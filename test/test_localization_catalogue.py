@@ -7,7 +7,6 @@ from zlib import crc32
 
 import pytest
 
-from cntrl.fonts import assets, status
 from cntrl.localization import catalogue
 from scripts import native_tests
 
@@ -71,12 +70,8 @@ def test_shipped_packs_match_their_translation_sources(language: str) -> None:
     packed = catalogue.inspect(data)
     assert packed.language == language
     assert catalogue.compile_catalogue(language, data[packed.font_offset :]) == data
-    faces = assets.decode(data[packed.font_offset :], language, 0).sizes
-    if language == 'en':
-        assert 13 not in faces
-    else:
-        assert set(faces[13].characters) == {'’'}
-        assert not set(faces[13].characters) & set(status.BASE_CHARACTERS)
+    assert packed.font_length == 0
+    assert packed.font_offset == len(data)
 
 
 def test_native_formatter_reorders_values_and_preserves_utf8(tmp_path: Path) -> None:

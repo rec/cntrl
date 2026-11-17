@@ -124,6 +124,17 @@ def font_choice(
     )
     if not sizes:
         raise ValueError(f'{face.name}: text was not prepared in the compiled font')
+    if (
+        len(sizes) == 1
+        and face.id != 255
+        and face.name.split('@', 1)[0] not in target.ui_fonts
+    ):
+        size = sizes[0]
+        if lines * face.sizes[size].line_height + max(0, lines - 1) * 2 > height:
+            raise ValueError(
+                f'{face.name}: fixed performance font does not fit the display height'
+            )
+        return face, size
 
     def fits(size: int) -> bool:
         metrics = face.sizes[size]

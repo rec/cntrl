@@ -8,9 +8,9 @@ import pytest
 from PIL import ImageFont
 
 from cntrl.fonts.outline import Outline
-from cntrl.maker.morningstar.mc import build_bitmap_fonts, build_font_metrics
+from cntrl.maker.morningstar.mc import build_bitmap_fonts
 from cntrl.maker.morningstar.mc.build_font_metrics import read_bits
-from cntrl.maker.morningstar.mc.font_diagnostics import Diagnostic, diagnose
+from cntrl.maker.morningstar.mc.export_fonts import FontExport, export, faces
 from cntrl.patch_switcher import compiler, models
 
 
@@ -121,22 +121,14 @@ def test_firmware_glyphs_preserve_pixels_and_baseline(
 
 def test_generated_fonts_and_exported_metrics_are_current(tmp_path: Path) -> None:
     root = Path(__file__).parents[1]
-    build_bitmap_fonts.generate(tmp_path)
-    diagnose(Diagnostic())
+    sources = export(FontExport(output=tmp_path / 'fonts', generated=tmp_path))
     target = models.Target.model_validate(
         compiler.read_document(root / 'patch-switcher-target.json')
     )
-    for p in tmp_path.iterdir():
-        assert (
-            p.read_bytes() == (root / 'firmware/patch_switcher' / p.name).read_bytes()
-        )
-    for i, (n, _, _) in enumerate(build_bitmap_fonts.FAMILIES, 3):
-        face = build_font_metrics.native_face(
-            (tmp_path / f'font_{n}.cpp').read_text(), n, i
-        )
-        if n == 'StillTime':
-            face = face.model_copy(update={'horizontal_scale': 1.5})
-        assert face == next(f for f in target.fonts if f.name == n)
+    assert (tmp_path / 'embedded_fonts.h').read_bytes() == (
+        root / 'firmware/patch_switcher/embedded_fonts.h'
+    ).read_bytes()
+    assert faces(tmp_path / 'fonts', sources) == target.fonts
 
 
 def test_small_page_font_has_equal_vertical_stems() -> None:

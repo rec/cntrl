@@ -6,7 +6,7 @@
 #include "utf8.h"
 
 namespace font_assets {
-constexpr unsigned max_file = 256 * 1024;
+constexpr unsigned max_file = 2 * 1024 * 1024;
 inline int signed16(const uint8_t *p) { return int16_t(cntrl::u16(p)); }
 struct Entry {
     uint8_t bytes[23] = {};

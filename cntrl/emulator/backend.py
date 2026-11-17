@@ -19,7 +19,7 @@ from .. import models
 from ..firmware import native_cache
 from ..firmware.build_info import commit_id
 from ..firmware.capabilities import header
-from ..fonts.catalogue import UI_FONTS
+from ..fonts.catalogue import FONT_IDS
 from ..patch_switcher.models import Target
 from . import font_comparison
 from .layout import EmulatorLayout
@@ -174,15 +174,17 @@ class Session:
             if source_record.is_file() and source_record.read_text() == source_hash
             else '1',
         ]
-        for name in target.ui_fonts:
-            if name not in UI_FONTS:
+        for name in dict.fromkeys(
+            [*target.ui_fonts, *(n for n in target.font_sources if n in FONT_IDS)]
+        ):
+            if name not in FONT_IDS:
                 raise ValueError(f'unknown UI font family: {name}')
             if name not in target.font_sources:
                 raise ValueError(
                     f'execution target lacks exported UI font source: {name}'
                 )
             command.extend(
-                [str(UI_FONTS[name]), str(Path(target.font_sources[name]).resolve())]
+                [str(FONT_IDS[name]), str(Path(target.font_sources[name]).resolve())]
             )
         self.process = subprocess.Popen(
             command,

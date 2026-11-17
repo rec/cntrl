@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from cntrl.maker.morningstar.mc import build_font_metrics
+from cntrl.maker.morningstar.mc.export_fonts import EmbeddedRaster
 from cntrl.maker.morningstar.mc.native_raster import NativeRaster
 from cntrl.patch_switcher import compiler, display, graphics, models
 
@@ -33,10 +34,11 @@ def test_page_lines_select_different_native_font_families() -> None:
         graphics.SCREEN.unpack_from(block, display.HEADER.size + graphics.SCREEN.size)[
             0
         ]
-        == 255
+        == 2
     )
     start = display.HEADER.size + graphics.SCREEN.size
-    assert int.from_bytes(block[start + 12 : start + 16], 'little') in font_data
+    assert int.from_bytes(block[start + 12 : start + 16], 'little') == 0
+    assert not font_data
 
 
 @pytest.mark.parametrize(
@@ -69,6 +71,10 @@ def test_native_autoscale_uses_largest_fitting_size_per_label(name: str) -> None
     for t in texts:
         _, size = graphics.font_choice(name, [t], target, 4)
         metrics = face.sizes[size]
+        if len(face.sizes) == 1:
+            assert size == next(iter(face.sizes))
+            assert metrics.line_height <= target.display_height // 3 - 4
+            continue
         left, width = graphics.bounds(t, metrics)
         assert width <= 152 and metrics.line_height <= 59
         assert left <= 0
@@ -83,7 +89,7 @@ def test_native_metrics_are_proportional_and_fit_selected_sizes() -> None:
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
     )
-    for name in ('Arimo', 'ComicSansMS'):
+    for name in ('Arimo', 'AtkinsonNextSemiBold'):
         face = next(f for f in target.fonts if f.name == name)
         assert (
             graphics.bounds('WWWW', face.sizes[16])[1]
@@ -165,9 +171,9 @@ def test_exported_native_resources_preserve_scaled_glyphs_and_runs(family: str) 
     source = build_font_metrics.Options().source / f'st7735_t3_font_{family}.c'
     resource = Path(__file__).parents[1] / 'font_sources' / f'{family}.cfont'
     for scale in (1.0, 1.25, 2.0):
-        original = NativeRaster(source, family, scale)
+        original = EmbeddedRaster(source, family, scale)
         portable = BitmapRaster(resource, scale)
-        for size in original.tables:
+        for size in portable.tables:
             for code in range(32, 127):
                 assert portable.glyph(size, code) == original.glyph(size, code)
             assert portable.shape(size, 'Wide patch 123') == original.shape(

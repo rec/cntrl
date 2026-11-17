@@ -18,7 +18,7 @@ public:
             char *end = nullptr;
             const unsigned long face = std::strtoul(arguments[i], &end, 10);
             const std::string path = arguments[i + 1];
-            if (!arguments[i][0] || *end || face > 254 || !ui_font_valid(unsigned(face)))
+            if (!arguments[i][0] || *end || face < 2 || face > 20)
                 throw std::runtime_error("invalid UI font identity: " + path);
             for (const auto &existing : faces_) if (existing.face == face)
                 throw std::runtime_error("duplicate UI font identity: " + path);

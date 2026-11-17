@@ -14,7 +14,26 @@ UI_FONTS = {
     'Arimo': 17,
     'TamzenBold7x13': 19,
 }
+FONT_IDS = {
+    'ComicSansMS': 2,
+    'Circuit': 3,
+    'CircuitBold': 4,
+    'StillTime': 5,
+    'MetalLord': 6,
+    'CaveatBold': 7,
+    'CourierPrimeBold': 9,
+    'DecoRound': 10,
+    'DMSerifDisplay': 11,
+    'CollegeBlock': 12,
+    'OrnamentalSlab': 13,
+    'RubikDistressed': 14,
+    'SpecialElite': 15,
+    'ArimoBold': 18,
+    'BarlowCondensedSemiBold': 20,
+    **UI_FONTS,
+}
 OUTLINE_SOURCES = {
+    'BarlowCondensedSemiBold': 'barlow-condensed/BarlowCondensed-SemiBold.ttf',
     'Arimo': 'arimo/Arimo-Regular.ttf',
     'ArimoBold': 'arimo/Arimo-Bold.ttf',
     'Circuit': 'orbitron/Orbitron-Medium.ttf',

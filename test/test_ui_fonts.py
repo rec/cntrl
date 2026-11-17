@@ -13,6 +13,7 @@ from pytest_regressions.file_regression import FileRegressionFixture
 from cntrl.fonts import assets, status, ui
 from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.catalogue import bundled_sources
+from cntrl.fonts.characters import printable_characters
 from cntrl.fonts.outline import Glyph, Outline
 from cntrl.patch_switcher import compiler, data_files, models, page_settings
 from scripts import native_tests
@@ -33,13 +34,15 @@ def test_ui_fonts_preserve_hinted_pixels_bearings_and_advances(
     face = assets.decode(data, name, crc32(data))
     source = Outline(bundled_sources()[name], hinting=hinting)
     for size in [12, 20]:
-        assert set(bitmap.characters[size]) == set(range(32, 127))
+        assert set(bitmap.characters[size]) == {
+            ord(c) for c in printable_characters() if source.face.get_char_index(ord(c))
+        }
         assert not face.sizes[size].runs
         assert (
             face.sizes[size].top
             == source.glyph(size, source.face.get_char_index(ord('H'))).top
         )
-        for code in range(32, 127):
+        for code in bitmap.characters[size]:
             expected = source.glyph(size, source.face.get_char_index(code))
             actual = bitmap.glyph(size, code)
             assert actual.pixels == expected.pixels
@@ -70,8 +73,8 @@ def test_tamzen_utility_asset_preserves_native_pixels_and_advances() -> None:
         assert ink(actual) == ink(source)
         assert actual.advance == source.advance == 7
     assert utility.glyph(13, ord('H')).height == 7
-    assert set(utility.characters[13]) == set(map(ord, status.BASE_CHARACTERS))
-    assert len(utility.characters[13]) == 139
+    assert set(map(ord, status.BASE_CHARACTERS)) <= set(utility.characters[13])
+    assert len(utility.characters[13]) == 182
     assert (directory / 'TamzenBold7x13.cfont').read_bytes() == status.prepare()
 
 
@@ -103,7 +106,9 @@ def test_ui_font_header_compiles_and_renders_without_a_driver_sdk(
 ) -> None:
     data = ui.prepare('AtkinsonNextSemiBold', [12])
     (tmp_path / 'ui_fonts.h').write_text(
-        ui.embedded_header({'AtkinsonNextSemiBold': data})
+        ui.embedded_header(
+            {'AtkinsonNextSemiBold': data, 'Arimo': ui.prepare('Arimo', [12])}
+        )
     )
     executable = tmp_path / 'font-provider'
     native_tests.compile_native(
@@ -137,7 +142,14 @@ def test_french_runtime_glyphs_render_without_replacing_authored_fonts(
         ''.join(chr(c) for c in range(32, 127)) + 'ÀÂÇÉÈÊËÎÏÔÙÛÜŒàâçéèêëîïôùûüœ…’'
     )
     english = tmp_path / 'english.cfont'
-    english.write_bytes(ui.prepare('Arimo', [8, 10, 12, 14, 16, 20], hinting='native'))
+    english.write_bytes(
+        ui.prepare(
+            'Arimo',
+            [8, 10, 12, 14, 16, 20],
+            hinting='native',
+            characters=''.join(chr(c) for c in range(32, 127)),
+        )
+    )
     french = tmp_path / 'french.cfont'
     data = ui.prepare(
         'Arimo',
@@ -169,13 +181,15 @@ def test_french_runtime_glyphs_render_without_replacing_authored_fonts(
         check=True,
     )
     rendered = tmp_path / 'french.ppm'
+    base_status = tmp_path / 'base-status.cfont'
+    base_status.write_bytes(status.prepare(status.BASE_CHARACTERS))
     native_tests.run_native(
         [
             str(program),
             str(english),
             str(french),
             str(rendered),
-            str(ROOT / 'cntrl/fonts/bitmap_samples/TamzenBold7x13.cfont'),
+            str(base_status),
         ],
         check=True,
     )

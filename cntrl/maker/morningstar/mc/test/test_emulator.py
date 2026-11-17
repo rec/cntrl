@@ -81,7 +81,7 @@ def test_exported_profile_keeps_font_paths_relocatable(tmp_path: Path) -> None:
     assert not errors
     target = models.Target.model_validate(data)
     assert target.controls.previous_page == 'g'
-    assert set(target.font_sources) == set(target.ui_fonts)
+    assert set(target.font_sources) == {f.name for f in target.fonts}
     assert all(
         Path(p).parent == path.parent / 'fonts' for p in target.font_sources.values()
     )

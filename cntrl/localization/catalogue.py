@@ -76,14 +76,15 @@ def inspect(data: bytes) -> Pack:
     catalogue = load()
     if (
         magic != b'CLNG'
-        or version != 2
+        or version != 3
         or length != len(data)
         or crc32(data[:12] + bytes(4) + data[16:]) != checksum
         or count != len(catalogue.messages)
         or abi != schema(catalogue)
         or font_start < HEADER.size + count * 8
         or font_start + font_size != len(data)
-        or not data[font_start:].startswith(b'CFN2')
+        or font_size
+        and not data[font_start:].startswith(b'CFN2')
         or b'\0' not in tag
         or b'\0' not in name
     ):
@@ -113,7 +114,8 @@ def inspect(data: bytes) -> Pack:
             ) != len(fields(message.en)):
                 raise ValueError('invalid language placeholders')
     font = data[font_start:]
-    assets.decode(font, 'language pack', crc32(font))
+    if font:
+        assets.decode(font, 'language pack', crc32(font))
     return Pack(
         language=language,
         name=display_name,
@@ -156,7 +158,7 @@ def schema(catalogue: Catalogue) -> int:
 def compile_catalogue(locale: str, font: bytes) -> bytes:
     if locale not in ('en', 'fr'):
         raise ValueError(f'unsupported UI language {locale!r}')
-    if not font.startswith(b'CFN2'):
+    if font and not font.startswith(b'CFN2'):
         raise ValueError('language pack requires a CFN2 font')
     catalogue = load()
     table = bytearray()
@@ -174,7 +176,7 @@ def compile_catalogue(locale: str, font: bytes) -> bytes:
     font_offset = base + len(strings)
     header = HEADER.pack(
         b'CLNG',
-        2,
+        3,
         len(catalogue.messages),
         font_offset + len(font),
         0,

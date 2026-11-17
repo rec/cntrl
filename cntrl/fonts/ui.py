@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 
 from ..patch_switcher.models import FontMetrics
 from .assets import decode, pack
-from .catalogue import UI_FONTS, bundled_sources
+from .catalogue import FONT_IDS, UI_FONTS, bundled_sources
+from .characters import printable_characters
 from .outline import Outline
 
 
@@ -30,7 +31,8 @@ def prepare(
     path: Path | None = None,
     *,
     hinting: Literal['auto', 'native'] = 'auto',
-    characters: str = ''.join(chr(c) for c in range(32, 127)),
+    characters: str | None = None,
+    horizontal_scale: float = 1.0,
 ) -> bytes:
     """Use hinted monochrome glyph pixels and advances, without stretching."""
     if name not in UI_FONTS and name not in bundled_sources():
@@ -39,7 +41,9 @@ def prepare(
         if name not in (sources := bundled_sources()):
             raise ValueError(f'UI font {name!r} requires an outline source')
         path = sources[name]
-    outline = Outline(path, hinting=hinting)
+    outline = Outline(path, horizontal_scale, hinting=hinting)
+    if characters is None:
+        characters = supported_characters(outline)
     characters = ''.join(sorted(set(characters)))
     if not characters or any(
         ord(c) < 32 or 127 <= ord(c) < 160 or 0xD800 <= ord(c) <= 0xDFFF
@@ -66,6 +70,37 @@ def prepare(
     )
 
 
+def supported_characters(outline: Outline) -> str:
+    return ''.join(
+        c for c in printable_characters() if outline.face.get_char_index(ord(c))
+    )
+
+
+def performance_size(outline: Outline, characters: str, display_height: int) -> int:
+    """Keep accents and descenders inside a third-height row with 2px margins."""
+    height = display_height // 3 - 4
+
+    def fits(size: int) -> bool:
+        glyphs = [
+            outline.glyph(size, outline.face.get_char_index(ord(c))) for c in characters
+        ]
+        top = max(g.top for g in glyphs)
+        bottom = max(g.height - g.top for g in glyphs)
+        return top + bottom <= height
+
+    low, high = 1, 255
+    selected = 0
+    while low <= high:
+        middle = (low + high) // 2
+        if fits(middle):
+            selected, low = middle, middle + 1
+        else:
+            high = middle - 1
+    if not selected:
+        raise ValueError('display is too short for a performance font')
+    return selected
+
+
 def embedded_header(fonts: dict[str, bytes]) -> str:
     """Emit neutral CFN2 resources; the adapter may define their storage macro."""
     if not fonts:
@@ -81,11 +116,11 @@ def embedded_header(fonts: dict[str, bytes]) -> str:
     symbols: dict[bytes, str] = {}
     descriptors = []
     for name, data in fonts.items():
-        if name not in UI_FONTS:
-            raise ValueError(f'unknown UI font family {name!r}')
+        if name not in FONT_IDS:
+            raise ValueError(f'unknown font family {name!r}')
         decode(data, name, crc32(data))
         if data not in symbols:
-            symbol = f'ui_font_{UI_FONTS[name]}'
+            symbol = f'ui_font_{FONT_IDS[name]}'
             symbols[data] = symbol
             lines.append(f'inline const uint8_t {symbol}[] CNTRL_UI_FONT_STORAGE = {{')
             lines.extend(
@@ -94,10 +129,11 @@ def embedded_header(fonts: dict[str, bytes]) -> str:
             )
             lines.append('};')
         symbol = symbols[data]
-        descriptors.append(f'    {{{UI_FONTS[name]}, {symbol}, sizeof({symbol})}},')
+        descriptors.append(f'    {{{FONT_IDS[name]}, {symbol}, sizeof({symbol})}},')
     lines.extend(
         [
-            'inline const cntrl::ui::EmbeddedFont embedded_fonts[] = {',
+            'inline const cntrl::ui::EmbeddedFont embedded_fonts[] '
+            'CNTRL_UI_FONT_STORAGE = {',
             *descriptors,
             '};',
             '#undef CNTRL_UI_FONT_STORAGE',

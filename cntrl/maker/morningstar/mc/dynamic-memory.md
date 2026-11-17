@@ -1638,6 +1638,41 @@ completion gate for the implementation.
 | Compiled fonts, USB identity and flash journal layouts | Immutable ROM/flash data and required redundant records remain fixed. They must not become heap objects just to eliminate constants. |
 | `archive/` and native test fixtures | Historical snapshots and test-only arrays do not reserve memory in the product binary. Exclude them from product totals, while retaining their role as test/reference material. |
 
+## Shared flash fonts, 2026-11-17
+
+All 19 bundled faces now have shared CFN2 resources in firmware flash. The ELF
+places both `ui_font_*` blobs and `embedded_fonts` in the relocated flash address
+range. The blobs total 2,210,081 bytes, approximately 2.11 MiB, across 84 font/size
+pairs. The four UI families keep their previous sizes; the 15 performance
+families use one size each. Ordinary compiled labels reference those faces with
+asset key zero and allocate no setup font pixels in RAM. Custom overrides,
+explicit scaling and authored text outside the shared repertoire retain sparse
+SD assets and the existing checked RAM accounting.
+
+The 373-character comparison repertoire has 372 drawable characters; soft
+hyphen is omitted. Arimo covers those 372 and Tamzen covers 182, including the
+139 base characters. English and French format-3 packs now contain translations
+only, occupying 9559 and 10966 bytes respectively. Their former localized font
+copies are no longer allocated when selecting those languages.
+
+Builds use `uv run --no-sync python -m cntrl.maker.morningstar.mc.boot_switch`,
+with `--diagnostics` for the qualification build. Both pass the existing memory
+budget checks; the time-critical MIDI code placement is unchanged.
+
+| Linked measurement, bytes | Normal | Diagnostic |
+| --- | ---: | ---: |
+| Flash code | 424224 | 427936 |
+| Flash data | 2253808 | 2256880 |
+| Instruction RAM code | 191544 | 192456 |
+| Instruction RAM padding/headroom | 5064 | 4152 |
+| RAM1 variables | 308032 | 312224 |
+| RAM1 free for stack/locals | 19648 | 15456 |
+| RAM2 static variables | 91136 | 91136 |
+| RAM2 free heap before runtime allocations | 433152 | 433152 |
+
+These are linked budgets and automated rendering results, not physical timing
+measurements. No device upload was performed for this change.
+
 ## Additional work beyond the prompt
 
 None.

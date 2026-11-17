@@ -95,7 +95,7 @@ def export(target: Path | None, controller: str, output: Path) -> Path:
     fonts = output / 'fonts'
     fonts.mkdir(exist_ok=True)
     sources: dict[str, str] = {}
-    for n in profile.ui_fonts:
+    for n in dict.fromkeys([*profile.ui_fonts, *profile.font_sources]):
         destination = fonts / f'{n}.cfont'
         if n in profile.font_sources:
             source = Path(profile.font_sources[n])

@@ -211,6 +211,9 @@ def compile_display(
         )
     ]
     for indexes in paired_lines:
+        indexes = [i for i in indexes if len(choices[i][0].sizes) > 1]
+        if len(indexes) < 2:
+            continue
         limit = min(choices[i][1] for i in indexes)
         sizes = set.intersection(*(set(choices[i][0].sizes) for i in indexes))
         sizes = {
@@ -229,6 +232,24 @@ def compile_display(
             )
         for i in indexes:
             choices[i] = choices[i][0], max(sizes)
+    for i, (face, size) in enumerate(choices):
+        if (
+            len(face.sizes) != 1
+            or face.id == 255
+            or face.name.split('@', 1)[0] in target.ui_fonts
+        ):
+            continue
+        code, text, style, pad, count, stipple = requests[i]
+        metrics = face.sizes[size]
+        width = target.display_width - 2 * pad
+        if graphics.bounds(text, metrics)[1] > width:
+            suffix = '…' if '…' in metrics.characters else '...'
+            prefix = text
+            while prefix and graphics.bounds(prefix + suffix, metrics)[1] > width:
+                prefix = prefix[:-1]
+            if graphics.bounds(prefix + suffix, metrics)[1] > width:
+                raise ValueError(f'{face.name}: ellipsis does not fit the display')
+            requests[i] = code, prefix + suffix, style, pad, count, stipple
     for (code, text, _, _, _, _), (face, size) in zip(requests, choices, strict=True):
         prepared.use(face.name, size, code, text)
     show, keys, generated = prepared.finish()

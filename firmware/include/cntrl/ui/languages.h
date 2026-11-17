@@ -109,6 +109,7 @@ public:
             return Result::pending;
         }
         const unsigned start = u32(pending_.data + 68), length = u32(pending_.data + 72);
+        if (!length) { phase_ = Phase::ready; return Result::ready; }
         if (length < 8 || std::memcmp(pending_.data + start, "CFN2", 4)) return fail();
         const unsigned count = u32(pending_.data + start + 4);
         if (!count || count > 32) return fail();
@@ -133,7 +134,7 @@ public:
             visible_ = this;
             i18n::lookup = active_.size ? lookup : nullptr;
             i18n::translated_ui = active_.size && std::strcmp(tag_, "en");
-            AssetFonts::localized(active_.size ? active_.data + u32(active_.data + 68) : nullptr,
+            AssetFonts::localized(active_.size && u32(active_.data + 72) ? active_.data + u32(active_.data + 68) : nullptr,
                 active_.size ? u32(active_.data + 72) : 0);
         }
         if (reader_) reader_->close(); reader_.reset(); pending_.clear();
@@ -172,7 +173,7 @@ private:
     CNTRL_FLASH_ROUTINE(languages_header)
 #endif
     static bool valid_header(const uint8_t *p, unsigned length, const char *tag) {
-        return !std::memcmp(p, "CLNG", 4) && u16(p + 4) == 2 && u16(p + 6) == i18n::message_count
+        return !std::memcmp(p, "CLNG", 4) && u16(p + 4) == 3 && u16(p + 6) == i18n::message_count
             && u32(p + 8) == length && u32(p + 64) == i18n::catalogue_schema
             && std::memchr(p + 16, 0, 16) && !std::strcmp(reinterpret_cast<const char *>(p + 16), tag)
             && p[32] && std::memchr(p + 32, 0, 32)

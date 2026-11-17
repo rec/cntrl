@@ -50,7 +50,11 @@ def cycle_styles(
         ]
     fonts = list(
         dict.fromkeys(
-            [f.name for f in target.fonts]
+            [
+                f.name
+                for f in target.fonts
+                if f.name not in ('AtkinsonNextSemiBold', 'TamzenBold7x13')
+            ]
             + [re.sub(r'@[0-9.e+-]+x$', '', n) for n in show.fonts]
         )
     )

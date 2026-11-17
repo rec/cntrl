@@ -36,10 +36,16 @@ def run(command: Build) -> None:
     target = Target.model_validate(data)
     sources = export_fonts.export(
         export_fonts.FontExport(
-            output=command.output / 'fonts', ui_fonts=target.ui_fonts
+            output=command.output / 'fonts',
+            ui_fonts=target.ui_fonts,
+            display_height=target.display_height,
         )
     )
     data['font_sources'] = {n: f'fonts/{p}' for n, p in sources.items()}
+    data['fonts'] = [
+        f.model_dump(mode='json')
+        for f in export_fonts.faces(command.output / 'fonts', sources)
+    ]
     target = Target.model_validate(data)
     capabilities = header(target)
     (root / 'firmware/patch_switcher/target_capabilities.h').write_text(capabilities)

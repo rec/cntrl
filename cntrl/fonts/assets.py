@@ -87,7 +87,7 @@ def pack(
 
 def entries(data: bytes) -> dict[int, tuple[list[int], bytes, bytes]]:
     if not 8 <= len(data) <= MAX_ASSET:
-        raise ValueError('font asset exceeds 256 KiB or is truncated')
+        raise ValueError('font asset exceeds 2 MiB or is truncated')
     magic, count = HEADER.unpack_from(data)
     if magic != b'CFN2' or not 1 <= count <= 255:
         raise ValueError('invalid font asset header')
@@ -228,7 +228,68 @@ class Preparation:
             family, scale = variants[name]
             source = show.fonts.get(name, show.fonts.get(family))
             resource = resources.get(family)
-            if source is not None:
+            embedded = (
+                source is None
+                and family in faces
+                and scale == defaults.get(family, 1.0)
+                and (
+                    family in target.ui_fonts
+                    and (
+                        any(m.characters for m in faces[family].sizes.values())
+                        or all(32 <= ord(c) < 127 for t in texts for c in t)
+                    )
+                    or resource is not None
+                    and resource.suffix == '.cfont'
+                    and any(m.characters for m in faces[family].sizes.values())
+                )
+            )
+            # Preserve authored Unicode outside the shared repertoire through
+            # the existing sparse outline path, at the target's declared sizes.
+            requires_outline = (
+                embedded
+                and family in builtins
+                and not all(
+                    any(
+                        t in m.runs
+                        or m.characters
+                        and all(c in m.characters for c in t)
+                        or not m.characters
+                        and all(32 <= ord(c) < 127 for c in t)
+                        for m in faces[family].sizes.values()
+                    )
+                    for t in texts
+                )
+            )
+            if embedded and not requires_outline:
+                face = faces[family].model_copy(update={'name': name})
+                for t in sorted(set(texts)):
+                    if not any(
+                        t in m.runs
+                        or m.characters
+                        and all(c in m.characters for c in t)
+                        or not m.characters
+                        and all(32 <= ord(c) < 127 for c in t)
+                        for m in face.sizes.values()
+                    ):
+                        missing = sorted(
+                            {
+                                c
+                                for c in t
+                                if not any(
+                                    c in m.characters for m in face.sizes.values()
+                                )
+                            },
+                            key=ord,
+                        )
+                        errors.append(
+                            f'{name}: {MissingGlyphs(missing)} '
+                            f'({", ".join(locations[name, t])})'
+                        )
+                faces[name] = face
+                continue
+            if requires_outline:
+                path = builtins[family]
+            elif source is not None:
                 path = Path(source)
             elif resource is not None:
                 path = (
@@ -239,19 +300,9 @@ class Preparation:
                 )
             else:
                 path = builtins.get(family)
-            if (
-                source is None
-                and resource is None
-                and scale == 1
-                and family in target.ui_fonts
-                and family in faces
-                and all(32 <= ord(c) < 127 for t in texts for c in t)
-            ):
-                # The target's embedded UI face is also usable for performance
-                # text. An outline is needed only for scaling or extra glyphs.
-                path = None
             native = (
-                source is None
+                not requires_outline
+                and source is None
                 and resource is not None
                 and resource.suffix.lower() == '.cfont'
                 and scale != 1
@@ -383,7 +434,7 @@ class Preparation:
 
 HEADER = struct.Struct('<4sI')
 ENTRY = struct.Struct('<15BII')
-MAX_ASSET = 256 * 1024
+MAX_ASSET = 2 * 1024 * 1024
 NUMBERS = '-0123456789'
 NUMERIC_FIELDS = (2, 3, 4, 5, 16, 17, 19, 20, 21, 24)
 SWITCH_STATES = (

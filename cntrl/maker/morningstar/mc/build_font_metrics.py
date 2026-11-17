@@ -8,10 +8,8 @@ import tomlkit
 import tyro
 from pydantic import BaseModel
 
-from ....fonts.assets import decode
-from ....fonts.catalogue import UI_FONTS
+from ....fonts.catalogue import FONT_IDS, UI_FONTS
 from ....patch_switcher import models
-from .build_bitmap_fonts import FAMILIES
 
 
 class Options(BaseModel, frozen=True):
@@ -104,49 +102,12 @@ def native_tables(source: str, name: str) -> dict[int, tuple[bytes, bytes, list[
     return result
 
 
-def portable_face(name: str, identifier: int) -> models.FontFace:
-    face = decode(
-        (Path(__file__).parent / 'font_sources' / f'{name}.cfont').read_bytes(), name, 0
-    )
-    sizes = {
-        s: m.model_copy(
-            update={
-                'characters': {},
-                'glyphs': bytes(
-                    v & 255 for c in range(32, 127) for v in m.characters[chr(c)]
-                ).hex(),
-            }
-        )
-        for s, m in face.sizes.items()
-    }
-    return face.model_copy(update={'id': identifier, 'sizes': sizes})
-
-
 def main() -> None:
+    from .export_fonts import faces
+
     options = tyro.cli(Options)
-    faces = [
-        portable_face('Arimo', 17),
-        native_face(
-            (options.source / 'st7735_t3_font_ComicSansMS.c').read_text(),
-            'ComicSansMS',
-            2,
-        ),
-    ]
-    faces += [
-        native_face(
-            (
-                Path(__file__).parent / 'firmware/patch_switcher' / f'font_{n}.cpp'
-            ).read_text(),
-            n,
-            i,
-        )
-        for i, (n, _, _) in enumerate(FAMILIES, 3)
-    ]
-    faces = [
-        f.model_copy(update={'horizontal_scale': 1.5}) if f.name == 'StillTime' else f
-        for f in faces
-    ]
-    faces.append(portable_face('ArimoBold', 18))
+    sources = {n: f'{n}.cfont' for n in FONT_IDS}
+    exported = faces(Path(__file__).with_name('font_sources'), sources)
     text = options.output.read_text()
     data = (
         tomlkit.parse(text).unwrap()
@@ -154,7 +115,9 @@ def main() -> None:
         else json.loads(text)
     )
     data.update(
-        fonts=[f.model_dump(mode='json') for f in faces], ui_fonts=list(UI_FONTS)
+        fonts=[f.model_dump(mode='json') for f in exported],
+        ui_fonts=list(UI_FONTS),
+        font_sources={n: f'font_sources/{p}' for n, p in sources.items()},
     )
     for name in ('Arial', 'classic'):
         data.get('font_sources', {}).pop(name, None)

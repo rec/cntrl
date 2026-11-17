@@ -10,8 +10,9 @@ from fontTools.ttLib import TTFont
 from pydantic import BaseModel
 
 from cntrl.fonts.assets import decode
-from cntrl.fonts.catalogue import UI_FONTS, bundled_sources
-from cntrl.localization.catalogue import inspect
+from cntrl.fonts.catalogue import FONT_IDS, bundled_sources
+from cntrl.fonts.characters import CHARACTERS
+from cntrl.localization import catalogue
 
 
 class Report(BaseModel, frozen=True):
@@ -36,7 +37,7 @@ def generate() -> str:
     names = {p: n for n, p in bundled_sources().items()}
     for path in paths:
         if path.suffix in ('.ttf', '.otf'):
-            with TTFont(BytesIO(committed(path))) as font:
+            with TTFont(BytesIO(path.read_bytes())) as font:
                 cmap = font.getBestCmap()
                 if cmap is None:
                     raise ValueError(f'{path}: no Unicode character map')
@@ -45,23 +46,24 @@ def generate() -> str:
             groups['Outline sources'].append((f'{name}: `{path}`', characters))
         elif path.suffix == '.cfont':
             groups['Packaged bitmap assets'].extend(
-                coverage(committed(path), str(path))
+                coverage(path.read_bytes(), str(path))
             )
-        elif path.suffix == '.bin' and committed(path).startswith(b'CLNG'):
-            data = committed(path)
-            pack = inspect(data)
-            groups['Language-pack fonts'].extend(
-                coverage(data[pack.font_offset :], str(path))
-            )
+        elif path.suffix == '.bin' and path.read_bytes().startswith(b'CLNG'):
+            data = path.read_bytes()
+            *_, start, length = catalogue.HEADER.unpack_from(data)
+            if length:
+                groups['Language-pack fonts'].extend(
+                    coverage(data[start : start + length], str(path))
+                )
         elif path.name == 'embedded_fonts.h':
-            text = committed(path).decode()
+            text = path.read_text()
             arrays = {
                 n: bytes(int(v) for v in b.split(',') if v.strip())
                 for n, b in re.findall(
                     r'uint8_t (ui_font_\d+)\[\][^{]*\{([^}]+)\}', text
                 )
             }
-            identifiers = {v: k for k, v in UI_FONTS.items()}
+            identifiers = {v: k for k, v in FONT_IDS.items()}
             for identifier, symbol in re.findall(
                 r'\{(\d+), (ui_font_\d+), sizeof', text
             ):
@@ -73,7 +75,7 @@ def generate() -> str:
             declarations = re.findall(
                 r'const ILI9341_t3_font_t (\w+)[^{]*\{[^}]+?,\s*'
                 r'1,\s*0,\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),',
-                committed(path).decode(),
+                path.read_text(),
             )
             sets: dict[frozenset[str], list[str]] = {}
             for name, first, last, second, end in declarations:
@@ -88,7 +90,7 @@ def generate() -> str:
     lines: list[str] = []
     lines.extend(INTRO.splitlines())
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-    lines.extend(['', f'Inspected source revision: `{revision}`.'])
+    lines.extend(['', f'Inspected working tree based on revision: `{revision}`.'])
     missing_sets: dict[frozenset[str], str] = {}
     for heading, rows in groups.items():
         lines.extend(
@@ -96,17 +98,28 @@ def generate() -> str:
                 '',
                 f'## {heading}',
                 '',
-                '| Font / asset | Base covered | Missing set |',
-                '| --- | ---: | --- |',
+                '| Font / asset | Base covered | Of requested 373 | Missing set |',
+                '| --- | ---: | ---: | --- |',
             ]
         )
+        if heading == 'Language-pack fonts' and not rows:
+            lines.extend(
+                [
+                    '',
+                    'The supplied packs contain translations only '
+                    'and reuse the flash fonts.',
+                ]
+            )
         for name, characters in rows:
-            missing = frozenset(BASE - characters)
+            missing = frozenset(set(CHARACTERS) - characters)
             if missing:
                 label = missing_sets.setdefault(missing, f'M{len(missing_sets) + 1}')
             else:
                 label = 'None'
-            lines.append(f'| {name} | {139 - len(missing)}/139 | {label} |')
+            lines.append(
+                f'| {name} | {len(BASE & characters)}/139 | '
+                f'{373 - len(missing)}/373 | {label} |'
+            )
     lines.extend(
         [
             '',
@@ -130,8 +143,8 @@ def generate() -> str:
             '',
             '## Additional work beyond the prompt',
             '',
-            'None. The inspection script is retained to reproduce this report; '
-            'no font assets or rendering behavior were changed.',
+            'None. Missing source glyphs have not been newly drawn. '
+            'The inspection script reproduces the coverage tables.',
             '',
         ]
     )
@@ -145,17 +158,13 @@ def coverage(data: bytes, name: str) -> list[tuple[str, set[str]]]:
         groups.setdefault(frozenset(metrics.characters), []).append(size)
     return [
         (
-            f'`{name}` (size {s[0]})'
+            f'`{name}` (size {s[0]}; {len(data)} bytes)'
             if len(s) == 1
-            else f'`{name}` ({len(s)} sizes: {min(s)}–{max(s)})',
+            else f'`{name}` ({len(s)} sizes: {min(s)}–{max(s)}; {len(data)} bytes)',
             set(c),
         )
         for c, s in groups.items()
     ]
-
-
-def committed(path: Path) -> bytes:
-    return subprocess.check_output(['git', 'show', f'HEAD:{path.as_posix()}'])
 
 
 def main() -> None:
@@ -170,8 +179,10 @@ BASE = {chr(c) for c in range(32, 127)} | set(
 )
 INTRO = """# Base font coverage
 
-This report checks the agreed **139-character base repertoire** against the
-actual committed font files, without downloading fonts or changing assets.
+This report checks the agreed **139 base characters** and the requested
+**373-character comparison repertoire** against the actual tracked font files.
+Soft hyphen U+00AD is a formatting control and is intentionally excluded from
+generated standalone glyphs, so a complete generated face covers 372/373.
 It includes current bundled sources, prepared assets, language packs and generated
 font declarations. Historical archives and test-only fixtures are excluded.
 
@@ -200,14 +211,13 @@ every stored size, with separate rows if coverage differs. Prepared whole-string
 runs do not establish general runtime character support. Embedded portable arrays
 are decoded using the same CFN2 reader. Legacy generated bitmap coverage uses the
 character ranges in its font declarations. This does not launch the application.
-Files are read from Git HEAD, excluding concurrent uncommitted font edits.
+Files are read from the working tree so regeneration checks newly generated assets.
 
 Source coverage and packaged coverage are separate: a complete outline does not
 mean its selected glyphs have been included in a generated asset. In particular,
 ASCII-only bitmap assets omit all 44 non-ASCII base extensions.
-The upstream bitmap source files are not bundled, so their broader repertoire is
-not inferred from these ASCII-only samples. Language-pack fonts are subsets for
-their catalogue text, not a promise of full base-font coverage.
+Tamzen's selected UI asset includes every supported drawable comparison character;
+the other comparison samples retain their original ASCII-only purpose.
 """
 
 

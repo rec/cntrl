@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     using Message = cntrl::ui::i18n::Message;
     assert(languages.boot("en"));
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "é", 0, glyph));
-    assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
+    assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
     assert(!std::strcmp(cntrl::ui::i18n::text(Message::pages_and_tools), "Pages and tools"));
     assert(languages.prepare("fr") == Result::failed);
     languages.finish(false);
@@ -27,13 +27,13 @@ int main(int argc, char **argv) {
     assert(languages.prepare("fr") == Result::failed);
     languages.finish(false);
     assert(!std::strcmp(languages.current(), "en"));
-    assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
+    assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
     std::filesystem::copy_file(argv[2], filesystem.path("/cntrl/languages/fr.bin"), std::filesystem::copy_options::overwrite_existing);
     std::filesystem::copy_file(argv[3], filesystem.path("/cntrl/languages/en.bin"));
     unsigned work = 0;
     auto result = languages.prepare("fr");
     while (result == Result::pending) {
-        assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
+    assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
         assert(!std::strcmp(cntrl::ui::i18n::text(Message::pages_and_tools), "Pages and tools"));
         result = languages.prepare("fr"); assert(++work < 4096);
     }
@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
     result = languages.prepare("en");
     while (result == Result::pending) result = languages.prepare("en");
     assert(result == Result::ready); languages.finish(true);
-    assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
+    assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "é", 0, glyph));
     result = languages.prepare("fr");
     while (result == Result::pending) result = languages.prepare("fr");

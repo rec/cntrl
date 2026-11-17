@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from . import bdf
+from .characters import printable_characters
 
 
 def prepare(characters: str = '') -> bytes:
@@ -10,16 +11,18 @@ def prepare(characters: str = '') -> bytes:
     directory = Path(__file__).with_name('bitmap_samples')
     source = (directory / 'Tamzen7x13b.bdf').read_bytes()
     additions = (directory / 'Tamzen7x13b-additions.bdf').read_bytes()
-    return bdf.prepare(
-        source + additions, 13, trim=True, characters=characters or BASE_CHARACTERS
-    )
+    data = source + additions
+    if not characters:
+        font = bdf.Bdf(data)
+        characters = ''.join(c for c in printable_characters() if ord(c) in font.glyphs)
+    return bdf.prepare(data, 13, trim=True, characters=characters)
 
 
 def main() -> None:
     directory = Path(__file__).with_name('bitmap_samples')
     data = prepare()
     (directory / 'TamzenBold7x13.cfont').write_bytes(data)
-    print(f'Status base: {len(BASE_CHARACTERS)} glyphs, {len(data)} bytes')
+    print(f'Status font: {len(data)} bytes')
 
 
 BASE_CHARACTERS = ''.join(chr(c) for c in range(32, 127)) + (

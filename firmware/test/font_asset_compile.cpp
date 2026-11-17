@@ -8,4 +8,9 @@ int main() {
     cntrl::ui::Glyph glyph;
     assert(fonts.glyph(16, 12, 0, "Status", 0, glyph));
     assert(glyph.pixels && glyph.width && glyph.height);
+    // Translation-only packs use the shared flash face, including accents.
+    cntrl::ui::AssetFonts::localized(nullptr, 0);
+    assert(fonts.supports(cntrl::ui::localized_face, 12));
+    assert(fonts.glyph(cntrl::ui::localized_face, 12, 0, "Éléments", 0, glyph));
+    assert(glyph.pixels && glyph.width && glyph.height);
 }

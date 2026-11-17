@@ -1,6 +1,6 @@
 # Bitmap display fonts
 
-Fifteen bundled outline families are available alongside ComicSansMS. Arimo is
+Seventeen bundled outline faces are available alongside ComicSansMS and Tamzen. Arimo is
 the default performance font. Atkinson is an additional page-text face, excluded
 from random patch formatting. The IDs below identify their generated reference tables:
 
@@ -22,6 +22,40 @@ from random patch formatting. The IDs below identify their generated reference t
 | `AtkinsonNextSemiBold` | Atkinson Hyperlegible Next SemiBold | 16 | SIL OFL 1.1 |
 | `Arimo` | Arimo Regular | 17 | SIL OFL 1.1 |
 | `ArimoBold` | Arimo Bold | 18 | SIL OFL 1.1 |
+| `TamzenBold7x13` | Tamzen Bold 7x13 | 19 | Tamzen/Tamsyn |
+| `BarlowCondensedSemiBold` | Barlow Condensed SemiBold | 20 | SIL OFL 1.1 |
+
+## Current flash fonts
+
+All listed fonts are embedded as portable CFN2 assets in firmware flash. The
+emulator loads those same resources. The fixed comparison repertoire contains
+373 characters; soft hyphen is excluded from drawable glyphs, and each font
+includes only characters it supplies. The 139 **base characters** remain a
+separate named subset. Missing characters are reported during compilation.
+
+Performance families have one size, selected using the complete supported glyph
+height: the largest that fits within `display_height // 3 - 4`, reserving two
+blank pixels above and below. Overlong labels use an ellipsis rather than a
+smaller size. Arimo, Atkinson and Courier Prime retain their existing size sets;
+Tamzen retains its native size 13. Custom source overrides and explicit scaling
+still use setup assets. Default StillTime's existing 1.5x width is baked into
+its flash asset and does not create an SD font allocation.
+
+Regenerate the shared assets and target metadata from the repository root:
+
+```sh
+uv run --no-sync python -m cntrl.maker.morningstar.mc.export_fonts --output cntrl/maker/morningstar/mc/font_sources
+uv run --no-sync python -m cntrl.maker.morningstar.mc.build_font_metrics --output cntrl/maker/morningstar/mc/patch-switcher-target.json
+uv run --no-sync python -m cntrl.fonts.status
+uv run --no-sync python -m cntrl.localization.build
+```
+
+The target build performs the font export automatically. Firmware and exported
+target metadata must be installed together. The supplied version-3 language
+packs contain translations only and reuse embedded glyphs, saving the RAM
+previously occupied by localized font copies.
+
+## Legacy raster reference tables
 
 The generated reference tables contain printable ASCII, characters 32 through
 126, at nominal pixel
@@ -31,8 +65,9 @@ FreeType rasterizer as show text, with monochrome autohinting for consistent
 stem widths and grid-fitted advances at small sizes. Its reference tables include every size from
 8 through 32 pixels, plus 40, 48, 60, 72 and 96. The renderer uses these glyphs
 without thickening or stretching.
-Show text uses sparse SD assets built from the corresponding outlines, as
-described below. Each line automatically selects its largest fitting size. Styles select a font
+These native tables remain rasterization references; the current runtime uses
+the portable flash assets described above. Custom show text uses sparse SD
+assets built from its supplied outlines. Styles select a font
 using `font_name` at any existing
 style level, including individual page fields.
 
@@ -77,15 +112,16 @@ page and line styles.
 The normal `cntrl setup copy` command shapes text with HarfBuzz and rasterizes
 it with FreeType on the development machine. Only glyphs actually used by the
 show, at the sizes selected by automatic fitting, are uploaded to
-`/cntrl/fonts/` on the pedal's SD card. All bundled outline families listed above
-use this same sparse path automatically. Prepared ComicSansMS and ArimoBold
-resources can also be loaded as setup font assets. Only CourierPrime,
-AtkinsonNextSemiBold, Arimo and TamzenBold7x13 remain embedded for UI use.
+`/cntrl/fonts/` on the pedal's SD card. The bundled families instead use their
+shared flash assets unless explicitly overridden. Only CourierPrime,
+AtkinsonNextSemiBold, Arimo and TamzenBold7x13 are offered for utility-page UI use.
 ComicSansMS, StillTime, CourierPrimeBold and ArimoBold are performance-only fonts.
 Arial and its classic alias have been removed; update existing source selections
 to Arimo and recompile. Cable Test uses Atkinson for its title and body.
 
-The normal firmware image shrinks from 1755136 to 941056 bytes after this font
+### Historical reduced UI set, 2026-11-16
+
+The normal firmware image shrank from 1755136 to 941056 bytes after this font
 split, saving 814080 bytes (795 KiB). Embedded UI font/size pairs fall from 151
 distinct pairs to 69: CourierPrime has eight, Atkinson and Arimo have 30 each,
 and Tamzen has one. The base font data stays in flash; this is a firmware flash
@@ -142,7 +178,7 @@ Rendering does not read the SD card. The compiler and pedal support up to
 budget, derived by the linker from RAM2 remaining after static firmware data.
 Active and candidate allocations count together; reused font data counts once.
 There is no separate font RAM allowance. A single SD asset file is limited to
-256 KiB. Candidate fonts are loaded before replacing the active fonts, so a
+2 MiB. Candidate fonts are loaded before replacing the active fonts, so a
 failed load preserves the current show. Missing assets prevent
 show upload; corrupt pixel data or insufficient memory prevent activation.
 Unused font files remain on SD when a show is deleted.

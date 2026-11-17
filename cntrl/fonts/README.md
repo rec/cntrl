@@ -9,25 +9,43 @@ baseline positions and seven-pixel character advances are preserved.
 Headings retain Atkinson Hyperlegible Next SemiBold.
 See [the pinned sources and regeneration command](bitmap_samples/README.md).
 
-The shared base has exactly 139 glyphs: printable ASCII, the French repertoire,
-and `Ä Å Ñ Ö Ā Ō ä å ñ ö ā ō` for familiar English loanwords. Its trimmed CFN2
-asset is 4377 bytes: 1010 bitmap bytes, 3336 glyph/character index bytes and
-31 header/metric bytes. This is 1442 bytes larger than the previous ASCII asset.
+The agreed **base characters** remain the 139-character repertoire: printable
+ASCII, the French repertoire, and `Ä Å Ñ Ö Ā Ō ä å ñ ö ā ō` for familiar English
+loanwords. The selected Status asset now includes all 182 drawable characters
+Tamzen supplies from the 373-character comparison repertoire and occupies 5723 bytes.
 The bitmap drawings for `Œ œ Ÿ Ā ā Ō ō` supplement the pinned upstream source.
 
-Language packs carry only their additional Status characters, in a size-13
-CFN2 entry. Other pack entries are the localized Arimo face at its existing
-sizes. The renderer resolves each Status character against the base first,
-then the active pack, preserving the base's baseline and seven-pixel advances.
-French adds only `’`, a 50-byte supplement including its descriptor and index;
-English adds none. Preparing another language temporarily retains the old pack
-until validation succeeds; committing the switch releases the old supplement.
+English and French packs now reuse flash-resident glyphs and carry no font data.
+The renderer still supports a language-specific font and Status supplement when
+a pack supplies one, preserving the native Status baseline and advances.
 
 Regenerate the Status base offline with:
 
 ```sh
 uv run --no-sync python -m cntrl.fonts.status
 ```
+
+## Shared flash repertoire
+
+`characters.py` records the fixed 373-character comparison repertoire. Fonts
+include every character they actually support, excluding the soft-hyphen format
+control. Missing glyphs are omitted rather than replaced by a missing-glyph box.
+Arimo contains all 372 drawable characters. This is a comparison repertoire,
+not a guarantee of support for every smaller European language.
+
+The four UI families retain their existing sizes: Tamzen 13; Courier Prime
+12, 16, 20, 24, 28, 32, 40, 48; Atkinson and Arimo 8 through 32, then
+40, 48, 60, 72, 96. Other bundled performance families use exactly one size:
+the largest whose full glyph bounds, including accents and descenders, fit
+one third of the target display height with two blank pixels above and below.
+Long performance labels end with an ellipsis instead of selecting a smaller size.
+Different performance families may therefore use different nominal point sizes.
+Custom font overrides, explicit horizontal scaling and authored Unicode outside
+the shared repertoire retain the existing sparse setup-asset path.
+
+The adapter's export command regenerates the portable files and flash header;
+the target build calls it automatically. See the adapter font documentation
+for its commands. The firmware and emulator use the same portable resources.
 
 ## Arimo UI trial
 
