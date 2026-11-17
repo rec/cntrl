@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from .. import build, flash, importing, qualify, upload
 from ..emulator.cli import Emulate, emulate
+from ..maker.morningstar.mc import font_coverage
 from . import (
     backups,
     binary_format,
@@ -713,6 +714,7 @@ def main() -> None:
         | Annotated[languages.LanguageCLI, tyro.conf.subcommand(name='language')]
         | Annotated[Songs, tyro.conf.subcommand(name='songs')]
         | Annotated[build.Build, tyro.conf.subcommand(name='build')]
+        | Annotated[font_coverage.Report, tyro.conf.subcommand(name='font-coverage')]
         | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
         | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
         | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')]
@@ -734,6 +736,8 @@ def main() -> None:
             flash.run(command)
         elif isinstance(command, build.Build):
             build.run(command)
+        elif isinstance(command, font_coverage.Report):
+            command.output.write_text(font_coverage.generate())
         elif isinstance(command, Compile):
             report_bundle(compile_to_file(command, command.output))
         elif isinstance(command, Songs):

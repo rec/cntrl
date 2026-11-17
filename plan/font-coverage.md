@@ -23,7 +23,7 @@ Counts refer to Unicode characters, not necessarily distinct bitmap shapes.
 Regenerate from the repository root:
 
 ```sh
-uv run --no-sync python -m cntrl.maker.morningstar.mc.font_coverage
+cntrl font-coverage
 ```
 
 Outline coverage uses each local TTF/OTF Unicode cmap and does not claim visual
@@ -40,7 +40,7 @@ ASCII-only bitmap assets omit all 44 non-ASCII base extensions.
 Tamzen's selected UI asset includes every supported drawable comparison character;
 the other comparison samples retain their original ASCII-only purpose.
 
-Inspected working tree based on revision: `293c465378c8b12686db3b7c20158267bd50e635`.
+Inspected working tree based on revision: `7439870ebc6a72b3578c949b07b189e9831ea44f`.
 
 ## Outline sources
 
@@ -104,27 +104,42 @@ Inspected working tree based on revision: `293c465378c8b12686db3b7c20158267bd50e
 | `cntrl/fonts/bitmap_samples/UW-ttyp0-15b.cfont` (size 15; 3736 bytes) | 95/139 | 95/373 | M14 |
 | `cntrl/fonts/bitmap_samples/UW-ttyp0-16.cfont` (size 16; 3831 bytes) | 95/139 | 95/373 | M14 |
 | `cntrl/fonts/bitmap_samples/UW-ttyp0-16b.cfont` (size 16; 3831 bytes) | 95/139 | 95/373 | M14 |
-| `cntrl/maker/morningstar/mc/distribution/fonts/Arimo.cfont` (30 sizes: 8–96; 203502 bytes) | 95/139 | 95/373 | M14 |
-| `cntrl/maker/morningstar/mc/distribution/fonts/ArimoBold.cfont` (30 sizes: 8–96; 211730 bytes) | 95/139 | 95/373 | M14 |
-| `cntrl/maker/morningstar/mc/distribution/fonts/ComicSansMS.cfont` (18 sizes: 8–96; 257396 bytes) | 95/139 | 95/373 | M14 |
-| `cntrl/maker/morningstar/mc/distribution/fonts/TamzenBold7x13.cfont` (size 13; 4377 bytes) | 139/139 | 139/373 | M16 |
-| `cntrl/maker/morningstar/mc/font_sources/Arimo.cfont` (30 sizes: 8–96; 887024 bytes) | 139/139 | 372/373 | M17 |
-| `cntrl/maker/morningstar/mc/font_sources/ArimoBold.cfont` (size 32; 29749 bytes) | 139/139 | 372/373 | M17 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/Arimo.cfont` (30 sizes: 8–96; 887024 bytes) | 139/139 | 372/373 | M16 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/ArimoBold.cfont` (size 32; 29749 bytes) | 139/139 | 372/373 | M16 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/AtkinsonNextSemiBold.cfont` (30 sizes: 8–96; 787656 bytes) | 137/139 | 337/373 | M1 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/BarlowCondensedSemiBold.cfont` (size 31; 23250 bytes) | 139/139 | 359/373 | M17 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/CaveatBold.cfont` (size 31; 25144 bytes) | 139/139 | 347/373 | M18 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/Circuit.cfont` (size 31; 14964 bytes) | 134/139 | 186/373 | M9 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/CircuitBold.cfont` (size 32; 15498 bytes) | 134/139 | 186/373 | M9 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/CollegeBlock.cfont` (size 31; 26717 bytes) | 139/139 | 346/373 | M7 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/ComicSansMS.cfont` (size 20; 6055 bytes) | 95/139 | 95/373 | M14 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/CourierPrime.cfont` (8 sizes: 12–48; 177220 bytes) | 139/139 | 344/373 | M19 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/CourierPrimeBold.cfont` (size 33; 25748 bytes) | 139/139 | 344/373 | M19 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/DMSerifDisplay.cfont` (size 32; 23512 bytes) | 139/139 | 314/373 | M20 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/DecoRound.cfont` (size 30; 23912 bytes) | 139/139 | 332/373 | M21 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/MetalLord.cfont` (size 31; 29972 bytes) | 139/139 | 346/373 | M22 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/OrnamentalSlab.cfont` (size 31; 19313 bytes) | 133/139 | 214/373 | M6 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/RubikDistressed.cfont` (size 31; 30382 bytes) | 139/139 | 344/373 | M23 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/SpecialElite.cfont` (size 30; 23842 bytes) | 139/139 | 330/373 | M24 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/StillTime.cfont` (size 32; 34400 bytes) | 133/139 | 304/373 | M13 |
+| `cntrl/maker/morningstar/mc/distribution/fonts/TamzenBold7x13.cfont` (size 13; 5723 bytes) | 139/139 | 182/373 | M15 |
+| `cntrl/maker/morningstar/mc/font_sources/Arimo.cfont` (30 sizes: 8–96; 887024 bytes) | 139/139 | 372/373 | M16 |
+| `cntrl/maker/morningstar/mc/font_sources/ArimoBold.cfont` (size 32; 29749 bytes) | 139/139 | 372/373 | M16 |
 | `cntrl/maker/morningstar/mc/font_sources/AtkinsonNextSemiBold.cfont` (30 sizes: 8–96; 787656 bytes) | 137/139 | 337/373 | M1 |
-| `cntrl/maker/morningstar/mc/font_sources/BarlowCondensedSemiBold.cfont` (size 31; 23250 bytes) | 139/139 | 359/373 | M18 |
-| `cntrl/maker/morningstar/mc/font_sources/CaveatBold.cfont` (size 31; 25144 bytes) | 139/139 | 347/373 | M19 |
+| `cntrl/maker/morningstar/mc/font_sources/BarlowCondensedSemiBold.cfont` (size 31; 23250 bytes) | 139/139 | 359/373 | M17 |
+| `cntrl/maker/morningstar/mc/font_sources/CaveatBold.cfont` (size 31; 25144 bytes) | 139/139 | 347/373 | M18 |
 | `cntrl/maker/morningstar/mc/font_sources/Circuit.cfont` (size 31; 14964 bytes) | 134/139 | 186/373 | M9 |
 | `cntrl/maker/morningstar/mc/font_sources/CircuitBold.cfont` (size 32; 15498 bytes) | 134/139 | 186/373 | M9 |
 | `cntrl/maker/morningstar/mc/font_sources/CollegeBlock.cfont` (size 31; 26717 bytes) | 139/139 | 346/373 | M7 |
 | `cntrl/maker/morningstar/mc/font_sources/ComicSansMS.cfont` (size 20; 6055 bytes) | 95/139 | 95/373 | M14 |
-| `cntrl/maker/morningstar/mc/font_sources/CourierPrime.cfont` (8 sizes: 12–48; 177220 bytes) | 139/139 | 344/373 | M20 |
-| `cntrl/maker/morningstar/mc/font_sources/CourierPrimeBold.cfont` (size 33; 25748 bytes) | 139/139 | 344/373 | M20 |
-| `cntrl/maker/morningstar/mc/font_sources/DMSerifDisplay.cfont` (size 32; 23512 bytes) | 139/139 | 314/373 | M21 |
-| `cntrl/maker/morningstar/mc/font_sources/DecoRound.cfont` (size 30; 23912 bytes) | 139/139 | 332/373 | M22 |
-| `cntrl/maker/morningstar/mc/font_sources/MetalLord.cfont` (size 31; 29972 bytes) | 139/139 | 346/373 | M23 |
+| `cntrl/maker/morningstar/mc/font_sources/CourierPrime.cfont` (8 sizes: 12–48; 177220 bytes) | 139/139 | 344/373 | M19 |
+| `cntrl/maker/morningstar/mc/font_sources/CourierPrimeBold.cfont` (size 33; 25748 bytes) | 139/139 | 344/373 | M19 |
+| `cntrl/maker/morningstar/mc/font_sources/DMSerifDisplay.cfont` (size 32; 23512 bytes) | 139/139 | 314/373 | M20 |
+| `cntrl/maker/morningstar/mc/font_sources/DecoRound.cfont` (size 30; 23912 bytes) | 139/139 | 332/373 | M21 |
+| `cntrl/maker/morningstar/mc/font_sources/MetalLord.cfont` (size 31; 29972 bytes) | 139/139 | 346/373 | M22 |
 | `cntrl/maker/morningstar/mc/font_sources/OrnamentalSlab.cfont` (size 31; 19313 bytes) | 133/139 | 214/373 | M6 |
-| `cntrl/maker/morningstar/mc/font_sources/RubikDistressed.cfont` (size 31; 30382 bytes) | 139/139 | 344/373 | M24 |
-| `cntrl/maker/morningstar/mc/font_sources/SpecialElite.cfont` (size 30; 23842 bytes) | 139/139 | 330/373 | M25 |
+| `cntrl/maker/morningstar/mc/font_sources/RubikDistressed.cfont` (size 31; 30382 bytes) | 139/139 | 344/373 | M23 |
+| `cntrl/maker/morningstar/mc/font_sources/SpecialElite.cfont` (size 30; 23842 bytes) | 139/139 | 330/373 | M24 |
 | `cntrl/maker/morningstar/mc/font_sources/StillTime.cfont` (size 32; 34400 bytes) | 133/139 | 304/373 | M13 |
 | `cntrl/maker/morningstar/mc/font_sources/TamzenBold7x13.cfont` (size 13; 5723 bytes) | 139/139 | 182/373 | M15 |
 
@@ -132,9 +147,8 @@ Inspected working tree based on revision: `293c465378c8b12686db3b7c20158267bd50e
 
 | Font / asset | Base covered | Of requested 373 | Missing set |
 | --- | ---: | ---: | --- |
-| `cntrl/maker/morningstar/mc/distribution/languages/en.bin` (6 sizes: 8–20; 20528 bytes) | 96/139 | 96/373 | M26 |
-| `cntrl/maker/morningstar/mc/distribution/languages/fr.bin` (6 sizes: 8–20; 22829 bytes) | 105/139 | 106/373 | M27 |
-| `cntrl/maker/morningstar/mc/distribution/languages/fr.bin` (size 13; 22829 bytes) | 0/139 | 1/373 | M28 |
+
+The supplied packs contain translations only and reuse the flash fonts.
 
 ## Embedded portable UI fonts
 
@@ -144,20 +158,20 @@ Inspected working tree based on revision: `293c465378c8b12686db3b7c20158267bd50e
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: Circuit` (size 31; 14964 bytes) | 134/139 | 186/373 | M9 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CircuitBold` (size 32; 15498 bytes) | 134/139 | 186/373 | M9 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: StillTime` (size 32; 34400 bytes) | 133/139 | 304/373 | M13 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: MetalLord` (size 31; 29972 bytes) | 139/139 | 346/373 | M23 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CaveatBold` (size 31; 25144 bytes) | 139/139 | 347/373 | M19 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CourierPrimeBold` (size 33; 25748 bytes) | 139/139 | 344/373 | M20 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: DecoRound` (size 30; 23912 bytes) | 139/139 | 332/373 | M22 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: DMSerifDisplay` (size 32; 23512 bytes) | 139/139 | 314/373 | M21 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: MetalLord` (size 31; 29972 bytes) | 139/139 | 346/373 | M22 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CaveatBold` (size 31; 25144 bytes) | 139/139 | 347/373 | M18 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CourierPrimeBold` (size 33; 25748 bytes) | 139/139 | 344/373 | M19 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: DecoRound` (size 30; 23912 bytes) | 139/139 | 332/373 | M21 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: DMSerifDisplay` (size 32; 23512 bytes) | 139/139 | 314/373 | M20 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CollegeBlock` (size 31; 26717 bytes) | 139/139 | 346/373 | M7 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: OrnamentalSlab` (size 31; 19313 bytes) | 133/139 | 214/373 | M6 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: RubikDistressed` (size 31; 30382 bytes) | 139/139 | 344/373 | M24 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: SpecialElite` (size 30; 23842 bytes) | 139/139 | 330/373 | M25 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: ArimoBold` (size 32; 29749 bytes) | 139/139 | 372/373 | M17 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: BarlowCondensedSemiBold` (size 31; 23250 bytes) | 139/139 | 359/373 | M18 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CourierPrime` (8 sizes: 12–48; 177220 bytes) | 139/139 | 344/373 | M20 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: RubikDistressed` (size 31; 30382 bytes) | 139/139 | 344/373 | M23 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: SpecialElite` (size 30; 23842 bytes) | 139/139 | 330/373 | M24 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: ArimoBold` (size 32; 29749 bytes) | 139/139 | 372/373 | M16 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: BarlowCondensedSemiBold` (size 31; 23250 bytes) | 139/139 | 359/373 | M17 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CourierPrime` (8 sizes: 12–48; 177220 bytes) | 139/139 | 344/373 | M19 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: AtkinsonNextSemiBold` (30 sizes: 8–96; 787656 bytes) | 137/139 | 337/373 | M1 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: Arimo` (30 sizes: 8–96; 887024 bytes) | 139/139 | 372/373 | M17 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: Arimo` (30 sizes: 8–96; 887024 bytes) | 139/139 | 372/373 | M16 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: TamzenBold7x13` (size 13; 5723 bytes) | 139/139 | 182/373 | M15 |
 
 ## Legacy generated bitmap fonts
@@ -243,58 +257,42 @@ Characters are ordered by Unicode code point. Each set applies to every row refe
 
 `§` `ª` `¬` `­` `®` `¯` `±` `²` `³` `µ` `¶` `·` `¹` `º` `¼` `½` `¾` `Ă` `ă` `Ą` `ą` `Ć` `ć` `Ċ` `ċ` `Č` `č` `Ď` `ď` `Đ` `đ` `Ē` `ē` `Ė` `ė` `Ę` `ę` `Ě` `ě` `Ğ` `ğ` `Ġ` `ġ` `Ģ` `ģ` `Ħ` `ħ` `Ī` `ī` `Į` `į` `İ` `ı` `Ķ` `ķ` `Ĺ` `ĺ` `Ļ` `ļ` `Ľ` `ľ` `Ł` `ł` `Ń` `ń` `Ņ` `ņ` `Ň` `ň` `Ŋ` `ŋ` `Ő` `ő` `Ŕ` `ŕ` `Ŗ` `ŗ` `Ř` `ř` `Ś` `ś` `Ş` `ş` `Š` `š` `Ţ` `ţ` `Ť` `ť` `Ŧ` `ŧ` `Ū` `ū` `Ů` `ů` `Ű` `ű` `Ų` `ų` `Ŵ` `ŵ` `Ŷ` `ŷ` `Ź` `ź` `Ż` `ż` `Ž` `ž` `Ə` `ƒ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ș` `ș` `Ț` `ț` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˆ` `ˇ` `ˉ` `˘` `˙` `˚` `˛` `˜` `˝` `π` `Ẁ` `ẁ` `Ẃ` `ẃ` `Ẅ` `ẅ` `Ỳ` `ỳ` `–` `—` `‘` `‚` `“` `”` `„` `†` `‡` `•` `…` `‰` `‹` `›` `⁄` `€` `₺` `₽` `ℓ` `™` `Ω` `℮` `∂` `∆` `∏` `∑` `−` `∕` `∙` `√` `∞` `∫` `≈` `≠` `≤` `≥` `◊` `ﬁ` `ﬂ`
 
-### M16: 234 missing
-
-` ` `¡` `¢` `£` `¤` `¥` `¦` `§` `¨` `©` `ª` `«` `¬` `­` `®` `¯` `°` `±` `²` `³` `´` `µ` `¶` `·` `¸` `¹` `º` `»` `¼` `½` `¾` `¿` `Á` `Ã` `Ì` `Í` `Ð` `Ò` `Ó` `Õ` `×` `Ø` `Ú` `Ý` `Þ` `ß` `á` `ã` `ì` `í` `ð` `ò` `ó` `õ` `÷` `ø` `ú` `ý` `þ` `Ă` `ă` `Ą` `ą` `Ć` `ć` `Ċ` `ċ` `Č` `č` `Ď` `ď` `Đ` `đ` `Ē` `ē` `Ė` `ė` `Ę` `ę` `Ě` `ě` `Ğ` `ğ` `Ġ` `ġ` `Ģ` `ģ` `Ħ` `ħ` `Ī` `ī` `Į` `į` `İ` `ı` `Ķ` `ķ` `Ĺ` `ĺ` `Ļ` `ļ` `Ľ` `ľ` `Ł` `ł` `Ń` `ń` `Ņ` `ņ` `Ň` `ň` `Ŋ` `ŋ` `Ő` `ő` `Ŕ` `ŕ` `Ŗ` `ŗ` `Ř` `ř` `Ś` `ś` `Ş` `ş` `Š` `š` `Ţ` `ţ` `Ť` `ť` `Ŧ` `ŧ` `Ū` `ū` `Ů` `ů` `Ű` `ű` `Ų` `ų` `Ŵ` `ŵ` `Ŷ` `ŷ` `Ź` `ź` `Ż` `ż` `Ž` `ž` `Ə` `ƒ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ș` `ș` `Ț` `ț` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˆ` `ˇ` `ˉ` `˘` `˙` `˚` `˛` `˜` `˝` `π` `Ẁ` `ẁ` `Ẃ` `ẃ` `Ẅ` `ẅ` `Ỳ` `ỳ` `–` `—` `‘` `’` `‚` `“` `”` `„` `†` `‡` `•` `…` `‰` `‹` `›` `⁄` `€` `₺` `₽` `ℓ` `™` `Ω` `℮` `∂` `∆` `∏` `∑` `−` `∕` `∙` `√` `∞` `∫` `≈` `≠` `≤` `≥` `◊` `ﬁ` `ﬂ`
-
-### M17: 1 missing
+### M16: 1 missing
 
 `­`
 
-### M18: 14 missing
+### M17: 14 missing
 
 `­` `Ʒ` `Ǟ` `ǟ` `Ǥ` `Ǧ` `Ǩ` `Ǭ` `ǭ` `Ǯ` `Ȯ` `ȯ` `Ȱ` `ȱ`
 
-### M19: 26 missing
+### M18: 26 missing
 
 `­` `Ʒ` `Ǟ` `ǟ` `Ǥ` `Ǧ` `Ǩ` `Ǭ` `ǭ` `Ǯ` `Ȯ` `ȯ` `Ȱ` `ȱ` `π` `ℓ` `Ω` `℮` `∂` `∆` `∏` `∑` `√` `∞` `∫` `◊`
 
-### M20: 29 missing
+### M19: 29 missing
 
 `­` `Ə` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˉ` `₺` `₽` `ℓ` `Ω` `℮` `∆` `∙`
 
-### M21: 59 missing
+### M20: 59 missing
 
 `­` `Ċ` `ċ` `Ġ` `ġ` `Ħ` `ħ` `Ŋ` `ŋ` `Ŧ` `ŧ` `Ŵ` `ŵ` `Ŷ` `ŷ` `Ə` `ƒ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˉ` `π` `Ẁ` `ẁ` `Ẃ` `ẃ` `Ẅ` `ẅ` `Ỳ` `ỳ` `₺` `ℓ` `Ω` `∂` `∆` `∏` `∑` `√` `∞` `∫` `◊` `ﬁ` `ﬂ`
 
-### M22: 41 missing
+### M21: 41 missing
 
 `­` `Ə` `ƒ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ș` `ș` `Ț` `ț` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˉ` `₺` `₽` `ℓ` `Ω` `℮` `∆` `∑` `∕` `∙` `√` `∫` `≤` `≥` `◊`
 
-### M23: 27 missing
+### M22: 27 missing
 
 `­` `µ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ȯ` `ȯ` `Ȱ` `ȱ` `ʒ` `ˉ` `ℓ` `Ω` `℮` `∆` `∕` `∙` `ﬁ` `ﬂ`
 
-### M24: 29 missing
+### M23: 29 missing
 
 `­` `Ţ` `ţ` `Ə` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˉ` `π` `₺` `ℓ` `Ω` `∙`
 
-### M25: 43 missing
+### M24: 43 missing
 
 `­` `Ə` `ƒ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ș` `ș` `Ț` `ț` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˉ` `π` `₺` `₽` `ℓ` `Ω` `℮` `∆` `∑` `∕` `∙` `√` `∞` `∫` `≤` `≥` `◊`
 
-### M26: 277 missing
-
-` ` `¡` `¢` `£` `¤` `¥` `¦` `§` `¨` `©` `ª` `«` `¬` `­` `®` `¯` `°` `±` `²` `³` `´` `µ` `¶` `·` `¸` `¹` `º` `»` `¼` `½` `¾` `¿` `À` `Á` `Â` `Ã` `Ä` `Å` `Æ` `Ç` `È` `É` `Ê` `Ë` `Ì` `Í` `Î` `Ï` `Ð` `Ñ` `Ò` `Ó` `Ô` `Õ` `Ö` `×` `Ø` `Ù` `Ú` `Û` `Ü` `Ý` `Þ` `ß` `à` `á` `â` `ã` `ä` `å` `æ` `è` `é` `ê` `ë` `ì` `í` `î` `ï` `ð` `ñ` `ò` `ó` `ô` `õ` `ö` `÷` `ø` `ù` `ú` `û` `ü` `ý` `þ` `ÿ` `Ā` `ā` `Ă` `ă` `Ą` `ą` `Ć` `ć` `Ċ` `ċ` `Č` `č` `Ď` `ď` `Đ` `đ` `Ē` `ē` `Ė` `ė` `Ę` `ę` `Ě` `ě` `Ğ` `ğ` `Ġ` `ġ` `Ģ` `ģ` `Ħ` `ħ` `Ī` `ī` `Į` `į` `İ` `ı` `Ķ` `ķ` `Ĺ` `ĺ` `Ļ` `ļ` `Ľ` `ľ` `Ł` `ł` `Ń` `ń` `Ņ` `ņ` `Ň` `ň` `Ŋ` `ŋ` `Ō` `ō` `Ő` `ő` `Œ` `œ` `Ŕ` `ŕ` `Ŗ` `ŗ` `Ř` `ř` `Ś` `ś` `Ş` `ş` `Š` `š` `Ţ` `ţ` `Ť` `ť` `Ŧ` `ŧ` `Ū` `ū` `Ů` `ů` `Ű` `ű` `Ų` `ų` `Ŵ` `ŵ` `Ŷ` `ŷ` `Ÿ` `Ź` `ź` `Ż` `ż` `Ž` `ž` `Ə` `ƒ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ș` `ș` `Ț` `ț` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˆ` `ˇ` `ˉ` `˘` `˙` `˚` `˛` `˜` `˝` `π` `Ẁ` `ẁ` `Ẃ` `ẃ` `Ẅ` `ẅ` `Ỳ` `ỳ` `–` `—` `‘` `’` `‚` `“` `”` `„` `†` `‡` `•` `…` `‰` `‹` `›` `⁄` `€` `₺` `₽` `ℓ` `™` `Ω` `℮` `∂` `∆` `∏` `∑` `−` `∕` `∙` `√` `∞` `∫` `≈` `≠` `≤` `≥` `◊` `ﬁ` `ﬂ`
-
-### M27: 267 missing
-
-` ` `¡` `¢` `£` `¤` `¥` `¦` `§` `¨` `©` `ª` `«` `¬` `­` `®` `¯` `°` `±` `²` `³` `´` `µ` `¶` `·` `¸` `¹` `º` `»` `¼` `½` `¾` `¿` `À` `Á` `Â` `Ã` `Ä` `Å` `Æ` `Ç` `Ê` `Ë` `Ì` `Í` `Î` `Ï` `Ð` `Ñ` `Ò` `Ó` `Ô` `Õ` `Ö` `×` `Ø` `Ù` `Ú` `Û` `Ü` `Ý` `Þ` `ß` `á` `ã` `ä` `å` `æ` `ë` `ì` `í` `î` `ï` `ð` `ñ` `ò` `ó` `õ` `ö` `÷` `ø` `ù` `ú` `û` `ü` `ý` `þ` `ÿ` `Ā` `ā` `Ă` `ă` `Ą` `ą` `Ć` `ć` `Ċ` `ċ` `Č` `č` `Ď` `ď` `Đ` `đ` `Ē` `ē` `Ė` `ė` `Ę` `ę` `Ě` `ě` `Ğ` `ğ` `Ġ` `ġ` `Ģ` `ģ` `Ħ` `ħ` `Ī` `ī` `Į` `į` `İ` `ı` `Ķ` `ķ` `Ĺ` `ĺ` `Ļ` `ļ` `Ľ` `ľ` `Ł` `ł` `Ń` `ń` `Ņ` `ņ` `Ň` `ň` `Ŋ` `ŋ` `Ō` `ō` `Ő` `ő` `Œ` `Ŕ` `ŕ` `Ŗ` `ŗ` `Ř` `ř` `Ś` `ś` `Ş` `ş` `Š` `š` `Ţ` `ţ` `Ť` `ť` `Ŧ` `ŧ` `Ū` `ū` `Ů` `ů` `Ű` `ű` `Ų` `ų` `Ŵ` `ŵ` `Ŷ` `ŷ` `Ÿ` `Ź` `ź` `Ż` `ż` `Ž` `ž` `Ə` `ƒ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ș` `ș` `Ț` `ț` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˆ` `ˇ` `ˉ` `˘` `˙` `˚` `˛` `˜` `˝` `π` `Ẁ` `ẁ` `Ẃ` `ẃ` `Ẅ` `ẅ` `Ỳ` `ỳ` `–` `—` `‘` `‚` `“` `”` `„` `†` `‡` `•` `…` `‰` `‹` `›` `⁄` `€` `₺` `₽` `ℓ` `™` `Ω` `℮` `∂` `∆` `∏` `∑` `−` `∕` `∙` `√` `∞` `∫` `≈` `≠` `≤` `≥` `◊` `ﬁ` `ﬂ`
-
-### M28: 372 missing
-
-` ` `!` `"` `#` `$` `%` `&` `'` `(` `)` `*` `+` `,` `-` `.` `/` `0` `1` `2` `3` `4` `5` `6` `7` `8` `9` `:` `;` `<` `=` `>` `?` `@` `A` `B` `C` `D` `E` `F` `G` `H` `I` `J` `K` `L` `M` `N` `O` `P` `Q` `R` `S` `T` `U` `V` `W` `X` `Y` `Z` `[` `\` `]` `^` `_` ``` `a` `b` `c` `d` `e` `f` `g` `h` `i` `j` `k` `l` `m` `n` `o` `p` `q` `r` `s` `t` `u` `v` `w` `x` `y` `z` `{` `|` `}` `~` ` ` `¡` `¢` `£` `¤` `¥` `¦` `§` `¨` `©` `ª` `«` `¬` `­` `®` `¯` `°` `±` `²` `³` `´` `µ` `¶` `·` `¸` `¹` `º` `»` `¼` `½` `¾` `¿` `À` `Á` `Â` `Ã` `Ä` `Å` `Æ` `Ç` `È` `É` `Ê` `Ë` `Ì` `Í` `Î` `Ï` `Ð` `Ñ` `Ò` `Ó` `Ô` `Õ` `Ö` `×` `Ø` `Ù` `Ú` `Û` `Ü` `Ý` `Þ` `ß` `à` `á` `â` `ã` `ä` `å` `æ` `ç` `è` `é` `ê` `ë` `ì` `í` `î` `ï` `ð` `ñ` `ò` `ó` `ô` `õ` `ö` `÷` `ø` `ù` `ú` `û` `ü` `ý` `þ` `ÿ` `Ā` `ā` `Ă` `ă` `Ą` `ą` `Ć` `ć` `Ċ` `ċ` `Č` `č` `Ď` `ď` `Đ` `đ` `Ē` `ē` `Ė` `ė` `Ę` `ę` `Ě` `ě` `Ğ` `ğ` `Ġ` `ġ` `Ģ` `ģ` `Ħ` `ħ` `Ī` `ī` `Į` `į` `İ` `ı` `Ķ` `ķ` `Ĺ` `ĺ` `Ļ` `ļ` `Ľ` `ľ` `Ł` `ł` `Ń` `ń` `Ņ` `ņ` `Ň` `ň` `Ŋ` `ŋ` `Ō` `ō` `Ő` `ő` `Œ` `œ` `Ŕ` `ŕ` `Ŗ` `ŗ` `Ř` `ř` `Ś` `ś` `Ş` `ş` `Š` `š` `Ţ` `ţ` `Ť` `ť` `Ŧ` `ŧ` `Ū` `ū` `Ů` `ů` `Ű` `ű` `Ų` `ų` `Ŵ` `ŵ` `Ŷ` `ŷ` `Ÿ` `Ź` `ź` `Ż` `ż` `Ž` `ž` `Ə` `ƒ` `Ʒ` `Ǟ` `ǟ` `Ǥ` `ǥ` `Ǧ` `ǧ` `Ǩ` `ǩ` `Ǭ` `ǭ` `Ǯ` `ǯ` `Ș` `ș` `Ț` `ț` `Ȯ` `ȯ` `Ȱ` `ȱ` `ə` `ʒ` `ˆ` `ˇ` `ˉ` `˘` `˙` `˚` `˛` `˜` `˝` `π` `Ẁ` `ẁ` `Ẃ` `ẃ` `Ẅ` `ẅ` `Ỳ` `ỳ` `–` `—` `‘` `‚` `“` `”` `„` `†` `‡` `•` `…` `‰` `‹` `›` `⁄` `€` `₺` `₽` `ℓ` `™` `Ω` `℮` `∂` `∆` `∏` `∑` `−` `∕` `∙` `√` `∞` `∫` `≈` `≠` `≤` `≥` `◊` `ﬁ` `ﬂ`
-
 ## Additional work beyond the prompt
 
-None. The inspection script is retained to reproduce this report; no font assets or rendering behavior were changed.
+None. Missing source glyphs have not been newly drawn. The inspection script reproduces the coverage tables.

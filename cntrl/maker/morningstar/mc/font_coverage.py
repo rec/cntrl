@@ -5,7 +5,6 @@ import subprocess
 from io import BytesIO
 from pathlib import Path
 
-import tyro
 from fontTools.ttLib import TTFont
 from pydantic import BaseModel
 
@@ -167,11 +166,6 @@ def coverage(data: bytes, name: str) -> list[tuple[str, set[str]]]:
     ]
 
 
-def main() -> None:
-    options = tyro.cli(Report)
-    options.output.write_text(generate())
-
-
 FRENCH = 'àâæçèéêëîïôœùûüÿ'
 EXTRA = 'äåñöāō'
 BASE = {chr(c) for c in range(32, 127)} | set(
@@ -202,7 +196,7 @@ Counts refer to Unicode characters, not necessarily distinct bitmap shapes.
 Regenerate from the repository root:
 
 ```sh
-uv run --no-sync python -m cntrl.maker.morningstar.mc.font_coverage
+cntrl font-coverage
 ```
 
 Outline coverage uses each local TTF/OTF Unicode cmap and does not claim visual
@@ -219,7 +213,3 @@ ASCII-only bitmap assets omit all 44 non-ASCII base extensions.
 Tamzen's selected UI asset includes every supported drawable comparison character;
 the other comparison samples retain their original ASCII-only purpose.
 """
-
-
-if __name__ == '__main__':
-    main()
