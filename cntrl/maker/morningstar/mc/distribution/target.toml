@@ -4,6 +4,7 @@ scan_interval = 0.001
 usb_block_size = 4096
 max_switches = 5
 ui_fonts = ["CourierPrime", "AtkinsonNextSemiBold", "Arimo", "TamzenBold7x13"]
+animation_display_streams = [0, 1, 0]
 default_midi_output = "din"
 relay_outputs = []
 max_instruments = 65535
@@ -15,6 +16,10 @@ characters = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_
 [memory]
 capacity = 770064
 runtime = 294912
+
+[button_labels]
+
+[compiled_button_ids]
 
 [controls]
 previous = "A"
@@ -58,6 +63,8 @@ width = 160
 height = 128
 gap = 72
 corner_radius = 8
+
+[compiled_display_ids]
 
 [[fonts]]
 horizontal_scale = 1.0
