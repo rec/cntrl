@@ -4,12 +4,14 @@ import struct
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from cntrl.fonts import assets, ui
 from cntrl.fonts.catalogue import FONT_IDS, UI_FONTS, bundled_sources
 from cntrl.fonts.characters import printable_characters
 from cntrl.fonts.outline import Outline
 from cntrl.patch_switcher import compiler, display, graphics, models
+from scripts import native_tests
 
 
 @pytest.fixture(scope='module')
@@ -37,7 +39,7 @@ def test_performance_fonts_use_the_largest_comfortable_single_size(
     face = next(f for f in target.fonts if f.name == name)
     assert len(face.sizes) == 1
     size, metrics = next(iter(face.sizes.items()))
-    assert metrics.line_height <= target.display_height // 3 - 4
+    assert metrics.line_height <= (target.display_height // 3) * 2 // 3
     if name in bundled_sources():
         outline = Outline(bundled_sources()[name], hinting='native')
         characters = ui.supported_characters(outline)
@@ -48,7 +50,7 @@ def test_performance_fonts_use_the_largest_comfortable_single_size(
         height = max(g.top for g in glyphs) + max(
             0, max(g.height - g.top for g in glyphs)
         )
-        assert height > target.display_height // 3 - 4
+        assert height > (target.display_height // 3) * 2 // 3
 
 
 @pytest.mark.parametrize('name', [n for n in FONT_IDS if n not in UI_FONTS])
@@ -109,6 +111,55 @@ def test_authored_unicode_outside_flash_repertoire_keeps_sparse_assets(
         for d in files.values()
         for m in assets.decode(d, 'Arimo', 0).sizes.values()
     )
+
+
+@pytest.fixture(scope='module')
+def performance_renderer(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    output = tmp_path_factory.mktemp('performance-renderer') / 'render'
+    root = ROOT.parents[3]
+    native_tests.compile_native(
+        [
+            'c++',
+            '-std=c++17',
+            '-Wall',
+            '-Wextra',
+            '-Werror',
+            '-fsanitize=address,undefined',
+            '-fno-omit-frame-pointer',
+            f'-I{root / "firmware/include"}',
+            str(root / 'firmware/test/test_performance_fonts.cpp'),
+            '-o',
+            str(output),
+        ]
+    )
+    return native_tests.executable(output)
+
+
+@pytest.mark.parametrize('name', [n for n in FONT_IDS if n not in UI_FONTS])
+def test_three_performance_rows_render_with_clear_space_above_and_below(
+    target: models.Target, name: str, performance_renderer: Path, tmp_path: Path
+) -> None:
+    face = next(f for f in target.fonts if f.name == name)
+    size, metrics = next(iter(face.sizes.items()))
+    characters = tmp_path / 'characters.txt'
+    characters.write_text(''.join(metrics.characters), encoding='utf-8')
+    native_tests.run_native(
+        [
+            str(performance_renderer),
+            str(ROOT / 'font_sources' / f'{name}.cfont'),
+            str(face.id),
+            str(size),
+            str(metrics.line_height),
+            str(metrics.top),
+            str(characters),
+            str(tmp_path / f'{name}.ppm'),
+        ],
+        check=True,
+    )
+    with Image.open(tmp_path / f'{name}.ppm') as image:
+        image.resize((480, 384), Image.Resampling.NEAREST).save(
+            tmp_path / f'{name}.png'
+        )
 
 
 ROOT = Path(__file__).parents[1]

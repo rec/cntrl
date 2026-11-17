@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from ....fonts import status, ui
 from ....fonts.assets import decode, pack
+from ....fonts.bitmap import BitmapRaster
 from ....fonts.catalogue import FONT_IDS, SIZES, UI_FONTS, bundled_sources
 from ....fonts.outline import Glyph, Outline
 from ....fonts.ui import embedded_header
@@ -71,7 +72,9 @@ def export(options: FontExport) -> dict[str, str]:
                     g.height - g.top for g in glyphs
                 )
             size = max(
-                s for s, h in heights.items() if h <= options.display_height // 3 - 4
+                s
+                for s, h in heights.items()
+                if h <= (options.display_height // 3) * 2 // 3
             )
             data = pack(
                 raster,
@@ -138,15 +141,32 @@ def export(options: FontExport) -> dict[str, str]:
 
 
 def faces(directory: Path, sources: dict[str, str]) -> list[models.FontFace]:
-    return [
-        decode((directory / p).read_bytes(), n, 0).model_copy(
-            update={
-                'id': FONT_IDS[n],
-                'horizontal_scale': 1.5 if n == 'StillTime' else 1.0,
-            }
+    result = []
+    for name, resource in sources.items():
+        path = directory / resource
+        face = decode(path.read_bytes(), name, 0)
+        raster = BitmapRaster(path)
+        # Embedded rendering already applies the asset's cap-height origin.
+        # Layout needs only the remaining ascent above that origin.
+        sizes = {
+            s: m.model_copy(
+                update={
+                    'top': max(raster.glyph(s, ord(c)).top for c in m.characters)
+                    - m.top
+                }
+            )
+            for s, m in face.sizes.items()
+        }
+        result.append(
+            face.model_copy(
+                update={
+                    'id': FONT_IDS[name],
+                    'horizontal_scale': 1.5 if name == 'StillTime' else 1.0,
+                    'sizes': sizes,
+                }
+            )
         )
-        for n, p in sources.items()
-    ]
+    return result
 
 
 def main() -> None:

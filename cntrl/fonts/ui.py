@@ -77,8 +77,8 @@ def supported_characters(outline: Outline) -> str:
 
 
 def performance_size(outline: Outline, characters: str, display_height: int) -> int:
-    """Keep accents and descenders inside a third-height row with 2px margins."""
-    height = display_height // 3 - 4
+    """Leave a third of each performance row clear, including accents/descenders."""
+    height = (display_height // 3) * 2 // 3
 
     def fits(size: int) -> bool:
         glyphs = [

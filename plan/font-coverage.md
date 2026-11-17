@@ -40,7 +40,7 @@ ASCII-only bitmap assets omit all 44 non-ASCII base extensions.
 Tamzen's selected UI asset includes every supported drawable comparison character;
 the other comparison samples retain their original ASCII-only purpose.
 
-Inspected working tree based on revision: `7439870ebc6a72b3578c949b07b189e9831ea44f`.
+Inspected working tree based on revision: `a6a207ea973f7baeda12f5fa89e0bbd4d35b9aa0`.
 
 ## Outline sources
 
@@ -124,23 +124,23 @@ Inspected working tree based on revision: `7439870ebc6a72b3578c949b07b189e9831ea
 | `cntrl/maker/morningstar/mc/distribution/fonts/StillTime.cfont` (size 32; 34400 bytes) | 133/139 | 304/373 | M13 |
 | `cntrl/maker/morningstar/mc/distribution/fonts/TamzenBold7x13.cfont` (size 13; 5723 bytes) | 139/139 | 182/373 | M15 |
 | `cntrl/maker/morningstar/mc/font_sources/Arimo.cfont` (30 sizes: 8–96; 887024 bytes) | 139/139 | 372/373 | M16 |
-| `cntrl/maker/morningstar/mc/font_sources/ArimoBold.cfont` (size 32; 29749 bytes) | 139/139 | 372/373 | M16 |
+| `cntrl/maker/morningstar/mc/font_sources/ArimoBold.cfont` (size 22; 19693 bytes) | 139/139 | 372/373 | M16 |
 | `cntrl/maker/morningstar/mc/font_sources/AtkinsonNextSemiBold.cfont` (30 sizes: 8–96; 787656 bytes) | 137/139 | 337/373 | M1 |
-| `cntrl/maker/morningstar/mc/font_sources/BarlowCondensedSemiBold.cfont` (size 31; 23250 bytes) | 139/139 | 359/373 | M17 |
-| `cntrl/maker/morningstar/mc/font_sources/CaveatBold.cfont` (size 31; 25144 bytes) | 139/139 | 347/373 | M18 |
-| `cntrl/maker/morningstar/mc/font_sources/Circuit.cfont` (size 31; 14964 bytes) | 134/139 | 186/373 | M9 |
-| `cntrl/maker/morningstar/mc/font_sources/CircuitBold.cfont` (size 32; 15498 bytes) | 134/139 | 186/373 | M9 |
-| `cntrl/maker/morningstar/mc/font_sources/CollegeBlock.cfont` (size 31; 26717 bytes) | 139/139 | 346/373 | M7 |
-| `cntrl/maker/morningstar/mc/font_sources/ComicSansMS.cfont` (size 20; 6055 bytes) | 95/139 | 95/373 | M14 |
+| `cntrl/maker/morningstar/mc/font_sources/BarlowCondensedSemiBold.cfont` (size 23; 16667 bytes) | 139/139 | 359/373 | M17 |
+| `cntrl/maker/morningstar/mc/font_sources/CaveatBold.cfont` (size 23; 18120 bytes) | 139/139 | 347/373 | M18 |
+| `cntrl/maker/morningstar/mc/font_sources/Circuit.cfont` (size 23; 10166 bytes) | 134/139 | 186/373 | M9 |
+| `cntrl/maker/morningstar/mc/font_sources/CircuitBold.cfont` (size 23; 10944 bytes) | 134/139 | 186/373 | M9 |
+| `cntrl/maker/morningstar/mc/font_sources/CollegeBlock.cfont` (size 23; 19525 bytes) | 139/139 | 346/373 | M7 |
+| `cntrl/maker/morningstar/mc/font_sources/ComicSansMS.cfont` (size 16; 4880 bytes) | 95/139 | 95/373 | M14 |
 | `cntrl/maker/morningstar/mc/font_sources/CourierPrime.cfont` (8 sizes: 12–48; 177220 bytes) | 139/139 | 344/373 | M19 |
-| `cntrl/maker/morningstar/mc/font_sources/CourierPrimeBold.cfont` (size 33; 25748 bytes) | 139/139 | 344/373 | M19 |
-| `cntrl/maker/morningstar/mc/font_sources/DMSerifDisplay.cfont` (size 32; 23512 bytes) | 139/139 | 314/373 | M20 |
-| `cntrl/maker/morningstar/mc/font_sources/DecoRound.cfont` (size 30; 23912 bytes) | 139/139 | 332/373 | M21 |
-| `cntrl/maker/morningstar/mc/font_sources/MetalLord.cfont` (size 31; 29972 bytes) | 139/139 | 346/373 | M22 |
-| `cntrl/maker/morningstar/mc/font_sources/OrnamentalSlab.cfont` (size 31; 19313 bytes) | 133/139 | 214/373 | M6 |
-| `cntrl/maker/morningstar/mc/font_sources/RubikDistressed.cfont` (size 31; 30382 bytes) | 139/139 | 344/373 | M23 |
-| `cntrl/maker/morningstar/mc/font_sources/SpecialElite.cfont` (size 30; 23842 bytes) | 139/139 | 330/373 | M24 |
-| `cntrl/maker/morningstar/mc/font_sources/StillTime.cfont` (size 32; 34400 bytes) | 133/139 | 304/373 | M13 |
+| `cntrl/maker/morningstar/mc/font_sources/CourierPrimeBold.cfont` (size 24; 18267 bytes) | 139/139 | 344/373 | M19 |
+| `cntrl/maker/morningstar/mc/font_sources/DMSerifDisplay.cfont` (size 24; 16970 bytes) | 139/139 | 314/373 | M20 |
+| `cntrl/maker/morningstar/mc/font_sources/DecoRound.cfont` (size 23; 17726 bytes) | 139/139 | 332/373 | M21 |
+| `cntrl/maker/morningstar/mc/font_sources/MetalLord.cfont` (size 23; 20750 bytes) | 139/139 | 346/373 | M22 |
+| `cntrl/maker/morningstar/mc/font_sources/OrnamentalSlab.cfont` (size 22; 12684 bytes) | 133/139 | 214/373 | M6 |
+| `cntrl/maker/morningstar/mc/font_sources/RubikDistressed.cfont` (size 23; 20274 bytes) | 139/139 | 344/373 | M23 |
+| `cntrl/maker/morningstar/mc/font_sources/SpecialElite.cfont` (size 22; 17470 bytes) | 139/139 | 330/373 | M24 |
+| `cntrl/maker/morningstar/mc/font_sources/StillTime.cfont` (size 23; 21855 bytes) | 133/139 | 304/373 | M13 |
 | `cntrl/maker/morningstar/mc/font_sources/TamzenBold7x13.cfont` (size 13; 5723 bytes) | 139/139 | 182/373 | M15 |
 
 ## Language-pack fonts
@@ -154,21 +154,21 @@ The supplied packs contain translations only and reuse the flash fonts.
 
 | Font / asset | Base covered | Of requested 373 | Missing set |
 | --- | ---: | ---: | --- |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: ComicSansMS` (size 20; 6055 bytes) | 95/139 | 95/373 | M14 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: Circuit` (size 31; 14964 bytes) | 134/139 | 186/373 | M9 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CircuitBold` (size 32; 15498 bytes) | 134/139 | 186/373 | M9 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: StillTime` (size 32; 34400 bytes) | 133/139 | 304/373 | M13 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: MetalLord` (size 31; 29972 bytes) | 139/139 | 346/373 | M22 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CaveatBold` (size 31; 25144 bytes) | 139/139 | 347/373 | M18 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CourierPrimeBold` (size 33; 25748 bytes) | 139/139 | 344/373 | M19 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: DecoRound` (size 30; 23912 bytes) | 139/139 | 332/373 | M21 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: DMSerifDisplay` (size 32; 23512 bytes) | 139/139 | 314/373 | M20 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CollegeBlock` (size 31; 26717 bytes) | 139/139 | 346/373 | M7 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: OrnamentalSlab` (size 31; 19313 bytes) | 133/139 | 214/373 | M6 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: RubikDistressed` (size 31; 30382 bytes) | 139/139 | 344/373 | M23 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: SpecialElite` (size 30; 23842 bytes) | 139/139 | 330/373 | M24 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: ArimoBold` (size 32; 29749 bytes) | 139/139 | 372/373 | M16 |
-| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: BarlowCondensedSemiBold` (size 31; 23250 bytes) | 139/139 | 359/373 | M17 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: ComicSansMS` (size 16; 4880 bytes) | 95/139 | 95/373 | M14 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: Circuit` (size 23; 10166 bytes) | 134/139 | 186/373 | M9 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CircuitBold` (size 23; 10944 bytes) | 134/139 | 186/373 | M9 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: StillTime` (size 23; 21855 bytes) | 133/139 | 304/373 | M13 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: MetalLord` (size 23; 20750 bytes) | 139/139 | 346/373 | M22 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CaveatBold` (size 23; 18120 bytes) | 139/139 | 347/373 | M18 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CourierPrimeBold` (size 24; 18267 bytes) | 139/139 | 344/373 | M19 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: DecoRound` (size 23; 17726 bytes) | 139/139 | 332/373 | M21 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: DMSerifDisplay` (size 24; 16970 bytes) | 139/139 | 314/373 | M20 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CollegeBlock` (size 23; 19525 bytes) | 139/139 | 346/373 | M7 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: OrnamentalSlab` (size 22; 12684 bytes) | 133/139 | 214/373 | M6 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: RubikDistressed` (size 23; 20274 bytes) | 139/139 | 344/373 | M23 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: SpecialElite` (size 22; 17470 bytes) | 139/139 | 330/373 | M24 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: ArimoBold` (size 22; 19693 bytes) | 139/139 | 372/373 | M16 |
+| `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: BarlowCondensedSemiBold` (size 23; 16667 bytes) | 139/139 | 359/373 | M17 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: CourierPrime` (8 sizes: 12–48; 177220 bytes) | 139/139 | 344/373 | M19 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: AtkinsonNextSemiBold` (30 sizes: 8–96; 787656 bytes) | 137/139 | 337/373 | M1 |
 | `cntrl/maker/morningstar/mc/firmware/patch_switcher/embedded_fonts.h: Arimo` (30 sizes: 8–96; 887024 bytes) | 139/139 | 372/373 | M16 |
