@@ -2,6 +2,8 @@ language = 'hu'
 name = 'Magyar'
 
 [messages]
+time = { text = 'Idő' }
+time_controls = { text = '{send:s} küldés/{source:s} forrás' }
 panic = { text = 'Pánik' }
 language_scroll = { text = '{up:s} és {down:s}: görgetés' }
 language_select = { text = '{button:s}: kiválasztás' }

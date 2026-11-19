@@ -2,6 +2,8 @@ language = 'fi'
 name = 'Suomi'
 
 [messages]
+time = { text = 'Aika' }
+time_controls = { text = '{send:s} lähetys/{source:s} lähde' }
 panic = { text = 'Paniikki' }
 language_scroll = { text = '{up:s} ja {down:s}: selaa' }
 language_select = { text = '{button:s}: valitse' }

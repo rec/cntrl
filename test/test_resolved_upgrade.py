@@ -83,7 +83,7 @@ def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position(
         'status-7',
         'status-8',
         'status-9',
-        'tap-tempo',
+        'status-0',
         'full-performance',
     ]
     assert source['regions'] == {

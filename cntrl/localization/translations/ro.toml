@@ -2,6 +2,8 @@ language = 'ro'
 name = 'Română'
 
 [messages]
+time = { text = 'Timp' }
+time_controls = { text = '{send:s} trimitere/{source:s} sursă' }
 panic = { text = 'Panică' }
 language_scroll = { text = '{up:s} și {down:s} pentru derulare' }
 language_select = { text = '{button:s} pentru selectare' }

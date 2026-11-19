@@ -2,6 +2,8 @@ language = 'de'
 name = 'Deutsch'
 
 [messages]
+time = { text = 'Zeit' }
+time_controls = { text = '{send:s} Senden/{source:s} Quelle' }
 panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} und {down:s} zum Blättern' }
 language_select = { text = '{button:s} zum Auswählen' }

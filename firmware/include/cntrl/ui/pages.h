@@ -27,7 +27,8 @@ public:
     const StatusSnapshot *status_snapshot = nullptr;
     StatusSnapshot capture_status(const PerformanceStatus &performance) const {
         StatusSnapshot result{performance, uptime_, 0};
-        result.tap_period_ms = tap_.period(); result.clock_period_us = clock_.period_us(); result.clock_active = clock_.active();
+        result.tap_period_ms = tap_.period();
+        result.clock_period_us = observed_clock().period_us(); result.clock_active = observed_clock().measured();
 #ifdef CNTRL_GIT_COMMIT
         result.git_commit = CNTRL_GIT_COMMIT;
 #endif
@@ -67,7 +68,7 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, cable = 3, panic, ports, expression, none = 10, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu };
+    enum class Page { status = 1, cable = 3, panic, ports, expression, none = 10, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu, time };
     struct ViewState {
         unsigned index = 0, jack = 0, language = 0;
         Page page = Page::none;
@@ -121,16 +122,18 @@ public:
         generator.stop();
         settings_ = settings;
         using R = cntrl::PageSettings;
-        external_ = settings[R::clock_external];
+        selected_clock_ = 0; sending_clock_ = false;
         if (unsigned bpm = settings_.words[R::slot1]) generator.set_tempo((60000000u + bpm / 2) / bpm);
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
-        clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
+        for (auto &clock : clocks_) clock.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
         prepare_expression_layout();
         clock_changed_ = true;
         dirty_ = true;
     }
     void stop_setup() {
-        generator.stop(); tap_ = TapTempo(); clock_ = ClockTempo();
+        generator.stop(); tap_ = TapTempo();
+        for (auto &clock : clocks_) clock = ClockTempo();
+        selected_clock_ = 0; sending_clock_ = false;
         held_ = flashing_ = false; clock_changed_ = dirty_ = true;
     }
     void browse(bool reverse) {
@@ -167,37 +170,69 @@ public:
     }
     cntrl::ClockGenerator generator;
     unsigned clock_outputs() const { return settings_[cntrl::PageSettings::clock_outputs]; }
-    bool external_clock() const { return external_; }
-    unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
+    bool external_clock() const { return selected_clock_ != 0; }
+    unsigned clock_owner() const { return clock_outputs() | generator.stopping(); }
+    unsigned clock_selection() const { return selected_clock_; }
+    bool clock_sending() const { return sending_clock_; }
+    uint64_t source_period(unsigned source) const {
+        return source == 0 ? uint64_t(tap_.period()) * 1000 : source <= 2 && clocks_[source - 1].measured() ? clocks_[source - 1].period_us() : 0;
+    }
+    void toggle_clock() { sending_clock_ = !sending_clock_; dirty_ = true; }
+    void cycle_clock() { select_clock((selected_clock_ + 1) % 3); }
+    void clear_tap() {
+        using R = cntrl::PageSettings;
+        tap_.configure(settings_[R::tap_intervals], settings_[R::minimum_taps], settings_[R::minimum_interval], settings_[R::reset_gap]);
+        select_available_clock(); dirty_ = true;
+    }
+    template<class Sink>
+    void poll_clock(uint32_t now_us, unsigned available, Sink &sink) {
+        for (auto &clock : clocks_) clock.poll(now_us);
+        select_available_clock();
+        unsigned mask = sending_clock_ && !selected_clock_ && tap_.period() ? clock_outputs() & available : 0;
+        if (mask && !generator.running() && !generator.stopping()) generator.start(now_us, 0, false);
+        generator.clock_outputs(mask);
+        generator.poll(now_us, available, sink);
+    }
+    unsigned relay_clock_outputs(unsigned input) const {
+        return sending_clock_ && selected_clock_ && input == clock_input(selected_clock_) ? clock_outputs() : 0;
+    }
     Page page() const { return page_; }
     void revisit() {
         dirty_ = true;
     }
     void tap(uint32_t now) {
-        if (page_ == Page::tap) {
-            if (tap_.tap(now)) generator.set_tempo(tap_.period() * 1000);
+        if (page_ == Page::time) {
+            if (tap_.tap(now)) {
+                generator.set_tempo(tap_.period() * 1000);
+                if (!generator.running() && !generator.stopping()) generator.start(now * 1000, 0, false);
+                select_clock(0);
+            }
         }
         else return;
         dirty_ = true;
     }
-    void clock(unsigned source, uint32_t now_us) { clock_.clock(source, now_us); }
+    void clock(unsigned source, uint32_t now_us) { clock_message(source, 0xf8, now_us); }
     void clock_message(unsigned source, uint8_t status, uint32_t now_us) {
-        if (clock_.transport(source,status,now_us) && external_ && status == 0xfc && arpeggiator) arpeggiator->stop();
+        for (unsigned i = 0; i < 2; ++i) if (source < midi::max_routes && source == clock_input(i + 1)) {
+            clocks_[i].poll(now_us);
+            if (clocks_[i].transport(source, status, now_us) && selected_clock_ == i + 1 && status == 0xfc && arpeggiator) arpeggiator->stop();
+        }
+        select_available_clock();
     }
-    bool clock_ready() const { return !external_ || clock_.available(); }
-    unsigned clock_period() const { return external_ ? unsigned(clock_.period_us()) : generator.period_us(); }
+    bool clock_ready() const { return !selected_clock_ || clocks_[selected_clock_ - 1].measured(); }
+    unsigned clock_period() const { return selected_clock_ ? unsigned(clocks_[selected_clock_ - 1].period_us()) : generator.period_us(); }
     cntrl::midi::BeatPosition beat_position(uint32_t now_us) {
-        if (external_) clock_.poll(now_us);
-        auto position = external_ ? clock_.beat_position(now_us) : generator.beat_position(now_us);
-        if (clock_changed_ || external_ != beat_external_ || position.restart != beat_source_restart_) {
-            ++beat_restart_; beat_source_restart_ = position.restart; beat_external_ = external_; clock_changed_ = false;
+        if (selected_clock_) clocks_[selected_clock_ - 1].poll(now_us);
+        auto position = selected_clock_ ? clocks_[selected_clock_ - 1].beat_position(now_us) : generator.beat_position(now_us);
+        if (clock_changed_ || selected_clock_ != beat_source_ || position.restart != beat_source_restart_) {
+            ++beat_restart_; beat_source_restart_ = position.restart; beat_source_ = selected_clock_; clock_changed_ = false;
         }
         position.restart = beat_restart_; return position;
     }
     cntrl::midi::BeatPosition arpeggiator_beat_position(uint32_t now_us) {
         auto position = beat_position(now_us);
-        if (external_) {
-            auto continuing = clock_.holdover_position(now_us);
+        if (selected_clock_) {
+            auto continuing = clocks_[selected_clock_ - 1].holdover_position(now_us);
             position.value = continuing.value; position.running = continuing.running;
         }
         return position;
@@ -205,7 +240,8 @@ public:
     void time(uint32_t now, uint32_t now_us, bool held) {
         held_ = held;
         uptime_ += uint32_t(now - previous_); previous_ = now;
-        clock_.poll(now_us); tap_.flash(now, 0);
+        for (auto &clock : clocks_) clock.poll(now_us);
+        select_available_clock(); tap_.flash(now, 0);
     }
     void expression_status(const char *title, const char *position, const char *prompt) {
         const char *fields[] = {title, position, prompt};
@@ -231,7 +267,7 @@ public:
         if (page_ == Page::arpeggiator) return uint32_t(now - refreshed_) >= 50;
         if (page_ == Page::cable || page_ == Page::panic) return uint32_t(now - refreshed_) >= 80;
         if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
-        return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
+        return page_ == Page::time && (uint32_t(now - refreshed_) >= 50 || (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_view)
@@ -243,6 +279,7 @@ public:
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
+        if (page_ == Page::time && window == 0) { time_view(pane); return pane; }
         if (page_ == Page::menu) {
             page_heading(pane, i18n::text(i18n::Message::pages_and_tools));
             i18n::format(prompt_, sizeof(prompt_), i18n::Message::control_action, "", label(controls_.confirm), i18n::text(i18n::Message::ok));
@@ -283,7 +320,7 @@ public:
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::tap ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : page_ == Page::ports ? i18n::text(i18n::Message::trs_ports) : "";
+        const char *heading = page_ == Page::time ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : page_ == Page::ports ? i18n::text(i18n::Message::trs_ports) : "";
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) heading = preview_label_;
 #endif
@@ -327,7 +364,7 @@ public:
             }
             return pane;
         }
-        if (page_ == Page::tap) {
+        if (page_ == Page::time) {
             char number[24], sample[24];
             number_text(number, sizeof(number), tap_.period(), false, true);
             const unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];
@@ -348,7 +385,7 @@ public:
             i18n::format(rows[0], sizeof(rows[0]), i18n::Message::cycles_patches, status.cycles, status.patches);
             char tap[24], clock[24], tap_label[32], uptime[32], git[16] = {};
             number_text(tap, sizeof(tap), status_snapshot ? status_snapshot->tap_period_ms : tap_.period(), false, true);
-            number_text(clock, sizeof(clock), status_snapshot ? status_snapshot->clock_period_us : clock_.period_us(), true, true);
+            number_text(clock, sizeof(clock), status_snapshot ? status_snapshot->clock_period_us : observed_clock().period_us(), true, true);
             i18n::format(rows[1], sizeof(rows[1]), i18n::Message::clock_value, clock + std::strspn(clock," "));
             std::snprintf(rows[2], sizeof(rows[2]), "RAM:%lu/%luk %lu/%luk",
                 (unsigned long)(status.ram_used[0] / 1024),
@@ -416,12 +453,53 @@ public:
                     if (value) l.color_mask |= uint64_t(1) << j;
                 }
             }
-            clock_.poll(now_us);
-            pane.lines[2].stippled = status_snapshot ? status_snapshot->clock_period_us && !status_snapshot->clock_active : clock_.period_us() && !clock_.active();
+            pane.lines[2].stippled = status_snapshot ? status_snapshot->clock_period_us && !status_snapshot->clock_active : observed_clock().period_us() && !observed_clock().measured();
         }
         return pane;
     }
 private:
+    const ClockTempo &observed_clock() const {
+        if (selected_clock_) return clocks_[selected_clock_ - 1];
+        if (clocks_[0].measured() || !clocks_[1].period_us()) return clocks_[0];
+        return clocks_[1];
+    }
+    unsigned clock_input(unsigned source) const {
+        const auto *input = outputs_.find(source == 1 ? "din" : "trs");
+        return input && input->input && input->transport == midi::OutputTransport::physical ? input->route : ~0u;
+    }
+    void select_clock(unsigned source) {
+        if (selected_clock_ == source) return;
+        selected_clock_ = source; clock_changed_ = dirty_ = true;
+    }
+    void select_available_clock() {
+        if ((settings_[cntrl::PageSettings::clock_options] & 2) || source_period(selected_clock_)) return;
+        for (unsigned i = 0; i < 3; ++i) if (source_period(i)) { select_clock(i); return; }
+        select_clock(0);
+    }
+    void time_view(cntrl::Pane &pane) {
+        using R = cntrl::PageSettings;
+        page_heading(pane, i18n::text(i18n::Message::time));
+        char help[96];
+        i18n::format(help, sizeof(help), i18n::Message::time_controls, label(controls_.next), label(controls_.next_section));
+        line(pane, 1, help, vertical(24), vertical(12), localized_face, true, nullptr, 0, 0, 12);
+        const char *names[] = {"Tap", "DIN", "TRS"};
+        for (unsigned i = 0; i < 3; ++i) {
+            char number[24], text[64];
+            number_text(number, sizeof(number), source_period(i), true, true);
+            std::snprintf(text, sizeof(text), "%s: %s", names[i], number + std::strspn(number, " "));
+            unsigned y = vertical(43 + 21 * i), height = vertical(18);
+            line(pane, 2 + i, text, y, height, settings_[R::status_font], true);
+            if (i == selected_clock_) {
+                int x = settings_[R::padding], top = int(y) - 2;
+                unsigned width = viewport_.width - 2 * x, box_height = height + 4;
+                pane.rectangles[0] = {int16_t(x), int16_t(top), uint16_t(width), 1, 0x07e0, false};
+                pane.rectangles[1] = {int16_t(x), int16_t(top + box_height - 1), uint16_t(width), 1, 0x07e0, false};
+                pane.rectangles[2] = {int16_t(x), int16_t(top), 1, uint16_t(box_height), 0x07e0, false};
+                pane.rectangles[3] = {int16_t(x + width - 1), int16_t(top), 1, uint16_t(box_height), 0x07e0, false};
+            }
+        }
+        pane.toggle = {uint16_t(viewport_.width / 2), uint16_t(vertical(116)), true, sending_clock_, false};
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pong_view)
 #endif
@@ -543,7 +621,8 @@ private:
         const char *help = monitor && monitor->frozen() ? prompt(i18n::Message::history_live_prompt, controls_.previous, controls_.next, controls_.confirm) : prompt(i18n::Message::freeze_prompt, controls_.confirm);
         line(pane, 14, help, bottom, row_height, settings_[R::status_font], false, nullptr, 0, 0, 8);
     }
-    bool clock_changed_ = false, beat_external_ = false;
+    bool clock_changed_ = false;
+    unsigned beat_source_ = 0;
     uint32_t beat_restart_ = 0, beat_source_restart_ = 0;
     static constexpr unsigned design_width = 5 * 32, design_height = 4 * 32;
     Controls controls_;
@@ -562,7 +641,8 @@ private:
     const char *port_message_ = nullptr;
     const char *port_name_ = i18n::definitions[unsigned(i18n::Message::no_configurable_ports)].text;
     bool port_available_ = false;
-    bool external_ = false;
+    unsigned selected_clock_ = 0;
+    bool sending_clock_ = false;
     unsigned horizontal(unsigned value) const { return value * viewport_.width / design_width; }
     unsigned vertical(unsigned value) const { return value * viewport_.height / design_height; }
     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
@@ -593,7 +673,7 @@ private:
 #endif
         auto &l = pane.lines[index];
         utf8::copy(l.text, sizeof(l.text), text);
-        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::tap && page_ != Page::pong;
+        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::time && page_ != Page::pong;
         if (ordinary) {
             face = 17;
             maximum_size = std::min(maximum_size, index ? (page_ == Page::panic ? 24u : 12u) : 16u);
@@ -754,7 +834,7 @@ private:
     unsigned preview_size_ = 0;
 #endif
     cntrl::TapTempo tap_;
-    cntrl::ClockTempo clock_;
+    cntrl::ClockTempo clocks_[2];
     Page page_ = Page::status;
     uint64_t uptime_ = 0;
     uint32_t previous_ = 0, refreshed_ = 0;

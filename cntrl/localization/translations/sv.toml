@@ -2,6 +2,8 @@ language = 'sv'
 name = 'Svenska'
 
 [messages]
+time = { text = 'Tid' }
+time_controls = { text = '{send:s} sändning/{source:s} källa' }
 panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} och {down:s} för att bläddra' }
 language_select = { text = '{button:s} för att välja' }

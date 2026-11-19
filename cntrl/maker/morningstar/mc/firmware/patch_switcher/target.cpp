@@ -1236,6 +1236,7 @@ public:
 #endif
         return reserved;
     }
+    bool time(unsigned i, uint8_t events, uint32_t now) { return board.time_button(i, events, now); }
     bool monitor(unsigned i, bool pressed) { return board.monitor_button(i, pressed); }
     bool looper(unsigned i, bool pressed) { return board.looper_button(i, pressed); }
     bool expression(unsigned i) { return board.expression_button(i); }

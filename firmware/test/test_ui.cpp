@@ -10,6 +10,7 @@
 #include <string>
 #include <algorithm>
 #include "page_fixture.h"
+#include "midi_endpoints.h"
 
 struct Fonts final : cntrl::ui::Fonts {
     const uint8_t bits[2] = {0x80, 0x80};
@@ -691,7 +692,49 @@ static void expression_reuses_its_initial_layout_and_redraws_only_changed_conten
     assert(fonts.measurements == prepared); // No font fitting on visits or changed-value redraws.
 }
 
+void test_time_sources_and_clock_output() {
+    using R = cntrl::PageSettings;
+    cntrl::PageSettings settings;
+    settings.words[R::clock_timeout] = 250; settings.words[R::clocks_per_quarter] = 24; settings.words[R::clock_beats] = 1;
+    settings.words[R::tap_intervals] = 4; settings.words[R::minimum_taps] = 2; settings.words[R::minimum_interval] = 100; settings.words[R::reset_gap] = 3000;
+    settings.words[R::digits] = 3; settings.words[R::decimals] = 2; settings.words[R::title_height] = 12;
+    settings.words[R::status_font] = 17; settings.words[R::tempo_font] = 8; settings.words[R::clock_outputs] = 1;
+    Fonts fonts; cntrl::ui::Pages pages(fonts,{160,128,0,0}); pages.outputs(test_midi_outputs); pages.configure(settings);
+    auto layout = page_fixture(2,{unsigned(cntrl::ui::Pages::Page::time)},{{0}}); pages.layout({layout.data()});
+    auto left = pages.view(0,0,{}, {}, cntrl::Panic::Status::ready,0,2);
+    assert(!std::strcmp(left.lines[0].text,"Time") && !std::strcmp(left.lines[2].text,"Tap: ---.--"));
+    assert(!left.toggle.enabled && left.toggle.x == 80 && left.rectangles[0].color == 0x07e0);
+    auto right = pages.view(0,0,{}, {}, cntrl::Panic::Status::ready,1,2);
+    assert(!std::strcmp(right.lines[0].text,"Tap Tempo") && std::strstr(right.lines[1].text,"---.--"));
+    pages.tap(0); pages.tap(500);
+    assert(pages.source_period(0) == 500000 && pages.clock_selection() == 0);
+    for (unsigned i = 0; i <= 24; ++i) {
+        pages.clock_message(0,0xf8,i * 20000); pages.clock_message(1,0xf8,i * 30000);
+    }
+    assert(pages.source_period(1) == 480000 && pages.source_period(2) == 720000 && pages.clock_selection() == 0);
+    struct Sink : cntrl::midi::Sink {
+        std::vector<uint8_t> messages;
+        bool write_packet(unsigned, const cntrl::midi::Packet &packet) override { messages.push_back(packet.bytes[0]); return true; }
+    } sink;
+    pages.poll_clock(740000,1,sink);
+    assert(!pages.source_period(1) && pages.source_period(2) == 720000 && pages.source_period(0) == 500000);
+    pages.clear_tap(); assert(pages.clock_selection() == 2 && !pages.source_period(0));
+    pages.poll_clock(971000,1,sink);
+    assert(pages.clock_selection() == 0 && !pages.source_period(2));
+    pages.tap(1000); pages.tap(1500); assert(pages.clock_selection() == 0);
+    pages.poll_clock(1500000,1,sink); assert(sink.messages.empty() && pages.beat_position(1500000).running);
+    pages.toggle_clock(); pages.poll_clock(1500000,1,sink); pages.poll_clock(1521000,1,sink);
+    assert(sink.messages == std::vector<uint8_t>{0xf8});
+    pages.toggle_clock(); pages.poll_clock(1542000,1,sink); assert(sink.messages.size() == 1);
+    settings.words[R::clock_options] = 2; pages.configure(settings);
+    pages.cycle_clock(); pages.poll_clock(2000000,1,sink);
+    assert(pages.clock_selection() == 1 && !pages.source_period(1) && !pages.relay_clock_outputs(0));
+    pages.toggle_clock(); assert(pages.relay_clock_outputs(0) == 1 && !pages.relay_clock_outputs(1));
+    pages.cycle_clock(); assert(pages.clock_selection() == 2 && pages.relay_clock_outputs(1) == 1);
+    pages.cycle_clock(); assert(pages.clock_selection() == 0);
+}
 int main() {
+    test_time_sources_and_clock_output();
     cable_test_preserves_its_original_font_and_indicators();
     panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed();
     focused_outline_follows_the_rounded_page_corners();
@@ -825,8 +868,8 @@ int main() {
         tempo_settings.words[cntrl::PageSettings::tap_intervals] = 4;
         tempo_settings.words[cntrl::PageSettings::minimum_taps] = 2;
         tempo_settings.words[cntrl::PageSettings::reset_gap] = 2000;
-        cntrl::ui::Pages tempo(fonts,{200,128,0,0}); tempo.configure(tempo_settings);
-        auto tempo_layout = page_fixture(1,{unsigned(cntrl::ui::Pages::Page::tap),unsigned(cntrl::ui::Pages::Page::status)},{{0,1}});
+        cntrl::ui::Pages tempo(fonts,{200,128,0,0}); tempo.outputs(test_midi_outputs); tempo.configure(tempo_settings);
+        auto tempo_layout = page_fixture(1,{unsigned(cntrl::ui::Pages::Page::time),unsigned(cntrl::ui::Pages::Page::status)},{{0,1}});
         tempo.layout({tempo_layout.data()}); tempo.tap(0); tempo.tap(1000); tempo.select(1);
         for (unsigned i = 0; i <= 24; ++i) tempo.clock(0,i * 41667);
         const auto text = tempo.view(1001,1000008,status);
@@ -834,7 +877,7 @@ int main() {
         assert(std::strcmp(text.lines[3].text,"Tap:60") == 0);
         tempo_settings.words[cntrl::PageSettings::padding] = 2;
         tempo_settings.words[cntrl::PageSettings::decimals] = 1;
-        cntrl::ui::Pages narrow(fonts,{48,128,0,0}); narrow.configure(tempo_settings);
+        cntrl::ui::Pages narrow(fonts,{48,128,0,0}); narrow.outputs(test_midi_outputs); narrow.configure(tempo_settings);
         narrow.layout({tempo_layout.data()}); narrow.tap(0); narrow.tap(500); narrow.select(1);
         for (unsigned i = 0; i <= 24; ++i) narrow.clock(0,i * 20833);
         const auto compact = narrow.view(501,499992,status);
@@ -861,8 +904,8 @@ int main() {
     settings.words[cntrl::PageSettings::annulus] = 5;
     settings.words[cntrl::PageSettings::tempo_height] = 40;
     pages.configure(settings); pages.viewport({320, 256, 0, 0});
-    layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::tap); pages.layout(cntrl::PageLayout{layout});
-    const auto large_tap = pages.view(0, 0, status);
+    layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::time); pages.layout(cntrl::PageLayout{layout});
+    const auto large_tap = pages.view(0, 0, status, {}, cntrl::Panic::Status::ready, 1, 2);
     assert(large_tap.circles[0].x == 160 && large_tap.circles[0].diameter == 18 && large_tap.circles[0].annulus == 5);
     assert(large_tap.lines[1].graphics.line_height == 40 && large_tap.lines[0].graphics.line_height == 34);
 

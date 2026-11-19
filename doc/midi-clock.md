@@ -1,8 +1,8 @@
 # Shared MIDI clock
 
 The shared clock supplies timing to the arpeggiator, looper and MIDI file
-services. The MIDI Clock and Clock Tempo pages have been removed. Two taps on
-**Tap Tempo** set the working tempo to the measured period. After a pause the
+services. The two-window **Time** page combines source selection, clock output
+and Tap Tempo. Two taps set the working tempo to the measured period. After a pause the
 first tap preserves the tempo until a second valid tap. Changing tempo during
 playback preserves fractional tick phase.
 
@@ -12,7 +12,8 @@ Configure clock preferences under page settings:
 [page_settings]
 clock_outputs = ['din', 'usb-device']
 clock_bpms = [120]
-clock_source = 'internal'
+clock_timeout = 0.250
+autoselect_clock = true
 ```
 
 The first configured tempo (20–600 BPM) is selected on setup activation.
@@ -21,13 +22,20 @@ target output names: DIN, TRS, USB device or USB host. Disabled USB ports and
 duplicate destinations are rejected. The configurable TRS jacks
 (`configurable-1` through `configurable-4`) must have a MIDI output role.
 
-Internal mode reserves the configured outputs for local Clock, Start, Continue
-and Stop, even while stopped. Other forwarded messages and unselected routes
-retain their existing behavior. At Start or Continue only currently available
-outputs join. Disconnect removes an output from that run. Reconnection requires
-a fresh transport command. External mode forwards through the existing bridge
-when enabled and measures incoming tempo for the shared services. Loss of
-incoming clock invalidates that measurement after the setup's clock timeout.
+The left Time window shows separate Tap, DIN and TRS tempos. A green outline
+marks the selected source. The next-section control (E on MC Pro) cycles down
+through them. The next control (B) toggles Send, initially off. When enabled,
+Tap generates MIDI Clock at the measured tempo; DIN and TRS relay the selected
+input's ticks directly to `clock_outputs`. These destinations reserve clock
+traffic for Time, preventing duplicate ticks from ordinary forwarding.
+
+DIN and TRS become blank independently after `clock_timeout` seconds without
+ticks. Tap remains measured until cleared by holding the confirm control
+(C on MC Pro). A successful tap measurement selects Tap. With
+`autoselect_clock = true`, the selected source stays selected while valid;
+if it becomes blank, another measured source is selected, or Tap if none is
+available. With it disabled, selection changes only through E or a successful
+tap measurement. Sending clock does not send transport Start or Stop messages.
 Activating a setup, entering stock firmware or starting a port-owning
 diagnostic stops local generation.
 

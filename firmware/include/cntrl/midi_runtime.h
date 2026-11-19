@@ -163,7 +163,7 @@ public:
         unsigned stream_clocks = streams_.clock_outputs();
         streams_.clock_owner(files.player.clock_outputs() | (pages.clock_owner() & ~stream_clocks));
         bridge.clock_owner(pages.clock_owner() | files.player.clock_outputs() | stream_clocks);
-        pages.generator.poll(s.microseconds(), available & ~files.player.clock_outputs() & ~stream_clocks, s);
+        pages.poll_clock(s.microseconds(), reserved ? 0 : available & ~files.player.clock_outputs() & ~stream_clocks, s);
         unsigned count = s.midi_source_count();
         CNTRL_RUNTIME_TRACE(midi_inputs);
         for (unsigned i = 0; i < count && uint32_t(s.microseconds() - begin) < input_budget_us_; ++i) {
@@ -188,7 +188,12 @@ public:
                 } else text_messages.byte(event.input, event.cable, event.byte, now);
                 uint8_t status = event.packetized ? event.packet.bytes[0] : event.byte;
                 if (status == 0xf8 || (status >= 0xfa && status <= 0xfc))
-                    pages.clock_message(event.clock_source, status, timestamp);
+                    pages.clock_message(event.input, status, timestamp);
+                if (status == 0xf8 && !reserved) {
+                    unsigned outputs = pages.relay_clock_outputs(event.input) & available & ~files.player.clock_outputs() & ~stream_clocks;
+                    for (unsigned route = 0; outputs; ++route, outputs >>= 1)
+                        if (outputs & 1) s.submit(route, {15, {0xf8, 0, 0}});
+                }
                 if (event.input >= generations_.size()) continue;
                 auto position = pages.beat_position(timestamp);
                 if (!reserved) {

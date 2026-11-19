@@ -62,6 +62,7 @@ struct Actions {
     void invoke(cntrl::ui::Operation) { assert(false); }
     void browse(bool reverse) { page_directions.push_back(reverse); }
     bool midi_reserved() const { return false; }
+    bool time(unsigned, uint8_t, uint32_t) { return false; }
     bool monitor(unsigned, bool) { return false; }
     bool looper(unsigned, bool) { return false; }
     bool expression(unsigned) { return false; }

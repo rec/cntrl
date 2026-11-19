@@ -54,7 +54,7 @@ def pack(show: models.Setup, target: models.Target) -> list[int]:
 
 def pack_clock(show: models.Setup, target: models.Target) -> bytes:
     r = show.page_settings
-    if not r.clock_outputs and r.clock_source == 'internal' and r.clock_bpms == [120]:
+    if not r.clock_outputs and r.autoselect_clock and r.clock_bpms == [120]:
         return b''
     if len(set(r.clock_outputs)) != len(r.clock_outputs):
         raise ValueError('page_settings.clock_outputs: duplicate output')
@@ -70,7 +70,7 @@ def pack_clock(show: models.Setup, target: models.Target) -> bytes:
             )
     return CLOCK.pack(
         sum(1 << routes[n] for n in r.clock_outputs),
-        int(r.clock_source == 'external'),
+        0 if r.autoselect_clock else 2,
         *r.clock_bpms,
         *([0] * (4 - len(r.clock_bpms))),
     )
@@ -118,10 +118,12 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
 
 
 def unpack_clock(data: bytes, offset: int, names: dict[int, str]) -> dict[str, object]:
-    mask, external, *slots = CLOCK.unpack_from(data, offset)
+    mask, options, *slots = CLOCK.unpack_from(data, offset)
+    if options not in (0, 2):
+        raise ValueError('clock_source has been retired; recompile this setup')
     return {
         'clock_outputs': [n for i, n in names.items() if mask & (1 << i)],
-        'clock_source': 'external' if external else 'internal',
+        'autoselect_clock': not bool(options & 2),
         'clock_bpms': [b for b in slots if b],
     }
 

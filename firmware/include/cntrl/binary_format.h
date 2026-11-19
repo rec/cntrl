@@ -102,7 +102,7 @@ public:
             } else if (tag == 3 && kind_ == Kind::setup) {
                 if (view_.global_mask_offset || n != 8 || !reader.read(position_, bytes, 8)) return false;
                 const uint64_t mask = uint64_t(read32(bytes)) | uint64_t(read32(bytes + 4)) << 32;
-                if (mask >> 34) return false;
+                if ((mask >> 34) || (mask & (uint64_t(1) << 27))) return false;
                 view_.global_explicit_mask = mask; view_.global_mask_offset = position_;
             } else view_.opaque = true;
         }

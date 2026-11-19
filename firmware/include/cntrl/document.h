@@ -148,14 +148,13 @@ public:
             if (names + clock_section_size > length) return false;
             read_clock(right, bytes + names);
             names += clock_section_size;
-            if (right[R::clock_external] > 1 || !right[R::slot1]) return false;
+            if ((right[R::clock_options] & ~2u) || !right[R::slot1]) return false;
             for (unsigned i = R::slot1; i <= R::slot4; ++i) {
                 unsigned bpm = right.words[i];
                 if (bpm && (bpm < 20 || bpm > 600 || (i > R::slot1 && !right.words[i - 1]))) return false;
             }
         }
         right.words[R::clock_outputs] = uint16_t(setting(28, right[R::clock_outputs]));
-        right.words[R::clock_external] = uint16_t(setting(27, right[R::clock_external]));
         if (!output_mask_valid(right[R::clock_outputs], effective_ports, flags, hardware)) return false;
         unsigned gestures = names;
         if (bytes[19] & 0x40) names += 5 * gesture_record_size;
@@ -187,9 +186,9 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!PageLayout::valid_name(p) || p[32] > PageLayout::menu || p[32] == 2 || (p[32] >= 7 && p[32] <= 9)
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::time || p[32] == 0 || p[32] == 2 || (p[32] >= 7 && p[32] <= 9)
                 || p[33] > windows || (p[32] == 10 && p[33])
-                || (p[32] == PageLayout::language && p[33] != 2)) return false;
+                || ((p[32] == PageLayout::language || p[32] == PageLayout::time) && p[33] != 2)) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < windows; ++j) {
                 if (p[34 + j] >= windows || seen[p[34 + j]]) return false;
@@ -679,7 +678,6 @@ public:
         settings.words[PageSettings::slot1] = 120;
         if (data_[core_ + 19] & 0x20) read_clock(settings, bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0));
         settings.words[PageSettings::clock_outputs] = uint16_t(setting(28, settings[PageSettings::clock_outputs]));
-        settings.words[PageSettings::clock_external] = uint16_t(setting(27, settings[PageSettings::clock_external]));
         return settings;
     }
     bool splash() const { return data_[core_ + 19] & 1; }

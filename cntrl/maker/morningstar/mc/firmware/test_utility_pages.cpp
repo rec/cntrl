@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
         }
         if (types[page] != Page::status && types[page] != Page::cable && types[page] != Page::pong)
             for (unsigned i = 1; i < cntrl::max_lines; ++i) if (pane.lines[i].text[0])
-                assert(pane.lines[i].graphics.font == 17 && pane.lines[i].graphics.size == 12);
+                assert(pane.lines[i].graphics.font == 17 && (types[page] == Page::panic ? pane.lines[i].graphics.size <= 24 : pane.lines[i].graphics.size == 12));
         if (!lines) { std::cerr << "page " << page << ": no text\n"; valid = false; }
         Display display; uint16_t work[160 * 128];
         cntrl::ui::Renderer renderer(display, fonts, work, 160 * 128);

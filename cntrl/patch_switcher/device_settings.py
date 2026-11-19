@@ -20,7 +20,7 @@ class Setting(BaseModel, frozen=True):
 
 def field_id(name: str, target: models.Target | None = None) -> int:
     for i, s in enumerate(SETTINGS):
-        if name == s.name:
+        if s is not None and name == s.name:
             field_path(i, target)
             return i
     if target is not None:
@@ -49,9 +49,11 @@ def field_path(field: int, target: models.Target | None = None) -> list[str]:
 
 
 def definition(field: int) -> Setting:
-    if not 0 <= field < len(SETTINGS):
+    if not 0 <= field < len(SETTINGS) or SETTINGS[field] is None:
         raise ValueError(f'unknown device-global setting id {field}')
-    return SETTINGS[field]
+    setting = SETTINGS[field]
+    assert setting is not None
+    return setting
 
 
 def encode_value(field: int, value: object, target: models.Target | None = None) -> int:
@@ -243,11 +245,7 @@ SETTINGS = [
         )
         for i in range(4)
     ],
-    Setting(
-        name='page_settings.clock_source',
-        kind='choice',
-        choices=['internal', 'external'],
-    ),
+    None,  # Retired clock_source ID. Never reuse persisted setting identifiers.
     Setting(name='page_settings.clock_outputs', kind='outputs', maximum=65535),
     Setting(name='target_pulse.period', kind='milliseconds', minimum=2, maximum=65535),
     Setting(name='target_pulse.minimum', kind='integer', maximum=128),

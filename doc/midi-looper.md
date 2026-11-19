@@ -9,8 +9,8 @@ Ordinary [MIDI file patches](midi-files.md) remain separate operations.
 [pages.loop]
 type = 'midi-looper'
 
-[page_settings]
-clock_source = 'external'
+[pages.time]
+type = 'time'
 
 [page_settings.looper]
 inputs = ['din']
@@ -27,8 +27,8 @@ this configuration. Saving a setup does not save the current performance.
 
 ## Playing and recording
 
-Start the selected clock before recording or playing. With the external source
-configured above, it must be receiving ticks and have a measured tempo.
+Start the selected clock before recording or playing. Select DIN or TRS on
+Time to follow that input; it must be receiving ticks and have a measured tempo.
 
 The page uses the target's logical control roles:
 

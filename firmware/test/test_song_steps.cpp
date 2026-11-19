@@ -65,6 +65,7 @@ struct Actions {
     void invoke(cntrl::ui::Operation operation) { board.state(unsigned(operation), 0); }
     void browse(bool) { assert(false); }
     bool midi_reserved() const { return false; }
+    bool time(unsigned, uint8_t, uint32_t) { return false; }
     bool monitor(unsigned, bool) { return false; }
     bool looper(unsigned, bool) { return false; }
     bool expression(unsigned) { return false; }

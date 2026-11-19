@@ -83,6 +83,7 @@ def unpack(data: bytes, kind: Kind) -> Document:
                 or size != 8
                 or any(r.tag == SETTING_OVERRIDES for r in records)
                 or int.from_bytes(data[cursor : cursor + size], 'little') >> 34
+                or int.from_bytes(data[cursor : cursor + size], 'little') & (1 << 27)
             ):
                 raise ValueError('invalid device-global setting overrides')
         elif flags & REQUIRED:
