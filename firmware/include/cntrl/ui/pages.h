@@ -449,14 +449,14 @@ public:
                 i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_value, (unsigned long)(tenths / 10), (unsigned long)(tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
             } else i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_unknown);
             uint64_t seconds = (status_snapshot ? status_snapshot->uptime_ms : uptime_) / 1000;
-            std::snprintf(uptime, sizeof(uptime), "%lu:%02u:%02u", (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
+            i18n::format(uptime, sizeof(uptime), i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
             if (status.starts_status == StartsStatus::ready) {
                 char number[21]; *std::to_chars(number, number + 20, status.starts).ptr = 0;
                 i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, number);
             }
             else i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
 #ifdef CNTRL_GIT_COMMIT
-            std::snprintf(git, sizeof(git), "%07x", unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
+            std::snprintf(git, sizeof(git), "Git:%07x", unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
 #endif
             i18n::format(tap_label, sizeof(tap_label), i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
@@ -473,9 +473,10 @@ public:
                         pane.graphics.pad = inset;
                     } else if (i >= 3) {
                         const unsigned right = i + 4;
-                        const char *value = i == 3 ? uptime : git;
+                        const char *value = i == 3 ? uptime + std::strspn(uptime, " ") : git;
                         if (*value) line(pane, right, value, y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size, true);
                         line(pane, i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, *value ? unsigned(pane.lines[right].x) : viewport_.width, maximum_size);
+                        if (*value) pane.lines[right].y = pane.lines[i + 2].y;
                     } else {
                         line(pane, i == 0 ? 1 : i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size);
                     }
@@ -489,7 +490,7 @@ public:
                 auto &l = pane.lines[i];
                 l.graphics.foreground = 0x0011; // Dark blue, #00008B.
                 l.alternate_color = 0x0400; // Green, #008000.
-                bool value = i >= 7;
+                bool value = false;
                 const char *cursor = l.text;
                 for (unsigned j = 0; *cursor; ++j) {
                     uint32_t code; if (!utf8::next(cursor, code)) break;

@@ -112,12 +112,12 @@ int main(int argc, char **argv) {
         status.disk_used = 1024ull * 1024 * 1024;
         status.disk_free = 29 * status.disk_used;
         status.starts_status = cntrl::ui::StartsStatus::ready; status.starts = 119;
-        pages.time(123456789, 0, false);
-        const auto pane = pages.view(123456789, 0, status);
+        pages.time(3456789, 0, false);
+        const auto pane = pages.view(3456789, 0, status);
         assert(!std::strcmp(pane.lines[5].text, "Disk:1.0/30G"));
         assert(!std::strcmp(pane.lines[6].text, "Starts:119"));
-        assert(!std::strcmp(pane.lines[7].text, "34:17:36"));
-        assert(!std::strcmp(pane.lines[8].text, "b7c7eb4"));
+        assert(!std::strcmp(pane.lines[7].text, "Up:0:57:36"));
+        assert(!std::strcmp(pane.lines[8].text, "Git:b7c7eb4"));
         for (unsigned i : {7u, 8u}) {
             const auto &right = pane.lines[i], &left = pane.lines[i - 2];
             const auto r = fonts.bounds(right.graphics.font, right.graphics.size, 0, right.text);
@@ -125,7 +125,8 @@ int main(int argc, char **argv) {
             assert(right.x + r.left + r.width == 158);
             assert(left.x + l.left + l.width < right.x + r.left);
             assert(right.y + r.top == left.y + l.top);
-            assert(right.color_mask == (uint64_t(1) << std::strlen(right.text)) - 1);
+            const unsigned value = unsigned(std::strchr(right.text, ':') - right.text) + 1;
+            assert(right.color_mask == ((uint64_t(1) << std::strlen(right.text)) - 1) - ((uint64_t(1) << value) - 1));
         }
     }
     cntrl::ui::Glyph actual, accent;

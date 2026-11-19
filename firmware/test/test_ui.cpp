@@ -724,14 +724,15 @@ int main() {
     pages.viewport({200, 128, 0, 0});
     const auto status_view = pages.view(0,0,status);
     assert(std::strcmp(status_view.lines[6].text, "Starts:42") == 0);
-    assert(std::strcmp(status_view.lines[7].text, "0:00:00") == 0);
-    assert(std::strcmp(status_view.lines[8].text, "000a1b2") == 0);
+    assert(std::strcmp(status_view.lines[7].text, "Up:0:00:00") == 0);
+    assert(std::strcmp(status_view.lines[8].text, "Git:000a1b2") == 0);
     for (unsigned i : {7u, 8u}) {
         const auto &line = status_view.lines[i];
         const auto bounds = fonts.bounds(line.graphics.font, line.graphics.size, 0, line.text);
         assert(line.x + bounds.left + bounds.width == 200);
         assert(line.y == status_view.lines[i - 2].y);
-        assert(line.color_mask == (uint64_t(1) << std::strlen(line.text)) - 1);
+        const unsigned value = unsigned(std::strchr(line.text, ':') - line.text) + 1;
+        assert(line.color_mask == ((uint64_t(1) << std::strlen(line.text)) - 1) - ((uint64_t(1) << value) - 1));
     }
     {
         auto captured_status = status;
@@ -813,8 +814,8 @@ int main() {
         preview.configure(sample_settings); preview.font_preview("UW ttyp0 R 6x12",12);
         const auto sample = preview.view(0,0,status);
         assert(std::strncmp(sample.lines[0].text,"UW ttyp",7) == 0);
-        assert(std::strcmp(sample.lines[6].text,"St") == 0);
-        assert(std::strcmp(sample.lines[8].text,"000a1b2") == 0);
+        assert(!sample.lines[6].text[0]);
+        assert(std::strcmp(sample.lines[8].text,"Git:000a1b") == 0);
         for (unsigned i = 1; i <= 8; ++i) {
             assert(sample.lines[i].graphics.font == 254);
             assert(sample.lines[i].graphics.size == 12);
