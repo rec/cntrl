@@ -458,7 +458,7 @@ public:
             else i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
 #ifdef CNTRL_GIT_COMMIT
             const auto starts_length = std::strlen(rows[4]);
-            std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", status_snapshot ? status_snapshot->git_commit : unsigned(CNTRL_GIT_COMMIT));
+            std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
 #endif
             i18n::format(tap_label, sizeof(tap_label), i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
