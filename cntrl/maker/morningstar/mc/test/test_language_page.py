@@ -95,7 +95,7 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         assert {b'\xf8\0', b'\0\x18', b'\xff\xe0'} <= colors
         snapshot(0)
         for _ in range(catalogue.locales().index('fr')):
-            press('e')
+            press('b')
         advance(500000)
         assert session.frames['lcd-2'] != first
         assert session.frames['lcd-1'] == performance
@@ -107,7 +107,7 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         snapshot(1)
         # Moving the candidate never changes the active language until C.
         for _ in range(catalogue.locales().index('fr') + 1):
-            press('b')
+            press('e')
         advance(500000)
         assert session.frames['lcd-3'] == french
         snapshot(2)
