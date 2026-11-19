@@ -1,5 +1,6 @@
 """Native controller scenarios use the production compiler, renderer and MIDI."""
 
+import struct
 from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
@@ -132,6 +133,35 @@ def backend_files(
         executable=backend.build(target, directory / 'native', root),
         setup=setup,
     )
+
+
+def test_mirrored_status_uses_captured_values_and_remains_frozen(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    setup = tmp_path / 'status.bin'
+    write_bundle(
+        {'status': {'pages': {'status': {'type': 'status'}}}}, files.target, setup
+    )
+    with backend.Session(
+        files.layout, files.target, files.executable, tmp_path / 'preview', setup
+    ) as session:
+        preview = dict(session.frames)
+    storage = tmp_path / 'mirror'
+    storage.mkdir()
+    (storage / 'mirror.toml').write_text('')
+    snapshot = bytearray(b'CSS1' + bytes(107))
+    struct.pack_into('<QQI', snapshot, 36, 118, 123456789, 0xB7C7EB4)
+    snapshot[65] = 1
+    (storage / 'status-snapshot.bin').write_bytes(snapshot)
+    with backend.Session(
+        files.layout, files.target, files.executable, storage, setup
+    ) as session:
+        captured = dict(session.frames)
+        assert session.mode == 'pedal mirror'
+        assert captured != preview
+        session.advance(3600000000)
+        assert session.frames == captured
 
 
 def test_cable_test_cycles_runs_locally_and_releases_midi_on_exit(

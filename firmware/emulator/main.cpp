@@ -449,6 +449,7 @@ public:
         primary.executor().cancel(); song_sources.executor.cancel(); switches.close();
     }
     Board board;
+    ui::StatusSnapshot status_snapshot;
     PreviewFonts &preview_fonts;
     host::FileSystem filesystem;
     Display display;
@@ -712,6 +713,12 @@ void Session::command(const std::vector<uint8_t> &bytes) {
         preview_fonts.load(p + 3 + p[2],length - 3 - p[2]);
         if (!preview_fonts.supports(254,p[1])) throw std::runtime_error("preview font lacks native size");
         host.font_preview(label.c_str(),p[1]); settle();
+    }
+    else if (p[0] == 14) {
+        if (!status_snapshot.decode(p + 1, length - 1)) throw std::runtime_error("invalid Status snapshot");
+        host.pages_.status_snapshot = &status_snapshot; host.pages_.revisit();
+        for (auto &view : application.views) view.dirty = true;
+        renderer.invalidate(); settle();
     }
     else throw std::runtime_error("unsupported or malformed emulator command");
 }

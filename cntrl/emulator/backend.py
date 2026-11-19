@@ -207,6 +207,8 @@ class Session:
         self.closed = False
         try:
             self.receive()
+            if self.mode == 'pedal mirror':
+                self.request(b'\x0e' + (storage / 'status-snapshot.bin').read_bytes())
             errors = [e.message for e in self.messages if e.kind == 'error']
             if errors:
                 raise ValueError('native emulator startup failed: ' + '; '.join(errors))

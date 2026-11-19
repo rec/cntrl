@@ -966,6 +966,11 @@ PerformanceStatus performance_status() {
 void midi_status(unsigned route) { board.midi_status(route); }
 void midi_reset() { board.midi_reset(); }
 FLASHMEM bool native_asset_command(const char *line) {
+    if (!std::strcmp(line, "CNTRL STATUS SNAPSHOT")) {
+        const auto snapshot = board.runtime_pages().capture_status(performance_status());
+        uint8_t bytes[cntrl::ui::StatusSnapshot::wire_size];
+        snapshot.encode(bytes); board.data(bytes, sizeof(bytes)); return true;
+    }
 #if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
     if (!std::strcmp(line, "CNTRL QUAL STATUS")) {
         char response[640]; cntrl::device::qualification_status(response, sizeof(response)); board.reply(response); return true;

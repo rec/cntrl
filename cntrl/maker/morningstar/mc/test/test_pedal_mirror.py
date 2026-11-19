@@ -18,6 +18,10 @@ from cntrl.patch_switcher import (
 
 
 class StoredPedal(transport.SetupClient):
+    def request_data(self, command: str) -> bytes:
+        assert command == 'CNTRL STATUS SNAPSHOT'
+        return b'CSS1' + bytes(107)
+
     def __init__(self, directory: Path, bundle: bytes, status: str) -> None:
         self.directory = directory
         self.bundle = bundle

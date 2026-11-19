@@ -28,6 +28,10 @@ class CapturedPedal(transport.SetupClient):
     def download_bundle(self) -> bytes:
         return b'exact compiled bundle'
 
+    def request_data(self, command: str) -> bytes:
+        assert command == 'CNTRL STATUS SNAPSHOT'
+        return b'CSS1' + bytes(107)
+
     def download_state(self, path: str) -> bytes:
         self.reads[path] = self.reads.get(path, 0) + 1
         if self.changing and self.reads[path] > 1:
@@ -112,3 +116,4 @@ def test_capture_preserves_active_journals_and_exact_asset_set(
     }
     manifest = tomlkit.loads((tmp_path / 'mirror.toml').read_text())
     assert manifest['selected'] == 'stored-setup'
+    assert (tmp_path / 'status-snapshot.bin').read_bytes() == b'CSS1' + bytes(107)
