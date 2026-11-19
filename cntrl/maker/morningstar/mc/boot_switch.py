@@ -125,8 +125,14 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             '*(.text._ZNK5cntrl6device10SharedHeap*)',
             # Management screens, browsing and saved-return decoding are cold.
             # Leave the MIDI preparation/queue iteration paths in ITCM.
-            '*(.text._ZN5cntrl7SongsUi6renderEv*)',
-            '*(.text._ZN5cntrl7SongsUi13handle_buttonEjb*)',
+            '*(.text._ZN5cntrl7SongsUi*)',
+            # Host keyboard decoding is UI input, outside the MIDI hot path.
+            '*(.text._ZN18KeyboardController*)',
+            '*(.text._ZThn*_N18KeyboardController*)',
+            '*(.text._ZN12USBHIDParser*)',
+            # The SDK keyboard class also links these Bluetooth helpers.
+            '*(.text._ZN19BluetoothController*)',
+            '*(.text._ZN19BluetoothConnection*)',
             '*(.text._ZN5cntrl10ModuleMenu6renderEv*)',
             '*(.text._ZN5cntrl14StorageListing4nextE*)',
             '*(.text._ZN5cntrl2ui19FirmwareVisitRecord6decodeE*)',

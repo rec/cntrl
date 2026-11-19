@@ -1,6 +1,7 @@
 #include "input_hardware.h"
 #include "midi_endpoints.h"
 #include <cntrl/keyboard.h>
+#include <cntrl/keyboard_input.h>
 #include <cntrl/document.h>
 #include <fstream>
 #include <iterator>
@@ -31,7 +32,31 @@ struct Hardware : TestInputHardware {
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
 };
+void test_keyboard_input_preserves_text_and_edit_keys() {
+    cntrl::KeyboardInput input;
+    uint8_t key;
+    assert(!input.read(key));
+    assert(input.press('a', 0));
+    assert(input.press('A', 2));
+    assert(input.press('!', 32));
+    assert(input.press(127, 0));
+    assert(input.press('\n', 0));
+    assert(input.press(27, 0));
+    for (unsigned modifier : {1u, 4u, 8u, 16u, 64u, 128u}) assert(!input.press('x', modifier));
+    for (unsigned unsupported : {0u, 9u, 0xd8u, 0x100u}) assert(!input.press(unsupported, 0));
+    for (uint8_t expected : {'a', 'A', '!', '\b', '\n', '\x1b'}) {
+        assert(input.read(key) && key == expected);
+    }
+    assert(!input.read(key));
+    for (unsigned cycle = 0; cycle < 3; ++cycle) {
+        for (unsigned i = 0; i < cntrl::KeyboardInput::capacity - 1; ++i) assert(input.press(' ' + i, 0));
+        assert(!input.press('\n', 0));
+        for (unsigned i = 0; i < cntrl::KeyboardInput::capacity - 1; ++i) assert(input.read(key) && key == ' ' + i);
+        assert(!input.read(key));
+    }
+}
 int main(int argc, char **argv) {
+    test_keyboard_input_preserves_text_and_edit_keys();
     cntrl::memory_budget = 1024 * 1024;
     if (argc == 2) {
         std::ifstream f(argv[1], std::ios::binary);

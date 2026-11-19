@@ -8,7 +8,7 @@
 
 struct Board : TestInputHardware, cntrl::SongResolver, cntrl::SongCapture {
     unsigned sends = 0, switches = 0; cntrl::SongContinuation saved; bool missing = false, writable = true;
-    std::string feedback;
+    std::string feedback, name;
     bool send(const char *, const uint8_t *, unsigned) override { if (!writable) return false; ++sends; return true; }
     bool stock_firmware(uint8_t pair, const cntrl::SongContinuation *continuation = nullptr) override {
         assert(pair == 33); ++switches; if (continuation) saved = *continuation; return writable;
@@ -22,7 +22,10 @@ struct Board : TestInputHardware, cntrl::SongResolver, cntrl::SongCapture {
     const char *control_label(cntrl::ControlRole role) const override {
         const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
     }
-    void show(unsigned pane, const cntrl::Pane &view) override { if (!pane) feedback = view.lines[2].text; }
+    void show(unsigned pane, const cntrl::Pane &view) override {
+        if (!pane) feedback = view.lines[2].text;
+        if (pane == 1) name = view.lines[1].text;
+    }
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}
@@ -93,6 +96,81 @@ void test_rename_read_failure_can_be_retried() {
     press(storage, ui, songs, 1, true); press(storage, ui, songs, 2, true); // A becomes B, then save.
     assert(songs.song_at(0, a) && !std::strcmp(a.name, "B"));
     assert(board.sends == 0);
+}
+void test_keyboard_edits_song_names_only_in_the_name_editor() {
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board);
+    assert(songs.boot());
+    assert(completed(storage, songs, songs.save_song("A", Board::patch())));
+    cntrl::SongsUi ui(songs, board, board);
+    const auto original = snapshot(songs);
+    ui.key('x'); ui.key('\n'); assert(!ui.open());
+    ui.enter(); ui.poll(0);
+    ui.key('x'); ui.key('\n'); assert(snapshot(songs) == original);
+    press(storage, ui, songs, 1, true); press(storage, ui, songs, 1, true);
+    press(storage, ui, songs, 2, true); // Library.
+    press(storage, ui, songs, 2, true); press(storage, ui, songs, 2, true); // Rename A.
+    ui.key('\b'); assert(board.name == "A");
+    ui.key('B'); ui.key('!'); assert(board.name == "B!A");
+    ui.key('\b'); assert(board.name == "BA");
+    ui.key(9); ui.key(0xd8); assert(board.name == "BA");
+    assert(snapshot(songs) == original);
+    ui.key(27); assert(snapshot(songs) == original); // Cancel.
+    press(storage, ui, songs, 2, true); assert(board.name == "A");
+    press(storage, ui, songs, 4, true); // Cursor after A.
+    ui.key('\b'); assert(board.name.empty());
+    ui.key('\n'); assert(!completed(storage, songs, true)); ui.poll(0); // Empty name rejected.
+    assert(snapshot(songs) == original);
+    for (char c : std::string("New Song 2!")) ui.key(uint8_t(c));
+    assert(board.name == "New Song 2!");
+    ui.key('\n'); assert(songs.busy());
+    ui.key('x'); ui.key(27); // Saving cannot be interrupted by more keys.
+    assert(completed(storage, songs, true)); ui.poll(0);
+    assert(songs.song("New Song 2!") && !songs.song("A"));
+    cntrl::Songs reboot(storage, board); assert(reboot.boot() && reboot.song("New Song 2!"));
+    assert(board.sends == 0);
+}
+void test_keyboard_renames_setlists_and_keeps_their_entries() {
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board);
+    assert(songs.boot());
+    assert(completed(storage, songs, songs.save_song("A", Board::patch())));
+    char set[64]; assert(completed(storage, songs, songs.new_setlist(set)));
+    assert(completed(storage, songs, songs.insert(set, 0, "A"))); songs.choose(set);
+    cntrl::SongsUi ui(songs, board, board); ui.perform(); ui.poll(0);
+    press(storage, ui, songs, 3, true); // Edit setlist.
+    for (unsigned i = 0; i < 4; ++i) press(storage, ui, songs, 1, true);
+    press(storage, ui, songs, 2, true); // Rename.
+    const auto original = snapshot(songs);
+    ui.key('X'); ui.key(27); assert(snapshot(songs) == original);
+    press(storage, ui, songs, 2, true); assert(board.name == set);
+    for (unsigned i = 0; i < std::strlen(set); ++i) press(storage, ui, songs, 4, true);
+    for (unsigned i = 0; i < std::strlen(set); ++i) ui.key('\b');
+    for (char c : std::string("Friday Set")) ui.key(uint8_t(c));
+    ui.key('\n'); assert(completed(storage, songs, true)); ui.poll(0);
+    assert(!std::strcmp(songs.active_set(), "Friday Set"));
+    cntrl::SongEntry entry; assert(songs.entry("Friday Set", 0, entry) && !std::strcmp(entry.song, "A"));
+    assert(!songs.setlist(set) && songs.setlist("Friday Set")->count == 1);
+    cntrl::Songs reboot(storage, board); assert(reboot.boot() && reboot.setlist("Friday Set"));
+}
+void test_keyboard_name_limit_and_failed_save_can_be_retried() {
+    SongStorage storage; Board board; cntrl::Songs songs(storage, board);
+    assert(songs.boot());
+    assert(completed(storage, songs, songs.save_song("A", Board::patch())));
+    cntrl::SongsUi ui(songs, board, board); ui.enter(); ui.poll(0);
+    press(storage, ui, songs, 1, true); press(storage, ui, songs, 1, true);
+    press(storage, ui, songs, 2, true); press(storage, ui, songs, 2, true); press(storage, ui, songs, 2, true);
+    press(storage, ui, songs, 4, true); ui.key('\b'); // Empty name.
+    for (unsigned i = 0; i < 63; ++i) ui.key('x');
+    ui.key('z'); assert(board.name == std::string(63, 'x'));
+    press(storage, ui, songs, 1, true); assert(board.name == std::string(63, 'x'));
+    ui.key('\b'); ui.key('Y'); assert(board.name == std::string(62, 'x') + 'Y');
+    const auto original = snapshot(songs);
+    storage.remaining = 30;
+    ui.key('\n'); assert(!completed(storage, songs, true)); ui.poll(0);
+    assert(snapshot(songs) == original && board.feedback == "Not saved");
+    storage.remaining = -1;
+    ui.key('\b'); ui.key('Z'); ui.key('\n');
+    assert(completed(storage, songs, true)); ui.poll(0);
+    assert(songs.song((std::string(62, 'x') + 'Z').c_str()) && !songs.song("A"));
 }
 void test_abandoned_imports_close_without_changing_library() {
     struct Replies : cntrl::Replies {
@@ -242,6 +320,9 @@ void test_envelope_metadata_and_recovery() {
 }
 
 int main() {
+    test_keyboard_edits_song_names_only_in_the_name_editor();
+    test_keyboard_renames_setlists_and_keeps_their_entries();
+    test_keyboard_name_limit_and_failed_save_can_be_retried();
     test_envelope_metadata_and_recovery();
     test_names_and_positions_survive_edits();
     test_import_progress_and_failure_keep_the_active_generation();
