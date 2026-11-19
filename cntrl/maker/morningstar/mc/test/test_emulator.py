@@ -305,6 +305,97 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
         assert not [e.message for e in session.messages if e.kind == 'error']
 
 
+def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
+    root = Path(__file__).parents[5]
+    target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
+    source = {
+        'fill_in_styles': False,
+        'pages': {'performance': {'type': 'patch-switcher'}},
+        'patch_cycles': {
+            'Sound': [
+                {'operation': 'menu'},
+                {'type': 'program-change', 'output': 'din', 'channel': 1, 'program': 1},
+            ]
+        },
+    }
+    raw = compiler.compile_show(source, {}, [], target)
+    bundle = tmp_path / 'names.bin'
+    bundle.write_bytes(
+        setup_bundle.build({'names': raw}, {'names': source}, target.memory).pack()
+    )
+    executable = backend.build(target, tmp_path / 'native', root)
+    layout = EmulatorLayout.load(Path(__file__).parents[1] / 'emulator/mc6-pro.toml')
+    storage = tmp_path / 'session'
+    with backend.Session(layout, target, executable, storage, bundle) as session:
+
+        def press(button: str) -> None:
+            session.button(button, True)
+            session.advance(session.time_us + 60000)
+            session.button(button, False)
+            session.advance(session.time_us + 60000)
+
+        def rename(name: str) -> dict[str, bytes]:
+            cli.save(session, tmp_path / name)
+            assert session.editing_name
+            for _ in range(63):
+                press('e')
+            for _ in range(63):
+                session.key(8)
+            for c in name + 'X':
+                session.key(ord(c))
+            session.key(8)
+            for _ in name:
+                press('d')
+            expected = dict(session.frames)
+            session.key(10)
+            assert not session.editing_name
+            session.advance(session.time_us + 1000000)
+            return expected
+
+        assert not session.editing_name
+        session.key(ord('x'))  # Typing outside Rename is ignored by the shared UI.
+        session.advance(1000000)
+        press('a')  # Activate the Menu patch.
+        press('b')
+        press('c')  # Songs and setlists.
+        for _ in range(3):
+            press('b')
+        press('c')  # Save current patch as a song, then browse the library.
+        press('c')
+        press('c')  # Rename song.
+        expected = rename('abc!')
+        press('c')
+        cli.save(session, tmp_path / 'saved-song')
+        assert session.editing_name and session.frames == expected
+        saved = {
+            p.name: p.read_bytes() for p in (storage / 'cntrl/songs').glob('*.bin')
+        }
+        session.key(ord('Z'))
+        session.key(27)
+        assert not session.editing_name
+        assert {
+            p.name: p.read_bytes() for p in (storage / 'cntrl/songs').glob('*.bin')
+        } == saved
+        press('c')
+        assert session.editing_name and session.frames == expected
+        session.key(27)
+        press('f')  # Root menu.
+        press('b')
+        press('c')  # Setlists.
+        press('c')  # New setlist.
+        press('f')  # Performance.
+        press('d')  # Edit setlist.
+        for _ in range(4):
+            press('b')
+        press('c')  # Rename setlist.
+        expected = rename('Friday')
+        for _ in range(4):
+            press('b')
+        press('c')
+        assert session.editing_name and session.frames == expected
+        assert not [e.message for e in session.messages if e.kind == 'error']
+
+
 def test_mirrored_movies_preserve_physical_stream_geometry(tmp_path: Path) -> None:
     target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile', mirror=True))
     assert target.animation_display_streams == [0, 1, 0]

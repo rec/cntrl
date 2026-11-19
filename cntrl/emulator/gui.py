@@ -208,6 +208,27 @@ class ControllerCanvas(QtWidgets.QWidget):
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.isAutoRepeat():
             return
+        if self.session.editing_name:
+            if not event.modifiers() & (
+                QtCore.Qt.KeyboardModifier.ControlModifier
+                | QtCore.Qt.KeyboardModifier.AltModifier
+                | QtCore.Qt.KeyboardModifier.MetaModifier
+            ):
+                keys: dict[int, int] = {
+                    QtCore.Qt.Key.Key_Return: 10,
+                    QtCore.Qt.Key.Key_Enter: 10,
+                    QtCore.Qt.Key.Key_Escape: 27,
+                    QtCore.Qt.Key.Key_Backspace: 8,
+                }
+                if event.key() in keys:
+                    self.session.key(keys[event.key()])
+                else:
+                    for c in event.text():
+                        if 32 <= ord(c) <= 126:
+                            self.session.key(ord(c))
+            self.update()
+            event.accept()
+            return
         identity = QtGui.QKeySequence(event.key()).toString().lower()
         if any(
             c.id == identity and isinstance(c, models.Button)

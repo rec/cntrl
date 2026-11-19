@@ -129,6 +129,14 @@ not generate repeated presses. Shift-click or right-click latches a switch so
 chords and holds can be operated with one mouse. Leaving the window releases
 held controls through the normal input path.
 
+While the song or setlist Rename editor is open, the computer keyboard types
+into the shared name editor instead of pressing pedal switches. Enter saves,
+Escape cancels, and Backspace deletes the preceding character. Printable ASCII
+uses the computer's keyboard layout, with the same 63-character name limit as
+USB keyboard input on the pedal. Control, Alt and Command/GUI combinations and
+key auto-repeat are ignored. Use the mouse to press the pedal's position
+buttons while editing a name.
+
 The inspector provides virtual MIDI injection, output blocking, connection
 state, manual time stepping, expression/auxiliary inputs and display snapshots.
 The enclosure drawing retains

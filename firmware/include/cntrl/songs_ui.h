@@ -16,6 +16,7 @@ class SongsUi {
 public:
     SongsUi(Songs &songs, Hardware &hardware, SongCapture &capture) : songs_(songs), hardware_(hardware), capture_(capture) {}
     bool open() const { return mode_ != closed; }
+    bool editing_name() const { return mode_ == naming; }
     void refresh() { if (open()) { feedback_[0] = 0; render(); } }
     void leave() { mode_ = closed; }
     void perform() { mode_ = performance; cursor_ = 0; locked_ = true; std::snprintf(feedback_, 64, "%s", songs_.last_error()); render(); }
