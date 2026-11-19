@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Înlocuiești bucla nesalvată?' }
 scanning = { text = 'Căutare...' }
 no_midi_files = { text = 'Niciun fișier MIDI' }
 storage_busy = { text = 'Stocare ocupată' }
-stock_firmware_prompt = { text = '{button:s}: firmware original.' }
-cancel_prompt = { text = '{button:s}: anulare' }
 notes_off = { text = 'Note oprite' }
 all_off = { text = 'Totul oprit' }
-midi_clock = { text = 'Ceas MIDI' }
-clock_tempo = { text = 'Tempo ceas' }
 tap_tempo = { text = 'Tempo prin apăsări' }
 status = { text = 'Stare' }
 midi_cable_test = { text = 'Test cablu MIDI' }
 trs_ports = { text = 'Porturi TRS' }
-keyboard = { text = 'Tastatură' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Extern: recepție' }
-external_waiting = { text = 'Extern: așteptare' }
-no_outputs_configured = { text = 'Nicio ieșire configurată', short = 'Nicio ieșire' }
-outputs_offline = { text = 'Ieșiri deconectate' }
-internal_running = { text = 'Intern: pornit' }
-internal_stopped = { text = 'Intern: oprit' }
-start_continue_prompt = { text = '{start:s} Pornire {resume:s} Continuare' }
-stop_source_prompt = { text = '{stop:s} Oprire {source:s} Sursă' }
-tempo_slot = { text = 'Memorie {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Memorie' }
-clock_late_lost = { text = 'Întârziere {late:u}us Pierdute {lost:u}' }
 output_heading = { text = 'Ieș.' }
 input_heading = { text = 'Intr.' }
 input = { text = 'Intrare' }
-no_shortcuts = { text = 'Nicio scurtătură' }
-held = { text = 'Menținut' }
-ready = { text = 'Pregătit' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: selectare' }
-hold_send_prompt = { text = 'Ține {button:s}: trimite' }
 off = { text = 'Oprit' }
 on = { text = 'Pornit' }
 midi_type_a = { text = 'MIDI tip A' }
@@ -74,7 +52,6 @@ expression = { text = 'Expresie' }
 aux_switch = { text = 'Comutator auxiliar' }
 jack_mode_prompt = { text = '{jack:s}: mufă {mode:s}: mod' }
 apply_prompt = { text = '{button:s}: aplică' }
-use_stock = { text = 'Folosește' }
 cycles_patches = { text = 'Cicluri:{cycles:u} Sunete:{patches:u}' }
 clock_value = { text = 'Ceas:{clock:s}' }
 disk_value = { text = 'Disc:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Închidere: ' }
 shifted_prefix = { text = 'Decalat | ' }
 abandon = { text = 'renunță' }
 no_switches = { text = 'Niciun comutator' }
-firmware_caption = { text = 'firmware original' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Can {channel:u}' }
 no_pedal = { text = 'Nicio pedală' }
 travel_too_short = { text = 'Cursă prea scurtă' }

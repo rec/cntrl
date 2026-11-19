@@ -79,7 +79,11 @@ struct VisitFile : cntrl::files::File {
     }
     bool sync() override { return true; }
 };
-struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink {
+struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink, cntrl::KeyboardSink {
+    bool keyboard_online = false;
+    std::vector<cntrl::KeyboardReport> keyboard_reports;
+    bool keyboard_connected() const { return keyboard_online; }
+    bool keyboard_report(const cntrl::KeyboardReport &report) override { keyboard_reports.push_back(report); return true; }
     // Panic reads midi_outputs() during construction.
     cntrl::midi::Outputs endpoints;
     cntrl::Panic panic{*this, *this};
@@ -111,7 +115,6 @@ struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink {
     cntrl::ui::PerformanceStatus status() const { return {}; }
     cntrl::midi::Monitor monitor;
     cntrl::midi::Monitor &midi_monitor() { return monitor; }
-    bool switch_firmware() { return false; }
     struct Expression {
         unsigned index = 0;
         const char *position_text = "50%";
@@ -201,6 +204,23 @@ static void pong_keeps_navigation_until_serve(cntrl::Documents &documents, cntrl
     assert(host.pages_.pong.left < left && host.pages_.pong.right < right);
     host.leave_page(); host.enter_page();
     assert(!host.looper_button(3, true) && !host.looper_button(5, true));
+}
+static void keyboard_actions_survive_page_changes_and_panic_releases_keys(cntrl::Documents &documents, cntrl::ui::Application &app) {
+    PagePlatform platform; PageFonts fonts; PageDisplay display;
+    uint16_t work[64 * 64] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64);
+    constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"},{3,"D"},{4,"E"},{5,"F"}};
+    cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0,1,2,3,4,5,4,3,2,bindings,6});
+    platform.keyboard_online = true;
+    cntrl::KeyboardKeys keys; keys.keys[0] = 44;
+    assert(host.keyboard_action(keys, true) == cntrl::KeyboardDelivery::complete);
+    host.leave_page();
+    auto view = host.pages_.save_view(); view.page = cntrl::ui::Pages::Page::status; host.pages_.restore_view(view);
+    host.enter_page(); host.poll_keyboard();
+    assert(platform.keyboard_reports.back().keys[0] == 44);
+    view.page = cntrl::ui::Pages::Page::panic; host.pages_.restore_view(view);
+    host.tap_tempo(0);
+    assert(platform.keyboard_reports.back() == cntrl::KeyboardReport{});
 }
 static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents &documents, cntrl::ui::Application &app) {
     PagePlatform platform; PageFonts fonts; PageDisplay display;
@@ -409,12 +429,10 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
         void switch_button(unsigned, bool, uint32_t) { assert(false); }
         void browse(bool reverse) { host.browse_page(reverse); }
         bool midi_reserved() const { return false; }
-        bool keyboard(unsigned input, bool pressed) { return host.keyboard_button(input, pressed); }
         bool monitor(unsigned input, bool pressed) { return host.monitor_button(input, pressed); }
         bool looper(unsigned input, bool pressed) { return host.looper_button(input, pressed); }
         bool expression(unsigned input) { return host.expression_button(input); }
         bool port(unsigned input) { return host.trs_button(input); }
-        bool clock(unsigned input, bool pressed) { return host.clock_control(input, pressed); }
         bool has_controller() const { return app.visible(); }
         void controller(unsigned input, bool pressed, uint32_t now) { app.controller().button(input, pressed, now); }
         void tap(uint32_t now) { host.tap_tempo(now); }
@@ -473,11 +491,7 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     const unsigned before_tap = hardware.sent, tap_callbacks = hardware.taps;
     click(2, 4100); assert(hardware.taps == tap_callbacks + 1 && hardware.sent == before_tap);
     edge(2, true, 4200); click(5, 4300); edge(2, false, 4400);
-    assert(host.pages_.page() != cntrl::ui::Pages::Page::confirm_firmware && hardware.sent == before_tap);
-    select_tool(cntrl::ui::Pages::Page::firmware);
-    click(2, 4500);
-    assert(host.pages_.page() == cntrl::ui::Pages::Page::confirm_firmware && hardware.sent == before_tap);
-    click(2, 4600); assert(host.pages_.page() == cntrl::ui::Pages::Page::firmware);
+    assert(hardware.sent == before_tap);
     const cntrl::midi::OutputConnection jack{"jack","Expression jack",0,cntrl::midi::OutputTransport::physical,true,true,3};
     platform.endpoints = {&jack,1};
     host.configure_page_settings(documents.document().page_settings());
@@ -560,14 +574,15 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         for (uint8_t b : bytes) documents.receive(b, 0);
         for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
         assert(!documents.busy() && documents.select("Test"));
+        keyboard_actions_survive_page_changes_and_panic_releases_keys(documents, app);
         host.configure_pages(documents.document()); host.select_page(5); host.select_page(4);
-        host.pages_.shortcut = 7;
+        host.pages_.language = 7;
         const unsigned tools_count = app.allocation.region(1).count;
         host.focus_region(0);
         assert(host.pages_.index() == 5 && app.allocation.region(1).selected == 4 && app.allocation.region(1).count == tools_count);
         host.display(100,false);
         assert(host.pages_.index() == 5); // Rendering a background view preserves control focus.
-        host.focus_region(1); assert(host.pages_.index() == 4 && host.pages_.shortcut == 7);
+        host.focus_region(1); assert(host.pages_.index() == 4 && host.pages_.language == 7);
         // Select region focus through the normal menu action, without changing either page.
         assert(app.operation_ui(cntrl::ui::Operation::menu_open,hardware)); app.menu.poll(0);
         for (unsigned i = 0; i < 2; ++i) app.operation_ui(cntrl::ui::Operation::menu_next,hardware);

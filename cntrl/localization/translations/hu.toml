@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Lecseréli a nem mentett hurkot?' }
 scanning = { text = 'Keresés...' }
 no_midi_files = { text = 'Nincs MIDI-fájl' }
 storage_busy = { text = 'A tárhely foglalt' }
-stock_firmware_prompt = { text = '{button:s}: gyári firmware.' }
-cancel_prompt = { text = '{button:s}: mégse' }
 notes_off = { text = 'Hangok kikapcsolva' }
 all_off = { text = 'Minden kikapcsolva' }
-midi_clock = { text = 'MIDI-óra' }
-clock_tempo = { text = 'Óratempó' }
 tap_tempo = { text = 'Tempóbeütés' }
 status = { text = 'Állapot' }
 midi_cable_test = { text = 'MIDI-kábelteszt' }
 trs_ports = { text = 'TRS-portok' }
-keyboard = { text = 'Billentyűzet' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Külső: vétel' }
-external_waiting = { text = 'Külső: várakozás' }
-no_outputs_configured = { text = 'Nincs beállított kimenet', short = 'Nincs kimenet' }
-outputs_offline = { text = 'Kimenetek leválasztva' }
-internal_running = { text = 'Belső: fut' }
-internal_stopped = { text = 'Belső: leállítva' }
-start_continue_prompt = { text = '{start:s} Indítás {resume:s} Folytatás' }
-stop_source_prompt = { text = '{stop:s} Leállítás {source:s} Forrás' }
-tempo_slot = { text = '{slot:u}. memória: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Memória' }
-clock_late_lost = { text = 'Késés {late:u}us Elveszett {lost:u}' }
 output_heading = { text = 'Ki' }
 input_heading = { text = 'Be' }
 input = { text = 'Bemenet' }
-no_shortcuts = { text = 'Nincs gyorsbillentyű' }
-held = { text = 'Nyomva tartva' }
-ready = { text = 'Kész' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: választás' }
-hold_send_prompt = { text = '{button:s} nyomva: küldés' }
 off = { text = 'Ki' }
 on = { text = 'Be' }
 midi_type_a = { text = 'A típusú MIDI' }
@@ -74,7 +52,6 @@ expression = { text = 'Expression' }
 aux_switch = { text = 'Kiegészítő kapcsoló' }
 jack_mode_prompt = { text = '{jack:s}: aljzat {mode:s}: mód' }
 apply_prompt = { text = '{button:s}: alkalmazás' }
-use_stock = { text = 'Gyári' }
 cycles_patches = { text = 'Ciklus:{cycles:u} Hangszín:{patches:u}' }
 clock_value = { text = 'Óra:{clock:s}' }
 disk_value = { text = 'Lemez:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Lezárás: ' }
 shifted_prefix = { text = 'Eltolt | ' }
 abandon = { text = 'feladás' }
 no_switches = { text = 'Nincs kapcsoló' }
-firmware_caption = { text = 'firmware használata' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Cs {channel:u}' }
 no_pedal = { text = 'Nincs pedál' }
 travel_too_short = { text = 'Túl rövid mozgásút' }

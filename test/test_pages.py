@@ -108,8 +108,9 @@ def test_named_instances_and_order_survive_compilation() -> None:
 def test_migrated_legacy_setup_keeps_live_patch_state_while_cycling_tools(
     tmp_path: Path,
     native_programs: native_tests.NativePrograms,
+    legacy_setups: dict[int, bytes],
 ) -> None:
-    original = bytes.fromhex((ROOT / 'setup36.golden').read_text())
+    original = legacy_setups[36]
     legacy = models.Setup.model_validate(
         layout.unpack(original, original.index(b'CPAG'))
     )
@@ -126,6 +127,9 @@ def test_migrated_legacy_setup_keeps_live_patch_state_while_cycling_tools(
         {'apps': {}},
         {'pages': {'x': {'give_up_windows': ['right', 'right']}}},
         {'pages': {'x': {'type': 'unknown'}}},
+        {'pages': {'x': {'type': 'clock-tempo'}}},
+        {'pages': {'x': {'type': 'clock-transport'}}},
+        {'pages': {'x': {'type': 'firmware'}}},
         {'pages': {'x': {'type': 'None', 'min_windows': 1}}},
         {'pages': {'x': {'min_windows': -1}}},
         {'pages': {'x': {'windows': 1}}},
@@ -175,7 +179,7 @@ def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
     [
         t
         for t in layout.PAGE_TYPES
-        if t not in ('None', 'patch-switcher', 'banked', 'pong', 'language')
+        if t and t not in ('None', 'patch-switcher', 'banked', 'pong', 'language')
     ],
 )
 @pytest.mark.parametrize('count', [0, 1, 3])
@@ -311,6 +315,7 @@ def test_firmware_and_authoring_agree_on_page_capabilities(
     assert [[int(n) for n in r.split()] for r in result.stdout.splitlines()] == [
         [models.Page(type=t).maximum_windows(n) for n in [1, 3, 5]]
         for t in layout.PAGE_TYPES
+        if t
     ]
 
 

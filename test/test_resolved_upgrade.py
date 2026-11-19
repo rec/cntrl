@@ -18,8 +18,9 @@ def current_setup() -> bytes:
 @pytest.mark.parametrize('version', [46, 47])
 def test_unchanged_record_format_upgrade_preserves_the_entire_body(
     version: int,
+    legacy_setups: dict[int, bytes],
 ) -> None:
-    original = bytes.fromhex((ROOT / f'setup{version}.golden').read_text())
+    original = legacy_setups[version]
     assert struct.unpack_from('<H', original, 4)[0] == version
     upgraded = resolved.upgrade(original)
     assert upgraded[6:] == original[6:]
@@ -28,9 +29,11 @@ def test_unchanged_record_format_upgrade_preserves_the_entire_body(
 
 
 @pytest.mark.parametrize('version', [36, 38, 39, 40, 41, 42, 43, 44, 45])
-def test_historical_setup_preserves_graph_assets_and_page_order(version: int) -> None:
+def test_historical_setup_preserves_graph_assets_and_page_order(
+    version: int, legacy_setups: dict[int, bytes]
+) -> None:
     # Actual outputs from a6916c8^, 1c8dd6b, c502794, 48fafdf, 32bdbab and 109a9cb.
-    original = bytes.fromhex((ROOT / f'setup{version}.golden').read_text())
+    original = legacy_setups[version]
     assert struct.unpack_from('<H', original, 4)[0] == version
     upgraded = resolved.upgrade(original)
     assert resolved.export(original) == resolved.export(upgraded)
@@ -65,19 +68,21 @@ def test_historical_setup_preserves_graph_assets_and_page_order(version: int) ->
     assert original[resolved.graph_offset(original) :][:4] == b'CPAT'
 
 
-def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position() -> None:
-    original = bytes.fromhex((ROOT / 'setup36.golden').read_text())
+def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position(
+    legacy_setups: dict[int, bytes],
+) -> None:
+    original = legacy_setups[36]
     source = tomlkit.parse(resolved.export(resolved.upgrade(original))).unwrap()
     tools = [
         'status',
-        'firmware',
+        'status-2',
         'cable-test',
         'panic',
         'trs-ports',
         'expression',
-        'clock-transport',
-        'clock-tempo',
-        'keyboard',
+        'status-7',
+        'status-8',
+        'status-9',
         'tap-tempo',
         'full-performance',
     ]
@@ -101,8 +106,10 @@ def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position() -
     assert source['pages']['full-performance']['min_windows'] == 0
 
 
-def test_legacy_full_width_position_and_page_names_are_preserved() -> None:
-    original = bytes.fromhex((ROOT / 'setup36.golden').read_text())
+def test_legacy_full_width_position_and_page_names_are_preserved(
+    legacy_setups: dict[int, bytes],
+) -> None:
+    original = legacy_setups[36]
     offset = original.index(b'CPAG')
     section = bytearray(original[offset : layout.section_end(original, offset)])
     count, windows = section[4:6]
@@ -164,9 +171,11 @@ def test_memory_refresh_matches_compiler_and_changes_only_estimate_and_crc(
     assert resolved.refresh_memory(refreshed, {}, target=target) is refreshed
 
 
-def test_historical_memory_estimate_uses_migrated_layout() -> None:
+def test_historical_memory_estimate_uses_migrated_layout(
+    legacy_setups: dict[int, bytes],
+) -> None:
     target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
-    old = bytes.fromhex((ROOT / 'setup36.golden').read_text())
+    old = legacy_setups[36]
     upgraded = resolved.upgrade(old)
     current_source = tomlkit.parse(resolved.export(upgraded)).unwrap()
     rebuilt = compiler.compile_show(current_source, {}, [], target)
@@ -184,9 +193,11 @@ def test_historical_memory_estimate_uses_migrated_layout() -> None:
     assert refreshed[:20] == upgraded[:20] and refreshed[24:28] == upgraded[24:28]
 
 
-def test_legacy_page_memory_allowance_survives_layout_source_normalization() -> None:
+def test_legacy_page_memory_allowance_survives_layout_source_normalization(
+    legacy_setups: dict[int, bytes],
+) -> None:
     target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
-    old = bytes.fromhex((ROOT / 'setup36.golden').read_text())
+    old = legacy_setups[36]
     annotated = bytearray(old)
     position = old.index(b'ram2_bytes = 0') + len(b'ram2_bytes = ')
     annotated[position] = ord('7')
@@ -209,8 +220,9 @@ def test_legacy_page_memory_allowance_survives_layout_source_normalization() -> 
 @pytest.mark.parametrize('version', [39, 40])
 def test_legacy_gestures_shifted_actions_and_bound_nodes_keep_their_references(
     version: int,
+    legacy_setups: dict[int, bytes],
 ) -> None:
-    original = bytes.fromhex((ROOT / f'setup{version}.golden').read_text())
+    original = legacy_setups[version]
     page = original.index(b'CPAG')
     graph = resolved.graph_offset(original)
     magic, size, count, switches, roots, named = compiler.GRAPH.unpack_from(

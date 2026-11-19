@@ -167,10 +167,9 @@ def test_same_firmware_recovery_accepts_preserved_memory_estimates(
 
 def test_preserving_memory_estimates_rejects_a_format_upgrade(
     target: models.Target,
+    legacy_setups: dict[int, bytes],
 ) -> None:
-    data = bytes.fromhex(
-        (Path(__file__).parents[1] / 'firmware/test/setup36.golden').read_text()
-    )
+    data = legacy_setups[36]
     with pytest.raises(ValueError, match='requires current-format setups'):
         resolved.prepare_restore(
             data, {}, target=target, preserve_memory_estimates=True
@@ -210,15 +209,14 @@ def test_backup_refuses_to_overwrite_an_existing_directory(tmp_path: Path) -> No
 def test_restore_preparation_upgrades_setups_and_history_without_changing_backup(
     tmp_path: Path,
     target: models.Target,
+    legacy_setups: dict[int, bytes],
 ) -> None:
     import tomlkit
 
     original = tmp_path / 'before'
     (original / 'setups/fonts').mkdir(parents=True)
     (original / 'history/Evening').mkdir(parents=True)
-    data = bytes.fromhex(
-        (Path(__file__).parents[1] / 'firmware/test/setup36.golden').read_text()
-    )
+    data = legacy_setups[36]
     (original / 'setups/Evening.bin').write_bytes(data)
     (original / 'setups/fonts/12345678.cfont').write_bytes(b'font')
     (original / 'history/Evening/3.bin').write_bytes(data)
@@ -1057,17 +1055,13 @@ def test_post_flash_verification_accepts_all_saved_data(
 
 @pytest.mark.parametrize('version', [44, 45])
 def test_pre_flash_backup_keeps_previous_development_bytes_and_can_convert_them(
-    tmp_path: Path, target: models.Target, saved_pedal: SavedPedal, version: int
+    tmp_path: Path,
+    target: models.Target,
+    saved_pedal: SavedPedal,
+    version: int,
+    legacy_setups: dict[int, bytes],
 ) -> None:
-    original = bytearray(
-        binary_format.wrap(
-            bytes.fromhex(
-                (
-                    Path(__file__).parents[1] / f'firmware/test/setup{version}.golden'
-                ).read_text()
-            )
-        )
-    )
+    original = bytearray(binary_format.wrap(legacy_setups[version]))
     struct.pack_into('<H', original, 4, 0x8000 | version)
     struct.pack_into('<I', original, 16, 0)
     struct.pack_into('<I', original, 16, crc32(original))

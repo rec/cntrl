@@ -432,7 +432,6 @@ The input services are:
 | Method | Required result or operation |
 | --- | --- |
 | `debounce(input)` | `std::optional<unsigned>` override in milliseconds; no override returns `std::nullopt` |
-| `keyboard_release(input)` | Release the shortcut owned by this input |
 | `panic_open()` | Whether the optional panic utility owns input |
 | `panic_release(now_ms)` | Release its confirm gesture |
 | `animation_controls(held, now_ms, replay)` | Call the shared animation session's controls method; return whether it consumed input |
@@ -449,7 +448,7 @@ inspect the `controls.count` event entries; event bits are `press_event`,
 
 The router's action service binds `controls_locked`, `menu_open`, `setup_open`,
 `songs_open`, `switches_open`, `switch_button`, `invoke(Operation)`, `browse`,
-`midi_reserved`, `keyboard`, `expression`, `port`, `clock`, `has_controller`, `controller` and
+`midi_reserved`, `expression`, `port`, `clock`, `has_controller`, `controller` and
 `tap` to the shared application and page objects. Its completion path additionally
 uses `leave_switches`, `abandoned`, `patch_pending` and `error`. Call
 `InputCoordinator::finish(actions)` during the runtime's navigation phase;

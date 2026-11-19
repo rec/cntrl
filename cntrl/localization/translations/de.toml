@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Ungespeicherten Loop ersetzen?' }
 scanning = { text = 'Suche...' }
 no_midi_files = { text = 'Keine MIDI-Dateien' }
 storage_busy = { text = 'Speicher belegt' }
-stock_firmware_prompt = { text = '{button:s} für Original-Firmware.' }
-cancel_prompt = { text = '{button:s} zum Abbrechen' }
 notes_off = { text = 'Noten aus' }
 all_off = { text = 'Alles aus' }
-midi_clock = { text = 'MIDI-Clock' }
-clock_tempo = { text = 'Clock-Tempo' }
 tap_tempo = { text = 'Tap-Tempo' }
 status = { text = 'Status' }
 midi_cable_test = { text = 'MIDI-Kabeltest' }
 trs_ports = { text = 'TRS-Anschlüsse' }
-keyboard = { text = 'Tastatur' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Extern: Empfang' }
-external_waiting = { text = 'Extern: Warten' }
-no_outputs_configured = { text = 'Keine Ausgänge konfiguriert', short = 'Keine Ausgänge' }
-outputs_offline = { text = 'Ausgänge getrennt' }
-internal_running = { text = 'Intern: läuft' }
-internal_stopped = { text = 'Intern: gestoppt' }
-start_continue_prompt = { text = '{start:s} Start {resume:s} Fortsetzen' }
-stop_source_prompt = { text = '{stop:s} Stopp {source:s} Quelle' }
-tempo_slot = { text = 'Platz {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Platz' }
-clock_late_lost = { text = 'Spät {late:u}us Verloren {lost:u}' }
 output_heading = { text = 'Aus' }
 input_heading = { text = 'Ein' }
 input = { text = 'Eingang' }
-no_shortcuts = { text = 'Keine Kurzbefehle' }
-held = { text = 'Gehalten' }
-ready = { text = 'Bereit' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: Wählen' }
-hold_send_prompt = { text = '{button:s} halten: Senden' }
 off = { text = 'Aus' }
 on = { text = 'Ein' }
 midi_type_a = { text = 'MIDI Typ A' }
@@ -74,7 +52,6 @@ expression = { text = 'Expression' }
 aux_switch = { text = 'Zusatzschalter' }
 jack_mode_prompt = { text = '{jack:s}: Buchse {mode:s}: Modus' }
 apply_prompt = { text = '{button:s}: Anwenden' }
-use_stock = { text = 'Originale' }
 cycles_patches = { text = 'Zyklen:{cycles:u} Patches:{patches:u}' }
 clock_value = { text = 'Clock:{clock:s}' }
 disk_value = { text = 'Karte:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Abschließen: ' }
 shifted_prefix = { text = 'Umschaltebene | ' }
 abandon = { text = 'verwerfen' }
 no_switches = { text = 'Keine Schalter' }
-firmware_caption = { text = 'Firmware nutzen' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} K {channel:u}' }
 no_pedal = { text = 'Kein Pedal' }
 travel_too_short = { text = 'Pedalweg zu kurz' }

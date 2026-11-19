@@ -157,17 +157,6 @@ public:
         right.words[R::clock_outputs] = uint16_t(setting(28, right[R::clock_outputs]));
         right.words[R::clock_external] = uint16_t(setting(27, right[R::clock_external]));
         if (!output_mask_valid(right[R::clock_outputs], effective_ports, flags, hardware)) return false;
-        if (names + 4 <= length && !std::memcmp(bytes + names, "CKBD", 4)) {
-            if (!hardware.supports_keyboard() || names + 6 > length || !u16(bytes + names + 4)) return false;
-            unsigned count = u16(bytes + names + 4);
-            if (count > (length - names - 6) / 39) return false;
-            for (unsigned i = 0; i < count; ++i) {
-                const uint8_t *p = bytes + names + 6 + i * 39;
-                if (!text_valid(p, 32) || !p[33]) return false;
-                for (unsigned j = 33; j < 39; ++j) if (p[j] && (p[j] < 4 || p[j] > 115)) return false;
-            }
-            names += 6 + count * 39;
-        }
         unsigned gestures = names;
         if (bytes[19] & 0x40) names += 5 * gesture_record_size;
         unsigned hooks = names;
@@ -198,7 +187,7 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!PageLayout::valid_name(p) || p[32] > PageLayout::language
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::language || p[32] == 2 || (p[32] >= 7 && p[32] <= 9)
                 || p[33] > windows || (p[32] == 10 && p[33])
                 || (p[32] == PageLayout::language && p[33] != 2)) return false;
             bool seen[256] = {};
@@ -689,10 +678,6 @@ public:
         }
         settings.words[PageSettings::slot1] = 120;
         if (data_[core_ + 19] & 0x20) read_clock(settings, bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0));
-        if (keyboard_size()) {
-            settings.keyboard_count = u16(keyboard_section() + 4);
-            settings.keyboard = keyboard_section() + 6;
-        }
         settings.words[PageSettings::clock_outputs] = uint16_t(setting(28, settings[PageSettings::clock_outputs]));
         settings.words[PageSettings::clock_external] = uint16_t(setting(27, settings[PageSettings::clock_external]));
         return settings;
@@ -700,12 +685,8 @@ public:
     bool splash() const { return data_[core_ + 19] & 1; }
     bool animation_color_cycle() const { return setting(9, (data_[core_ + 19] & 4) != 0); }
     bool usb_device_midi() const { return setting(3, (data_[core_ + 19] & 8) != 0); }
-    const uint8_t *keyboard_section() const {
-        return bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0) + ((data_[core_ + 19] & 0x20) ? clock_section_size : 0);
-    }
-    unsigned keyboard_size() const { return !std::memcmp(keyboard_section(), "CKBD", 4) ? 6 + u16(keyboard_section() + 4) * 39 : 0; }
     const uint8_t *switch_hook_section() const {
-        return bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0) + ((data_[core_ + 19] & 0x20) ? clock_section_size : 0) + keyboard_size() + ((data_[core_ + 19] & 0x40) ? 5 * gesture_record_size : 0);
+        return bank(patches()) + ((data_[core_ + 19] & 0x80) ? expression_section_size : 0) + ((data_[core_ + 19] & 0x20) ? clock_section_size : 0) + ((data_[core_ + 19] & 0x40) ? 5 * gesture_record_size : 0);
     }
     const uint8_t *switch_hooks(unsigned button) const {
         const uint8_t *p = switch_hook_section();
@@ -1056,6 +1037,12 @@ private:
             case 18:
                 if (n[1] || length != 6 || p[0] >= GlobalSettings::count || p[1] > 1
                     || (p[1] ? u32(p + 2) != 0 : !GlobalSettings::valid(p[0], u32(p + 2)))) return false;
+                break;
+            case 20:
+                if (!hardware.supports_keyboard() || n[1] || length != 8 || p[0] > 1 || !p[2]) return false;
+                for (unsigned j = 2; j < 8; ++j) {
+                    if (p[j] && (p[j] < 4 || p[j] > 115 || (j > 2 && (!p[j - 1] || p[j] <= p[j - 1])))) return false;
+                }
                 break;
             case 19:
                 if (n[1] || length != 67 || p[0] > 2 || u16(p + 65) >= i

@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Nahradiť neuloženú slučku?' }
 scanning = { text = 'Hľadanie...' }
 no_midi_files = { text = 'Žiadne súbory MIDI' }
 storage_busy = { text = 'Úložisko je zaneprázdnené' }
-stock_firmware_prompt = { text = '{button:s}: pôvodný firmware.' }
-cancel_prompt = { text = '{button:s}: zrušiť' }
 notes_off = { text = 'Noty vypnuté' }
 all_off = { text = 'Všetko vypnuté' }
-midi_clock = { text = 'MIDI hodiny' }
-clock_tempo = { text = 'Tempo hodín' }
 tap_tempo = { text = 'Vyťukanie tempa' }
 status = { text = 'Stav' }
 midi_cable_test = { text = 'Test MIDI kábla' }
 trs_ports = { text = 'Porty TRS' }
-keyboard = { text = 'Klávesnica' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Externé: príjem' }
-external_waiting = { text = 'Externé: čakanie' }
-no_outputs_configured = { text = 'Žiadne nastavené výstupy', short = 'Žiadne výstupy' }
-outputs_offline = { text = 'Výstupy odpojené' }
-internal_running = { text = 'Interné: beží' }
-internal_stopped = { text = 'Interné: zastavené' }
-start_continue_prompt = { text = '{start:s} Spustiť {resume:s} Pokračovať' }
-stop_source_prompt = { text = '{stop:s} Stop {source:s} Zdroj' }
-tempo_slot = { text = 'Pamäť {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Pamäť' }
-clock_late_lost = { text = 'Neskoro {late:u}us Straty {lost:u}' }
 output_heading = { text = 'Výst.' }
 input_heading = { text = 'Vst.' }
 input = { text = 'Vstup' }
-no_shortcuts = { text = 'Žiadne skratky' }
-held = { text = 'Držané' }
-ready = { text = 'Pripravené' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: vybrať' }
-hold_send_prompt = { text = 'Držať {button:s}: odoslať' }
 off = { text = 'Vyp.' }
 on = { text = 'Zap.' }
 midi_type_a = { text = 'MIDI typ A' }
@@ -74,7 +52,6 @@ expression = { text = 'Expression' }
 aux_switch = { text = 'Pomocný spínač' }
 jack_mode_prompt = { text = '{jack:s}: zásuvka {mode:s}: režim' }
 apply_prompt = { text = '{button:s}: použiť' }
-use_stock = { text = 'Použiť pôvodný' }
 cycles_patches = { text = 'Cykly:{cycles:u} Zvuky:{patches:u}' }
 clock_value = { text = 'Hodiny:{clock:s}' }
 disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Uzatváranie: ' }
 shifted_prefix = { text = 'Posunuté | ' }
 abandon = { text = 'opustiť' }
 no_switches = { text = 'Žiadne spínače' }
-firmware_caption = { text = 'firmvér' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
 no_pedal = { text = 'Žiadny pedál' }
 travel_too_short = { text = 'Príliš malý rozsah' }

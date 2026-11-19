@@ -180,11 +180,27 @@ def test_exported_profiles_build_without_the_physical_sdk(
         'pages': {'performance': {'type': 'patch-switcher'}},
         'patches': {
             'control': {
-                'type': 'control-change',
-                'output': 'din',
-                'channel': 1,
-                'controller': 7,
-                'value': 100,
+                'patches': [
+                    {
+                        'type': 'control-change',
+                        'output': 'din',
+                        'channel': 1,
+                        'controller': 7,
+                        'value': 100,
+                    },
+                    {
+                        'operation': 'keyboard',
+                        'action': 'press',
+                        'keys': [4],
+                        'modifiers': 2,
+                    },
+                    {
+                        'operation': 'keyboard',
+                        'action': 'release',
+                        'keys': [4],
+                        'modifiers': 2,
+                    },
+                ],
             },
         },
         'patch_cycles': {'main': ['control']},
@@ -213,6 +229,11 @@ def test_exported_profiles_build_without_the_physical_sdk(
             e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xb0\x07\x64'
             for e in session.messages
         ), session.messages
+        assert [e.data for e in session.messages if e.kind == 'keyboard'] == [
+            bytes(8),  # Initial report after USB connection.
+            b'\x02\0\x04\0\0\0\0\0',
+            bytes(8),
+        ]
 
 
 def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
@@ -222,14 +243,14 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
     target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
     source = {
         'pages': {
+            'performance': {'type': 'patch-switcher', 'min_windows': 0},
             'status': {'type': 'status'},
             'panic': {'type': 'panic'},
-            'keyboard': {'type': 'keyboard'},
-            'clock': {'type': 'clock-transport'},
-            'firmware': {'type': 'firmware'},
         },
+        'layout': {'focus': 'tools'},
+        'patches': {'stock': {'operation': 'stock-firmware', 'exit_buttons': 'a+f'}},
+        'patch_cycles': {'main': ['stock']},
         'page_settings': {
-            'keyboard': [{'name': 'Test shortcut', 'keys': [4], 'modifiers': 2}],
             'clock_outputs': ['din'],
         },
     }
@@ -260,31 +281,13 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
             e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xb0\x7b\0'
             for e in session.messages
         ), session.messages
-        session.messages.clear()
         press('f')
-        press('c')
-        assert [e.data for e in session.messages if e.kind == 'keyboard'] == [
-            b'\x02\0\x04\0\0\0\0\0',
-            bytes(8),
-        ]
-        press('f')
-        press('a')
-        assert any(
-            e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xf8'
-            for e in session.messages
-        )
-        press('f')
-        press('c')  # Confirm before the stock-firmware transition.
         assert not any(e.kind == 'firmware' for e in session.messages)
-        press('f')
+        press('a')  # The stock-firmware patch remains available without its old page.
         assert len([e for e in session.messages if e.kind == 'firmware']) == 1
         assert session.stock_firmware
         transition = next(
             i for i, e in enumerate(session.messages) if e.kind == 'firmware'
-        )
-        assert any(
-            e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xfc'
-            for e in session.messages[:transition]
         )
         assert not any(
             e.kind in ('midi', 'keyboard', 'relay')

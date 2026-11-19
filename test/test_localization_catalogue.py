@@ -52,7 +52,7 @@ def test_reference_header_is_reproducible(
 )
 def test_invalid_translation_templates_are_rejected(french: str) -> None:
     data = catalogue.translation('en').model_dump()
-    data['messages']['tempo_slot']['text'] = french
+    data['messages']['cycles_patches']['text'] = french
     with pytest.raises(ValueError):
         catalogue.Translation.model_validate(data)
 
@@ -101,7 +101,7 @@ def test_damaged_or_incompatible_pack_is_rejected(damage: str) -> None:
         struct.pack_into('<H', packed, 4, 1)
     else:
         source = catalogue.load()
-        index = list(source.messages).index('tempo_slot')
+        index = list(source.messages).index('cycles_patches')
         offset = struct.unpack_from('<I', packed, catalogue.HEADER.size + index * 8)[0]
         packed[offset : offset + 3] = b'{x}'
     if damage != 'crc':

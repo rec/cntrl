@@ -558,7 +558,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
-| Page layout, after optional expression, clock, keyboard, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 window count and one u8 surrender-order entry per display. At most four patch-switchers and 36 pages. Page types follow `layout.PAGE_TYPES` |
+| Page layout, after optional expression, clock, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 window count and one u8 surrender-order entry per display. At most four patch-switchers and 36 pages. Page types follow `layout.PAGE_TYPES`; ID 9 is unassigned |
 | Movie lists, after page layout | `CMOV`, u16 startup count, u16 idle count, then startup and idle CRC32 asset keys as u32 values |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
 | Display header, 16 bytes | `CDSP`, u16 style count, page count, text count, page-data byte count; u32 source-metadata byte count |
@@ -693,8 +693,8 @@ A zero channel denotes an unassigned jack.
 
 ### Pages
 
-By default the rightmost window starts on Status. F cycles through Status, Firmware,
-MIDI Cable Test, Panic, TRS Ports, Expression, MIDI Clock, Clock Tempo, Keyboard and Tap Tempo using
+By default the rightmost window starts on Status. F cycles through Status,
+MIDI Cable Test, Panic, TRS Ports, Expression, Tap Tempo, Pong, Language and None using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary page in place.
@@ -764,14 +764,11 @@ padding, tempo font ID, status font ID, off RGB565, on RGB565, ring RGB565,
 integer digits, decimal digits, page-background RGB565, and title font ID.
 Clock preferences use an optional format 29 section with six words for the
 output mask, external-source flag and four zero-padded BPM slots. See
-[MIDI Clock](../doc/midi-clock.md) for transport controls and timing qualification.
+[MIDI Clock](../doc/midi-clock.md) for shared timing behavior and qualification.
 `flash_fraction` accepts 0.001..1 in steps of 0.001, including percentage strings.
 
-The Firmware page has the shared centered title and a two-line “Use stock firmware”
-label near the bottom center, above C. Press C to open a confirmation page with two centered lines: `F for stock firmware.`
-and `C to cancel`. Release C, then press F to start the stock-firmware handoff,
-or press C to return to the Firmware page. In stock firmware, A+F pressed within the configured 50 ms window returns
-to cntrl with no hold. The handoff preserves boot selection and navigation continuation. F and D+F browse away normally.
+The `stock-firmware` patch action starts the stock-firmware handoff and specifies
+the exit-button pair. The handoff preserves boot selection and navigation continuation.
 
 Target-pulse `delay` defaults to 2 seconds. Each newly selected pending patch stays
 at the configured pulse maximum for this delay before starting the smooth throb.

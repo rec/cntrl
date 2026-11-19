@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Sostituire il loop non salvato?' }
 scanning = { text = 'Ricerca...' }
 no_midi_files = { text = 'Nessun file MIDI' }
 storage_busy = { text = 'Memoria occupata' }
-stock_firmware_prompt = { text = '{button:s} per il firmware originale.' }
-cancel_prompt = { text = '{button:s} per annullare' }
 notes_off = { text = 'Note disattivate' }
 all_off = { text = 'Tutto disattivato' }
-midi_clock = { text = 'Clock MIDI' }
-clock_tempo = { text = 'Tempo del clock' }
 tap_tempo = { text = 'Tap tempo' }
 status = { text = 'Stato' }
 midi_cable_test = { text = 'Test cavo MIDI' }
 trs_ports = { text = 'Porte TRS' }
-keyboard = { text = 'Tastiera' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Esterno: ricezione' }
-external_waiting = { text = 'Esterno: attesa' }
-no_outputs_configured = { text = 'Nessuna uscita configurata', short = 'Nessuna uscita' }
-outputs_offline = { text = 'Uscite scollegate' }
-internal_running = { text = 'Interno: in esecuzione' }
-internal_stopped = { text = 'Interno: fermo' }
-start_continue_prompt = { text = '{start:s} Avvia {resume:s} Riprendi' }
-stop_source_prompt = { text = '{stop:s} Ferma {source:s} Sorgente' }
-tempo_slot = { text = 'Memoria {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Memoria' }
-clock_late_lost = { text = 'Ritardo {late:u}us Persi {lost:u}' }
 output_heading = { text = 'Uscita' }
 input_heading = { text = 'Ingresso' }
 input = { text = 'Ingresso' }
-no_shortcuts = { text = 'Nessuna scorciatoia' }
-held = { text = 'Premuto' }
-ready = { text = 'Pronto' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: Scegli' }
-hold_send_prompt = { text = 'Tieni {button:s}: Invia' }
 off = { text = 'Spento' }
 on = { text = 'Acceso' }
 midi_type_a = { text = 'MIDI tipo A' }
@@ -74,7 +52,6 @@ expression = { text = 'Espressione' }
 aux_switch = { text = 'Interruttore ausiliario', short = 'Interr. ausiliario' }
 jack_mode_prompt = { text = '{jack:s}: Presa {mode:s}: Modo' }
 apply_prompt = { text = '{button:s}: Applica' }
-use_stock = { text = 'Usa il' }
 cycles_patches = { text = 'Cicli:{cycles:u} Suoni:{patches:u}' }
 clock_value = { text = 'Clock:{clock:s}' }
 disk_value = { text = 'Disco:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Chiusura: ' }
 shifted_prefix = { text = 'Livello secondario | ' }
 abandon = { text = 'scarta' }
 no_switches = { text = 'Nessun interruttore' }
-firmware_caption = { text = 'firmware originale' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Can {channel:u}' }
 no_pedal = { text = 'Nessun pedale' }
 travel_too_short = { text = 'Corsa troppo breve' }

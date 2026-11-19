@@ -105,24 +105,11 @@ text = 'Aucun fichier MIDI'
 [messages.storage_busy]
 text = 'Stockage occupé'
 
-[messages.stock_firmware_prompt]
-text = '{button:s} : micrologiciel initial.'
-short = '{button:s} : système initial.'
-
-[messages.cancel_prompt]
-text = '{button:s} : annuler'
-
 [messages.notes_off]
 text = 'Notes coupées'
 
 [messages.all_off]
 text = 'Tout coupé'
-
-[messages.midi_clock]
-text = 'Horloge MIDI'
-
-[messages.clock_tempo]
-text = 'Tempo horloge'
 
 [messages.tap_tempo]
 text = 'Tempo frappé'
@@ -136,48 +123,6 @@ text = 'Test câble MIDI'
 [messages.trs_ports]
 text = 'Ports TRS'
 
-[messages.keyboard]
-text = 'Clavier'
-
-[messages.firmware]
-text = 'Micrologiciel'
-short = 'Système'
-
-[messages.external_receiving]
-text = 'Externe : réception'
-
-[messages.external_waiting]
-text = 'Externe : attente'
-
-[messages.no_outputs_configured]
-text = 'Aucune sortie configurée'
-short = 'Aucune sortie'
-
-[messages.outputs_offline]
-text = 'Sorties déconnectées'
-
-[messages.internal_running]
-text = 'Interne : en marche'
-
-[messages.internal_stopped]
-text = 'Interne : arrêt'
-
-[messages.start_continue_prompt]
-text = '{start:s} Démarrer  {resume:s} Reprendre'
-short = '{start:s} Début {resume:s} Suite'
-
-[messages.stop_source_prompt]
-text = '{stop:s} Arrêt  {source:s} Source'
-
-[messages.tempo_slot]
-text = 'Mémoire {slot:u} : {tempo:u} BPM'
-
-[messages.tempo_adjust_prompt]
-text = '{minus:s} -1 {plus:s} +1 {slot:s} Mémoire'
-
-[messages.clock_late_lost]
-text = 'Retard {late:u}us Perdus {lost:u}'
-
 [messages.output_heading]
 text = 'Sortie'
 
@@ -186,21 +131,6 @@ text = 'Entrée'
 
 [messages.input]
 text = 'Entrée'
-
-[messages.no_shortcuts]
-text = 'Aucun raccourci'
-
-[messages.held]
-text = 'Maintenu'
-
-[messages.ready]
-text = 'Prêt'
-
-[messages.select_pair_prompt]
-text = '{previous:s}/{next:s} : choisir'
-
-[messages.hold_send_prompt]
-text = 'Maintenir {button:s} : envoyer'
 
 [messages.off]
 text = 'Arrêt'
@@ -226,9 +156,6 @@ text = '{jack:s} : prise {mode:s} : mode'
 
 [messages.apply_prompt]
 text = '{button:s} : appliquer'
-
-[messages.use_stock]
-text = 'Utiliser le'
 
 [messages.cycles_patches]
 text = 'Cycles : {cycles:u} Sons : {patches:u}'
@@ -995,9 +922,6 @@ text = 'abandonner'
 
 [messages.no_switches]
 text = 'Aucun commutateur'
-
-[messages.firmware_caption]
-text = 'micrologiciel'
 
 [messages.expression_assigned]
 text = '{port:.20s} CC {controller:u} Can {channel:u}'

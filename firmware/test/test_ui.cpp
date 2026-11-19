@@ -822,15 +822,7 @@ int main() {
         }
     }
     uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0};
-    layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::clock_tempo);
     layout[12 + 3 * 32 + 33] = 1;
-    pages.layout(cntrl::PageLayout{layout});
-    const auto clock_page = pages.view(0, 0, status);
-    assert(std::strcmp(clock_page.lines[3].text, "Less -1   More +1   Yes Slot") == 0);
-    layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::firmware); pages.layout(cntrl::PageLayout{layout}); pages.tap(0);
-    const auto confirmation = pages.view(0, 0, status);
-    assert(std::strcmp(confirmation.lines[0].text, "Back for stock firmware.") == 0);
-    assert(std::strcmp(confirmation.lines[1].text, "Yes to cancel") == 0);
 
     settings.words[cntrl::PageSettings::diameter] = 18;
     settings.words[cntrl::PageSettings::annulus] = 5;

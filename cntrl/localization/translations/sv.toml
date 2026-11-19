@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Ersätt osparad loop?' }
 scanning = { text = 'Söker...' }
 no_midi_files = { text = 'Inga MIDI-filer' }
 storage_busy = { text = 'Lagringen upptagen' }
-stock_firmware_prompt = { text = '{button:s} för originalfirmware.' }
-cancel_prompt = { text = '{button:s} för att avbryta' }
 notes_off = { text = 'Toner av' }
 all_off = { text = 'Allt av' }
-midi_clock = { text = 'MIDI-klocka' }
-clock_tempo = { text = 'Klocktempo' }
 tap_tempo = { text = 'Trycktempo' }
 status = { text = 'Status' }
 midi_cable_test = { text = 'MIDI-kabeltest' }
 trs_ports = { text = 'TRS-portar' }
-keyboard = { text = 'Tangentbord' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Extern: tar emot' }
-external_waiting = { text = 'Extern: väntar' }
-no_outputs_configured = { text = 'Inga utgångar konfigurerade', short = 'Inga utgångar' }
-outputs_offline = { text = 'Utgångar frånkopplade' }
-internal_running = { text = 'Intern: kör' }
-internal_stopped = { text = 'Intern: stoppad' }
-start_continue_prompt = { text = '{start:s} Starta  {resume:s} Fortsätt' }
-stop_source_prompt = { text = '{stop:s} Stopp  {source:s} Källa' }
-tempo_slot = { text = 'Plats {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Plats' }
-clock_late_lost = { text = 'Sent {late:u}us Tappat {lost:u}' }
 output_heading = { text = 'Ut' }
 input_heading = { text = 'In' }
 input = { text = 'Ingång' }
-no_shortcuts = { text = 'Inga genvägar' }
-held = { text = 'Nedtryckt' }
-ready = { text = 'Redo' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: Välj' }
-hold_send_prompt = { text = 'Håll {button:s}: Skicka' }
 off = { text = 'Av' }
 on = { text = 'På' }
 midi_type_a = { text = 'MIDI typ A' }
@@ -74,7 +52,6 @@ expression = { text = 'Expression' }
 aux_switch = { text = 'Extra fotknapp' }
 jack_mode_prompt = { text = '{jack:s}: Uttag {mode:s}: Läge' }
 apply_prompt = { text = '{button:s}: Tillämpa' }
-use_stock = { text = 'Använd originalets' }
 cycles_patches = { text = 'Cykler:{cycles:u} Ljud:{patches:u}' }
 clock_value = { text = 'Klocka:{clock:s}' }
 disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Avslutar: ' }
 shifted_prefix = { text = 'Skiftad | ' }
 abandon = { text = 'överge' }
 no_switches = { text = 'Inga fotknappar' }
-firmware_caption = { text = 'firmware' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
 no_pedal = { text = 'Ingen pedal' }
 travel_too_short = { text = 'För kort rörelse' }

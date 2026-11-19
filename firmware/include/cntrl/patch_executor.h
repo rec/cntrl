@@ -7,7 +7,6 @@
 namespace cntrl {
 class PatchExecutor;
 struct StatePatch { unsigned operation; uint32_t value = 0; };
-struct StockFirmwarePatch { uint8_t exit_buttons; };
 
 struct PatchSources {
     virtual ~PatchSources() = default;
@@ -89,11 +88,6 @@ public:
     bool invoke(const StatePatch &patch) {
         return outputs_.state(patch.operation, patch.value);
     }
-    bool invoke(const StockFirmwarePatch &patch) {
-        if (busy() || !button_pair_valid(patch.exit_buttons) || hardware_.input_count() > 8 || unsigned(patch.exit_buttons) >= (1u << hardware_.input_count())) return false;
-        reset(); document_ = Document(); builtin_stock_ = patch.exit_buttons;
-        status_ = Status::pending; return true;
-    }
 
     bool start(const Document &document, unsigned node, bool persistent = false, bool selection = false) {
         if (!resume(document, node, 0, 0, persistent)) return false;
@@ -146,7 +140,6 @@ public:
     bool delaying() const { return delaying_; }
     void tick(uint32_t now = 0) {
         if (status_ != Status::pending) return;
-        if (builtin_stock_) { dispatch_stock(builtin_stock_); return; }
         if (file_waiting_) {
             auto delivery = outputs_.midi_file_delivery(owner_);
             if (delivery == midi::Bridge::Delivery::pending) return;
@@ -176,6 +169,14 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 20: {
+            KeyboardKeys keys;
+            keys.modifiers = p[1]; std::memcpy(keys.keys, p + 2, 6);
+            const auto delivery = hardware_.keyboard_action(keys, p[0]);
+            if (delivery == KeyboardDelivery::pending) return;
+            if (delivery == KeyboardDelivery::failed) { fail(ui::i18n::Message::application_operation_failed); return; }
+            started_ = true; complete_leaf(); return;
+        }
         case 18:
             if (!hardware_.global_setting(p[0], u32(p + 2), p[1] != 0)) { fail(ui::i18n::Message::global_setting_rejected); return; }
             started_ = true; complete_leaf(); return;
@@ -285,7 +286,7 @@ public:
         if (file_waiting_) outputs_.cancel_midi_file(owner_);
         file_waiting_ = false;
         if (waiting_) outputs_.cancel_patch(owner_);
-        waiting_ = delaying_ = false; builtin_stock_ = 0; depth_ = 0;
+        waiting_ = delaying_ = false; depth_ = 0;
         finish(Status::idle);
     }
 private:
@@ -305,7 +306,6 @@ private:
     uint32_t delay_started_ = 0, delay_duration_ = 0;
     bool delaying_ = false;
     uint8_t program_[14] = {};
-    uint8_t builtin_stock_ = 0;
     Status status_ = Status::idle;
     ui::i18n::Message error_ = ui::i18n::Message(ui::i18n::message_count);
     const char *waiting_output_ = nullptr;
@@ -417,9 +417,10 @@ private:
     }
     void dispatch_stock(uint8_t buttons) {
         if (!leaving()) return;
+        if (!hardware_.release_keyboard()) return;
         // Count the visit before checkpointing, so a return resumes after it.
         ++completed_; if (depth_) --depth_;
-        builtin_stock_ = 0; started_ = true; status_ = Status::suspended;
+        started_ = true; status_ = Status::suspended;
         if (!outputs_.stock(buttons, *this)) fail(ui::i18n::Message::firmware_switch_failed);
     }
     bool resource(const char *output, unsigned channel, unsigned control, int expected = -1) {

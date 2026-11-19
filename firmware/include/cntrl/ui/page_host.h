@@ -158,25 +158,16 @@ public:
         else if (input == controls_.previous || input == controls_.next) platform_.midi_monitor().browse(input == controls_.previous);
         pages_.revisit(); return true;
     }
-    bool keyboard_button(unsigned i, bool pressed) {
-        if (pages_.page() != Pages::Page::keyboard || (i != controls_.previous && i != controls_.next && i != controls_.confirm)) return false;
-        if (i == controls_.confirm) {
-            if (!pressed) keyboard_.release(0);
-            else {
-                const auto shortcut = pages_.keyboard_shortcut();
-                pressed = shortcut.name[0] && keyboard_.press(0, shortcut);
-            }
-            pages_.keyboard_held(pressed);
-        } else if (pressed) {
-            keyboard_.release(0);
-            pages_.keyboard_held(false);
-            pages_.keyboard_select(i == controls_.previous);
-        }
-        return true;
+    KeyboardDelivery keyboard_action(const KeyboardKeys &keys, bool pressed) {
+        poll_keyboard();
+        return keyboard_.execute(keys, pressed, platform_);
     }
     void poll_keyboard() {
         keyboard_.poll(platform_.keyboard_connected(), platform_);
-        if (!platform_.keyboard_connected()) pages_.keyboard_held(false);
+    }
+    bool release_keyboard() {
+        keyboard_.clear(); poll_keyboard();
+        return keyboard_.released();
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_show)
@@ -313,7 +304,6 @@ public:
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
         if (pages_.page() == Pages::Page::midi_looper && looper_files_) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; }
         if (pages_.page() == Pages::Page::midi_monitor && !other_selected(Pages::Page::midi_monitor)) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
-        keyboard_.clear(); pages_.keyboard_held(false);
         if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();
 #if CNTRL_CABLE_TEST
         if (pages_.page() == Pages::Page::cable && pages_.index() == application_.allocation.selected()) platform_.leave_cable_test();
@@ -341,7 +331,7 @@ public:
 #endif
     void stop_setup() {
         application_.stop_setup(); leave_page();
-        keyboard_.clear(); poll_keyboard();
+        release_keyboard();
         pages_.stop_setup();
         platform_.animation_session().stop();
         platform_.expression_controls().configure(nullptr, {});
@@ -351,11 +341,6 @@ public:
         brightness_feedback_ = false; pending_patch_ = -1;
         throb_.configure(0, 0, 0, 0);
         if (!platform_.relays.reset()) platform_.error(i18n::text(i18n::Message::relay_reset_failed));
-    }
-    bool clock_control(unsigned button, bool pressed) {
-        if (!pages_.clock_page()) return false;
-        if (pressed) pages_.clock_button(button == controls_.previous ? 0 : button == controls_.next ? 1 : button == controls_.confirm ? 2 : button == controls_.next_section ? 4 : Controls::absent, platform_.microseconds(), platform_.clock_available());
-        return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_configure)
@@ -373,18 +358,13 @@ public:
 #endif
     void browse_page(bool reverse) {
         if (!documents_.document().valid()) return;
-        if (pages_.page() == Pages::Page::confirm_firmware
-            && controls_.confirm < 64 && (application_.held & (uint64_t(1) << controls_.confirm))) return;
         auto previous = pages_.save_view();
-        if (pages_.browse(reverse)) {
-            if (!platform_.switch_firmware()) error(i18n::text(i18n::Message::firmware_switch_failed));
-        } else {
-            unsigned selected = pages_.index();
-            pages_.restore_view(previous);
-            const auto &span = application_.allocation.region(application_.allocation.focus());
-            if (span.count) renderer_.transition(reverse,documents_.document().scroll_ms(),int(span.first),0,false,true,span.count);
-            select_page(selected);
-        }
+        pages_.browse(reverse);
+        unsigned selected = pages_.index();
+        pages_.restore_view(previous);
+        const auto &span = application_.allocation.region(application_.allocation.focus());
+        if (span.count) renderer_.transition(reverse,documents_.document().scroll_ms(),int(span.first),0,false,true,span.count);
+        select_page(selected);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_select_page)
@@ -619,6 +599,7 @@ private:
     CNTRL_FLASH_ROUTINE(page_host_start_panic)
 #endif
     void start_panic() {
+        release_keyboard();
         if (looper_files_) looper_files_->player.cancel();
         if (!platform_.panic_owns_midi && (application_.patch_pending() || !platform_.output_idle()
             || documents_.busy() || (looper_files_ && looper_files_->player.cleaning()) || !stop_clock())) return;
@@ -641,7 +622,6 @@ private:
     }
     void cancel_focus() {
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
-        keyboard_.clear(); pages_.keyboard_held(false);
         application_.controller().cancel_gesture();
         if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();
         if (looper_files_ && pages_.page() == Pages::Page::midi_looper) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; pages_.looper_prompt[0] = 0; }

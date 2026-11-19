@@ -19,8 +19,9 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     version: int,
     legacy_library: bool,
     target: models.Target,
+    legacy_setups: dict[int, bytes],
 ) -> None:
-    original = bytearray(bytes.fromhex((ROOT / 'setup36.golden').read_text()))
+    original = bytearray(legacy_setups[36])
     # Formats 36 and 38 share these historical records; this setup has no looper.
     struct.pack_into('<H', original, 4, version)
     source = bytes(original)

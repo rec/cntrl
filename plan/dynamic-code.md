@@ -75,7 +75,7 @@ attribution and its limitations are recorded in the appendix.
 | `scrolling` | 4–10 KiB | Horizontal/vertical/panoramic transitions, including single-frame rendering coordination. Needed only when animations and a nonzero frame count allow scrolling. Static drawing and throb stay resident. |
 | `storage-tools` | 8–16 KiB | Optional storage browser, extended history inspection/comparison and disk benchmark. Minimum setup management, backup/recovery and transfer services stay resident. |
 | `cable-test` | 3–6 KiB | Interactive MIDI cable diagnostics and its page. Requires idle/admitted diagnostic output ownership. Panic is not included. |
-| `keyboard-controls` | 2–4 KiB | Shortcut actions and keyboard page. The target's USB transport/descriptors remain resident; loading a module must not require USB re-enumeration. |
+| `keyboard-controls` | 2–4 KiB | Keyboard patch actions. The target's USB transport/descriptors remain resident; loading a module must not require USB re-enumeration. |
 
 Use feature groups initially, not one binary per effect, page class or selector.
 Common capture/timeline/format helpers may remain resident until independently

@@ -67,13 +67,13 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, firmware, cable, panic, ports, expression, clock_transport, clock_tempo, keyboard, none, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language, confirm_firmware };
+    enum class Page { tap, status, cable = 3, panic, ports, expression, none = 10, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language };
     struct ViewState {
-        unsigned index = 0, jack = 0, shortcut = 0, language = 0;
+        unsigned index = 0, jack = 0, language = 0;
         Page page = Page::none;
         midi::TrsMode candidate = midi::TrsMode::off, active_port = midi::TrsMode::off;
         const char *port_message = nullptr, *port_name = i18n::definitions[unsigned(i18n::Message::no_configurable_ports)].text;
-        bool port_available = false, shortcut_held = false, dirty = true, flashing = false, held = false;
+        bool port_available = false, dirty = true, flashing = false, held = false;
         uint32_t refreshed = 0;
         char expression[3][40] = {}, looper_prompt[96] = {};
         Pong pong;
@@ -82,7 +82,7 @@ public:
         ViewState view;
         view.index = index_; view.page = page_; view.jack = jack; view.candidate = candidate;
         view.language = language;
-        view.shortcut = shortcut; view.shortcut_held = shortcut_held; view.active_port = active_port_;
+        view.active_port = active_port_;
         view.port_message = port_message_; view.port_name = port_name_; view.port_available = port_available_;
         view.dirty = dirty_; view.flashing = flashing_; view.held = held_; view.refreshed = refreshed_;
         std::memcpy(view.expression,expression_lines_,sizeof(expression_lines_));
@@ -93,7 +93,7 @@ public:
     void restore_view(const ViewState &view) {
         index_ = view.index; page_ = view.page; jack = view.jack; candidate = view.candidate;
         language = view.language;
-        shortcut = view.shortcut; shortcut_held = view.shortcut_held; active_port_ = view.active_port;
+        active_port_ = view.active_port;
         port_message_ = view.port_message; port_name_ = view.port_name; port_available_ = view.port_available;
         dirty_ = view.dirty; flashing_ = view.flashing; held_ = view.held; refreshed_ = view.refreshed;
         std::memcpy(expression_lines_,view.expression,sizeof(expression_lines_));
@@ -119,12 +119,10 @@ public:
     }
     void configure(const cntrl::PageSettings &settings) {
         generator.stop();
-        slot_ = 0;
         settings_ = settings;
-        shortcut = 0;
         using R = cntrl::PageSettings;
         external_ = settings[R::clock_external];
-        recall_slot();
+        if (unsigned bpm = settings_.words[R::slot1]) generator.set_tempo((60000000u + bpm / 2) / bpm);
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
         clock_.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
         prepare_expression_layout();
@@ -135,11 +133,10 @@ public:
         generator.stop(); tap_ = TapTempo(); clock_ = ClockTempo();
         held_ = flashing_ = false; clock_changed_ = dirty_ = true;
     }
-    bool browse(bool reverse) {
-        if (page_ == Page::confirm_firmware) return !reverse;
-        if (!layout_.pages()) return false;
+    void browse(bool reverse) {
+        if (!layout_.pages()) return;
         unsigned region = layout_.page_region(index_);
-        if (region == layout_.regions()) return false;
+        if (region == layout_.regions()) return;
         unsigned count = layout_.region_size(region), position = 0;
         while (position < count && layout_.region_page(region,position) != index_) ++position;
         for (unsigned i = 0; i < count;) {
@@ -156,7 +153,6 @@ public:
             break;
         }
         dirty_ = true;
-        return false;
     }
     using PortMode = cntrl::midi::TrsMode;
     unsigned jack = 0;
@@ -173,43 +169,6 @@ public:
     unsigned clock_outputs() const { return settings_[cntrl::PageSettings::clock_outputs]; }
     bool external_clock() const { return external_; }
     unsigned clock_owner() const { return (external_ ? 0 : clock_outputs()) | generator.stopping(); }
-    bool clock_page() const { return page_ == Page::clock_transport || page_ == Page::clock_tempo; }
-    void clock_connections(unsigned available) {
-        available &= clock_outputs();
-        if (available != available_outputs_) {
-            available_outputs_ = available;
-            if (clock_page()) dirty_ = true;
-        }
-    }
-    void clock_button(unsigned button, uint32_t now_us, unsigned available) {
-        generator.beat_position(now_us);
-        using R = cntrl::PageSettings;
-        if (page_ == Page::clock_transport) {
-            if (button == 2) generator.stop();
-            if (!external_ && button < 2)
-                generator.start(now_us, clock_outputs() & available, button == 1);
-            if (button == 4) { generator.stop(); external_ = !external_; }
-        } else if (page_ == Page::clock_tempo) {
-            if (button < 2) {
-                unsigned bpm = std::clamp(int(generator.bpm()) + (button ? 1 : -1), 20, 600);
-                generator.set_tempo((60000000u + bpm / 2) / bpm);
-            } else if (button == 2) {
-                if (++slot_ == 4 || !settings_.words[R::slot1 + slot_]) slot_ = 0;
-                recall_slot();
-            }
-        }
-        dirty_ = true;
-    }
-    unsigned shortcut = 0;
-    bool shortcut_held = false;
-    void keyboard_select(bool reverse) {
-        if (settings_.keyboard_count) shortcut = (shortcut + (reverse ? settings_.keyboard_count - 1 : 1)) % settings_.keyboard_count;
-        dirty_ = true;
-    }
-    cntrl::KeyboardShortcut keyboard_shortcut() const {
-        return settings_.keyboard_shortcut(shortcut);
-    }
-    void keyboard_held(bool held) { if (held != shortcut_held) { shortcut_held = held; dirty_ = true; } }
     Page page() const { return page_; }
     void revisit() {
         dirty_ = true;
@@ -218,8 +177,6 @@ public:
         if (page_ == Page::tap) {
             if (tap_.tap(now)) generator.set_tempo(tap_.period() * 1000);
         }
-        else if (page_ == Page::firmware) page_ = Page::confirm_firmware;
-        else if (page_ == Page::confirm_firmware) page_ = Page::firmware;
         else return;
         dirty_ = true;
     }
@@ -273,7 +230,7 @@ public:
         if (page_ == Page::midi_looper) return uint32_t(now - refreshed_) >= 50;
         if (page_ == Page::arpeggiator) return uint32_t(now - refreshed_) >= 50;
         if (page_ == Page::cable || page_ == Page::panic) return uint32_t(now - refreshed_) >= 80;
-        if (page_ == Page::status || clock_page()) return uint32_t(now - refreshed_) >= settings_[R::refresh];
+        if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::tap && (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -299,12 +256,6 @@ public:
             return pane;
         }
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
-        if (page_ == Page::confirm_firmware) {
-            const unsigned height = title * 3 / 2;
-            line(pane, 0, prompt(i18n::Message::stock_firmware_prompt, controls_.next_page), viewport_.height / 2 - height, height, settings_[R::title_font], true);
-            line(pane, 1, prompt(i18n::Message::cancel_prompt, controls_.confirm), viewport_.height / 2, height, settings_[R::title_font], true, nullptr, 0, viewport_.width, pane.lines[0].graphics.size);
-            return pane;
-        }
         if (page_ == Page::panic) {
             page_heading(pane, i18n::text(i18n::Message::panic));
             constexpr uint16_t red = 0xf800, dark_red = 0x6000;
@@ -325,42 +276,11 @@ public:
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::clock_transport ? i18n::text(i18n::Message::midi_clock) : page_ == Page::clock_tempo ? i18n::text(i18n::Message::clock_tempo) : page_ == Page::tap ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : page_ == Page::ports ? i18n::text(i18n::Message::trs_ports) : page_ == Page::keyboard ? i18n::text(i18n::Message::keyboard) : i18n::text(i18n::Message::firmware);
+        const char *heading = page_ == Page::tap ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : page_ == Page::ports ? i18n::text(i18n::Message::trs_ports) : "";
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) heading = preview_label_;
 #endif
         page_heading(pane, heading);
-        if (clock_page()) {
-            const unsigned font = settings_[R::status_font];
-            char tempo[32], detail[64];
-            std::snprintf(tempo, sizeof(tempo), "%u BPM", generator.bpm());
-            if (page_ == Page::clock_transport) {
-                const char *state = external_ ? (clock_.active() ? i18n::text(i18n::Message::external_receiving) : i18n::text(i18n::Message::external_waiting))
-                    : !clock_outputs() ? i18n::text(i18n::Message::no_outputs_configured) : !available_outputs_ ? i18n::text(i18n::Message::outputs_offline) : generator.running() ? i18n::text(i18n::Message::internal_running) : i18n::text(i18n::Message::internal_stopped);
-                line(pane, 1, state, vertical(30), vertical(19), font, true);
-                if (external_) number_text(tempo, sizeof(tempo), clock_.period_us(), true, true);
-                line(pane, 2, tempo, vertical(48), vertical(19), font, true);
-                detail[0] = 0;
-                auto output = [&](const cntrl::midi::OutputConnection &port) {
-                    if (!(clock_outputs() & (1u << port.route))) return;
-                    auto used = std::strlen(detail);
-                    std::snprintf(detail + used, sizeof(detail) - used, "%s%s%s", used ? " " : "",
-                        port.label, available_outputs_ & (1u << port.route) ? "" : "*");
-                };
-                for (const auto &port : outputs_) output(port);
-                line(pane, 3, detail, vertical(67), vertical(14), font, true);
-                line(pane, 4, prompt(i18n::Message::start_continue_prompt, controls_.previous, controls_.next), vertical(82), vertical(16), font, true);
-                line(pane, 5, prompt(i18n::Message::stop_source_prompt, controls_.confirm, controls_.next_section), vertical(102), vertical(16), font, true);
-            } else {
-                i18n::format(detail, sizeof(detail), i18n::Message::tempo_slot, slot_ + 1, settings_.words[R::slot1 + slot_]);
-                line(pane, 1, detail, vertical(28), vertical(18), font, true);
-                line(pane, 2, tempo, vertical(50), vertical(24), font, true);
-                line(pane, 3, prompt(i18n::Message::tempo_adjust_prompt, controls_.previous, controls_.next, controls_.confirm), vertical(80), vertical(17), font, true);
-                i18n::format(detail, sizeof(detail), i18n::Message::clock_late_lost, generator.late_us, generator.skipped + generator.blocked);
-                line(pane, 4, detail, vertical(102), vertical(16), font, true);
-            }
-            return pane;
-        }
         if (page_ == Page::cable) {
             const bool active = cable.enabled;
             const unsigned font = 16; // Preserve Cable Test's Atkinson font.
@@ -386,15 +306,6 @@ public:
             pane.toggle = {uint16_t(horizontal(design_height)), uint16_t(vertical(110)), true, cable.enabled, false};
             return pane;
         }
-        if (page_ == Page::keyboard) {
-            const auto selected_shortcut = keyboard_shortcut();
-            const unsigned font = settings_[R::status_font];
-            line(pane, 1, selected_shortcut.name[0] ? selected_shortcut.name : i18n::text(i18n::Message::no_shortcuts), vertical(38), vertical(24), font, true);
-            line(pane, 2, shortcut_held ? i18n::text(i18n::Message::held) : i18n::text(i18n::Message::ready), vertical(66), vertical(20), font, true);
-            line(pane, 3, prompt(i18n::Message::select_pair_prompt, controls_.previous, controls_.next), vertical(91), vertical(16), font, true);
-            line(pane, 4, prompt(i18n::Message::hold_send_prompt, controls_.confirm), vertical(109), vertical(16), font, true);
-            return pane;
-        }
         if (page_ == Page::ports) {
             const char *names[] = {i18n::text(i18n::Message::off), i18n::text(i18n::Message::midi_type_a), i18n::text(i18n::Message::midi_type_b), i18n::text(i18n::Message::expression), i18n::text(i18n::Message::aux_switch)};
             char current[40];
@@ -407,12 +318,6 @@ public:
                 line(pane, 3, prompt(i18n::Message::jack_mode_prompt, controls_.previous, controls_.next), vertical(87), vertical(17), font, true);
                 line(pane, 4, prompt(i18n::Message::apply_prompt, controls_.confirm), vertical(106), vertical(17), font, true);
             }
-            return pane;
-        }
-        if (page_ == Page::firmware) {
-            const unsigned label_height = std::min(title * 2, (viewport_.height - 2 * pad) / 4);
-            line(pane, 1, i18n::text(i18n::Message::use_stock), viewport_.height - pad - label_height * 2, label_height, pane.graphics.font, true);
-            line(pane, 2, i18n::text(i18n::Message::firmware_caption), viewport_.height - pad - label_height, label_height, pane.graphics.font, true);
             return pane;
         }
         if (page_ == Page::tap) {
@@ -650,14 +555,9 @@ private:
     const char *port_message_ = nullptr;
     const char *port_name_ = i18n::definitions[unsigned(i18n::Message::no_configurable_ports)].text;
     bool port_available_ = false;
-    unsigned available_outputs_ = 0, slot_ = 0;
     bool external_ = false;
     unsigned horizontal(unsigned value) const { return value * viewport_.width / design_width; }
     unsigned vertical(unsigned value) const { return value * viewport_.height / design_height; }
-    void recall_slot() {
-        unsigned bpm = settings_.words[cntrl::PageSettings::slot1 + slot_];
-        if (bpm) generator.set_tempo((60000000u + bpm / 2) / bpm);
-    }
     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
         using R = cntrl::PageSettings;
         unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];

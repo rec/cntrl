@@ -41,7 +41,8 @@ public:
         const auto &platform = static_cast<const Platform &>(*this);
         return midi::available_outputs(platform.midi_outputs(), [&](const char *name) { return platform.available(name); });
     }
-    bool keyboard_button(unsigned input, bool pressed) { return presentation().keyboard_button(input, pressed); }
+    KeyboardDelivery keyboard_action(const KeyboardKeys &keys, bool pressed) override { return presentation().keyboard_action(keys, pressed); }
+    bool release_keyboard() override { return presentation().release_keyboard(); }
     bool monitor_button(unsigned input, bool pressed) { return presentation().monitor_button(input, pressed); }
     bool looper_button(unsigned input, bool pressed) { return presentation().looper_button(input, pressed); }
     void poll_keyboard() { presentation().poll_keyboard(); }
@@ -51,7 +52,6 @@ public:
     void enter_page() { presentation().enter_page(); }
     void leave_page() { presentation().leave_page(); }
     bool stop_clock() { return presentation().stop_clock(); }
-    bool clock_control(unsigned input, bool pressed) { return presentation().clock_control(input, pressed); }
     void draw() { presentation().draw(); }
     bool expression_button(unsigned input) { return presentation().expression_button(input); }
     void display(uint32_t now, bool transfer_busy) { presentation().display(now, transfer_busy); }

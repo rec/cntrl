@@ -189,13 +189,6 @@ public:
     PerformanceStatus status() const { return performance_status(); }
     void display_brightness(uint8_t value) { analogWrite(6, value); }
     void displayed() { midi_runtime_.displayed(); }
-    bool switch_firmware() {
-#if CNTRL_ORIGINAL_FIRMWARE
-        return firmware_visit.start(33);
-#else
-        return false;
-#endif
-    }
 #if CNTRL_ORIGINAL_FIRMWARE
     cntrl::ui::FirmwareSelection firmware_selection() const override {
         const auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
@@ -1241,12 +1234,10 @@ public:
 #endif
         return reserved;
     }
-    bool keyboard(unsigned i, bool pressed) { return board.keyboard_button(i, pressed); }
     bool monitor(unsigned i, bool pressed) { return board.monitor_button(i, pressed); }
     bool looper(unsigned i, bool pressed) { return board.looper_button(i, pressed); }
     bool expression(unsigned i) { return board.expression_button(i); }
     bool port(unsigned i) { return board.trs_button(i); }
-    bool clock(unsigned i, bool pressed) { return board.clock_control(i, pressed); }
     bool has_controller() const { return application.visible(); }
     void controller(unsigned i, bool pressed, uint32_t now) { application.controller().button(i, pressed, now); }
     void tap(uint32_t now) { board.tap_tempo(now); }
@@ -1305,7 +1296,6 @@ public:
         (void)i; return std::nullopt;
 #endif
     }
-    void keyboard_release(unsigned input) { board.keyboard_button(input, false); }
     bool panic_open() const {
 #if CNTRL_PANIC
         return board.panic.open();

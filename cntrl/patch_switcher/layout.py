@@ -217,6 +217,12 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     pages = {}
     for _ in range(count):
         name = data[cursor : cursor + 32].split(b'\0')[0].decode('ascii')
+        if data[cursor + 32] == 9:
+            raise ValueError('Keyboard page has been removed; recompile this setup')
+        if data[cursor + 32] in (2, 7, 8):
+            raise ValueError(
+                'Clock and Firmware pages have been removed; recompile this setup'
+            )
         if name in pages or data[cursor + 32] >= len(PAGE_TYPES):
             raise ValueError('invalid page record')
         if data[cursor + 33] > window_count:
@@ -278,14 +284,14 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
 PAGE_TYPES = (
     'tap-tempo',
     'status',
-    'firmware',
+    '',
     'cable-test',
     'panic',
     'trs-ports',
     'expression',
-    'clock-transport',
-    'clock-tempo',
-    'keyboard',
+    '',
+    '',
+    '',  # Unassigned page ID. Existing page IDs remain stable.
     'None',
     'patch-switcher',
     'midi-monitor',
