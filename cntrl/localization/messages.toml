@@ -727,7 +727,7 @@ en = 'End of set'
 context = 'Setlist end state'
 
 [messages.next_patch]
-en = 'Next patch'
+en = 'Next step'
 context = 'Song browser next patch'
 
 [messages.perform_setlist]
@@ -803,11 +803,11 @@ en = 'Use selected patch'
 context = 'Song edit action'
 
 [messages.edit_patches]
-en = 'Edit patches'
+en = 'Edit steps'
 context = 'Song edit action'
 
 [messages.patch_position]
-en = 'Patch {position:u}/{count:lu}'
+en = 'Step {position:u}/{count:lu}'
 context = 'Song patch position'
 
 [messages.replace_with_selected]
@@ -819,7 +819,7 @@ en = 'Insert selected after'
 context = 'Song patch edit action'
 
 [messages.remove_patch]
-en = 'Remove patch'
+en = 'Remove step'
 context = 'Song patch edit action'
 
 [messages.move_earlier]
@@ -835,7 +835,7 @@ en = 'Save a song first'
 context = 'Empty song library prompt'
 
 [messages.patches_count]
-en = '{count:lu} patches'
+en = '{count:lu} steps'
 context = 'Song patch count'
 
 [messages.missing_song]
@@ -1388,4 +1388,8 @@ context = 'Language page navigation control'
 [messages.panic]
 en = 'Panic'
 context = 'Panic page heading'
+
+[messages.last_step]
+en = 'Last step'
+context = 'Silent end-of-song step before the next song'
 

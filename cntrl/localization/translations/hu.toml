@@ -188,7 +188,8 @@ current = { text = 'Jelenlegi' }
 next = { text = 'Következő' }
 add_songs = { text = 'Dalok hozzáadása' }
 end_of_set = { text = 'Műsor vége' }
-next_patch = { text = 'Következő hangszín' }
+next_patch = { text = 'Következő lépés' }
+last_step = { text = 'Utolsó lépés' }
 perform_setlist = { text = 'Műsorlista lejátszása' }
 setlists = { text = 'Műsorlisták' }
 songs = { text = 'Dalok' }

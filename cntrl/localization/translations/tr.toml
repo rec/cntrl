@@ -188,7 +188,8 @@ current = { text = 'Geçerli' }
 next = { text = 'Sonraki' }
 add_songs = { text = 'Şarkı ekle' }
 end_of_set = { text = 'Liste sonu' }
-next_patch = { text = 'Sonraki ses' }
+next_patch = { text = 'Sonraki adım' }
+last_step = { text = 'Son adım' }
 perform_setlist = { text = 'Listeyi çal' }
 setlists = { text = 'Çalma listeleri' }
 songs = { text = 'Şarkılar' }

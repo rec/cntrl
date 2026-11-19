@@ -33,6 +33,19 @@ public:
         application_.setups.poll(pressed); application_.menu.poll(pressed); application_.song_ui.poll(pressed);
         if (!pressed) application_.controls_locked = false;
         if (auto *visit = services.visit()) { visit->poll(!pressed); consumed = consumed || visit->busy(); }
+        if (!consumed && application_.song_navigation_active() && !application_.controls_locked
+            && controls_.back < controls_.count && controls_.confirm < controls_.count) {
+            const unsigned next = controls_.back, modifier = controls_.confirm;
+            if (events[next] & press_event) next_step_held_ = true;
+            if (next_step_held_ && (pressed & (1u << modifier))) previous_step_ = true;
+            if (next_step_held_ && (events[next] & release_event)) {
+                application_.request_song_step(previous_step_);
+                next_step_held_ = previous_step_ = false;
+            }
+            events[next] = events[modifier] = 0;
+            if (application_.song_last_step() && application_.binding_return_songs)
+                for (auto &event : events) event &= release_event;
+        } else next_step_held_ = previous_step_ = false;
         if (!consumed) router_.route(services.actions(), events.data(), pressed, now);
     }
     template<class Actions>
@@ -44,5 +57,6 @@ private:
     Application &application_;
     ApplicationServices &application_services_;
     ControlRouter router_;
+    bool next_step_held_ = false, previous_step_ = false;
 };
 } // namespace cntrl::ui

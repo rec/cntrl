@@ -247,6 +247,8 @@ public:
     midi::Bridge &midi_bridge() { return bridge; }
     ExpressionPedals &expression_controls() { return *expression; }
     bool expression_available(unsigned port) const override { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
+    bool song_navigation_active() const override { return app && app->song_navigation_active(); }
+    bool song_last_step() const override { return app && app->song_last_step(); }
     bool looper_storage_ready() const { return true; }
     bool switch_firmware() {
         if (!target::supports_stock_firmware || stock_firmware || stock_pending || documents->busy() || documents->dirty() || !output_idle() || !stop_clock()) return false;

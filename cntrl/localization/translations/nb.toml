@@ -188,7 +188,8 @@ current = { text = 'Gjeldende' }
 next = { text = 'Neste' }
 add_songs = { text = 'Legg til låter' }
 end_of_set = { text = 'Slutt på settlisten' }
-next_patch = { text = 'Neste lyd' }
+next_patch = { text = 'Neste trinn' }
+last_step = { text = 'Siste trinn' }
 perform_setlist = { text = 'Spill settliste' }
 setlists = { text = 'Settlister' }
 songs = { text = 'Låter' }

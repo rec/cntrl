@@ -114,6 +114,15 @@ public:
         return primary_.busy();
     }
     bool patch_pending() { return busy() || songs_.executing() || songs_.busy(); }
+    bool song_navigation_active() const {
+        return songs_.active_set()[0] && !menu.open() && !setups.open() && (song_ui.performing() || binding_return_songs);
+    }
+    bool song_last_step() const { return song_navigation_active() && songs_.last_step(); }
+    bool request_song_step(bool previous) {
+        if (pending_song_step_) return false;
+        pending_song_step_ = previous ? -1 : 1;
+        return true;
+    }
     bool stopping_setup() const { return stopping_setup_; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_stop_setup)
@@ -123,7 +132,7 @@ public:
         primary_.stop();
         for (unsigned i = 1; i < layout.controllers(); ++i) at(i).stop();
         for (auto &bank : banked_) if (bank) bank->stop();
-        songs_.stop_execution(); next_song_patch_ = false; pending_operation = 0;
+        songs_.stop_execution(); pending_song_step_ = 0; pending_operation = 0;
         menu.leave(); song_ui.leave();
         pending_page = pending_region = PageLayout::max_pages;
         binding_return_songs = false; controls_locked = true;
@@ -193,9 +202,13 @@ public:
         processing_index = PageLayout::max_controllers;
         for (unsigned i = 0; i < banked_.size(); ++i) if (banked_[i]) { processing_banked_ = i; banked_[i]->tick(now, uint32_t(held)); }
         processing_banked_ = PageLayout::max_pages;
-        if (next_song_patch_ && !patch_pending()) {
-            next_song_patch_ = false;
-            if (!songs_.next()) hardware_.error(songs_.last_error());
+        if (pending_song_step_ && !patch_pending()) {
+            bool previous = pending_song_step_ < 0;
+            pending_song_step_ = 0;
+            if (!(previous ? songs_.previous() : songs_.next())) hardware_.error(songs_.last_error());
+            if (songs_.last_step()) song_ui.perform();
+            else if (binding_return_songs) song_ui.leave();
+            else song_ui.refresh();
         }
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -215,10 +228,7 @@ public:
             return controller().navigate(operation);
         }
         if (operation == 9 || operation == 10) { pending_operation = operation; return true; }
-        if (operation == 13) {
-            if (next_song_patch_) return false;
-            next_song_patch_ = true; return true;
-        }
+        if (operation == 13 || operation == 18) return request_song_step(operation == 18);
         return operation_ui(Operation(operation), services);
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -344,7 +354,8 @@ private:
     }
     Songs &songs_;
     bool has_switches_;
-    bool next_song_patch_ = false, stopping_setup_ = false;
+    int pending_song_step_ = 0;
+    bool stopping_setup_ = false;
     unsigned page_offset() const { return has_switches_ ? 3 : 2; }
 };
 } // namespace cntrl::ui

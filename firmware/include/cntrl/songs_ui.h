@@ -16,6 +16,7 @@ class SongsUi {
 public:
     SongsUi(Songs &songs, Hardware &hardware, SongCapture &capture) : songs_(songs), hardware_(hardware), capture_(capture) {}
     bool open() const { return mode_ != closed; }
+    bool performing() const { return mode_ == performance; }
     bool editing_name() const { return mode_ == naming; }
     void refresh() { if (open()) { feedback_[0] = 0; render(); } }
     void leave() { mode_ = closed; }
@@ -194,6 +195,7 @@ private:
         if (songs_.current_patch(current_patch)) {
             text(0, 2, current_patch.label[0] ? current_patch.label : current_patch.document[0] ? current_patch.key : ui::i18n::text(ui::i18n::Message::patch));
         }
+        if (songs_.last_step()) text(0, 2, ui::i18n::text(ui::i18n::Message::last_step));
         const Setlist *set = current_set(); unsigned next = songs_.next_position();
         text(2, 0, ui::i18n::text(ui::i18n::Message::next));
         SongEntry next_entry;
@@ -203,6 +205,10 @@ private:
         if (songs_.upcoming_patch(next_patch)) {
             text(2, 0, ui::i18n::text(ui::i18n::Message::next_patch));
             text(2, 1, next_patch.label[0] ? next_patch.label : next_patch.document[0] ? next_patch.key : ui::i18n::text(ui::i18n::Message::patch));
+        }
+        if (songs_.upcoming_last_step()) {
+            text(2, 0, ui::i18n::text(ui::i18n::Message::next_patch));
+            text(2, 1, ui::i18n::text(ui::i18n::Message::last_step));
         }
         const char *roots[] = {ui::i18n::text(ui::i18n::Message::perform_setlist), ui::i18n::text(ui::i18n::Message::setlists), ui::i18n::text(ui::i18n::Message::songs), ui::i18n::text(ui::i18n::Message::save_as_song), ui::i18n::text(ui::i18n::Message::save_reference)};
         const char *edits[] = {ui::i18n::text(ui::i18n::Message::add_next), ui::i18n::text(ui::i18n::Message::add_to_end), ui::i18n::text(ui::i18n::Message::remove_from_setlist), ui::i18n::text(ui::i18n::Message::move), ui::i18n::text(ui::i18n::Message::rename_setlist), ui::i18n::text(ui::i18n::Message::undo_edit), ui::i18n::text(ui::i18n::Message::restart_setlist), ui::i18n::text(ui::i18n::Message::done)};
@@ -227,7 +233,7 @@ private:
             else {
                 const auto *found = songs_.song(picker_); if (!found) return; const Song s = *found;
                 text(1, 1, s.name);
-                ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::patches_count, (unsigned long)s.count);
+                ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::patches_count, (unsigned long)(s.count + s.add_last_step));
             }
         } else if (set && set->count) {
             cursor_ %= set->count; SongEntry selected;
@@ -239,8 +245,10 @@ private:
         if (mode_ == performance) prompt.add(Role::previous_section, ui::i18n::text(ui::i18n::Message::edit_action));
         else prompt.pair(Role::previous_section, Role::next_section, mode_ == naming ? ui::i18n::text(ui::i18n::Message::position_action) : ui::i18n::text(ui::i18n::Message::jump_action));
         text(0, 3, prompt.text());
-        prompt.clear().add(Role::confirm, mode_ == performance ? ui::i18n::text(ui::i18n::Message::next_action) : mode_ == adding ? ui::i18n::text(ui::i18n::Message::add_action) : ui::i18n::text(ui::i18n::Message::ok))
-            .add(Role::back, mode_ == performance ? ui::i18n::text(ui::i18n::Message::menu_action) : mode_ == adding ? ui::i18n::text(ui::i18n::Message::done_action) : ui::i18n::text(ui::i18n::Message::back));
+        prompt.clear().add(mode_ == performance ? Role::back : Role::confirm, mode_ == performance ? ui::i18n::text(ui::i18n::Message::next_action) : mode_ == adding ? ui::i18n::text(ui::i18n::Message::add_action) : ui::i18n::text(ui::i18n::Message::ok));
+        if (mode_ == performance) {
+            std::snprintf(panes[2].lines[2].text, 64, "%s+%s %s", hardware_.control_label(Role::confirm), hardware_.control_label(Role::back), ui::i18n::text(ui::i18n::Message::back));
+        } else prompt.add(Role::back, mode_ == adding ? ui::i18n::text(ui::i18n::Message::done_action) : ui::i18n::text(ui::i18n::Message::back));
         text(2, 3, prompt.text());
         if (feedback_[0]) text(0, 2, feedback_);
         for (unsigned i = 0; i < 3; ++i) {

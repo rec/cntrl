@@ -188,7 +188,8 @@ current = { text = 'Actual' }
 next = { text = 'Siguiente' }
 add_songs = { text = 'Añadir canciones' }
 end_of_set = { text = 'Fin del repertorio' }
-next_patch = { text = 'Siguiente sonido' }
+next_patch = { text = 'Siguiente paso' }
+last_step = { text = 'Último paso' }
 perform_setlist = { text = 'Tocar repertorio' }
 setlists = { text = 'Repertorios' }
 songs = { text = 'Canciones' }

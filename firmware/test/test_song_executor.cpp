@@ -85,6 +85,7 @@ int main(int argc, char **argv) {
     assert(restored.resume(board.saved)); returned.drain();
     assert(returned.visits == 0 && returned.events == std::vector<unsigned>({65, 66, 67}));
     cntrl::SongSelection current; assert(restored.current_patch(current) && restored.continuation().patch == 1);
+    assert(restored.next() && restored.last_step());
     assert(!restored.next());
 
     SongBoard changed; cntrl::Songs invalid(storage, changed); changed.songs = &invalid;

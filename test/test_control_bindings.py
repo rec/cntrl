@@ -62,10 +62,11 @@ def test_scoped_bindings_override_and_preserve_ordinary_actions(
         songs=[
             songs.Song(
                 name='One',
+                add_last_step=False,
                 patches=['default'],
                 bindings={'A': cc(22, 1), 'configurable-1': expression(11)},
             ),
-            songs.Song(name='Two', patches=['default']),
+            songs.Song(name='Two', add_last_step=False, patches=['default']),
         ],
         setlists=[
             songs.Setlist(
