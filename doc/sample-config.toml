@@ -46,7 +46,7 @@ pages = ["status", "cable-test", "panic", "trs-ports", "expression", "tap-tempo"
 
 order = ["performance", "tools"]
 left_wins = false
-focus = "performance"
+focus = "tools"
 
 [midi]
 

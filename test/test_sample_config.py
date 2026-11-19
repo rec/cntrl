@@ -26,7 +26,7 @@ class ExampleSetup(models.Setup, frozen=True):
         ),
     }
     layout: models.PageLayout | None = models.PageLayout(
-        order=['performance', 'tools'], focus='performance'
+        order=['performance', 'tools'], focus='tools'
     )
     style: models.Style | None = models.Style(horizontal_scale=1.0)
     windows: models.Windows = models.Windows(

@@ -10,12 +10,18 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.localization import catalogue
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_switcher import compiler, languages, setup_bundle
+from cntrl.patch_switcher import compiler, languages, models, setup_bundle
 
 
-@pytest.mark.parametrize('frame_buffers', [0, 1, 2])
+@pytest.mark.parametrize(
+    ('frame_buffers', 'default_catalogue'),
+    [(0, False), (1, False), (2, False), (1, True)],
+)
 def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
-    tmp_path: Path, file_regression: FileRegressionFixture, frame_buffers: int
+    tmp_path: Path,
+    file_regression: FileRegressionFixture,
+    frame_buffers: int,
+    default_catalogue: bool,
 ) -> None:
     target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
     source = {
@@ -33,6 +39,15 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         'use_animations': False,
         'fill_in_styles': False,
     }
+    if default_catalogue:
+        del source['pages']
+        del source['regions']
+        del source['layout']
+    language_position = [
+        p.type
+        for p in models.Setup.model_validate(source).pages.values()
+        if p.type != 'patch-switcher'
+    ].index('language')
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'
     bundle.write_bytes(
@@ -69,6 +84,10 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
                     image.paste(panel, (i * 160, row * 128))
 
         advance(1000000)
+        for _ in range(language_position):
+            press('f')
+        if language_position:
+            advance(500000)
         english = session.frames['lcd-3']
         performance = session.frames['lcd-1']
         first = session.frames['lcd-2']
@@ -99,12 +118,15 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         path.read_bytes(), binary=True, extension='.png', basename='language-page'
     )
     with backend.Session(layout, target, executable, storage, bundle) as session:
-        session.advance(1000000)
+        now = 0
+        advance(1000000)
+        for _ in range(language_position):
+            press('f')
+        if language_position:
+            advance(500000)
         assert session.frames['lcd-3'] == french
-        session.button('f', True)
-        session.advance(1060000)
-        session.button('f', False)
-        session.advance(1600000)
+        press('f')
+        advance(500000)
         assert session.frames['lcd-3'] != french
         center = session.frames['lcd-2']
         assert b'\xf8\0' not in {center[i : i + 2] for i in range(0, len(center), 2)}

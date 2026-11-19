@@ -4,10 +4,19 @@ A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
 `patch-switcher`, `status`, `tap-tempo`, `cable-test`, `panic`,
 `trs-ports`, `expression`,
-`midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, and `None`.
+`midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`, and `None`.
 Select a region or a page in the Pages and tools menu. F and the existing
 reverse-page control cycle only the focused region. Page and region names
 contain 1 to 31 printable ASCII characters.
+
+The default utility-page cycle is Status, MIDI Cable Test, Panic, TRS Ports,
+Expression, Tap Tempo, Pong, Language, then None. Language appears immediately
+before None; Pong appears immediately before Language on targets with three
+or more displays. Language requires at least two displays and is omitted from
+the defaults on one-display targets.
+Setups using the default pages and automatically generated regions start with
+the tools region focused, so F browses this utility cycle. Explicit layout focus
+settings take precedence.
 
 Each patch-switcher page keeps its own navigation, sent-state and undo history.
 All configured patch-switchers continue executing queued patches and delays while

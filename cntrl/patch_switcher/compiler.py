@@ -305,7 +305,14 @@ def compile_show(
                     n: p
                     for n, p in show.pages.items()
                     if p.min_windows <= len(target.displays)
-                }
+                },
+                'layout': (
+                    models.PageLayout(focus='tools')
+                    if show.layout is None
+                    and not show.regions
+                    and len(target.displays) > 1
+                    else show.layout
+                ),
             }
         )
     jacks = midi_endpoints.ports(target.midi_endpoints)
