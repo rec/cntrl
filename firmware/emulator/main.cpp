@@ -249,6 +249,7 @@ public:
     bool expression_available(unsigned port) const override { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
     bool song_last_step() const override { return app && app->song_last_step(); }
+    bool song_style(ScreenGraphics &style) const override { return app && app->song_style(style); }
     bool looper_storage_ready() const { return true; }
     bool switch_firmware() {
         if (!target::supports_stock_firmware || stock_firmware || stock_pending || documents->busy() || documents->dirty() || !output_idle() || !stop_clock()) return false;

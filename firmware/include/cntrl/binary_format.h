@@ -104,11 +104,15 @@ public:
                 const uint64_t mask = uint64_t(read32(bytes)) | uint64_t(read32(bytes + 4)) << 32;
                 if ((mask >> 34) || (mask & (uint64_t(1) << 27))) return false;
                 view_.global_explicit_mask = mask; view_.global_mask_offset = position_;
+            } else if (tag == 4 && kind_ == Kind::songs) {
+                if (song_formatting_) return false;
+                song_formatting_ = true;
             } else view_.opaque = true;
         }
         position_ += n; return true;
     }
 private:
+    bool song_formatting_ = false;
     enum class Phase { header, hash, records, done };
     Phase phase_ = Phase::header;
     unsigned length_, position_ = 0, records_ = 0;

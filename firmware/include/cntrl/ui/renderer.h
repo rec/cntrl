@@ -243,7 +243,7 @@ private:
         for (unsigned i = 0; i < max_lines && !full; ++i) {
             const auto &a = before.lines[i], &b = content.lines[i];
             full = std::strcmp(a.text, b.text) || std::memcmp(&a.graphics, &b.graphics, sizeof(a.graphics))
-                || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.stippled != b.stippled
+                || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.fit != b.fit || a.stippled != b.stippled
                 || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color;
         }
         if (full) {
@@ -274,7 +274,7 @@ private:
     void begin_paint(unsigned screen, const Pane &content) {
         drawing_ = int(screen); painting_ = content;
         auto &s = screens_[screen]; const auto v = s.viewport;
-        fit_localized(painting_, v);
+        fit_text(painting_, v);
         painting_region_ = !s.valid || preparing_ || animating_ ? Region{0, 0, int(v.width), int(v.height)} : s.damage;
         s.damage = {};
         painting_region_ = {std::max(0, painting_region_.left), std::max(0, painting_region_.top), std::min(int(v.width), painting_region_.right), std::min(int(v.height), painting_region_.bottom)};
@@ -293,26 +293,28 @@ private:
         }
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(renderer_fit_localized)
+    CNTRL_FLASH_ROUTINE(renderer_fit_text)
 #endif
-    void fit_localized(Pane &pane, Viewport viewport) const {
+    void fit_text(Pane &pane, Viewport viewport) const {
         unsigned count = 0;
         for (const auto &line : pane.lines) if (line.text[0]) ++count;
         const unsigned pad = pane.graphics.pad;
         const unsigned available_height = viewport.height > 2 * pad ? viewport.height - 2 * pad : 0;
         for (unsigned index = 0; index < max_lines; ++index) {
             auto &line = pane.lines[index];
-            if (!line.text[0] || line.graphics.font != localized_face) continue;
-            const unsigned maximum = std::min(96u, unsigned(line.graphics.size));
+            if (!line.text[0] || (line.graphics.font != localized_face && !line.fit)) continue;
+            const unsigned face = line.graphics.font, asset = face == localized_face ? 0 : line.graphics.asset;
+            unsigned maximum = std::min(96u, unsigned(line.graphics.size));
+            if (line.fit) for (unsigned size = 8; size <= 96; ++size) if (fonts_.supports(face, size, asset)) { maximum = std::max(maximum, size); break; }
             const unsigned height = pane.three_bands ? viewport.height / 3
                 : line.y < 0 ? available_height / std::max(1u, count) : line.graphics.line_height;
             const int left = line.centered ? int(pad) : std::max(int(pad), int(line.x));
             const int width = std::max(0, int(viewport.width) - int(pad) - left);
-            const auto original = fonts_.bounds(localized_face, line.graphics.size, 0, line.text);
+            const auto original = fonts_.bounds(face, line.graphics.size, asset, line.text);
             auto choose = [&]() {
                 for (unsigned size = maximum; size >= 8; --size) {
-                    if (!fonts_.supports(localized_face, size)) continue;
-                    const auto bounds = fonts_.bounds(localized_face, size, 0, line.text);
+                    if (!fonts_.supports(face, size, asset)) continue;
+                    const auto bounds = fonts_.bounds(face, size, asset, line.text);
                     unsigned rows = 1;
                     const unsigned line_height = std::max(size, unsigned(std::max(0, bounds.height)));
                     if (line.wrap) {
@@ -324,6 +326,8 @@ private:
                     if (line.y < 0) {
                         line.graphics.line_height = uint16_t(line_height);
                         line.graphics.top = uint16_t(std::max(0, -bounds.top));
+                    } else if (line.fit && pane.three_bands) {
+                        line.y = int16_t(int((index + 1) * viewport.height / 3) - bounds.height - bounds.top);
                     } else if (size != maximum) {
                         line.y = int16_t(int(line.y) + original.top + (int(height) - bounds.height) / 2 - bounds.top);
                     }
@@ -332,7 +336,7 @@ private:
                 return false;
             };
             if (choose()) continue;
-            if (line.graphics.asset) {
+            if (face == localized_face && line.graphics.asset) {
                 const char *shorter = i18n::short_text(static_cast<i18n::Message>(line.graphics.asset - 1));
                 if (shorter && *shorter) { utf8::copy(line.text, sizeof(line.text), shorter); if (choose()) continue; }
             }

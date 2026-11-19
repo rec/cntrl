@@ -41,11 +41,19 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     prefix = (
         struct.pack('<II', 1, 1)
         + first
-        + songs.SONG.pack(songs.text('Saved', 64), 2, 0xFFFFFFFF, True)
+        + songs.SONG.pack(
+            songs.text('Saved', 64),
+            2,
+            0xFFFFFFFF,
+            True,
+            0,
+            65535,
+            17,
+        )
         + second
         + songs.SET.pack(songs.text('Tonight', 64), 2, 0xFFFFFFFF)
         + songs.text('Saved', 64) * 2
-        + b'CSP7'
+        + b'CSP8'
     )
     song_header = struct.pack('<64sI', songs.text('Saved', 64), 2)
     set_header = struct.pack('<64sI', songs.text('Tonight', 64), 2)
@@ -142,7 +150,7 @@ def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
         ),
         target,
     )
-    assert source[source.index(b'CSP7') + 8 :].startswith(binary_format.MAGIC)
+    assert source[source.index(b'CSP8') + 8 :].startswith(binary_format.MAGIC)
     upgraded = songs.upgrade(source, {}, target=target)
     assert songs.decode(upgraded) == songs.decode(source)
     assert songs.upgrade(upgraded, {}, target=target) == upgraded
@@ -173,7 +181,7 @@ def test_captured_references_follow_the_reordered_deployed_bundle() -> None:
     linked = songs.reindex(library, ['Aardvark', 'Zulu'])
     assert songs.decode(linked) == songs.decode(library)
     core = binary_format.core(linked, binary_format.Kind.songs)
-    captured = core[core.index(b'CSP7') + 8 :]
+    captured = core[core.index(b'CSP8') + 8 :]
     graph = resolved.graph_offset(captured)
     core_source = binary_format.core(captured)
     graph -= binary_format.core_offset(captured)

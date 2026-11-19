@@ -14,7 +14,9 @@ from cntrl.patch_switcher import (
     binary_format,
     compiler,
     data_files,
+    formatting,
     global_config,
+    graphics,
     models,
     songs,
     transport,
@@ -95,6 +97,73 @@ def test_names_are_unique(target: models.Target) -> None:
     for field, items in (('songs', value.songs), ('setlists', value.setlists)):
         with pytest.raises(ValueError, match='unique'):
             songs.encode(value.model_copy(update={field: [items[0], items[0]]}), target)
+
+
+def test_songs_fill_missing_styles_with_the_cycle_formatter(
+    target: models.Target,
+) -> None:
+    device = target.model_copy(
+        update={
+            'fonts': [
+                *target.fonts,
+                target.fonts[0].model_copy(update={'name': 'CourierPrime', 'id': 8}),
+            ]
+        }
+    )
+    value = library().model_copy(update={'seed': 42})
+    first = value.songs[0].model_copy(
+        update={'style': models.Style(foreground_color='red')}
+    )
+    value = value.model_copy(update={'songs': [first, value.songs[1]]})
+    expected = formatting.cycle_styles(
+        models.Setup(seed=42), [s.name for s in value.songs], device
+    )
+    data = songs.encode(value, device, COMPANIONS)
+    restored = songs.decode(data)
+    assert restored.seed == 42 and restored.fill_in_styles
+    assert restored.songs == value.songs
+    core = binary_format.core(data, binary_format.Kind.songs)
+    offset = 8
+    for original in value.songs:
+        header = songs.SONG.unpack_from(core, offset + songs.SELECTION.size)
+        assert header[6] == next(
+            f.id for f in device.fonts if f.name == expected[original.name].font_name
+        )
+        assert header[5] == graphics.colors(expected[original.name], 0)[1]
+        assert header[4] == graphics.rgb565(
+            graphics.color(
+                original.style.foreground_color
+                if original.style is not None
+                else expected[original.name].foreground_color
+            )
+        )
+        offset += songs.SELECTION.size * len(original.patches) + songs.SONG.size
+    assert songs.encode(restored, device, COMPANIONS) == data
+    changed = restored.model_copy(update={'background_color': '0xE8F0FF'})
+    updated = binary_format.core(
+        songs.encode(changed, device, COMPANIONS), binary_format.Kind.songs
+    )
+    header = songs.SONG.unpack_from(updated, 8 + songs.SELECTION.size)
+    assert header[4] == graphics.rgb565(graphics.color('red'))
+    assert header[5] == graphics.rgb565(graphics.color('0xE8F0FF'))
+
+
+def test_song_styles_can_disable_automatic_formatting(target: models.Target) -> None:
+    value = library().model_copy(update={'fill_in_styles': False})
+    data = songs.encode(value, target, COMPANIONS)
+    restored = songs.decode(data)
+    assert not restored.fill_in_styles
+    assert restored.songs == value.songs
+    core = binary_format.core(data, binary_format.Kind.songs)
+    assert songs.SONG.unpack_from(core, 8 + songs.SELECTION.size)[4:7] == (0, 65535, 17)
+    assert songs.encode(restored, target, COMPANIONS) == data
+
+
+def test_song_random_seed_is_preserved_for_recompilation(target: models.Target) -> None:
+    data = songs.encode(library().model_copy(update={'seed': None}), target, COMPANIONS)
+    restored = songs.decode(data)
+    assert restored.seed is not None
+    assert songs.encode(restored, target, COMPANIONS) == data
 
 
 def test_song_authoring_inherits_the_rig_without_selecting_an_inherited_cycle(
@@ -199,7 +268,7 @@ def test_captured_sources_with_colliding_instrument_aliases_export_independently
         + left[8:end]
         + songs.SELECTION.pack(*position)
         + right[8 + songs.SELECTION.size : end]
-        + b'CSP7'
+        + b'CSP8'
         + left[end + 4 :]
         + right[end + 4 :]
     )

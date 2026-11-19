@@ -966,15 +966,16 @@ private:
                 break;
             case 10: {
                 if (!hardware.switch_capacity() || n[1] > 3 || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
-                    || p[66] > 8 || p[66] > input_count || p[67] > 1
-                    || length != 220u + binding_record_size * p[66] + (p[67] ? binding_view_header_size + binding_view_record_size * p[66] : 0)) return false;
-                if (p[67]) {
+                    || p[66] > 8 || p[66] > input_count || p[67] > 2
+                    || length != 220u + binding_record_size * p[66] + (p[67] == 1 ? binding_view_header_size + binding_view_record_size * p[66] : p[67] == 2 ? 16 : 0)) return false;
+                if (p[67] == 2 && !graphics_valid(p + 220 + binding_record_size * p[66], hardware, true)) return false;
+                if (p[67] == 1) {
                     const uint8_t *v = p + 220 + binding_record_size * p[66];
                     if (p[66] > 6 || v[32] > 3 || !label_valid(v + 33, 64)
-                        || !graphics_valid(v, hardware) || !graphics_valid(v + 16, hardware)) return false;
+                        || !graphics_valid(v, hardware, true) || !graphics_valid(v + 16, hardware, true)) return false;
                     for (unsigned j = 0; j < p[66]; ++j) {
                         const uint8_t *s = v + binding_view_header_size + j * binding_view_record_size;
-                        if (!graphics_valid(s, hardware) || !graphics_valid(s + 16, hardware) || !label_valid(s + 32, 64)) return false;
+                        if (!graphics_valid(s, hardware, true) || !graphics_valid(s + 16, hardware, true) || !label_valid(s + 32, 64)) return false;
                     }
                 }
                 for (unsigned j = 0; j < 4; ++j) {
@@ -1115,9 +1116,9 @@ private:
         }
         return true;
     }
-    static bool graphics_valid(const uint8_t *p, const Hardware &hardware) {
+    static bool graphics_valid(const uint8_t *p, const Hardware &hardware, bool binding = false) {
         return (p[0] == 255 ? u32(p + 12) && hardware.supports_font_asset(u32(p + 12), p[1])
-                           : !u32(p + 12) && hardware.supports_font(p[0], p[1])) && !p[3]
+                           : !u32(p + 12) && hardware.supports_font(p[0], p[1])) && !(p[3] & (binding ? ~15u : 255u))
             && 2u * p[2] < hardware.display_width()
             && 2u * p[2] + u16(p + 8) <= hardware.display_height()
             && u16(p + 8) && u16(p + 10) < u16(p + 8);

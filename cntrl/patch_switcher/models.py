@@ -16,6 +16,7 @@ from pydantic import (
     StrictStr,
     Tag,
     TypeAdapter,
+    field_serializer,
     field_validator,
     model_validator,
 )
@@ -205,6 +206,10 @@ class Presentation(BindingScope, frozen=True):
     inherits: Inherits = Inherits.expression
     binding_view: BindingView | None = None
     midi: dict[str, object] | None = None
+
+    @field_serializer('binding_view', when_used='unless-none')
+    def serialize_binding_view(self, value: BindingView) -> dict[str, object]:
+        return value.model_dump(exclude_unset=True, exclude_none=True)
 
     model_config = ConfigDict(extra='forbid')
 

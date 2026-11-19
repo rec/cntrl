@@ -94,6 +94,7 @@ void scoped_bindings(Board &board, const std::vector<uint8_t> &bytes) {
     assert(songs.import_finish(unsigned(bytes.size()), cntrl::checksum(bytes.data(), unsigned(bytes.size()))));
     while (songs.busy()) songs.tick();
     assert(songs.success());
+    const cntrl::Song original_style = *songs.song("One");
     auto next = [&]() { assert(songs.next()); board.tick(); songs.tick(); };
     auto recall = [&](const char *name) { assert(board.entry.start(resolver.document, unsigned(resolver.document.named_patch(name)))); board.tick(); };
     auto press = [&](unsigned input) { board.button(input, true); board.button(input, false); };
@@ -140,10 +141,15 @@ void scoped_bindings(Board &board, const std::vector<uint8_t> &bytes) {
     songs.choose("Other"); next(); assert(board.switches.expression(0).controller == 74);
     songs.choose("Plain"); next(); assert(board.switches.expression(0).controller == 7);
     assert(songs.rename_song("One", "Renamed")); while (songs.busy()) songs.tick(); assert(songs.success());
+    const auto *renamed = songs.song("Renamed");
+    assert(renamed && renamed->foreground == original_style.foreground && renamed->background == original_style.background
+        && renamed->font == original_style.font);
     assert(songs.rename_setlist("Set", "Renamed set")); while (songs.busy()) songs.tick(); assert(songs.success());
     songs.choose("Renamed set"); next(); assert(board.switches.expression(0).controller == 11);
     next(); assert(board.switches.expression(0).controller == 10);
     assert(songs.undo()); while (songs.busy()) songs.tick(); assert(songs.success());
+    const auto *restored = songs.song("Renamed");
+    assert(restored && restored->foreground == original_style.foreground && restored->background == original_style.background && restored->font == original_style.font);
     songs.choose("Set"); next(); assert(board.switches.expression(0).controller == 11);
     assert(board.switches.binding_context());
     recall("default"); assert(board.switches.expression(0).controller == 7); // Browser has no lingering song scope.

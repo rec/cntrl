@@ -1611,11 +1611,21 @@ class PatchCompiler:
                     unicode=True,
                 ),
                 len(records),
-                int(value.binding_view is not None),
+                1
+                if value.binding_view is not None
+                else 2
+                if value.style is not None
+                else 0,
             )
             + (expression or bytes(4 * page_settings.EXPRESSION.size))
             + b''.join(records)
-            + visual
+            + (
+                visual
+                if value.binding_view is not None
+                else self.binding_graphics(' ', value.style, models.BindingView(), 16)
+                if value.style is not None
+                else b''
+            )
         )
 
     def binding_graphics(
@@ -1626,9 +1636,9 @@ class PatchCompiler:
         maximum: int,
     ) -> bytes:
         from ..fonts import assets
-        from ..fonts.catalogue import UI_FONTS
         from ..fonts.outline import GLYPH
 
+        authored = style
         style = display.merge_style(
             models.Style(
                 font_name=view.font_name,
@@ -1637,8 +1647,12 @@ class PatchCompiler:
             ),
             style,
         )
-        if style.font_name not in self.target.ui_fonts:
-            raise ValueError('binding views require an embedded UI font')
+        embedded = next(
+            (f for f in self.target.fonts if f.name == style.font_name and f.id != 255),
+            None,
+        )
+        if embedded is None:
+            raise ValueError('binding views require an embedded controller font')
         assert style.font_name is not None
         if style.font_name not in self.target.font_sources:
             raise ValueError(
@@ -1692,7 +1706,7 @@ class PatchCompiler:
             (
                 s
                 for s in sorted(face.sizes, reverse=True)
-                if s <= maximum
+                if s <= max(maximum, min(face.sizes))
                 and vertical_bounds(s)[1] - vertical_bounds(s)[0]
                 <= self.target.display_height // 3 - 4
                 and max(graphics.bounds(t, face.sizes[s])[1] for t in samples)
@@ -1705,10 +1719,18 @@ class PatchCompiler:
         foreground, background = graphics.colors(style, 0)
         top, bottom = vertical_bounds(size)
         return graphics.SCREEN.pack(
-            UI_FONTS[style.font_name],
+            embedded.id,
             size,
             0,
-            0,
+            8
+            | sum(
+                1 << i
+                for i, n in enumerate(
+                    ('foreground_color', 'background_color', 'font_name')
+                )
+                if authored is not None and getattr(authored, n) is not None
+            )
+            | (4 if 'font_name' in view.model_fields_set else 0),
             foreground,
             background,
             bottom - top,

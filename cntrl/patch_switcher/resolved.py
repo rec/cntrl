@@ -234,10 +234,12 @@ def _replace_removed_ui_fonts(data: bytes) -> bytes:
     for index in range(count):
         node = graph + struct.unpack_from('<I', data, graph + GRAPH.size + index * 4)[0]
         payload = node + 4
-        if data[node] != 10 or not data[payload + 67]:
+        if data[node] != 10 or data[payload + 67] != 1:
             continue
         bindings = data[payload + 66]
         view = payload + 220 + bindings * BINDING_RECORD_SIZE
+        if data[view + 3] & 8:
+            continue
         addresses.extend((view, view + graphics.SCREEN.size))
         for binding in range(bindings):
             style = (
