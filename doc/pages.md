@@ -3,14 +3,13 @@
 A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
 `patch-switcher`, `status`, `time`, `cable-test`, `panic`,
-`trs-ports`, `expression`,
 `midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`, `menu`, and `None`.
 Select a region or a page in the Pages and tools menu. F and the existing
 reverse-page control cycle only the focused region. Page and region names
 contain 1 to 31 printable ASCII characters.
 
-The default utility-page cycle is Status, Menu, MIDI Cable Test, Panic, TRS Ports,
-Expression, Time, Pong, Language, then None. Language appears immediately
+The default utility-page cycle is Status, MIDI Cable Test, Panic,
+Time, Pong, Language, then None. Language appears immediately
 before None; Pong appears immediately before Language on targets with three
 or more displays. Time and Language require at least two displays and are omitted from
 the defaults on one-display targets.
@@ -78,11 +77,13 @@ returns all windows to the Patch Switcher. Controllers with fewer than three
 displays omit Pong from the implicit catalogue; explicitly configured Pong
 pages still require three displays.
 
-Menu follows Status in the default tools cycle. It uses one utility window on
-the right of the performance view. Press the confirm control (C on MC Pro) to
+Pages and tools is available as the optional Menu page. It uses one utility
+window on the right of the performance view. Press the confirm control (C on MC Pro) to
 open Pages and tools, including Setups and Songs and setlists. Back returns to
 the Menu page, and the usual page controls continue cycling the tools region.
-Explicit page catalogues can include it with `type = 'menu'`.
+Explicit page catalogues can include it with `type = 'menu'`; it is omitted from
+the default cycle. The TRS Ports and Expression utility pages have been removed.
+TRS roles and expression assignments remain setup configuration.
 
 ## Pong
 

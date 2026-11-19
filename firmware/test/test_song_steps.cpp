@@ -68,8 +68,6 @@ struct Actions {
     bool time(unsigned, uint8_t, uint32_t) { return false; }
     bool monitor(unsigned, bool) { return false; }
     bool looper(unsigned, bool) { return false; }
-    bool expression(unsigned) { return false; }
-    bool port(unsigned) { return false; }
     bool has_controller() const { return false; }
     void controller(unsigned, bool, uint32_t) { assert(false); }
     void tap(uint32_t) {}

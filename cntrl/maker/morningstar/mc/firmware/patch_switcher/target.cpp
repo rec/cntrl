@@ -1239,8 +1239,6 @@ public:
     bool time(unsigned i, uint8_t events, uint32_t now) { return board.time_button(i, events, now); }
     bool monitor(unsigned i, bool pressed) { return board.monitor_button(i, pressed); }
     bool looper(unsigned i, bool pressed) { return board.looper_button(i, pressed); }
-    bool expression(unsigned i) { return board.expression_button(i); }
-    bool port(unsigned i) { return board.trs_button(i); }
     bool has_controller() const { return application.visible(); }
     void controller(unsigned i, bool pressed, uint32_t now) { application.controller().button(i, pressed, now); }
     void tap(uint32_t now) { board.tap_tempo(now); }

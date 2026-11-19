@@ -43,17 +43,11 @@ int main(int argc, char **argv) {
     status.cycles = 10; status.patches = 59; status.starts = 111; status.starts_status = cntrl::ui::StartsStatus::ready;
     status.ram_used[0] = 310240; status.ram_free[0] = 17440; status.ram_used[1] = 91008; status.ram_free[1] = 433280;
     using Page = cntrl::ui::Pages::Page;
-    const Page types[] = {Page::status, Page::cable, Page::panic, Page::ports, Page::expression, Page::pong};
+    const Page types[] = {Page::status, Page::cable, Page::panic, Page::pong, Page::menu};
     std::vector<uint16_t> sheet(5 * 160 * 2 * 128);
     bool valid = true;
     for (unsigned page = 0; page < sizeof(types) / sizeof(types[0]); ++page) {
         auto view = pages.save_view(); view.page = types[page]; pages.restore_view(view);
-        if (types[page] == Page::expression) {
-            std::strcpy(view.expression[0], "TRS 1  CC 11 Ch 1");
-            std::strcpy(view.expression[1], "Raw 2048  Norm 64");
-            std::strcpy(view.expression[2], "Uncalibrated");
-            pages.restore_view(view);
-        }
         const auto pane = pages.view(0, 0, status, {}, types[page] == Page::panic ? cntrl::Panic::Status::all_off : cntrl::Panic::Status::ready);
         unsigned lines = 0;
         for (const auto &line : pane.lines) if (line.text[0]) {

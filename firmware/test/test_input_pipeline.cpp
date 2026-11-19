@@ -65,8 +65,6 @@ struct Actions {
     bool time(unsigned, uint8_t, uint32_t) { return false; }
     bool monitor(unsigned, bool) { return false; }
     bool looper(unsigned, bool) { return false; }
-    bool expression(unsigned) { return false; }
-    bool port(unsigned) { return false; }
     bool has_controller() const { return true; }
     void controller(unsigned input, bool pressed, uint32_t now) { application.controller().button(input, pressed, now); }
     void tap(uint32_t) {}

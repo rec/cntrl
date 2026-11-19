@@ -212,10 +212,9 @@ public:
         }
         expression_bank_ = nullptr;
         keyboard_.clear(); platform_.midi_monitor().close(); monitor_unavailable_ = false;
-        port_save_pending_ = management_visible_ = false;
+        management_visible_ = false;
         if (pages_.arpeggiator) pages_.arpeggiator->configure(document.valid() ? document.arpeggiator_settings() : nullptr);
         pages_.outputs(platform_.midi_outputs());
-        if (!configure_ports()) { error(i18n::text(i18n::Message::port_memory_unavailable)); return; }
         pages_.layout(document.valid() ? document.page_layout() : cntrl::PageLayout{});
         if (looper_files_) {
             looper_sink_->configure_loop_controls(document.valid() ? document.loop_stop_settings() : nullptr, document.valid() && document.loop_stop_reset_controls());
@@ -244,29 +243,6 @@ public:
         pages_.revisit();
         for (auto &view : application_.views) view.dirty = true;
     }
-    void select_trs_jack() {
-        auto &page = pages_;
-        if (ports_.empty()) {
-            page.port_name(i18n::text(i18n::Message::no_configurable_ports), false); page.port_status(Pages::PortMode::off, i18n::text(i18n::Message::unavailable)); return;
-        }
-        auto port = std::find_if(ports_.begin(), ports_.end(), [&](const Port &p) { return p.index == page.jack; });
-        if (port == ports_.end()) { port = ports_.begin(); page.jack = port->index; }
-        page.port_name(port->label, true);
-        page.candidate = platform_.port_mode(page.jack);
-        page.port_status(page.candidate, documents_.document().valid() && documents_.document().trs_modes()[page.jack] != uint8_t(page.candidate) ? i18n::text(i18n::Message::driver_failed) : nullptr);
-    }
-    bool trs_button(unsigned i) {
-        if (pages_.page() != Pages::Page::ports || (i != controls_.previous && i != controls_.next)) return false;
-        if (ports_.empty()) { select_trs_jack(); return true; }
-        if (i == controls_.previous) {
-            pages_.jack = next_port(pages_.jack, false);
-            select_trs_jack();
-        } else for (unsigned mode = 0; mode < 5; ++mode) {
-            pages_.next_port_mode();
-            if (platform_.supports_trs_mode(pages_.jack, pages_.candidate)) break;
-        }
-        return true;
-    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_enter_page)
 #endif
@@ -289,12 +265,6 @@ public:
                 if (monitor_unavailable_) error(i18n::text(i18n::Message::monitor_memory_unavailable));
             }
         }
-        if (pages_.page() == Pages::Page::ports && documents_.document().valid()) select_trs_jack();
-        if (pages_.page() == Pages::Page::expression) {
-            if (expression_ports_.empty()) pages_.expression_status(i18n::text(i18n::Message::no_configurable_ports), "", "");
-            else if (std::find(expression_ports_.begin(), expression_ports_.end(), platform_.expression_controls().selected()) == expression_ports_.end())
-                platform_.expression_controls().select(expression_ports_[0]);
-        }
 #if CNTRL_CABLE_TEST
         if (pages_.page() == Pages::Page::cable && pages_.index() == application_.allocation.selected()) platform_.cable_test.enter();
 #endif
@@ -309,7 +279,6 @@ public:
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
         if (pages_.page() == Pages::Page::midi_looper && looper_files_) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; }
         if (pages_.page() == Pages::Page::midi_monitor && !other_selected(Pages::Page::midi_monitor)) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
-        if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();
 #if CNTRL_CABLE_TEST
         if (pages_.page() == Pages::Page::cable && pages_.index() == application_.allocation.selected()) platform_.leave_cable_test();
 #endif
@@ -353,7 +322,6 @@ public:
 #endif
     void configure_page_settings(const cntrl::PageSettings &settings) {
         pages_.outputs(platform_.midi_outputs());
-        if (!configure_ports()) { error(i18n::text(i18n::Message::port_memory_unavailable)); return; }
         leave_page();
         platform_.expression_controls().configure(settings.expression, platform_.midi_outputs());
         pages_.configure(settings);
@@ -417,16 +385,6 @@ public:
     }
     void tap_tempo(uint32_t now) {
         if (!documents_.document().valid()) return;
-        auto &page = pages_;
-        if (page.page() == Pages::Page::ports) {
-            if (ports_.empty()) { select_trs_jack(); return; }
-            auto active = platform_.port_mode(page.jack);
-            if (!platform_.output_idle() || platform_.configuration_locked() || documents_.busy() || documents_.dirty()) page.port_status(active, i18n::text(i18n::Message::busy));
-            else if (active == page.candidate && documents_.document().trs_modes()[page.jack] == uint8_t(active)) page.port_status(active, i18n::text(i18n::Message::already_set));
-            else if (!documents_.save_trs_mode(page.jack, page.candidate, now)) page.port_status(active, i18n::text(i18n::Message::cannot_apply));
-            else { port_save_pending_ = true; port_save_page_ = pages_.index(); page.port_status(active, i18n::text(i18n::Message::saving)); }
-            return;
-        }
 #if CNTRL_CABLE_TEST
         if (pages_.page() == Pages::Page::cable) {
             if (!platform_.cable_test.enabled() && (application_.patch_pending() || !platform_.output_idle() || documents_.busy() || !stop_clock())) return;
@@ -445,11 +403,6 @@ public:
             return;
         }
 #endif
-        if (pages_.page() == Pages::Page::expression) {
-            if (expression_ports_.empty()) { pages_.expression_status(i18n::text(i18n::Message::no_configurable_ports), "", ""); return; }
-            platform_.expression_controls().calibrate(platform_.expression_available(platform_.expression_controls().selected()));
-            return;
-        }
         pages_.tap(now);
     }
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) {
@@ -489,13 +442,6 @@ public:
         if (platform_.animation_session().take_redraw()) renderer_.invalidate();
         renderer_.draw(platform_.microseconds());
     }
-    bool expression_button(unsigned i) {
-        if (pages_.page() != Pages::Page::expression || (i != controls_.previous && i != controls_.next)) return false;
-        if (expression_ports_.empty()) { pages_.expression_status(i18n::text(i18n::Message::no_configurable_ports), "", ""); return true; }
-        if (i == controls_.previous) platform_.expression_controls().select(next_port(platform_.expression_controls().selected(), true));
-        else platform_.expression_controls().cancel();
-        return true;
-    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
@@ -531,15 +477,6 @@ public:
 #if CNTRL_PANIC
         transfer_busy = transfer_busy || platform_.panic_owns_midi;
 #endif
-        if (port_save_pending_ && !documents_.busy()) {
-            port_save_pending_ = false;
-            if (documents_.dirty()) {
-                documents_.edit_cancel();
-                save_view(); const unsigned focused = pages_.index(); load_view(port_save_page_);
-                pages_.port_status(platform_.port_mode(pages_.jack), i18n::text(i18n::Message::save_failed));
-                save_view(); load_view(focused);
-            }
-        }
         pages_.time(now, platform_.microseconds(), controls_.confirm < 64 && (application_.held & (uint64_t(1) << controls_.confirm)));
         platform_.displayed();
         if (!platform_.display_busy()) splash_visible_ = platform_.animation_session().poll(now, renderer_.ready(), transfer_busy);
@@ -558,16 +495,6 @@ public:
             const auto &region = application_.allocation.region(r);
             if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_switcher || application_.layout.page(region.selected)[0] == PageLayout::banked) continue;
             load_view(region.selected);
-            if (pages_.page() == Pages::Page::expression && pages_.expression_status_due(now)) {
-                if (expression_ports_.empty()) pages_.expression_status(i18n::text(i18n::Message::no_configurable_ports), "", "");
-                else {
-                    const unsigned selected = platform_.expression_controls().selected();
-                    const auto port = std::find_if(ports_.begin(), ports_.end(), [&](const Port &p) { return p.index == selected; });
-                    char title[40], position[40], prompt[40];
-                    platform_.expression_controls().status(port->label, platform_.expression_available(selected), title, position, prompt);
-                    pages_.expression_status(title, position, prompt);
-                }
-            }
             if (!pages_.due(now)) { save_view(); continue; }
             if (pages_.page() == Pages::Page::midi_looper && looper_files_) refresh_looper_prompt();
             if (pages_.page() == Pages::Page::midi_monitor && !platform_.midi_monitor().active() && !monitor_unavailable_) enter_page();
@@ -641,7 +568,6 @@ private:
     void cancel_focus() {
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
         application_.controller().cancel_gesture();
-        if (pages_.page() == Pages::Page::expression) platform_.expression_controls().cancel();
         if (looper_files_ && pages_.page() == Pages::Page::midi_looper) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; pages_.looper_prompt[0] = 0; }
 #if CNTRL_CABLE_TEST
         if (pages_.page() == Pages::Page::cable) platform_.leave_cable_test();
@@ -674,54 +600,14 @@ private:
         application_.controller().cancel_gesture();
         application_.visible_index = application_.layout.controller_slot(pages_.index());
     }
-    struct Port { unsigned index; const char *label; };
-    CheckedArray<Port> ports_;
-    CheckedArray<unsigned> expression_ports_;
-    bool configure_ports() {
-        const auto outputs = platform_.midi_outputs();
-        unsigned count = 0, expressions = 0;
-        auto first = [&](const midi::OutputConnection &endpoint) {
-            if (endpoint.port == midi::no_port) return false;
-            for (const auto &previous : outputs) {
-                if (&previous == &endpoint) break;
-                if (previous.port == endpoint.port) return false;
-            }
-            return true;
-        };
-        for (const auto &endpoint : outputs) if (first(endpoint)) {
-            ++count;
-            expressions += platform_.supports_trs_mode(endpoint.port, midi::TrsMode::expression);
-        }
-        CheckedArray<Port> ports;
-        CheckedArray<unsigned> expression_ports;
-        if (!ports.reserve(count) || !expression_ports.reserve(expressions)) return false;
-        for (const auto &endpoint : outputs) {
-            if (endpoint.port == midi::no_port) continue;
-            if (!first(endpoint)) continue;
-            (void)ports.append({endpoint.port, endpoint.label});
-            if (platform_.supports_trs_mode(endpoint.port, midi::TrsMode::expression)) (void)expression_ports.append(endpoint.port);
-        }
-        ports_.swap(ports); expression_ports_.swap(expression_ports);
-        select_trs_jack();
-        return true;
-    }
-    unsigned next_port(unsigned current, bool expression) const {
-        if (expression) {
-            auto at = std::find(expression_ports_.begin(), expression_ports_.end(), current);
-            return at == expression_ports_.end() || ++at == expression_ports_.end() ? expression_ports_[0] : *at;
-        }
-        auto at = std::find_if(ports_.begin(), ports_.end(), [&](const Port &p) { return p.index == current; });
-        return at == ports_.end() || ++at == ports_.end() ? ports_[0].index : at->index;
-    }
     Platform &platform_;
     Application &application_;
     Documents &documents_;
     Display &display_;
     Renderer &renderer_;
     Controls controls_;
-    unsigned port_save_page_ = PageLayout::max_pages;
     PixelThrob throb_;
-    bool port_save_pending_ = false, splash_visible_ = false, management_visible_ = false;
+    bool splash_visible_ = false, management_visible_ = false;
     bool pending_animations_ = true;
     int pending_patch_ = -1;
     bool brightness_feedback_ = false;

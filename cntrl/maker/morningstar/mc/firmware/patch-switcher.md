@@ -313,12 +313,10 @@ and six outputs. With USB MIDI forwarding enabled, USB output cables 0 and 1
 send to DIN and dedicated TRS. Cables 2 through 5 send to configurable jacks
 1 through 4 when their active setup selects a MIDI mode.
 
-### TRS Ports page
+### TRS port configuration
 
-From the performance screen, press F to reach **TRS Ports** after Panic.
-A selects a jack, B previews its next mode, and C saves it with the selected
-setup. The first row shows the active mode. Switching setups restores all four
-roles. An unused jack defaults to Off. If the setup routes an instrument or
+Configure jack modes in the setup's `[trs_ports]` table. Switching setups
+restores all four roles. An unused jack defaults to Off. If the setup routes an instrument or
 patch to a jack, change that route before switching the jack to an input.
 
 ```toml

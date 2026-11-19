@@ -221,6 +221,10 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             raise ValueError(
                 'Tap Tempo page has been removed; recompile this setup using Time'
             )
+        if data[cursor + 32] in (5, 6):
+            raise ValueError(
+                'TRS Ports and Expression pages have been removed; recompile this setup'
+            )
         if data[cursor + 32] == 9:
             raise ValueError('Keyboard page has been removed; recompile this setup')
         if data[cursor + 32] in (2, 7, 8):
@@ -292,8 +296,8 @@ PAGE_TYPES = (
     '',
     'cable-test',
     'panic',
-    'trs-ports',
-    'expression',
+    '',
+    '',
     '',
     '',
     '',  # Unassigned page ID. Existing page IDs remain stable.

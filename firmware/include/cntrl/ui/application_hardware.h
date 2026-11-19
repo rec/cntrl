@@ -48,13 +48,10 @@ public:
     void poll_keyboard() { presentation().poll_keyboard(); }
     bool time_button(unsigned input, uint8_t events, uint32_t now) { return presentation().time_button(input, events, now); }
     void blank_performance() { presentation().blank_performance(); }
-    void select_trs_jack() { presentation().select_trs_jack(); }
-    bool trs_button(unsigned input) { return presentation().trs_button(input); }
     void enter_page() { presentation().enter_page(); }
     void leave_page() { presentation().leave_page(); }
     bool stop_clock() { return presentation().stop_clock(); }
     void draw() { presentation().draw(); }
-    bool expression_button(unsigned input) { return presentation().expression_button(input); }
     void display(uint32_t now, bool transfer_busy) { presentation().display(now, transfer_busy); }
 private:
     auto &presentation() { return static_cast<Platform &>(*this).page_host(); }
