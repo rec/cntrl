@@ -188,7 +188,8 @@ current = { text = 'Atual' }
 next = { text = 'Seguinte' }
 add_songs = { text = 'Adicionar músicas' }
 end_of_set = { text = 'Fim do alinhamento' }
-next_patch = { text = 'Som seguinte' }
+next_patch = { text = 'Passo seguinte' }
+last_step = { text = 'Último passo' }
 perform_setlist = { text = 'Tocar alinhamento' }
 setlists = { text = 'Alinhamentos' }
 songs = { text = 'Músicas' }

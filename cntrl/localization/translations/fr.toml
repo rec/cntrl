@@ -571,7 +571,10 @@ text = 'Ajouter des morceaux'
 text = 'Fin de liste'
 
 [messages.next_patch]
-text = 'Son suivant'
+text = 'Étape suivante'
+
+[messages.last_step]
+text = 'Dernière étape'
 
 [messages.perform_setlist]
 text = 'Jouer la liste'

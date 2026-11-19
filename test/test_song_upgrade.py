@@ -14,10 +14,10 @@ def target() -> models.Target:
 
 
 @pytest.mark.parametrize('version', [36, 38])
-@pytest.mark.parametrize('legacy_library', [False, True])
+@pytest.mark.parametrize('library_format', [5, 6, 7])
 def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     version: int,
-    legacy_library: bool,
+    library_format: int,
     target: models.Target,
     legacy_setups: dict[int, bytes],
 ) -> None:
@@ -41,22 +41,27 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     prefix = (
         struct.pack('<II', 1, 1)
         + first
-        + songs.SONG.pack(songs.text('Saved', 64), 2, 0xFFFFFFFF)
+        + songs.SONG.pack(songs.text('Saved', 64), 2, 0xFFFFFFFF, True)
         + second
         + songs.SET.pack(songs.text('Tonight', 64), 2, 0xFFFFFFFF)
         + songs.text('Saved', 64) * 2
-        + b'CSP6'
+        + b'CSP7'
     )
+    song_header = struct.pack('<64sI', songs.text('Saved', 64), 2)
+    set_header = struct.pack('<64sI', songs.text('Tonight', 64), 2)
+    if library_format >= 6:
+        song_header += struct.pack('<I', 0xFFFFFFFF)
+        set_header += struct.pack('<I', 0xFFFFFFFF)
+    if library_format == 7:
+        song_header += b'\x01'
     stored_prefix = (
         struct.pack('<II', 1, 1)
         + first
-        + struct.pack('<64sI', songs.text('Saved', 64), 2)
+        + song_header
         + second
-        + struct.pack('<64sI', songs.text('Tonight', 64), 2)
+        + set_header
         + songs.text('Saved', 64) * 2
-        + b'CSP5'
-        if legacy_library
-        else prefix
+        + f'CSP{library_format}'.encode()
     )
     library = stored_prefix + (struct.pack('<I', len(source)) + source) * 2
     assert songs.decode(library).setlists[0].songs == ['Saved', 'Saved']
@@ -86,7 +91,7 @@ def test_empty_song_library_upgrade_preserves_its_bytes(target: models.Target) -
 
 
 @pytest.mark.parametrize('wrapped', [False, True])
-def test_csp5_empty_library_migrates_to_csp6(
+def test_csp5_empty_library_migrates_to_current_format(
     target: models.Target, wrapped: bool
 ) -> None:
     source = struct.pack('<II', 0, 0) + b'CSP5'
@@ -137,7 +142,7 @@ def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
         ),
         target,
     )
-    assert source[source.index(b'CSP6') + 8 :].startswith(binary_format.MAGIC)
+    assert source[source.index(b'CSP7') + 8 :].startswith(binary_format.MAGIC)
     upgraded = songs.upgrade(source, {}, target=target)
     assert songs.decode(upgraded) == songs.decode(source)
     assert songs.upgrade(upgraded, {}, target=target) == upgraded
@@ -168,7 +173,7 @@ def test_captured_references_follow_the_reordered_deployed_bundle() -> None:
     linked = songs.reindex(library, ['Aardvark', 'Zulu'])
     assert songs.decode(linked) == songs.decode(library)
     core = binary_format.core(linked, binary_format.Kind.songs)
-    captured = core[core.index(b'CSP6') + 8 :]
+    captured = core[core.index(b'CSP7') + 8 :]
     graph = resolved.graph_offset(captured)
     core_source = binary_format.core(captured)
     graph -= binary_format.core_offset(captured)

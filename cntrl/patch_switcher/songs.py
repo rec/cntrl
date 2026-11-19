@@ -38,6 +38,7 @@ from .usb_frames import Kind
 class Song(models.BindingScope, frozen=True):
     bindings: dict[str, object] = Field(default_factory=dict)
     name: str
+    add_last_step: bool = True
     patches: list[
         Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)]
     ] = Field(min_length=1)
@@ -293,6 +294,7 @@ def encode(
                 text(song.name, 64),
                 len(selections),
                 scope_roots.get((2, song.name), 0xFFFFFFFF),
+                song.add_last_step,
             )
             + b''.join(selections[1:])
         )
@@ -308,7 +310,7 @@ def encode(
     payload = (
         struct.pack('<II', len(library.songs), len(library.setlists))
         + b''.join(records + sets)
-        + b'CSP6'
+        + b'CSP7'
     )
     if source:
         source = (
@@ -415,7 +417,9 @@ def decode(data: bytes) -> Library:
     if sources:
         context['definitions'] = {'profiles': profiles, 'programs': programs}
     songs = []
-    for (name, binding), values in zip(song_headers, positions, strict=True):
+    for (name, binding, add_last_step), values in zip(
+        song_headers, positions, strict=True
+    ):
         patches = []
         for document, reference, label, source, node in values:
             if document[0]:
@@ -453,7 +457,12 @@ def decode(data: bytes) -> Library:
         )
         songs.append(
             Song.model_validate(
-                {'name': name, 'patches': patches, 'bindings': bindings}
+                {
+                    'name': name,
+                    'patches': patches,
+                    'bindings': bindings,
+                    'add_last_step': add_last_step,
+                }
             )
         )
     sets = [
@@ -500,11 +509,16 @@ def _current_core(data: bytes) -> bytes:
     if len(data) < 12:
         raise ValueError('invalid song library size')
     ns, nl = struct.unpack_from('<II', data)
-    for header_size, marker in ((SONG.size, b'CSP6'), (SONG.size - 4, b'CSP5')):
+    for song_size, set_size, marker in (
+        (SONG.size, SET.size, b'CSP7'),
+        (SONG.size - 1, SET.size, b'CSP6'),
+        (SONG.size - 5, SET.size - 4, b'CSP5'),
+    ):
         offset = 8
         prefix = bytearray(data[:offset])
         valid = True
         for song, records in ((True, ns), (False, nl)):
+            header_size = song_size if song else set_size
             for _ in range(records):
                 first_size = SELECTION.size if song else 0
                 if offset + first_size + header_size > len(data):
@@ -519,9 +533,11 @@ def _current_core(data: bytes) -> bytes:
                 prefix += data[offset : offset + 68]
                 prefix += (
                     data[offset + 68 : offset + 72]
-                    if marker == b'CSP6'
+                    if marker != b'CSP5'
                     else struct.pack('<I', 0xFFFFFFFF)
                 )
+                if song and marker != b'CSP7':
+                    prefix += b'\x01'
                 offset += header_size
                 size = (count - 1) * SELECTION.size if song else count * 64
                 if size > len(data) - offset:
@@ -534,8 +550,8 @@ def _current_core(data: bytes) -> bytes:
         if valid and data[offset : offset + 4] == marker:
             return (
                 data
-                if marker == b'CSP6'
-                else bytes(prefix) + b'CSP6' + data[offset + 4 :]
+                if marker == b'CSP7'
+                else bytes(prefix) + b'CSP7' + data[offset + 4 :]
             )
     raise ValueError('invalid song records or missing song Patch sources')
 
@@ -544,7 +560,7 @@ def _parse(
     data: bytes,
 ) -> tuple[
     int,
-    list[tuple[str, int]],
+    list[tuple[str, int, bool]],
     list[list[tuple[bytes, bytes, bytes, int, int]]],
     list[Setlist],
     list[bytes],
@@ -563,7 +579,7 @@ def _parse(
             raise ValueError('truncated song')
         first = SELECTION.unpack_from(data, offset)
         offset += SELECTION.size
-        name, count, binding = SONG.unpack_from(data, offset)
+        name, count, binding, add_last_step = SONG.unpack_from(data, offset)
         offset += SONG.size
         if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
             raise ValueError('invalid song patch count')
@@ -572,7 +588,9 @@ def _parse(
             values.append(SELECTION.unpack_from(data, offset))
             offset += SELECTION.size
         positions.append(values)
-        song_headers.append((_string(name), binding))
+        if add_last_step > 1:
+            raise ValueError('invalid add_last_step flag')
+        song_headers.append((_string(name), binding, bool(add_last_step)))
     sets = []
     set_bindings = []
     for _ in range(nl):
@@ -588,7 +606,7 @@ def _parse(
         ]
         offset += count * 64
         sets.append(Setlist(name=_string(name), songs=entries))
-    if data[offset : offset + 4] != b'CSP6':
+    if data[offset : offset + 4] != b'CSP7':
         raise ValueError('missing song Patch sources')
     offset += 4
     prefix = offset
@@ -603,7 +621,7 @@ def _parse(
         sources.append(data[offset : offset + length])
         offset += length
     if not sources and (
-        any(b != 0xFFFFFFFF for _, b in song_headers)
+        any(b != 0xFFFFFFFF for _, b, _ in song_headers)
         or any(b != 0xFFFFFFFF for b in set_bindings)
     ):
         raise ValueError('missing binding-map source')
@@ -1027,5 +1045,5 @@ def run(command: Copy | Download) -> None:
 
 
 SELECTION = struct.Struct('<64s64s64sII')
-SONG = struct.Struct('<64sII')
+SONG = struct.Struct('<64sIIB')
 SET = struct.Struct('<64sII')

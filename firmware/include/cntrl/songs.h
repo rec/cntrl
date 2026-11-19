@@ -14,6 +14,7 @@ struct Song : SongSelection {
     char name[64] = {};
     uint32_t count = 1;
     uint32_t bindings = 0xffffffff;
+    uint8_t add_last_step = 1;
 };
 struct SongContinuation {
     uint32_t generation = 0, crc = 0, entry = 0xffffffff, patch = 0, source_crc = 0;
@@ -25,7 +26,7 @@ struct SongEntry { char song[64] = {}; };
 struct Setlist { char name[64] = {}; uint32_t count = 0, bindings = 0xffffffff; };
 struct SongCounts { uint32_t songs = 0, sets = 0; };
 #pragma pack(pop)
-static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 272 && sizeof(Setlist) == 72 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
+static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 273 && sizeof(Setlist) == 72 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
 template<class T>
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(song_record_encode)
@@ -34,7 +35,7 @@ inline void encode_song_record(const T &value, uint8_t *bytes) {
     if constexpr (std::is_base_of_v<SongSelection, T>) {
         std::memcpy(bytes, value.document, 64); std::memcpy(bytes + 64, value.key, 64); std::memcpy(bytes + 128, value.label, 64);
         put32(bytes + 192, value.source); put32(bytes + 196, value.node);
-        if constexpr (std::is_same_v<T, Song>) { std::memcpy(bytes + 200, value.name, 64); put32(bytes + 264, value.count); put32(bytes + 268, value.bindings); }
+        if constexpr (std::is_same_v<T, Song>) { std::memcpy(bytes + 200, value.name, 64); put32(bytes + 264, value.count); put32(bytes + 268, value.bindings); bytes[272] = value.add_last_step; }
     } else if constexpr (std::is_same_v<T, Setlist>) {
         std::memcpy(bytes, value.name, 64); put32(bytes + 64, value.count); put32(bytes + 68, value.bindings);
     } else if constexpr (std::is_same_v<T, SongCounts>) {
@@ -46,7 +47,7 @@ inline void decode_song_record(const uint8_t *bytes, T &value) {
     if constexpr (std::is_base_of_v<SongSelection, T>) {
         std::memcpy(value.document, bytes, 64); std::memcpy(value.key, bytes + 64, 64); std::memcpy(value.label, bytes + 128, 64);
         value.source = u32(bytes + 192); value.node = u32(bytes + 196);
-        if constexpr (std::is_same_v<T, Song>) { std::memcpy(value.name, bytes + 200, 64); value.count = u32(bytes + 264); value.bindings = u32(bytes + 268); }
+        if constexpr (std::is_same_v<T, Song>) { std::memcpy(value.name, bytes + 200, 64); value.count = u32(bytes + 264); value.bindings = u32(bytes + 268); value.add_last_step = bytes[272]; }
     } else if constexpr (std::is_same_v<T, Setlist>) {
         std::memcpy(value.name, bytes, 64); value.count = u32(bytes + 64); value.bindings = u32(bytes + 68);
     } else if constexpr (std::is_same_v<T, SongCounts>) {
@@ -145,7 +146,7 @@ public:
             }
         }
         if (!found) {
-            if (!commit(active_, 12, counts_, 8, 0, "CSP6", 4, nullptr, nullptr)) return false;
+            if (!commit(active_, 12, counts_, 8, 0, "CSP7", 4, nullptr, nullptr)) return false;
             while (busy()) tick(); // Initialization precedes the live main loop.
             return success();
         }
@@ -349,6 +350,7 @@ public:
         if (current && !removed_) {
             if (patch_position_ == 0xffffffffu) { error_ = "Current patch removed"; return false; }
             if (patch_position_ + 1 < current->count) return activate_patch(current_song_, patch_position_ + 1, position_);
+            if (patch_position_ < current->count && current->add_last_step) return enter_last_step(current_song_, current->count, position_);
         }
         SongEntry value;
         const auto *set = setlist(active_set_);
@@ -359,6 +361,30 @@ public:
         if (!entry(active_set_, position, value)) { error_ = "Setlist read failed"; return false; }
         const auto *p = song(value.song); if (!p) { error_ = "Song missing"; return false; }
         return activate_patch(value.song, 0, position);
+    }
+    bool previous() {
+        if (busy() || executing()) { error_ = "Song work pending"; return false; }
+        const auto *current = song(current_song_);
+        if (current && !removed_) {
+            if (patch_position_ == 0xffffffffu) { error_ = "Current step removed"; return false; }
+            if (patch_position_) return activate_patch(current_song_, patch_position_ - 1, position_);
+        }
+        if (!position_ || position_ == 0xffffffffu) { error_ = "Start of set"; return false; }
+        const unsigned position = position_ - 1;
+        SongEntry value;
+        if (!entry(active_set_, position, value)) { error_ = "Setlist read failed"; return false; }
+        const auto *item = song(value.song);
+        if (!item) { error_ = "Song missing"; return false; }
+        return item->add_last_step ? enter_last_step(value.song, item->count, position)
+            : activate_patch(value.song, item->count - 1, position);
+    }
+    bool last_step() const {
+        const auto *item = song(current_song_);
+        return item && !removed_ && item->add_last_step && patch_position_ == item->count;
+    }
+    bool upcoming_last_step() const {
+        const auto *item = song(current_song_);
+        return item && !removed_ && item->add_last_step && patch_position_ != 0xffffffffu && patch_position_ + 1 == item->count;
     }
     bool current_patch(SongSelection &result) const {
         return patch_at(current_song_, patch_position_, result);
@@ -474,7 +500,7 @@ private:
             if (!graph_started) {
                 uint8_t magic[4];
                 if (position > length || 4 > length - position || !storage.read(slot, base + position, magic, 4)
-                    || std::memcmp(magic, "CSP6", 4)) return false;
+                    || std::memcmp(magic, "CSP7", 4)) return false;
                 records_end = position; position += 4; graph_started = true; return true;
             }
             if (source_remaining) {
@@ -621,8 +647,14 @@ private:
         patch_position_ = position; position_ = entry_index; removed_ = false;
         error_ = resolver_.execution_status() == SongExecution::completed ? ui::i18n::text(ui::i18n::Message::completed_locally) : ui::i18n::text(ui::i18n::Message::pending); return true;
     }
+    bool enter_last_step(const char *name, unsigned count, unsigned entry_index) {
+        SongContinuation saved = continuation(); saved.entry = entry_index; saved.patch = count;
+        std::snprintf(saved.song, sizeof(saved.song), "%s", name);
+        restore_cursor(saved); removed_ = false; error_ = "";
+        return true;
+    }
     static bool valid_song(const Song &s) {
-        return s.count && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64) && valid_selection(s);
+        return s.count && s.add_last_step <= 1 && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64) && valid_selection(s);
     }
     static bool valid_selection(const SongSelection &s) {
         return (!s.label[0] || label_valid(reinterpret_cast<const uint8_t *>(s.label), sizeof(s.label))) && (s.document[0]
@@ -633,7 +665,10 @@ private:
     bool advance_after_return() {
         const auto *item = song(current_song_);
         if (!item) { error_ = "Song missing"; return false; }
-        if (patch_position_ + 1 == item->count) { error_ = "End of song"; return true; }
+        if (patch_position_ + 1 == item->count) {
+            if (item->add_last_step) return enter_last_step(current_song_, item->count, position_);
+            error_ = "End of song"; return true;
+        }
         return activate_patch(current_song_, patch_position_ + 1, position_);
     }
     bool source_offset(unsigned index, unsigned &offset, unsigned &length) const {

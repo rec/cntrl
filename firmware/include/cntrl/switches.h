@@ -2,6 +2,7 @@
 #include "ui/messages.h"
 #include "ui/presentation.h"
 #include "ui/prompts.h"
+#include "ui/fonts.h"
 #include "patch_executor.h"
 #include "switch_gestures.h"
 #include "control_bindings.h"
@@ -313,6 +314,8 @@ public:
     void tick(uint32_t now = 0, std::optional<uint32_t> held = std::nullopt) {
         if (held) held_ = *held;
         if (!open_) { install_pending(); return; }
+        bool last_step = outputs_.song_last_step();
+        if (last_step != last_step_) { last_step_ = last_step; dirty_ = true; }
         if (counter_revision_ != hardware_.counters.revision()) {
             counter_revision_ = hardware_.counters.revision(); dirty_ = true;
         }
@@ -465,6 +468,7 @@ private:
     unsigned count_ = 0, held_ = 0, disarmed_ = 0;
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
     bool shifted_ = false;
+    bool last_step_ = false;
     unsigned page_, owner_;
     bool rendering_;
     int bank_ = -1, bank_page_ = -1;
@@ -647,9 +651,10 @@ private:
 #endif
     void render() {
         if (!rendering_) return;
+        if (outputs_.song_last_step()) { dirty_ = false; return; }
         if (bindings_) {
             Pane panes[3];
-            if (const uint8_t *view = count_ <= 6 ? bindings_.view() : nullptr) {
+            if (const uint8_t *view = count_ <= 6 && (!outputs_.song_navigation_active() || hardware_.input_count() <= 6) ? bindings_.view() : nullptr) {
                 for (auto &pane : panes) {
                     pane.three_bands = true;
                     pane.graphics.background = 0;
@@ -668,15 +673,19 @@ private:
                 document_.counter_text(status.text, sizeof(status.text), view[33] ? reinterpret_cast<const char *>(view + 33) : " ", hardware_.counters, bank_, bank_page_);
                 for (unsigned i = 0; i < count_; ++i) {
                     const auto &s = states_[i];
+                    bool navigation = outputs_.song_navigation_active();
+                    unsigned input = s.record[0];
+                    if (navigation && (input == hardware_.control_input(ControlRole::confirm) || input == hardware_.control_input(ControlRole::back))) continue;
                     const uint8_t *visual = s.visual;
-                    auto &line = panes[i % 3].lines[i < 3 ? 2 : 0];
+                    unsigned slot = navigation && input < 6 ? input : i;
+                    auto &line = panes[slot % 3].lines[slot < 3 ? 2 : 0];
                     line.graphics = Document::read_graphics(visual ? visual : view);
                     line.x = 4;
                     line.centered = view[32] & 1;
                     char label[64];
                     s.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
-                    const char *input = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : s.document->input_label(s.record[0]);
-                    if (view[32] & 2) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", input, label);
+                    const char *caption = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : s.document->input_label(s.record[0]);
+                    if (view[32] & 2) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", caption, label);
                     else std::snprintf(line.text, sizeof(line.text), "%s", label);
                     if (last_pressed_ == int(i)) {
                         auto &detail = panes[0].lines[1];
@@ -685,12 +694,14 @@ private:
                         s.document->counter_text(detail.text, sizeof(detail.text), visual ? reinterpret_cast<const char *>(visual + 32) : label, hardware_.counters);
                     }
                 }
+                navigation_captions(panes, view);
                 present(panes); dirty_ = false; return;
             }
             for (auto &pane : panes) pane.graphics = document_.graphics(1);
             std::snprintf(panes[1].lines[0].text, 64, "%s", bindings_.title());
             for (unsigned i = 0; i < count_; ++i) {
                 const auto &s = states_[i];
+                if (outputs_.song_navigation_active() && (s.record[0] == hardware_.control_input(ControlRole::confirm) || s.record[0] == hardware_.control_input(ControlRole::back))) continue;
                 auto &pane = panes[i % 3];
                 const unsigned row = 2 + i / 3;
                 const char *state = s.unknown ? ui::i18n::text(ui::i18n::Message::unknown_title) : s.executor.busy() || s.queued ? ui::i18n::text(ui::i18n::Message::pending) : s.record[1] ? (s.active ? ui::i18n::text(ui::i18n::Message::on) : ui::i18n::text(ui::i18n::Message::off)) : "";
@@ -700,6 +711,7 @@ private:
                 std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", input, label, state[0] ? " | " : "", state);
                 if (ui::i18n::translated_ui) pane.lines[row].graphics.font = 253;
             }
+            navigation_captions(panes);
             present(panes); dirty_ = false; return;
         }
         ui::Prompt prompt(hardware_);
@@ -729,6 +741,20 @@ private:
         if (!count_) ui::i18n::format(panes[1].lines[0].text, 64, ui::i18n::Message::no_switches);
         present(panes);
         dirty_ = false;
+    }
+    void navigation_captions(Pane *panes, const uint8_t *view = nullptr) {
+        if (!outputs_.song_navigation_active()) return;
+        for (unsigned i = 0; i < 2; ++i) {
+            unsigned input = hardware_.control_input(i ? ControlRole::confirm : ControlRole::back);
+            if (view && input >= 6) continue;
+            auto &line = view ? panes[input % 3].lines[input < 3 ? 2 : 0] : panes[2].lines[i];
+            line.graphics = view ? Document::read_graphics(view) : panes[2].graphics;
+            line.graphics.font = ui::localized_face; line.graphics.size = line.graphics.line_height = 16;
+            line.centered = bool(view);
+            const char *next = hardware_.control_label(ControlRole::back), *modifier = hardware_.control_label(ControlRole::confirm);
+            if (i) std::snprintf(line.text, sizeof(line.text), "%s+%s %s", modifier, next, ui::i18n::text(ui::i18n::Message::back));
+            else std::snprintf(line.text, sizeof(line.text), "%s %s", next, ui::i18n::text(ui::i18n::Message::next_action));
+        }
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_present)

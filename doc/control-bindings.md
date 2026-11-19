@@ -19,12 +19,12 @@ value = 110
 
 [patches.verse]
 parent = 'clean'
-bindings = {A = 'boost', B = 'chorus', E = {operation = 'next-song-patch'}, F = {operation = 'back'}}
+bindings = {A = 'boost', B = 'chorus', E = {operation = 'next-song-step'}}
 
 [patches.chorus]
 parent = 'verse'
 program = 2
-bindings = {A = 'verse', B = 'boost', E = {operation = 'next-song-patch'}, F = {operation = 'back'}}
+bindings = {A = 'verse', B = 'boost', E = {operation = 'next-song-step'}}
 
 [patches.verse_louder]
 parent = 'verse'
@@ -43,7 +43,10 @@ when the entry operations complete.
 Pressing B selects `chorus`, replacing the map. Pressing A on `chorus` selects
 `verse`. Calling `boost`, which has no bindings, sends its MIDI while keeping
 the current map. E advances through the current song's patches, then to the
-next song in the selected setlist. F returns to the preceding performance UI.
+next song in the selected setlist. During set performance, F always selects the
+next step on release; C+F selects the previous step in either press order. C is
+the modifier and has no standalone action. These controls take precedence over
+authored bindings and work regardless of `inherits`.
 
 ## Binding scopes and inheritance
 
@@ -82,7 +85,7 @@ channel = 1
 controller = 7
 
 [patches.verse]
-bindings = {A = 'boost', E = {operation = 'next-song-patch'}}
+bindings = {A = 'boost', E = {operation = 'next-song-step'}}
 
 [patches.boost]
 output = 'din'
@@ -112,9 +115,27 @@ shows up to six; larger maps use the ordinary switch presentation. Inherited
 switch actions retain their source definitions and routing even when the
 selected patch comes from another setup.
 
-Song records now include binding references and use the `CSP6` source appendix.
-Recompile song libraries and use matching host and firmware versions; earlier
-song cores are rejected.
+Each song has `add_last_step = true` by default. After its authored steps, Next
+selects a **Last step** view that leaves the sound and active bindings in place
+and sends no MIDI. It previews the next song; Next again starts that song.
+The last song also has this step, followed by End of set. Set
+`add_last_step = false` to go directly from a song's final authored step to the
+next song. Previous walks the same step order backwards across song boundaries.
+Entering a last step backwards also sends no MIDI.
+
+While the last-step view is visible, hidden switch assignments cannot receive
+new presses. Releases for already-held controls still complete their cleanup,
+and expression assignments remain active. Leaving the last step restores the
+patch interface or installs the selected step's patch map normally.
+
+Explicit patch actions use `next-song-step` and `previous-song-step`. Song
+authoring still uses an ordered `patches` list: each occurrence is a step, and
+the automatic last step is separate from that list.
+
+Song records include binding references and the last-step flag and use `CSP7`.
+Recompile song libraries and use matching host and firmware versions. Existing
+offline backup conversion preserves older selections and enables the default
+last step; firmware uses the current format.
 
 ## Replacing maps
 

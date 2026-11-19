@@ -188,7 +188,8 @@ current = { text = 'Attuale' }
 next = { text = 'Successivo' }
 add_songs = { text = 'Aggiungi brani' }
 end_of_set = { text = 'Fine scaletta' }
-next_patch = { text = 'Suono successivo' }
+next_patch = { text = 'Passo successivo' }
+last_step = { text = 'Ultimo passo' }
 perform_setlist = { text = 'Esegui scaletta' }
 setlists = { text = 'Scalette' }
 songs = { text = 'Brani' }

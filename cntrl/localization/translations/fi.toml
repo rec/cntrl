@@ -188,7 +188,8 @@ current = { text = 'Nykyinen' }
 next = { text = 'Seuraava' }
 add_songs = { text = 'Lisää kappaleita' }
 end_of_set = { text = 'Soittolistan loppu' }
-next_patch = { text = 'Seuraava soundi' }
+next_patch = { text = 'Seuraava askel' }
+last_step = { text = 'Viimeinen askel' }
 perform_setlist = { text = 'Soita soittolista' }
 setlists = { text = 'Soittolistat' }
 songs = { text = 'Kappaleet' }

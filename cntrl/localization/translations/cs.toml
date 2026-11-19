@@ -188,7 +188,8 @@ current = { text = 'Aktuální' }
 next = { text = 'Další' }
 add_songs = { text = 'Přidat skladby' }
 end_of_set = { text = 'Konec seznamu' }
-next_patch = { text = 'Další zvuk' }
+next_patch = { text = 'Další krok' }
+last_step = { text = 'Poslední krok' }
 perform_setlist = { text = 'Hrát seznam' }
 setlists = { text = 'Seznamy skladeb' }
 songs = { text = 'Skladby' }

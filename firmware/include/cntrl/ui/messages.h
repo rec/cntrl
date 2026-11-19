@@ -351,9 +351,10 @@ enum class Message : uint16_t {
     language_select,
     language_next_page,
     panic,
+    last_step,
 };
-inline constexpr unsigned message_count = 348;
-inline constexpr uint32_t catalogue_schema = 0x446870c5u;
+inline constexpr unsigned message_count = 349;
+inline constexpr uint32_t catalogue_schema = 0x5f10ae42u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char pages_and_tools_text[] CNTRL_I18N_STORAGE = "Pages and tools";
@@ -961,7 +962,7 @@ inline const char add_songs_text[] CNTRL_I18N_STORAGE = "Add songs";
 inline const char add_songs_short[] CNTRL_I18N_STORAGE = "";
 inline const char end_of_set_text[] CNTRL_I18N_STORAGE = "End of set";
 inline const char end_of_set_short[] CNTRL_I18N_STORAGE = "";
-inline const char next_patch_text[] CNTRL_I18N_STORAGE = "Next patch";
+inline const char next_patch_text[] CNTRL_I18N_STORAGE = "Next step";
 inline const char next_patch_short[] CNTRL_I18N_STORAGE = "";
 inline const char perform_setlist_text[] CNTRL_I18N_STORAGE = "Perform setlist";
 inline const char perform_setlist_short[] CNTRL_I18N_STORAGE = "";
@@ -1004,9 +1005,9 @@ inline const char rename_song_text[] CNTRL_I18N_STORAGE = "Rename song";
 inline const char rename_song_short[] CNTRL_I18N_STORAGE = "";
 inline const char use_selected_patch_text[] CNTRL_I18N_STORAGE = "Use selected patch";
 inline const char use_selected_patch_short[] CNTRL_I18N_STORAGE = "";
-inline const char edit_patches_text[] CNTRL_I18N_STORAGE = "Edit patches";
+inline const char edit_patches_text[] CNTRL_I18N_STORAGE = "Edit steps";
 inline const char edit_patches_short[] CNTRL_I18N_STORAGE = "";
-inline const char patch_position_text[] CNTRL_I18N_STORAGE = "Patch {position:u}/{count:lu}";
+inline const char patch_position_text[] CNTRL_I18N_STORAGE = "Step {position:u}/{count:lu}";
 inline const char patch_position_short[] CNTRL_I18N_STORAGE = "";
 inline const char patch_position_position_name[] CNTRL_I18N_STORAGE = "position";
 inline const char patch_position_position_spec[] CNTRL_I18N_STORAGE = "u";
@@ -1020,7 +1021,7 @@ inline const char replace_with_selected_text[] CNTRL_I18N_STORAGE = "Replace wit
 inline const char replace_with_selected_short[] CNTRL_I18N_STORAGE = "";
 inline const char insert_selected_after_text[] CNTRL_I18N_STORAGE = "Insert selected after";
 inline const char insert_selected_after_short[] CNTRL_I18N_STORAGE = "";
-inline const char remove_patch_text[] CNTRL_I18N_STORAGE = "Remove patch";
+inline const char remove_patch_text[] CNTRL_I18N_STORAGE = "Remove step";
 inline const char remove_patch_short[] CNTRL_I18N_STORAGE = "";
 inline const char move_earlier_text[] CNTRL_I18N_STORAGE = "Move earlier";
 inline const char move_earlier_short[] CNTRL_I18N_STORAGE = "";
@@ -1028,7 +1029,7 @@ inline const char move_later_text[] CNTRL_I18N_STORAGE = "Move later";
 inline const char move_later_short[] CNTRL_I18N_STORAGE = "";
 inline const char save_song_first_text[] CNTRL_I18N_STORAGE = "Save a song first";
 inline const char save_song_first_short[] CNTRL_I18N_STORAGE = "";
-inline const char patches_count_text[] CNTRL_I18N_STORAGE = "{count:lu} patches";
+inline const char patches_count_text[] CNTRL_I18N_STORAGE = "{count:lu} steps";
 inline const char patches_count_short[] CNTRL_I18N_STORAGE = "";
 inline const char patches_count_count_name[] CNTRL_I18N_STORAGE = "count";
 inline const char patches_count_count_spec[] CNTRL_I18N_STORAGE = "lu";
@@ -1450,6 +1451,8 @@ inline const Field language_next_page_fields[] CNTRL_I18N_STORAGE = {
 };
 inline const char panic_text[] CNTRL_I18N_STORAGE = "Panic";
 inline const char panic_short[] CNTRL_I18N_STORAGE = "";
+inline const char last_step_text[] CNTRL_I18N_STORAGE = "Last step";
+inline const char last_step_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
     {browse_text, browse_short, nullptr, 0},
@@ -1799,6 +1802,7 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {language_select_text, language_select_short, language_select_fields, 1},
     {language_next_page_text, language_next_page_short, language_next_page_fields, 1},
     {panic_text, panic_short, nullptr, 0},
+    {last_step_text, last_step_short, nullptr, 0},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

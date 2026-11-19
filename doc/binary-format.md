@@ -47,7 +47,7 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | --- | --- |
 | Kind 1 | Setup document |
 | Kind 2 | Indexed setup bundle, with a `CSTB` version-1 core |
-| Kind 3 | Song library, with the counts/records/`CSP6` core described below |
+| Kind 3 | Song library, with the counts/records/`CSP7` core described below |
 | Tag 1 | Required, first, singleton core snapshot |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
@@ -111,21 +111,23 @@ An offset is meaningful only with its own document and saved name table.
 The song core begins with u32 song and setlist counts. Each song has one
 200-byte selection (document[64], patch key[64], UTF-8 display label[64], u32
 captured-source index, u32 graph-node index), followed by name[64], u32 nonzero
-selection count, u32 binding-map node, then the remaining selections. Each setlist
+selection count, u32 binding-map node, u8 `add_last_step` (0 or 1), then the
+remaining selections. Each setlist
 has name[64], u32 entry count, u32 binding-map node, and that many song names[64].
 A binding-map node of `0xffffffff` means no bindings at that scope; other values
 refer to a control-map node in captured source zero. These references survive
 renames, occurrence edits and undo. All fixed text fields are zero padded
 and terminated. Names and external document/key references use the existing
-ASCII name rules; display labels are UTF-8. The four bytes `CSP6` follow the
+ASCII name rules; display labels are UTF-8. The four bytes `CSP7` follow the
 setlists. Captured sources then repeat as u32 byte length plus the complete setup
 document, until the end of the core. External document selections use source
 index `0xffffffff`; captured source and node indices are zero based.
 Order, repetitions and node identities are significant.
 
-Host backup readers also accept the preceding `CSP5` library layout. Its song
-and setlist headers omit the binding-map field. Offline upgrade inserts
-`0xffffffff` for those fields and writes `CSP6`, preserving selections, labels,
+Host backup readers also accept the preceding `CSP5` and `CSP6` library layouts.
+`CSP5` song and setlist headers omit the binding-map field. Offline upgrade inserts
+`0xffffffff` for those fields and sets `add_last_step` to 1 for both older formats.
+It writes `CSP7`, preserving selections, labels,
 setlist entries and captured sources. Empty libraries migrate the same way.
 Opaque outer metadata blocks this structural migration; the original backup
 remains unchanged.

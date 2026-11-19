@@ -933,7 +933,7 @@ private:
                 }
                 break;
             case 3:
-                if (n[1] || length != 5 || p[0] < 1 || p[0] > 17
+                if (n[1] || length != 5 || p[0] < 1 || p[0] > 18
                     || (p[0] >= 11 && !hardware.switch_capacity())
                     || (p[0] == 1 && u32(p + 1) > 255) || (p[0] == 2 && u32(p + 1) > 1)
                     || (p[0] > 2 && u32(p + 1))) return false;

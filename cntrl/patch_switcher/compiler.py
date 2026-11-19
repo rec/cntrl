@@ -2108,7 +2108,8 @@ class PatchCompiler:
                     isinstance(value, (models.StockFirmware, models.Banked))
                     or getattr(value, 'bindings', None) is not None
                     or isinstance(value, models.Navigation)
-                    and value.operation in ('menu', 'back', 'next-song-patch')
+                    and value.operation
+                    in ('menu', 'back', 'next-song-step', 'previous-song-step')
                 ):
                     self.errors.append(
                         f'switches.{key}: {path} leaves the switch context; '
@@ -2464,11 +2465,12 @@ STATE_OPERATIONS = {
             'back',
             'shift',
             'unshift',
-            'next-song-patch',
+            'next-song-step',
             'next-bank',
             'previous-bank',
             'next-bank-page',
             'previous-bank-page',
+            'previous-song-step',
         )
     )
 }

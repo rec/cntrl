@@ -188,7 +188,8 @@ current = { text = 'Actual' }
 next = { text = 'Următor' }
 add_songs = { text = 'Adaugă piese' }
 end_of_set = { text = 'Sfârșit de listă' }
-next_patch = { text = 'Sunetul următor' }
+next_patch = { text = 'Pasul următor' }
+last_step = { text = 'Ultimul pas' }
 perform_setlist = { text = 'Redă lista de piese' }
 setlists = { text = 'Liste de piese' }
 songs = { text = 'Piese' }
