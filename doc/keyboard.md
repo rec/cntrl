@@ -1,3 +1,18 @@
+# USB keyboard input
+
+Plug a standard USB keyboard directly into the pedal's USB host port. In the
+song or setlist Rename editor, printable keys insert text at the current
+character position. Backspace deletes the preceding character, Enter saves,
+and Escape cancels the edit. The pedal's position buttons move the cursor;
+the cursor starts at the first character. Names hold at most 63 characters.
+Typing outside the Rename editor has no effect.
+
+Input uses the firmware USB host driver's keyboard layout (US English in the
+current build), including Shift and Caps Lock. Printable ASCII is supported;
+Control, Alt and GUI/Command combinations are ignored. The existing pedal
+button editor remains available. Physical keyboard enumeration and typing
+still need to be checked on the pedal.
+
 # Keyboard page
 
 Keyboard follows Clock Tempo in the page cycle. A and B select a

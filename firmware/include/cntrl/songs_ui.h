@@ -4,6 +4,7 @@
 #include "ui/presentation.h"
 #include "ui/prompts.h"
 #include "songs.h"
+#include <algorithm>
 
 namespace cntrl {
 struct SongCapture {
@@ -41,6 +42,24 @@ public:
         std::snprintf(saved_.song, 64, "%s", song_name_);
         handle_button(button, down);
         if (songs_.busy()) { waiting_ = true; render(); }
+    }
+    void key(uint8_t key) {
+        if (mode_ != naming || locked_ || songs_.busy() || waiting_) return;
+        if (key == '\n' || key == 27) { button(key == '\n' ? 2 : 5, true); return; }
+        if (key != '\b' && (key < 32 || key > 126)) return;
+        unsigned length = unsigned(std::strlen(name_));
+        character_ = std::min(character_, length);
+        if (key == '\b') {
+            if (!character_) return;
+            std::memmove(name_ + character_ - 1, name_ + character_, length - character_ + 1);
+            --character_;
+        } else {
+            if (length == sizeof(name_) - 1) return;
+            std::memmove(name_ + character_ + 1, name_ + character_, length - character_ + 1);
+            name_[character_++] = char(key);
+        }
+        feedback_[0] = 0;
+        render();
     }
 private:
     void handle_button(unsigned button, bool down) {
@@ -147,7 +166,7 @@ private:
         if (button == 5) { mode_ = return_mode_; return; }
         if (button == 3 && character_) --character_;
         if (button == 4 && character_ < 62) ++character_;
-        if (button < 2) {
+        if (button < 2 && character_ < sizeof(name_) - 1) {
             while (length <= character_) name_[length++] = ' ';
             name_[length] = 0;
             char &c = name_[character_]; c = char(32 + (c - 32 + 95 + (button == 0 ? -1 : 1)) % 95);

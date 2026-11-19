@@ -57,6 +57,7 @@ extern "C" char cntrl_memory_budget;
 #include <cntrl/panic.h>
 #endif
 #include <cntrl/songs_ui.h>
+#include <cntrl/keyboard_input.h>
 #include <cntrl/songs_transfer.h>
 #include <cntrl/usb_session.h>
 #if CNTRL_CABLE_TEST
@@ -104,6 +105,10 @@ extern cntrl::splash::Panels splash_panels;
 font_assets::Files font_files;
 TrsPorts trs_ports;
 USBHost host;
+USBHIDParser host_keyboard_parser(host);
+KeyboardController host_keyboard(host);
+cntrl::KeyboardInput keyboard_input;
+void keyboard_press(int key) { keyboard_input.press(unsigned(key), host_keyboard.getModifiers()); }
 class HostedMidi : public MIDIDevice {
 public:
     explicit HostedMidi(USBHost &host) : MIDIDevice(host) {}
@@ -1152,6 +1157,7 @@ FLASHMEM void initialize_target() {
 #endif
     cntrl::memory_budget = unsigned(reinterpret_cast<uintptr_t>(&cntrl_memory_budget));
     cntrl::device::initialize_heap_accounting(cntrl::memory_budget);
+    host_keyboard.attachPress(keyboard_press);
     if (!auxiliary.prepare(board)) board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_auxiliary_memory));
     board.page_host().looper_files(midi_files,board);
     board.page_host().arpeggiator(board.arpeggiator());
@@ -1267,7 +1273,12 @@ class TargetRuntime {
 public:
     uint32_t now() const { return millis(); }
     void complete_display() { CNTRL_RUNTIME_TRACE(display); poll_display_dma(); }
-    void keyboard() { CNTRL_RUNTIME_TRACE(keyboard); board.poll_keyboard(); }
+    FLASHMEM void keyboard() {
+        CNTRL_RUNTIME_TRACE(keyboard); board.poll_keyboard();
+        uint8_t key;
+        for (unsigned i = 0; i < cntrl::KeyboardInput::capacity && keyboard_input.read(key); ++i)
+            if (host_keyboard && deployment.ready() && !deployment.pending()) application.song_ui.key(key);
+    }
     bool scan_available() const { return !display_spi_busy(); }
     void scan(uint32_t now, uint32_t gap) {
         if (deployment.pending() || !deployment.ready()) return;
