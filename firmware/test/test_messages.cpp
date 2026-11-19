@@ -6,7 +6,7 @@ namespace i18n = cntrl::ui::i18n;
 
 const char *translated(i18n::Message message, bool short_form) {
     if (short_form) return nullptr;
-    if (message == i18n::Message::tempo_slot) return "{tempo:u} BPM, mémoire {slot:u}";
+    if (message == i18n::Message::cycles_patches) return "{patches:u} patches, {cycles:u} cycles";
     return nullptr;
 }
 
@@ -37,16 +37,16 @@ int main() {
         assert(i18n::render(text, sizeof(text), definition, definition.text, arguments, 1));
         assert(!std::strcmp(text, value.expected));
     }
-    assert(i18n::format(text, sizeof(text), i18n::Message::tempo_slot, 2u, 120u));
-    assert(!std::strcmp(text, "Slot 2: 120 BPM"));
+    assert(i18n::format(text, sizeof(text), i18n::Message::cycles_patches, 2u, 120u));
+    assert(!std::strcmp(text, "Cycles:2  Patches:120"));
     i18n::lookup = translated;
-    assert(i18n::format(text, sizeof(text), i18n::Message::tempo_slot, 2u, 120u));
-    assert(!std::strcmp(text, "120 BPM, mémoire 2"));
-    assert(i18n::valid_template(i18n::Message::tempo_slot, "{tempo:u} / {slot:u}"));
-    assert(!i18n::valid_template(i18n::Message::tempo_slot, "{tempo:s} / {slot:u}"));
-    assert(!i18n::valid_template(i18n::Message::tempo_slot, "{tempo:u}"));
-    assert(!i18n::valid_template(i18n::Message::tempo_slot, "{tempo:u} {slot:u} {slot:u}"));
-    assert(!i18n::format(text, sizeof(text), i18n::Message::tempo_slot, 2u));
+    assert(i18n::format(text, sizeof(text), i18n::Message::cycles_patches, 2u, 120u));
+    assert(!std::strcmp(text, "120 patches, 2 cycles"));
+    assert(i18n::valid_template(i18n::Message::cycles_patches, "{patches:u} / {cycles:u}"));
+    assert(!i18n::valid_template(i18n::Message::cycles_patches, "{patches:s} / {cycles:u}"));
+    assert(!i18n::valid_template(i18n::Message::cycles_patches, "{patches:u}"));
+    assert(!i18n::valid_template(i18n::Message::cycles_patches, "{patches:u} {cycles:u} {cycles:u}"));
+    assert(!i18n::format(text, sizeof(text), i18n::Message::cycles_patches, 2u));
     assert(!text[0]);
     assert(i18n::format(text, 8, i18n::Message::song_added, "été très long"));
     const char *cursor = text; uint32_t code;

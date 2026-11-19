@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Niet-opgeslagen lus vervangen?' }
 scanning = { text = 'Zoeken...' }
 no_midi_files = { text = 'Geen MIDI-bestanden' }
 storage_busy = { text = 'Opslag bezet' }
-stock_firmware_prompt = { text = '{button:s} voor originele firmware.' }
-cancel_prompt = { text = '{button:s} om te annuleren' }
 notes_off = { text = 'Noten uit' }
 all_off = { text = 'Alles uit' }
-midi_clock = { text = 'MIDI-klok' }
-clock_tempo = { text = 'Kloktempo' }
 tap_tempo = { text = 'Tiktempo' }
 status = { text = 'Status' }
 midi_cable_test = { text = 'MIDI-kabeltest' }
 trs_ports = { text = 'TRS-poorten' }
-keyboard = { text = 'Toetsenbord' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Extern: ontvangt' }
-external_waiting = { text = 'Extern: wacht' }
-no_outputs_configured = { text = 'Geen uitgangen ingesteld', short = 'Geen uitgangen' }
-outputs_offline = { text = 'Uitgangen losgekoppeld' }
-internal_running = { text = 'Intern: loopt' }
-internal_stopped = { text = 'Intern: gestopt' }
-start_continue_prompt = { text = '{start:s} Start {resume:s} Hervatten' }
-stop_source_prompt = { text = '{stop:s} Stop {source:s} Bron' }
-tempo_slot = { text = 'Geheugen {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Geheugen' }
-clock_late_lost = { text = 'Laat {late:u}us Verloren {lost:u}' }
 output_heading = { text = 'Uit' }
 input_heading = { text = 'In' }
 input = { text = 'Ingang' }
-no_shortcuts = { text = 'Geen sneltoetsen' }
-held = { text = 'Ingedrukt' }
-ready = { text = 'Gereed' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: Kiezen' }
-hold_send_prompt = { text = 'Houd {button:s} vast: Verzenden' }
 off = { text = 'Uit' }
 on = { text = 'Aan' }
 midi_type_a = { text = 'MIDI type A' }
@@ -74,7 +52,6 @@ expression = { text = 'Expressie' }
 aux_switch = { text = 'Hulpschakelaar' }
 jack_mode_prompt = { text = '{jack:s}: Aansluiting {mode:s}: Modus' }
 apply_prompt = { text = '{button:s}: Toepassen' }
-use_stock = { text = 'Gebruik originele' }
 cycles_patches = { text = 'Cycli:{cycles:u} Patches:{patches:u}' }
 clock_value = { text = 'Klok:{clock:s}' }
 disk_value = { text = 'Schijf:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Afronden: ' }
 shifted_prefix = { text = 'Tweede laag | ' }
 abandon = { text = 'verwerpen' }
 no_switches = { text = 'Geen schakelaars' }
-firmware_caption = { text = 'firmware' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
 no_pedal = { text = 'Geen pedaal' }
 travel_too_short = { text = 'Pedaalweg te kort' }

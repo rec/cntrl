@@ -85,9 +85,11 @@ int main(int argc, char **argv) {
         hw.keyboard_supported = false;
         assert(!rejected.load(data.data(), unsigned(data.size()), hw));
         hw.keyboard_supported = true;
-        data[document.page_layout().page(0) - data.data()] = 9;
-        cntrl::put32(data.data() + 20, cntrl::checksum(data.data() + 28, unsigned(data.size()) - 28));
-        assert(!rejected.load(data.data(), unsigned(data.size()), hw));
+        for (uint8_t kind : {2, 7, 8, 9}) {
+            data[document.page_layout().page(0) - data.data()] = kind;
+            cntrl::put32(data.data() + 20, cntrl::checksum(data.data() + 28, unsigned(data.size()) - 28));
+            assert(!rejected.load(data.data(), unsigned(data.size()), hw));
+        }
     }
     Sink sink; cntrl::Keyboard keyboard;
     cntrl::KeyboardKeys first{}, second{};

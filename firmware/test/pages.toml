@@ -8,12 +8,12 @@ type = 'status'
 min_windows = 1
 
 [pages.wide]
-type = 'clock-tempo'
-min_windows = 2
+type = 'status'
+min_windows = 1
 
 [pages.all]
-type = 'clock-transport'
-min_windows = 2
+type = 'status'
+min_windows = 1
 
 [pages.tap]
 type = 'tap-tempo'

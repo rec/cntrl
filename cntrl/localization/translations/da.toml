@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Erstat ugemt loop?' }
 scanning = { text = 'Søger...' }
 no_midi_files = { text = 'Ingen MIDI-filer' }
 storage_busy = { text = 'Lager optaget' }
-stock_firmware_prompt = { text = '{button:s} for original firmware.' }
-cancel_prompt = { text = '{button:s} for at annullere' }
 notes_off = { text = 'Toner fra' }
 all_off = { text = 'Alt fra' }
-midi_clock = { text = 'MIDI-ur' }
-clock_tempo = { text = 'Urtempo' }
 tap_tempo = { text = 'Tryktempo' }
 status = { text = 'Status' }
 midi_cable_test = { text = 'MIDI-kabeltest' }
 trs_ports = { text = 'TRS-porte' }
-keyboard = { text = 'Tastatur' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Ekstern: modtager' }
-external_waiting = { text = 'Ekstern: venter' }
-no_outputs_configured = { text = 'Ingen udgange indstillet', short = 'Ingen udgange' }
-outputs_offline = { text = 'Udgange frakoblet' }
-internal_running = { text = 'Intern: kører' }
-internal_stopped = { text = 'Intern: stoppet' }
-start_continue_prompt = { text = '{start:s} Start {resume:s} Fortsæt' }
-stop_source_prompt = { text = '{stop:s} Stop {source:s} Kilde' }
-tempo_slot = { text = 'Plads {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Plads' }
-clock_late_lost = { text = 'Sent {late:u}us Tabt {lost:u}' }
 output_heading = { text = 'Ud' }
 input_heading = { text = 'Ind' }
 input = { text = 'Indgang' }
-no_shortcuts = { text = 'Ingen genveje' }
-held = { text = 'Holdt nede' }
-ready = { text = 'Klar' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: Vælg' }
-hold_send_prompt = { text = 'Hold {button:s}: Send' }
 off = { text = 'Fra' }
 on = { text = 'Til' }
 midi_type_a = { text = 'MIDI-type A' }
@@ -74,7 +52,6 @@ expression = { text = 'Expression' }
 aux_switch = { text = 'Ekstra fodkontakt' }
 jack_mode_prompt = { text = '{jack:s}: Stik {mode:s}: Tilstand' }
 apply_prompt = { text = '{button:s}: Anvend' }
-use_stock = { text = 'Brug original' }
 cycles_patches = { text = 'Cyklusser:{cycles:u} Lyde:{patches:u}' }
 clock_value = { text = 'Ur:{clock:s}' }
 disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Afslutter: ' }
 shifted_prefix = { text = 'Forskudt | ' }
 abandon = { text = 'opgiv' }
 no_switches = { text = 'Ingen fodkontakter' }
-firmware_caption = { text = 'firmware' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
 no_pedal = { text = 'Ingen pedal' }
 travel_too_short = { text = 'Vandring for kort' }

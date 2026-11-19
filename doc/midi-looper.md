@@ -6,11 +6,11 @@ control the same session.
 Ordinary [MIDI file patches](midi-files.md) remain separate operations.
 
 ```toml
-[pages.clock]
-type = 'clock-transport'
-
 [pages.loop]
 type = 'midi-looper'
+
+[page_settings]
+clock_source = 'external'
 
 [page_settings.looper]
 inputs = ['din']
@@ -27,10 +27,8 @@ this configuration. Saving a setup does not save the current performance.
 
 ## Playing and recording
 
-Start the selected clock before recording or playing. The clock transport page
-can start the internal clock without sending clock messages to an instrument;
-`page_settings.clock_outputs` determines which outputs receive those messages.
-An external clock must be receiving ticks and have a measured tempo.
+Start the selected clock before recording or playing. With the external source
+configured above, it must be receiving ticks and have a measured tempo.
 
 The page uses the target's logical control roles:
 

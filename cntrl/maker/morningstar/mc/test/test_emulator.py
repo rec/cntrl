@@ -243,11 +243,13 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
     target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
     source = {
         'pages': {
+            'performance': {'type': 'patch-switcher', 'min_windows': 0},
             'status': {'type': 'status'},
             'panic': {'type': 'panic'},
-            'clock': {'type': 'clock-transport'},
-            'firmware': {'type': 'firmware'},
         },
+        'layout': {'focus': 'tools'},
+        'patches': {'stock': {'operation': 'stock-firmware', 'exit_buttons': 'a+f'}},
+        'patch_cycles': {'main': ['stock']},
         'page_settings': {
             'clock_outputs': ['din'],
         },
@@ -280,23 +282,12 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
             for e in session.messages
         ), session.messages
         press('f')
-        press('a')
-        assert any(
-            e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xf8'
-            for e in session.messages
-        )
-        press('f')
-        press('c')  # Confirm before the stock-firmware transition.
         assert not any(e.kind == 'firmware' for e in session.messages)
-        press('f')
+        press('a')  # The stock-firmware patch remains available without its old page.
         assert len([e for e in session.messages if e.kind == 'firmware']) == 1
         assert session.stock_firmware
         transition = next(
             i for i, e in enumerate(session.messages) if e.kind == 'firmware'
-        )
-        assert any(
-            e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xfc'
-            for e in session.messages[:transition]
         )
         assert not any(
             e.kind in ('midi', 'keyboard', 'relay')

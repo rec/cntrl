@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Korvataanko tallentamaton luuppi?' }
 scanning = { text = 'Etsitään...' }
 no_midi_files = { text = 'Ei MIDI-tiedostoja' }
 storage_busy = { text = 'Tallennustila varattu' }
-stock_firmware_prompt = { text = '{button:s}: alkuperäinen laiteohjelmisto.' }
-cancel_prompt = { text = '{button:s}: peruuta' }
 notes_off = { text = 'Nuotit pois' }
 all_off = { text = 'Kaikki pois' }
-midi_clock = { text = 'MIDI-kello' }
-clock_tempo = { text = 'Kellon tempo' }
 tap_tempo = { text = 'Naputustempo' }
 status = { text = 'Tila' }
 midi_cable_test = { text = 'MIDI-kaapelitesti' }
 trs_ports = { text = 'TRS-portit' }
-keyboard = { text = 'Näppäimistö' }
-firmware = { text = 'Laiteohjelmisto' }
-external_receiving = { text = 'Ulkoinen: vastaanottaa' }
-external_waiting = { text = 'Ulkoinen: odottaa' }
-no_outputs_configured = { text = 'Ei määritettyjä lähtöjä', short = 'Ei lähtöjä' }
-outputs_offline = { text = 'Lähdöt irrotettu' }
-internal_running = { text = 'Sisäinen: käy' }
-internal_stopped = { text = 'Sisäinen: pysäytetty' }
-start_continue_prompt = { text = '{start:s} Aloita {resume:s} Jatka' }
-stop_source_prompt = { text = '{stop:s} Pysäytä {source:s} Lähde' }
-tempo_slot = { text = 'Paikka {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Paikka' }
-clock_late_lost = { text = 'Viive {late:u}us Kadonnut {lost:u}' }
 output_heading = { text = 'Ulos' }
 input_heading = { text = 'Sisään' }
 input = { text = 'Tulo' }
-no_shortcuts = { text = 'Ei pikanäppäimiä' }
-held = { text = 'Painettu' }
-ready = { text = 'Valmis' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: Valitse' }
-hold_send_prompt = { text = 'Pidä {button:s}: Lähetä' }
 off = { text = 'Pois' }
 on = { text = 'Päällä' }
 midi_type_a = { text = 'MIDI-tyyppi A' }
@@ -74,7 +52,6 @@ expression = { text = 'Ekspressio' }
 aux_switch = { text = 'Lisäkytkin' }
 jack_mode_prompt = { text = '{jack:s}: Liitin {mode:s}: Tila' }
 apply_prompt = { text = '{button:s}: Käytä' }
-use_stock = { text = 'Käytä alkuperäistä' }
 cycles_patches = { text = 'Kierrot:{cycles:u} Soundit:{patches:u}' }
 clock_value = { text = 'Kello:{clock:s}' }
 disk_value = { text = 'Levy:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Suljetaan: ' }
 shifted_prefix = { text = 'Vaihtonäppäin | ' }
 abandon = { text = 'hylkää' }
 no_switches = { text = 'Ei jalkakytkimiä' }
-firmware_caption = { text = 'laiteohjelmistoa' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Kan {channel:u}' }
 no_pedal = { text = 'Ei pedaalia' }
 travel_too_short = { text = 'Liike liian lyhyt' }

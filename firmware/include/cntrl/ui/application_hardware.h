@@ -52,7 +52,6 @@ public:
     void enter_page() { presentation().enter_page(); }
     void leave_page() { presentation().leave_page(); }
     bool stop_clock() { return presentation().stop_clock(); }
-    bool clock_control(unsigned input, bool pressed) { return presentation().clock_control(input, pressed); }
     void draw() { presentation().draw(); }
     bool expression_button(unsigned input) { return presentation().expression_button(input); }
     void display(uint32_t now, bool transfer_busy) { presentation().display(now, transfer_busy); }

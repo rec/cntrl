@@ -40,8 +40,6 @@ int main(int argc, char **argv) {
     assert(document.switch_gestures(7) && !document.switch_gestures(5));
     const auto *stock = document.node(unsigned(document.named_patch("stock")));
     assert(stock[0] == 4 && stock[4] == 129);
-    cntrl::PatchExecutor executor(board, board, board, 0);
-    assert(executor.invoke(cntrl::StockFirmwarePatch{129})); executor.cancel();
     cntrl::Switches switches(board, board, board); switches.enter(document, 0);
     auto tick = [&](unsigned start) { for (unsigned i = 0; i < 100; ++i) switches.tick(start + i); };
     tick(0); assert(board.sent.empty());

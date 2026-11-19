@@ -75,7 +75,6 @@ public:
                 if ((press || release) && services.monitor(i, press)) continue;
                 if (press && services.expression(i)) continue;
                 if (press && services.port(i)) continue;
-                if (services.clock(i, press)) continue;
                 if (services.has_controller()) {
                     if (press) services.controller(controls_.bindings[i].controller_button, true, now);
                     if (release) services.controller(controls_.bindings[i].controller_button, false, now);

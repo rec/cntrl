@@ -115,7 +115,6 @@ struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink, cntrl::K
     cntrl::ui::PerformanceStatus status() const { return {}; }
     cntrl::midi::Monitor monitor;
     cntrl::midi::Monitor &midi_monitor() { return monitor; }
-    bool switch_firmware() { return false; }
     struct Expression {
         unsigned index = 0;
         const char *position_text = "50%";
@@ -434,7 +433,6 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
         bool looper(unsigned input, bool pressed) { return host.looper_button(input, pressed); }
         bool expression(unsigned input) { return host.expression_button(input); }
         bool port(unsigned input) { return host.trs_button(input); }
-        bool clock(unsigned input, bool pressed) { return host.clock_control(input, pressed); }
         bool has_controller() const { return app.visible(); }
         void controller(unsigned input, bool pressed, uint32_t now) { app.controller().button(input, pressed, now); }
         void tap(uint32_t now) { host.tap_tempo(now); }
@@ -493,11 +491,7 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     const unsigned before_tap = hardware.sent, tap_callbacks = hardware.taps;
     click(2, 4100); assert(hardware.taps == tap_callbacks + 1 && hardware.sent == before_tap);
     edge(2, true, 4200); click(5, 4300); edge(2, false, 4400);
-    assert(host.pages_.page() != cntrl::ui::Pages::Page::confirm_firmware && hardware.sent == before_tap);
-    select_tool(cntrl::ui::Pages::Page::firmware);
-    click(2, 4500);
-    assert(host.pages_.page() == cntrl::ui::Pages::Page::confirm_firmware && hardware.sent == before_tap);
-    click(2, 4600); assert(host.pages_.page() == cntrl::ui::Pages::Page::firmware);
+    assert(hardware.sent == before_tap);
     const cntrl::midi::OutputConnection jack{"jack","Expression jack",0,cntrl::midi::OutputTransport::physical,true,true,3};
     platform.endpoints = {&jack,1};
     host.configure_page_settings(documents.document().page_settings());

@@ -75,14 +75,14 @@ def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position(
     source = tomlkit.parse(resolved.export(resolved.upgrade(original))).unwrap()
     tools = [
         'status',
-        'firmware',
+        'status-2',
         'cable-test',
         'panic',
         'trs-ports',
         'expression',
-        'clock-transport',
-        'clock-tempo',
-        'extra-status',
+        'status-7',
+        'status-8',
+        'status-9',
         'tap-tempo',
         'full-performance',
     ]

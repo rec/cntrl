@@ -114,14 +114,6 @@ context = 'File browser empty state'
 en = 'Storage busy'
 context = 'Storage operation status'
 
-[messages.stock_firmware_prompt]
-en = '{button:s} for stock firmware.'
-context = 'Firmware switch confirmation'
-
-[messages.cancel_prompt]
-en = '{button:s} to cancel'
-context = 'Cancel confirmation'
-
 [messages.notes_off]
 en = 'Notes off'
 context = 'Panic status'
@@ -129,14 +121,6 @@ context = 'Panic status'
 [messages.all_off]
 en = 'All off'
 context = 'Panic status'
-
-[messages.midi_clock]
-en = 'MIDI Clock'
-context = 'Page heading'
-
-[messages.clock_tempo]
-en = 'Clock Tempo'
-context = 'Page heading'
 
 [messages.tap_tempo]
 en = 'Tap Tempo'
@@ -154,58 +138,6 @@ context = 'Page heading'
 en = 'TRS Ports'
 context = 'Page heading'
 
-[messages.keyboard]
-en = 'Keyboard'
-context = 'Page heading'
-
-[messages.firmware]
-en = 'Firmware'
-context = 'Firmware management page'
-
-[messages.external_receiving]
-en = 'External: receiving'
-context = 'Clock state'
-
-[messages.external_waiting]
-en = 'External: waiting'
-context = 'Clock state'
-
-[messages.no_outputs_configured]
-en = 'No outputs configured'
-context = 'Clock state'
-
-[messages.outputs_offline]
-en = 'Outputs offline'
-context = 'Clock state'
-
-[messages.internal_running]
-en = 'Internal: running'
-context = 'Clock state'
-
-[messages.internal_stopped]
-en = 'Internal: stopped'
-context = 'Clock state'
-
-[messages.start_continue_prompt]
-en = '{start:s} Start  {resume:s} Continue'
-context = 'Clock transport controls'
-
-[messages.stop_source_prompt]
-en = '{stop:s} Stop  {source:s} Source'
-context = 'Clock transport controls'
-
-[messages.tempo_slot]
-en = 'Slot {slot:u}: {tempo:u} BPM'
-context = 'Tempo memory'
-
-[messages.tempo_adjust_prompt]
-en = '{minus:s} -1   {plus:s} +1   {slot:s} Slot'
-context = 'Tempo adjustment controls'
-
-[messages.clock_late_lost]
-en = 'Late {late:u}us  Lost {lost:u}'
-context = 'Clock diagnostic summary'
-
 [messages.output_heading]
 en = 'Out'
 context = 'Cable-test output column'
@@ -217,26 +149,6 @@ context = 'Cable-test input column'
 [messages.input]
 en = 'Input'
 context = 'Cable-test input label'
-
-[messages.no_shortcuts]
-en = 'No shortcuts'
-context = 'Keyboard empty state'
-
-[messages.held]
-en = 'Held'
-context = 'Keyboard state'
-
-[messages.ready]
-en = 'Ready'
-context = 'Keyboard state'
-
-[messages.select_pair_prompt]
-en = '{previous:s}/{next:s}: Select'
-context = 'Keyboard shortcut controls'
-
-[messages.hold_send_prompt]
-en = 'Hold {button:s}: Send'
-context = 'Keyboard shortcut controls'
 
 [messages.off]
 en = 'Off'
@@ -269,10 +181,6 @@ context = 'TRS selection controls'
 [messages.apply_prompt]
 en = '{button:s}: Apply'
 context = 'TRS mode control'
-
-[messages.use_stock]
-en = 'Use stock'
-context = 'First line of stock firmware caption'
 
 [messages.cycles_patches]
 en = 'Cycles:{cycles:u}  Patches:{patches:u}'
@@ -1285,10 +1193,6 @@ context = 'Switch editor button action'
 [messages.no_switches]
 en = 'No switches'
 context = 'Switch editor empty state'
-
-[messages.firmware_caption]
-en = 'firmware'
-context = 'Second line of stock firmware caption'
 
 [messages.expression_assigned]
 en = '{port:.20s}  CC {controller:u} Ch {channel:u}'

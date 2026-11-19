@@ -5,8 +5,8 @@ loop_stop_neutral_values = [
     {type = 'nrpn', output = 'din', channel = 2, parameter = 42, value = 8192},
 ]
 
-[pages.clock]
-type = 'clock-transport'
+[pages.status]
+type = 'status'
 
 [pages.loop]
 type = 'midi-looper'

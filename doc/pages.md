@@ -2,8 +2,8 @@
 
 A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
-`patch-switcher`, `status`, `tap-tempo`, `firmware`, `cable-test`, `panic`,
-`trs-ports`, `expression`, `clock-transport`, `clock-tempo`,
+`patch-switcher`, `status`, `tap-tempo`, `cable-test`, `panic`,
+`trs-ports`, `expression`,
 `midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, and `None`.
 Select a region or a page in the Pages and tools menu. F and the existing
 reverse-page control cycle only the focused region. Page and region names

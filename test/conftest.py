@@ -18,10 +18,10 @@ def native_programs(tmp_path_factory: pytest.TempPathFactory) -> NativePrograms:
 
 @pytest.fixture(scope='session')
 def legacy_setups() -> dict[int, bytes]:
-    """Keep old format coverage independent of the removed Keyboard page.
+    """Keep old format coverage independent of removed utility pages.
 
     Original historical files stay unchanged for the removal/rejection tests.
-    These variants replace that utility slot with an additional Status page.
+    These variants replace those utility slots with additional Status pages.
     """
     result = {}
     root = Path(__file__).parents[1] / 'firmware/test'
@@ -32,8 +32,8 @@ def legacy_setups() -> dict[int, bytes]:
         start = page + (8 if layout_version == 1 else 12) + windows * 32
         for index in range(count):
             record = start + index * (34 + windows)
-            if data[record + 32] == 9:
-                data[record : record + 32] = b'extra-status'.ljust(32, b'\0')
+            if (kind := data[record + 32]) in (2, 7, 8, 9):
+                data[record : record + 32] = f'status-{kind}'.encode().ljust(32, b'\0')
                 data[record + 32] = 1
         struct.pack_into('<I', data, 20, crc32(data[28:]))
         result[version] = bytes(data)

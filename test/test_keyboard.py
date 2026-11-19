@@ -57,7 +57,7 @@ def test_keyboard_page_configuration_is_rejected(setup: dict[str, object]) -> No
 @pytest.mark.parametrize('version', [36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47])
 def test_stored_keyboard_pages_require_recompilation(version: int) -> None:
     original = bytes.fromhex(Path(f'firmware/test/setup{version}.golden').read_text())
-    with pytest.raises(ValueError, match='Keyboard page.*recompile'):
+    with pytest.raises(ValueError, match='pages?.*removed.*recompile'):
         resolved.upgrade(original)
 
 

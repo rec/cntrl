@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = '¿Reemplazar bucle sin guardar?' }
 scanning = { text = 'Buscando...' }
 no_midi_files = { text = 'No hay archivos MIDI' }
 storage_busy = { text = 'Almacenamiento ocupado' }
-stock_firmware_prompt = { text = '{button:s} para firmware original.' }
-cancel_prompt = { text = '{button:s} para cancelar' }
 notes_off = { text = 'Notas apagadas' }
 all_off = { text = 'Todo apagado' }
-midi_clock = { text = 'Reloj MIDI' }
-clock_tempo = { text = 'Tempo del reloj' }
 tap_tempo = { text = 'Tempo por pulsación' }
 status = { text = 'Estado' }
 midi_cable_test = { text = 'Prueba de cable MIDI' }
 trs_ports = { text = 'Puertos TRS' }
-keyboard = { text = 'Teclado' }
-firmware = { text = 'Firmware' }
-external_receiving = { text = 'Externo: recibiendo' }
-external_waiting = { text = 'Externo: esperando' }
-no_outputs_configured = { text = 'No hay salidas configuradas', short = 'Sin salidas' }
-outputs_offline = { text = 'Salidas desconectadas' }
-internal_running = { text = 'Interno: en marcha' }
-internal_stopped = { text = 'Interno: detenido' }
-start_continue_prompt = { text = '{start:s} Inicio {resume:s} Continuar' }
-stop_source_prompt = { text = '{stop:s} Parar {source:s} Fuente' }
-tempo_slot = { text = 'Memoria {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Memoria' }
-clock_late_lost = { text = 'Retraso {late:u}us Perdidos {lost:u}' }
 output_heading = { text = 'Salida' }
 input_heading = { text = 'Entrada' }
 input = { text = 'Entrada' }
-no_shortcuts = { text = 'No hay atajos' }
-held = { text = 'Mantenido' }
-ready = { text = 'Listo' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: Elegir' }
-hold_send_prompt = { text = 'Mantén {button:s}: Enviar' }
 off = { text = 'Apagado' }
 on = { text = 'Encendido' }
 midi_type_a = { text = 'MIDI tipo A' }
@@ -74,7 +52,6 @@ expression = { text = 'Expresión' }
 aux_switch = { text = 'Pulsador auxiliar' }
 jack_mode_prompt = { text = '{jack:s}: Toma {mode:s}: Modo' }
 apply_prompt = { text = '{button:s}: Aplicar' }
-use_stock = { text = 'Usar' }
 cycles_patches = { text = 'Ciclos:{cycles:u} Sonidos:{patches:u}' }
 clock_value = { text = 'Reloj:{clock:s}' }
 disk_value = { text = 'Disco:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Cerrando: ' }
 shifted_prefix = { text = 'Capa secundaria | ' }
 abandon = { text = 'descartar' }
 no_switches = { text = 'Sin pulsadores' }
-firmware_caption = { text = 'firmware original' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Can {channel:u}' }
 no_pedal = { text = 'Sin pedal' }
 travel_too_short = { text = 'Recorrido demasiado corto' }

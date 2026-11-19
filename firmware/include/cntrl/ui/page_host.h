@@ -342,11 +342,6 @@ public:
         throb_.configure(0, 0, 0, 0);
         if (!platform_.relays.reset()) platform_.error(i18n::text(i18n::Message::relay_reset_failed));
     }
-    bool clock_control(unsigned button, bool pressed) {
-        if (!pages_.clock_page()) return false;
-        if (pressed) pages_.clock_button(button == controls_.previous ? 0 : button == controls_.next ? 1 : button == controls_.confirm ? 2 : button == controls_.next_section ? 4 : Controls::absent, platform_.microseconds(), platform_.clock_available());
-        return true;
-    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_configure)
 #endif
@@ -363,18 +358,13 @@ public:
 #endif
     void browse_page(bool reverse) {
         if (!documents_.document().valid()) return;
-        if (pages_.page() == Pages::Page::confirm_firmware
-            && controls_.confirm < 64 && (application_.held & (uint64_t(1) << controls_.confirm))) return;
         auto previous = pages_.save_view();
-        if (pages_.browse(reverse)) {
-            if (!release_keyboard() || !platform_.switch_firmware()) error(i18n::text(i18n::Message::firmware_switch_failed));
-        } else {
-            unsigned selected = pages_.index();
-            pages_.restore_view(previous);
-            const auto &span = application_.allocation.region(application_.allocation.focus());
-            if (span.count) renderer_.transition(reverse,documents_.document().scroll_ms(),int(span.first),0,false,true,span.count);
-            select_page(selected);
-        }
+        pages_.browse(reverse);
+        unsigned selected = pages_.index();
+        pages_.restore_view(previous);
+        const auto &span = application_.allocation.region(application_.allocation.focus());
+        if (span.count) renderer_.transition(reverse,documents_.document().scroll_ms(),int(span.first),0,false,true,span.count);
+        select_page(selected);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_select_page)

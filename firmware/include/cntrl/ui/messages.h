@@ -32,37 +32,15 @@ enum class Message : uint16_t {
     scanning,
     no_midi_files,
     storage_busy,
-    stock_firmware_prompt,
-    cancel_prompt,
     notes_off,
     all_off,
-    midi_clock,
-    clock_tempo,
     tap_tempo,
     status,
     midi_cable_test,
     trs_ports,
-    keyboard,
-    firmware,
-    external_receiving,
-    external_waiting,
-    no_outputs_configured,
-    outputs_offline,
-    internal_running,
-    internal_stopped,
-    start_continue_prompt,
-    stop_source_prompt,
-    tempo_slot,
-    tempo_adjust_prompt,
-    clock_late_lost,
     output_heading,
     input_heading,
     input,
-    no_shortcuts,
-    held,
-    ready,
-    select_pair_prompt,
-    hold_send_prompt,
     off,
     on,
     midi_type_a,
@@ -71,7 +49,6 @@ enum class Message : uint16_t {
     aux_switch,
     jack_mode_prompt,
     apply_prompt,
-    use_stock,
     cycles_patches,
     clock_value,
     disk_value,
@@ -325,7 +302,6 @@ enum class Message : uint16_t {
     shifted_prefix,
     abandon,
     no_switches,
-    firmware_caption,
     expression_assigned,
     no_pedal,
     travel_too_short,
@@ -376,8 +352,8 @@ enum class Message : uint16_t {
     language_next_page,
     panic,
 };
-inline constexpr unsigned message_count = 372;
-inline constexpr uint32_t catalogue_schema = 0xfcde1e89u;
+inline constexpr unsigned message_count = 348;
+inline constexpr uint32_t catalogue_schema = 0x446870c5u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char pages_and_tools_text[] CNTRL_I18N_STORAGE = "Pages and tools";
@@ -454,28 +430,10 @@ inline const char no_midi_files_text[] CNTRL_I18N_STORAGE = "No MIDI files";
 inline const char no_midi_files_short[] CNTRL_I18N_STORAGE = "";
 inline const char storage_busy_text[] CNTRL_I18N_STORAGE = "Storage busy";
 inline const char storage_busy_short[] CNTRL_I18N_STORAGE = "";
-inline const char stock_firmware_prompt_text[] CNTRL_I18N_STORAGE = "{button:s} for stock firmware.";
-inline const char stock_firmware_prompt_short[] CNTRL_I18N_STORAGE = "";
-inline const char stock_firmware_prompt_button_name[] CNTRL_I18N_STORAGE = "button";
-inline const char stock_firmware_prompt_button_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field stock_firmware_prompt_fields[] CNTRL_I18N_STORAGE = {
-    {stock_firmware_prompt_button_name, stock_firmware_prompt_button_spec},
-};
-inline const char cancel_prompt_text[] CNTRL_I18N_STORAGE = "{button:s} to cancel";
-inline const char cancel_prompt_short[] CNTRL_I18N_STORAGE = "";
-inline const char cancel_prompt_button_name[] CNTRL_I18N_STORAGE = "button";
-inline const char cancel_prompt_button_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field cancel_prompt_fields[] CNTRL_I18N_STORAGE = {
-    {cancel_prompt_button_name, cancel_prompt_button_spec},
-};
 inline const char notes_off_text[] CNTRL_I18N_STORAGE = "Notes off";
 inline const char notes_off_short[] CNTRL_I18N_STORAGE = "";
 inline const char all_off_text[] CNTRL_I18N_STORAGE = "All off";
 inline const char all_off_short[] CNTRL_I18N_STORAGE = "";
-inline const char midi_clock_text[] CNTRL_I18N_STORAGE = "MIDI Clock";
-inline const char midi_clock_short[] CNTRL_I18N_STORAGE = "";
-inline const char clock_tempo_text[] CNTRL_I18N_STORAGE = "Clock Tempo";
-inline const char clock_tempo_short[] CNTRL_I18N_STORAGE = "";
 inline const char tap_tempo_text[] CNTRL_I18N_STORAGE = "Tap Tempo";
 inline const char tap_tempo_short[] CNTRL_I18N_STORAGE = "";
 inline const char status_text[] CNTRL_I18N_STORAGE = "Status";
@@ -484,104 +442,12 @@ inline const char midi_cable_test_text[] CNTRL_I18N_STORAGE = "MIDI Cable Test";
 inline const char midi_cable_test_short[] CNTRL_I18N_STORAGE = "";
 inline const char trs_ports_text[] CNTRL_I18N_STORAGE = "TRS Ports";
 inline const char trs_ports_short[] CNTRL_I18N_STORAGE = "";
-inline const char keyboard_text[] CNTRL_I18N_STORAGE = "Keyboard";
-inline const char keyboard_short[] CNTRL_I18N_STORAGE = "";
-inline const char firmware_text[] CNTRL_I18N_STORAGE = "Firmware";
-inline const char firmware_short[] CNTRL_I18N_STORAGE = "";
-inline const char external_receiving_text[] CNTRL_I18N_STORAGE = "External: receiving";
-inline const char external_receiving_short[] CNTRL_I18N_STORAGE = "";
-inline const char external_waiting_text[] CNTRL_I18N_STORAGE = "External: waiting";
-inline const char external_waiting_short[] CNTRL_I18N_STORAGE = "";
-inline const char no_outputs_configured_text[] CNTRL_I18N_STORAGE = "No outputs configured";
-inline const char no_outputs_configured_short[] CNTRL_I18N_STORAGE = "";
-inline const char outputs_offline_text[] CNTRL_I18N_STORAGE = "Outputs offline";
-inline const char outputs_offline_short[] CNTRL_I18N_STORAGE = "";
-inline const char internal_running_text[] CNTRL_I18N_STORAGE = "Internal: running";
-inline const char internal_running_short[] CNTRL_I18N_STORAGE = "";
-inline const char internal_stopped_text[] CNTRL_I18N_STORAGE = "Internal: stopped";
-inline const char internal_stopped_short[] CNTRL_I18N_STORAGE = "";
-inline const char start_continue_prompt_text[] CNTRL_I18N_STORAGE = "{start:s} Start  {resume:s} Continue";
-inline const char start_continue_prompt_short[] CNTRL_I18N_STORAGE = "";
-inline const char start_continue_prompt_start_name[] CNTRL_I18N_STORAGE = "start";
-inline const char start_continue_prompt_start_spec[] CNTRL_I18N_STORAGE = "s";
-inline const char start_continue_prompt_resume_name[] CNTRL_I18N_STORAGE = "resume";
-inline const char start_continue_prompt_resume_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field start_continue_prompt_fields[] CNTRL_I18N_STORAGE = {
-    {start_continue_prompt_start_name, start_continue_prompt_start_spec},
-    {start_continue_prompt_resume_name, start_continue_prompt_resume_spec},
-};
-inline const char stop_source_prompt_text[] CNTRL_I18N_STORAGE = "{stop:s} Stop  {source:s} Source";
-inline const char stop_source_prompt_short[] CNTRL_I18N_STORAGE = "";
-inline const char stop_source_prompt_stop_name[] CNTRL_I18N_STORAGE = "stop";
-inline const char stop_source_prompt_stop_spec[] CNTRL_I18N_STORAGE = "s";
-inline const char stop_source_prompt_source_name[] CNTRL_I18N_STORAGE = "source";
-inline const char stop_source_prompt_source_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field stop_source_prompt_fields[] CNTRL_I18N_STORAGE = {
-    {stop_source_prompt_stop_name, stop_source_prompt_stop_spec},
-    {stop_source_prompt_source_name, stop_source_prompt_source_spec},
-};
-inline const char tempo_slot_text[] CNTRL_I18N_STORAGE = "Slot {slot:u}: {tempo:u} BPM";
-inline const char tempo_slot_short[] CNTRL_I18N_STORAGE = "";
-inline const char tempo_slot_slot_name[] CNTRL_I18N_STORAGE = "slot";
-inline const char tempo_slot_slot_spec[] CNTRL_I18N_STORAGE = "u";
-inline const char tempo_slot_tempo_name[] CNTRL_I18N_STORAGE = "tempo";
-inline const char tempo_slot_tempo_spec[] CNTRL_I18N_STORAGE = "u";
-inline const Field tempo_slot_fields[] CNTRL_I18N_STORAGE = {
-    {tempo_slot_slot_name, tempo_slot_slot_spec},
-    {tempo_slot_tempo_name, tempo_slot_tempo_spec},
-};
-inline const char tempo_adjust_prompt_text[] CNTRL_I18N_STORAGE = "{minus:s} -1   {plus:s} +1   {slot:s} Slot";
-inline const char tempo_adjust_prompt_short[] CNTRL_I18N_STORAGE = "";
-inline const char tempo_adjust_prompt_minus_name[] CNTRL_I18N_STORAGE = "minus";
-inline const char tempo_adjust_prompt_minus_spec[] CNTRL_I18N_STORAGE = "s";
-inline const char tempo_adjust_prompt_plus_name[] CNTRL_I18N_STORAGE = "plus";
-inline const char tempo_adjust_prompt_plus_spec[] CNTRL_I18N_STORAGE = "s";
-inline const char tempo_adjust_prompt_slot_name[] CNTRL_I18N_STORAGE = "slot";
-inline const char tempo_adjust_prompt_slot_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field tempo_adjust_prompt_fields[] CNTRL_I18N_STORAGE = {
-    {tempo_adjust_prompt_minus_name, tempo_adjust_prompt_minus_spec},
-    {tempo_adjust_prompt_plus_name, tempo_adjust_prompt_plus_spec},
-    {tempo_adjust_prompt_slot_name, tempo_adjust_prompt_slot_spec},
-};
-inline const char clock_late_lost_text[] CNTRL_I18N_STORAGE = "Late {late:u}us  Lost {lost:u}";
-inline const char clock_late_lost_short[] CNTRL_I18N_STORAGE = "";
-inline const char clock_late_lost_late_name[] CNTRL_I18N_STORAGE = "late";
-inline const char clock_late_lost_late_spec[] CNTRL_I18N_STORAGE = "u";
-inline const char clock_late_lost_lost_name[] CNTRL_I18N_STORAGE = "lost";
-inline const char clock_late_lost_lost_spec[] CNTRL_I18N_STORAGE = "u";
-inline const Field clock_late_lost_fields[] CNTRL_I18N_STORAGE = {
-    {clock_late_lost_late_name, clock_late_lost_late_spec},
-    {clock_late_lost_lost_name, clock_late_lost_lost_spec},
-};
 inline const char output_heading_text[] CNTRL_I18N_STORAGE = "Out";
 inline const char output_heading_short[] CNTRL_I18N_STORAGE = "";
 inline const char input_heading_text[] CNTRL_I18N_STORAGE = "In";
 inline const char input_heading_short[] CNTRL_I18N_STORAGE = "";
 inline const char input_text[] CNTRL_I18N_STORAGE = "Input";
 inline const char input_short[] CNTRL_I18N_STORAGE = "";
-inline const char no_shortcuts_text[] CNTRL_I18N_STORAGE = "No shortcuts";
-inline const char no_shortcuts_short[] CNTRL_I18N_STORAGE = "";
-inline const char held_text[] CNTRL_I18N_STORAGE = "Held";
-inline const char held_short[] CNTRL_I18N_STORAGE = "";
-inline const char ready_text[] CNTRL_I18N_STORAGE = "Ready";
-inline const char ready_short[] CNTRL_I18N_STORAGE = "";
-inline const char select_pair_prompt_text[] CNTRL_I18N_STORAGE = "{previous:s}/{next:s}: Select";
-inline const char select_pair_prompt_short[] CNTRL_I18N_STORAGE = "";
-inline const char select_pair_prompt_previous_name[] CNTRL_I18N_STORAGE = "previous";
-inline const char select_pair_prompt_previous_spec[] CNTRL_I18N_STORAGE = "s";
-inline const char select_pair_prompt_next_name[] CNTRL_I18N_STORAGE = "next";
-inline const char select_pair_prompt_next_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field select_pair_prompt_fields[] CNTRL_I18N_STORAGE = {
-    {select_pair_prompt_previous_name, select_pair_prompt_previous_spec},
-    {select_pair_prompt_next_name, select_pair_prompt_next_spec},
-};
-inline const char hold_send_prompt_text[] CNTRL_I18N_STORAGE = "Hold {button:s}: Send";
-inline const char hold_send_prompt_short[] CNTRL_I18N_STORAGE = "";
-inline const char hold_send_prompt_button_name[] CNTRL_I18N_STORAGE = "button";
-inline const char hold_send_prompt_button_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field hold_send_prompt_fields[] CNTRL_I18N_STORAGE = {
-    {hold_send_prompt_button_name, hold_send_prompt_button_spec},
-};
 inline const char off_text[] CNTRL_I18N_STORAGE = "Off";
 inline const char off_short[] CNTRL_I18N_STORAGE = "";
 inline const char on_text[] CNTRL_I18N_STORAGE = "On";
@@ -611,8 +477,6 @@ inline const char apply_prompt_button_spec[] CNTRL_I18N_STORAGE = "s";
 inline const Field apply_prompt_fields[] CNTRL_I18N_STORAGE = {
     {apply_prompt_button_name, apply_prompt_button_spec},
 };
-inline const char use_stock_text[] CNTRL_I18N_STORAGE = "Use stock";
-inline const char use_stock_short[] CNTRL_I18N_STORAGE = "";
 inline const char cycles_patches_text[] CNTRL_I18N_STORAGE = "Cycles:{cycles:u}  Patches:{patches:u}";
 inline const char cycles_patches_short[] CNTRL_I18N_STORAGE = "";
 inline const char cycles_patches_cycles_name[] CNTRL_I18N_STORAGE = "cycles";
@@ -1349,8 +1213,6 @@ inline const char abandon_text[] CNTRL_I18N_STORAGE = "abandon";
 inline const char abandon_short[] CNTRL_I18N_STORAGE = "";
 inline const char no_switches_text[] CNTRL_I18N_STORAGE = "No switches";
 inline const char no_switches_short[] CNTRL_I18N_STORAGE = "";
-inline const char firmware_caption_text[] CNTRL_I18N_STORAGE = "firmware";
-inline const char firmware_caption_short[] CNTRL_I18N_STORAGE = "";
 inline const char expression_assigned_text[] CNTRL_I18N_STORAGE = "{port:.20s}  CC {controller:u} Ch {channel:u}";
 inline const char expression_assigned_short[] CNTRL_I18N_STORAGE = "";
 inline const char expression_assigned_port_name[] CNTRL_I18N_STORAGE = "port";
@@ -1618,37 +1480,15 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {scanning_text, scanning_short, nullptr, 0},
     {no_midi_files_text, no_midi_files_short, nullptr, 0},
     {storage_busy_text, storage_busy_short, nullptr, 0},
-    {stock_firmware_prompt_text, stock_firmware_prompt_short, stock_firmware_prompt_fields, 1},
-    {cancel_prompt_text, cancel_prompt_short, cancel_prompt_fields, 1},
     {notes_off_text, notes_off_short, nullptr, 0},
     {all_off_text, all_off_short, nullptr, 0},
-    {midi_clock_text, midi_clock_short, nullptr, 0},
-    {clock_tempo_text, clock_tempo_short, nullptr, 0},
     {tap_tempo_text, tap_tempo_short, nullptr, 0},
     {status_text, status_short, nullptr, 0},
     {midi_cable_test_text, midi_cable_test_short, nullptr, 0},
     {trs_ports_text, trs_ports_short, nullptr, 0},
-    {keyboard_text, keyboard_short, nullptr, 0},
-    {firmware_text, firmware_short, nullptr, 0},
-    {external_receiving_text, external_receiving_short, nullptr, 0},
-    {external_waiting_text, external_waiting_short, nullptr, 0},
-    {no_outputs_configured_text, no_outputs_configured_short, nullptr, 0},
-    {outputs_offline_text, outputs_offline_short, nullptr, 0},
-    {internal_running_text, internal_running_short, nullptr, 0},
-    {internal_stopped_text, internal_stopped_short, nullptr, 0},
-    {start_continue_prompt_text, start_continue_prompt_short, start_continue_prompt_fields, 2},
-    {stop_source_prompt_text, stop_source_prompt_short, stop_source_prompt_fields, 2},
-    {tempo_slot_text, tempo_slot_short, tempo_slot_fields, 2},
-    {tempo_adjust_prompt_text, tempo_adjust_prompt_short, tempo_adjust_prompt_fields, 3},
-    {clock_late_lost_text, clock_late_lost_short, clock_late_lost_fields, 2},
     {output_heading_text, output_heading_short, nullptr, 0},
     {input_heading_text, input_heading_short, nullptr, 0},
     {input_text, input_short, nullptr, 0},
-    {no_shortcuts_text, no_shortcuts_short, nullptr, 0},
-    {held_text, held_short, nullptr, 0},
-    {ready_text, ready_short, nullptr, 0},
-    {select_pair_prompt_text, select_pair_prompt_short, select_pair_prompt_fields, 2},
-    {hold_send_prompt_text, hold_send_prompt_short, hold_send_prompt_fields, 1},
     {off_text, off_short, nullptr, 0},
     {on_text, on_short, nullptr, 0},
     {midi_type_a_text, midi_type_a_short, nullptr, 0},
@@ -1657,7 +1497,6 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {aux_switch_text, aux_switch_short, nullptr, 0},
     {jack_mode_prompt_text, jack_mode_prompt_short, jack_mode_prompt_fields, 2},
     {apply_prompt_text, apply_prompt_short, apply_prompt_fields, 1},
-    {use_stock_text, use_stock_short, nullptr, 0},
     {cycles_patches_text, cycles_patches_short, cycles_patches_fields, 2},
     {clock_value_text, clock_value_short, clock_value_fields, 1},
     {disk_value_text, disk_value_short, disk_value_fields, 3},
@@ -1911,7 +1750,6 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {shifted_prefix_text, shifted_prefix_short, nullptr, 0},
     {abandon_text, abandon_short, nullptr, 0},
     {no_switches_text, no_switches_short, nullptr, 0},
-    {firmware_caption_text, firmware_caption_short, nullptr, 0},
     {expression_assigned_text, expression_assigned_short, expression_assigned_fields, 3},
     {no_pedal_text, no_pedal_short, nullptr, 0},
     {travel_too_short_text, travel_too_short_short, nullptr, 0},

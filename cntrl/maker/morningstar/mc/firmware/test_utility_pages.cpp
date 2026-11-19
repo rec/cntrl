@@ -43,8 +43,7 @@ int main(int argc, char **argv) {
     status.cycles = 10; status.patches = 59; status.starts = 111; status.starts_status = cntrl::ui::StartsStatus::ready;
     status.ram_used[0] = 310240; status.ram_free[0] = 17440; status.ram_used[1] = 91008; status.ram_free[1] = 433280;
     using Page = cntrl::ui::Pages::Page;
-    const Page types[] = {Page::status, Page::firmware, Page::cable, Page::panic, Page::ports,
-        Page::expression, Page::clock_transport, Page::clock_tempo, Page::pong};
+    const Page types[] = {Page::status, Page::cable, Page::panic, Page::ports, Page::expression, Page::pong};
     std::vector<uint16_t> sheet(5 * 160 * 2 * 128);
     bool valid = true;
     for (unsigned page = 0; page < sizeof(types) / sizeof(types[0]); ++page) {

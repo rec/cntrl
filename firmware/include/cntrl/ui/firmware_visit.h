@@ -77,10 +77,8 @@ public:
         : invocation(active_invocation), restoring(restoring_invocation), record_(record), file_(file), services_(services), hardware_(hardware), documents_(documents),
           application_(application), songs_(songs), sources_(sources), runtime_(runtime), navigation_(navigation) {}
     bool busy() const { return stage_ != Stage::idle; }
-    bool start(uint8_t pair) { return application_.controller().executor().invoke(StockFirmwarePatch{pair}); }
     bool stock(uint8_t pair, PatchExecutor &execution) {
         invocation = &execution;
-        if (!execution.document().valid()) return request(pair, nullptr);
         SongContinuation saved;
         if (&execution == &sources_.executor) saved = sources_.context();
         else if (services_.switch_invocation(execution)) saved.caller = 2;

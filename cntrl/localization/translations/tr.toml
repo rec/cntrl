@@ -35,37 +35,15 @@ replace_unsaved_loop = { text = 'Kaydedilmemiş döngü değiştirilsin mi?' }
 scanning = { text = 'Taranıyor...' }
 no_midi_files = { text = 'MIDI dosyası yok' }
 storage_busy = { text = 'Depolama meşgul' }
-stock_firmware_prompt = { text = '{button:s}: özgün aygıt yazılımı.' }
-cancel_prompt = { text = '{button:s}: iptal' }
 notes_off = { text = 'Notalar kapalı' }
 all_off = { text = 'Tümü kapalı' }
-midi_clock = { text = 'MIDI saati' }
-clock_tempo = { text = 'Saat temposu' }
 tap_tempo = { text = 'Vuruş temposu' }
 status = { text = 'Durum' }
 midi_cable_test = { text = 'MIDI kablo testi' }
 trs_ports = { text = 'TRS portları' }
-keyboard = { text = 'Klavye' }
-firmware = { text = 'Aygıt yazılımı' }
-external_receiving = { text = 'Harici: alınıyor' }
-external_waiting = { text = 'Harici: bekleniyor' }
-no_outputs_configured = { text = 'Ayarlanmış çıkış yok', short = 'Çıkış yok' }
-outputs_offline = { text = 'Çıkışlar çevrimdışı' }
-internal_running = { text = 'Dahili: çalışıyor' }
-internal_stopped = { text = 'Dahili: durdu' }
-start_continue_prompt = { text = '{start:s} Başlat {resume:s} Devam' }
-stop_source_prompt = { text = '{stop:s} Durdur {source:s} Kaynak' }
-tempo_slot = { text = 'Yuva {slot:u}: {tempo:u} BPM' }
-tempo_adjust_prompt = { text = '{minus:s} -1 {plus:s} +1 {slot:s} Yuva' }
-clock_late_lost = { text = 'Geç {late:u}us Kayıp {lost:u}' }
 output_heading = { text = 'Çıkış' }
 input_heading = { text = 'Giriş' }
 input = { text = 'Giriş' }
-no_shortcuts = { text = 'Kısayol yok' }
-held = { text = 'Basılı' }
-ready = { text = 'Hazır' }
-select_pair_prompt = { text = '{previous:s}/{next:s}: Seç' }
-hold_send_prompt = { text = '{button:s} basılı: Gönder' }
 off = { text = 'Kapalı' }
 on = { text = 'Açık' }
 midi_type_a = { text = 'MIDI Tip A' }
@@ -74,7 +52,6 @@ expression = { text = 'Ekspresyon' }
 aux_switch = { text = 'Yardımcı düğme' }
 jack_mode_prompt = { text = '{jack:s}: Jak {mode:s}: Kip' }
 apply_prompt = { text = '{button:s}: Uygula' }
-use_stock = { text = 'Özgün' }
 cycles_patches = { text = 'Çevrim:{cycles:u} Ses:{patches:u}' }
 clock_value = { text = 'Saat:{clock:s}' }
 disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
@@ -328,7 +305,6 @@ closing_prefix = { text = 'Kapatılıyor: ' }
 shifted_prefix = { text = 'Shift etkin | ' }
 abandon = { text = 'vazgeç' }
 no_switches = { text = 'Düğme yok' }
-firmware_caption = { text = 'yazılımı kullan' }
 expression_assigned = { text = '{port:.20s} CC {controller:u} Kn {channel:u}' }
 no_pedal = { text = 'Pedal yok' }
 travel_too_short = { text = 'Hareket aralığı çok kısa' }
