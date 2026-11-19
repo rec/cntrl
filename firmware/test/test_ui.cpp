@@ -253,6 +253,24 @@ static void moving_shapes_repaint_only_their_damage_and_restore_overlaps() {
         assert(display.pixels == reference.pixels);
     }
 }
+static void menu_page_shows_its_physical_confirm_label() {
+    Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
+    constexpr cntrl::ui::ControlBinding bindings[] = {{0,"Previous"},{1,"Next"},{2,"Confirm"}};
+    pages.controls({0,1,2,0,1,2,2,0,2,bindings,3});
+    cntrl::PageSettings settings;
+    settings.words[cntrl::PageSettings::title_height] = 12;
+    settings.words[cntrl::PageSettings::title_font] = 16;
+    settings.words[cntrl::PageSettings::status_font] = 16;
+    pages.configure(settings);
+    auto layout = page_fixture(3, {cntrl::PageLayout::patch_switcher, cntrl::PageLayout::menu}, {{0},{1}});
+    cntrl::PageAllocation allocation;
+    assert(allocation.prepare({layout.data()})); allocation.finish(true); allocation.configure({layout.data()});
+    assert(allocation.region(1).first == 2 && allocation.region(1).count == 1);
+    pages.layout({layout.data()}); pages.select(1);
+    const auto pane = pages.view(0,0,{});
+    assert(!std::strcmp(pane.lines[0].text, "Pages and tools"));
+    assert(!std::strcmp(pane.lines[1].text, "Confirm OK"));
+}
 static void pong_motion_only_changes_intersecting_windows() {
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
     uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0};
@@ -664,6 +682,7 @@ int main() {
     cable_test_preserves_its_original_font_and_indicators();
     panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed();
     cntrl::memory_budget = 192 * 1024;
+    menu_page_shows_its_physical_confirm_label();
     moving_shapes_repaint_only_their_damage_and_restore_overlaps();
     pong_motion_only_changes_intersecting_windows();
     updating_one_window_does_not_starve_the_others();

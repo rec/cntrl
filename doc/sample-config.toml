@@ -40,7 +40,7 @@ pages = ["patch-switcher"]
 
 [regions.tools]
 
-pages = ["status", "cable-test", "panic", "trs-ports", "expression", "tap-tempo", "pong", "language", "None"]
+pages = ["status", "menu", "cable-test", "panic", "trs-ports", "expression", "tap-tempo", "pong", "language", "None"]
 
 [layout]
 
@@ -136,6 +136,14 @@ events = 512
 [pages.status]
 
 type = "status"
+ram2_bytes = 0
+min_windows = 1
+give_up_windows = []
+patch = "sample"
+
+[pages.menu]
+
+type = "menu"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []

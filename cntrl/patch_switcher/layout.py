@@ -300,4 +300,5 @@ PAGE_TYPES = (
     'banked',
     'pong',
     'language',
+    'menu',
 )
