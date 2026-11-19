@@ -434,7 +434,7 @@ public:
         } else {
             char rows[5][64] = {};
             i18n::format(rows[0], sizeof(rows[0]), i18n::Message::cycles_patches, status.cycles, status.patches);
-            char tap[24], clock[24], tap_label[32];
+            char tap[24], clock[24], tap_label[32], uptime[32], git[16] = {};
             number_text(tap, sizeof(tap), status_snapshot ? status_snapshot->tap_period_ms : tap_.period(), false, true);
             number_text(clock, sizeof(clock), status_snapshot ? status_snapshot->clock_period_us : clock_.period_us(), true, true);
             i18n::format(rows[1], sizeof(rows[1]), i18n::Message::clock_value, clock + std::strspn(clock," "));
@@ -449,16 +449,14 @@ public:
                 i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_value, (unsigned long)(tenths / 10), (unsigned long)(tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
             } else i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_unknown);
             uint64_t seconds = (status_snapshot ? status_snapshot->uptime_ms : uptime_) / 1000;
-            auto disk_length = std::strlen(rows[3]);
-            i18n::format(rows[3] + disk_length, sizeof(rows[3]) - disk_length, i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
+            i18n::format(uptime, sizeof(uptime), i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
             if (status.starts_status == StartsStatus::ready) {
                 char number[21]; *std::to_chars(number, number + 20, status.starts).ptr = 0;
                 i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, number);
             }
             else i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
 #ifdef CNTRL_GIT_COMMIT
-            const auto starts_length = std::strlen(rows[4]);
-            std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
+            std::snprintf(git, sizeof(git), "Git:%07x", unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
 #endif
             i18n::format(tap_label, sizeof(tap_label), i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
@@ -473,6 +471,12 @@ public:
                         line(pane, 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width / 2, maximum_size);
                         line(pane, 3, tap_label, y, height, settings_[R::status_font], false, nullptr, viewport_.width / 2, viewport_.width, maximum_size);
                         pane.graphics.pad = inset;
+                    } else if (i >= 3) {
+                        const unsigned right = i + 4;
+                        const char *value = i == 3 ? uptime + std::strspn(uptime, " ") : git;
+                        if (*value) line(pane, right, value, y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size, true);
+                        line(pane, i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, *value ? unsigned(pane.lines[right].x) : viewport_.width, maximum_size);
+                        if (*value) pane.lines[right].y = pane.lines[i + 2].y;
                     } else {
                         line(pane, i == 0 ? 1 : i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size);
                     }
@@ -480,9 +484,9 @@ public:
             };
             body(96);
             unsigned shared_size = pane.lines[1].graphics.size;
-            for (unsigned i = 2; i <= 6; ++i) shared_size = std::min(shared_size, unsigned(pane.lines[i].graphics.size));
+            for (unsigned i = 2; i <= 8; ++i) if (pane.lines[i].text[0]) shared_size = std::min(shared_size, unsigned(pane.lines[i].graphics.size));
             body(shared_size);
-            for (unsigned i = 1; i <= 6; ++i) {
+            for (unsigned i = 1; i <= 8; ++i) {
                 auto &l = pane.lines[i];
                 l.graphics.foreground = 0x0011; // Dark blue, #00008B.
                 l.alternate_color = 0x0400; // Green, #008000.
@@ -491,7 +495,7 @@ public:
                 for (unsigned j = 0; *cursor; ++j) {
                     uint32_t code; if (!utf8::next(cursor, code)) break;
                     if (code == ':' && !value) { value = true; continue; }
-                    if (((i == 1 || i == 6) && code == ' ' && *cursor == ' ') || (i == 5 && code == ' ')) value = false;
+                    if (i == 1 && code == ' ' && *cursor == ' ') value = false;
                     if (value) l.color_mask |= uint64_t(1) << j;
                 }
             }
@@ -669,7 +673,7 @@ private:
         else std::snprintf(text, length, "%*lu", fixed ? int(digits) : 1, (unsigned long)value);
     }
     void line(cntrl::Pane &pane, unsigned index, const char *text, unsigned y, unsigned height,
-              unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 0, unsigned maximum_size = 96) {
+              unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 0, unsigned maximum_size = 96, bool right_aligned = false) {
         bool preview = false;
 #ifdef CNTRL_EMULATOR
         preview = page_ == Page::status && preview_size_ && index > 0;
@@ -718,7 +722,7 @@ private:
                 }
             }
             if (centered && sample) measure(l.text);
-            l.x = uint16_t(centered ? (int(left_edge + right_edge) - width) / 2 - left : sample ? int(right_edge - pane.graphics.pad) - width - left : left_edge + pane.graphics.pad);
+            l.x = uint16_t(centered ? (int(left_edge + right_edge) - width) / 2 - left : sample || right_aligned ? int(right_edge - pane.graphics.pad) - width - left : left_edge + pane.graphics.pad);
             l.y = int16_t(int(y) + (int(height) - ink_height) / 2 - top);
             return;
         }

@@ -1,4 +1,6 @@
+#define CNTRL_GIT_COMMIT 0xb7c7eb4
 #include <cntrl/ui/fonts.h>
+#include <cntrl/ui/pages.h>
 #include <cntrl/ui/raster.h>
 #include <cntrl/ui/renderer.h>
 #include <cassert>
@@ -99,6 +101,34 @@ int main(int argc, char **argv) {
         {cntrl::ui::status_face, status.data(), unsigned(status.size())},
     };
     cntrl::ui::AssetFonts fonts(embedded, 2);
+    {
+        cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
+        cntrl::PageSettings settings;
+        settings.words[cntrl::PageSettings::title_height] = 12;
+        settings.words[cntrl::PageSettings::padding] = 2;
+        pages.configure(settings);
+        cntrl::ui::PerformanceStatus status;
+        status.disk_valid = true;
+        status.disk_used = 1024ull * 1024 * 1024;
+        status.disk_free = 29 * status.disk_used;
+        status.starts_status = cntrl::ui::StartsStatus::ready; status.starts = 119;
+        pages.time(3456789, 0, false);
+        const auto pane = pages.view(3456789, 0, status);
+        assert(!std::strcmp(pane.lines[5].text, "Disk:1.0/30G"));
+        assert(!std::strcmp(pane.lines[6].text, "Starts:119"));
+        assert(!std::strcmp(pane.lines[7].text, "Up:0:57:36"));
+        assert(!std::strcmp(pane.lines[8].text, "Git:b7c7eb4"));
+        for (unsigned i : {7u, 8u}) {
+            const auto &right = pane.lines[i], &left = pane.lines[i - 2];
+            const auto r = fonts.bounds(right.graphics.font, right.graphics.size, 0, right.text);
+            const auto l = fonts.bounds(left.graphics.font, left.graphics.size, 0, left.text);
+            assert(right.x + r.left + r.width == 158);
+            assert(left.x + l.left + l.width < right.x + r.left);
+            assert(right.y + r.top == left.y + l.top);
+            const unsigned value = unsigned(std::strchr(right.text, ':') - right.text) + 1;
+            assert(right.color_mask == ((uint64_t(1) << std::strlen(right.text)) - 1) - ((uint64_t(1) << value) - 1));
+        }
+    }
     cntrl::ui::Glyph actual, accent;
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "Œāé", 2, actual));
     assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "ã", 0, actual));
