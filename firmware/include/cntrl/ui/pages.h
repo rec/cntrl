@@ -433,7 +433,7 @@ public:
             pane.circles[0].color = settings_[flashing_ ? R::on_color : R::off_color];
             pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
-            char rows[7][64] = {};
+            char rows[5][64] = {};
             i18n::format(rows[0], sizeof(rows[0]), i18n::Message::cycles_patches, status.cycles, status.patches);
             char tap[24], clock[24], tap_label[32];
             number_text(tap, sizeof(tap), tap_.period(), false, true);
@@ -450,22 +450,24 @@ public:
                 i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_value, (unsigned long)(tenths / 10), (unsigned long)(tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
             } else i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_unknown);
             uint64_t seconds = uptime_ / 1000;
-            i18n::format(rows[4], sizeof(rows[4]), i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
+            auto disk_length = std::strlen(rows[3]);
+            i18n::format(rows[3] + disk_length, sizeof(rows[3]) - disk_length, i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
             if (status.starts_status == StartsStatus::ready) {
                 char number[21]; *std::to_chars(number, number + 20, status.starts).ptr = 0;
-                i18n::format(rows[5], sizeof(rows[5]), i18n::Message::starts_value, number);
+                i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, number);
             }
-            else i18n::format(rows[5], sizeof(rows[5]), i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
+            else i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
 #ifdef CNTRL_GIT_COMMIT
-            std::snprintf(rows[6], sizeof(rows[6]), "Git:%07x", unsigned(CNTRL_GIT_COMMIT));
+            const auto starts_length = std::strlen(rows[4]);
+            std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", unsigned(CNTRL_GIT_COMMIT));
 #endif
             i18n::format(tap_label, sizeof(tap_label), i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
             const unsigned body_height = viewport_.height - pad - body_top;
             auto body = [&](unsigned maximum_size) {
-                for (unsigned i = 0; i < 7; ++i) {
-                    const unsigned y = body_top + body_height * i / 7;
-                    const unsigned height = body_height * (i + 1) / 7 - body_height * i / 7;
+                for (unsigned i = 0; i < 5; ++i) {
+                    const unsigned y = body_top + body_height * i / 5;
+                    const unsigned height = body_height * (i + 1) / 5 - body_height * i / 5;
                     if (i == 1) {
                         const auto inset = pane.graphics.pad;
                         pane.graphics.pad = std::min<uint8_t>(inset,1);
@@ -479,9 +481,9 @@ public:
             };
             body(96);
             unsigned shared_size = pane.lines[1].graphics.size;
-            for (unsigned i = 2; i <= 8; ++i) shared_size = std::min(shared_size, unsigned(pane.lines[i].graphics.size));
+            for (unsigned i = 2; i <= 6; ++i) shared_size = std::min(shared_size, unsigned(pane.lines[i].graphics.size));
             body(shared_size);
-            for (unsigned i = 1; i <= 8; ++i) {
+            for (unsigned i = 1; i <= 6; ++i) {
                 auto &l = pane.lines[i];
                 l.graphics.foreground = 0x0011; // Dark blue, #00008B.
                 l.alternate_color = 0x0400; // Green, #008000.
@@ -490,7 +492,7 @@ public:
                 for (unsigned j = 0; *cursor; ++j) {
                     uint32_t code; if (!utf8::next(cursor, code)) break;
                     if (code == ':' && !value) { value = true; continue; }
-                    if (i == 1 && code == ' ' && *cursor == ' ') value = false;
+                    if (((i == 1 || i == 6) && code == ' ' && *cursor == ' ') || (i == 5 && code == ' ')) value = false;
                     if (value) l.color_mask |= uint64_t(1) << j;
                 }
             }
