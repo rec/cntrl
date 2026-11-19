@@ -50,6 +50,7 @@ struct PatchOutputs {
     virtual bool expression_available(unsigned) const { return true; }
     virtual bool song_navigation_active() const { return false; }
     virtual bool song_last_step() const { return false; }
+    virtual bool song_style(ScreenGraphics &) const { return false; }
     virtual bool stock(uint8_t buttons, PatchExecutor &invocation) = 0;
 };
 

@@ -132,7 +132,7 @@ Explicit patch actions use `next-song-step` and `previous-song-step`. Song
 authoring still uses an ordered `patches` list: each occurrence is a step, and
 the automatic last step is separate from that list.
 
-Song records include binding references and the last-step flag and use `CSP7`.
+Song records include binding references, styles and the last-step flag and use `CSP8`.
 Recompile song libraries and use matching host and firmware versions. Existing
 offline backup conversion preserves older selections and enables the default
 last step; firmware uses the current format.
@@ -208,6 +208,19 @@ foreground and background colors. The patch's style supplies the colors for
 all three middle bands, including the long name. `binding_view.status_style` can override the
 indicator's colors and font; the indicator is left-aligned at the bottom of its
 band. Empty middle bands retain their background color.
+
+## Song styles
+
+During set performance, the current song's `style` supplies missing foreground,
+background and font properties in these displays, including the ordinary switch
+presentation when `binding_view` is omitted. Explicit patch, switch and status
+styles take precedence per property. Song fonts use the controller's embedded
+families. Fixed-size families use their smallest size when it exceeds a nominal
+size limit; labels are fitted or shortened within their bands.
+
+Recompile full-pedal setups to enable this inheritance. Older compiled binding
+views retain their fixed display values, because they did not record which
+properties were explicitly authored.
 
 ## Expression pedals
 

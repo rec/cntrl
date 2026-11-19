@@ -292,6 +292,7 @@ public:
     FLASHMEM bool state(unsigned operation, uint32_t value) override { return application.state(operation, value, *this); }
     bool song_navigation_active() const override { return application.song_navigation_active(); }
     bool song_last_step() const override { return application.song_last_step(); }
+    bool song_style(cntrl::ScreenGraphics &style) const override { return application.song_style(style); }
     FLASHMEM bool banked(const cntrl::Document &document, unsigned node) override { return application.activate_banked(document, node); }
     cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &document, unsigned node, cntrl::PatchExecutor &invocation) override {
 #if CNTRL_SWITCHES

@@ -307,7 +307,7 @@ void test_envelope_metadata_and_recovery() {
     upload(after_undo, required);
     assert(!after_undo.success() && snapshot(after_undo) == original && board.sends == 0);
     std::vector<uint8_t> record(24);
-    std::memcpy(record.data(), "CSG6", 4);
+    std::memcpy(record.data(), "CSG7", 4);
     cntrl::put32(record.data() + 4, after_undo.generation() + 1);
     cntrl::put32(record.data() + 8, unsigned(required.size()));
     cntrl::put32(record.data() + 12, cntrl::checksum(required.data(), unsigned(required.size())));

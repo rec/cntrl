@@ -316,6 +316,11 @@ public:
         if (!open_) { install_pending(); return; }
         bool last_step = outputs_.song_last_step();
         if (last_step != last_step_) { last_step_ = last_step; dirty_ = true; }
+        ScreenGraphics song;
+        bool styled = outputs_.song_style(song);
+        if (styled != song_styled_ || (styled && (song.foreground != song_foreground_ || song.background != song_background_ || song.font != song_font_))) {
+            song_styled_ = styled; song_foreground_ = song.foreground; song_background_ = song.background; song_font_ = song.font; dirty_ = true;
+        }
         if (counter_revision_ != hardware_.counters.revision()) {
             counter_revision_ = hardware_.counters.revision(); dirty_ = true;
         }
@@ -469,6 +474,9 @@ private:
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
     bool shifted_ = false;
     bool last_step_ = false;
+    bool song_styled_ = false;
+    uint16_t song_foreground_ = 0, song_background_ = 0xffff;
+    uint8_t song_font_ = 17;
     unsigned page_, owner_;
     bool rendering_;
     int bank_ = -1, bank_page_ = -1;
@@ -659,15 +667,17 @@ private:
                     pane.three_bands = true;
                     pane.graphics.background = 0;
                     pane.graphics.pad = 0;
-                    pane.lines[1].graphics = Document::read_graphics(view);
+                    pane.lines[1].graphics = styled_graphics(view);
+                    ScreenGraphics song;
+                    if (outputs_.song_style(song)) pane.graphics.background = pane.lines[1].graphics.background;
                     std::strcpy(pane.lines[1].text, " ");
                 }
                 auto &title = panes[1].lines[1];
-                title.graphics = Document::read_graphics(view);
+                title.graphics = styled_graphics(view);
                 title.centered = true;
                 std::snprintf(title.text, sizeof(title.text), "%s", bindings_.title());
                 auto &status = panes[2].lines[1];
-                status.graphics = Document::read_graphics(view + 16);
+                status.graphics = styled_graphics(view + 16);
                 status.x = 2;
                 status.y = int16_t(hardware_.display_height() * 2 / 3 - status.graphics.line_height);
                 document_.counter_text(status.text, sizeof(status.text), view[33] ? reinterpret_cast<const char *>(view + 33) : " ", hardware_.counters, bank_, bank_page_);
@@ -679,7 +689,7 @@ private:
                     const uint8_t *visual = s.visual;
                     unsigned slot = navigation && input < 6 ? input : i;
                     auto &line = panes[slot % 3].lines[slot < 3 ? 2 : 0];
-                    line.graphics = Document::read_graphics(visual ? visual : view);
+                    line.graphics = styled_graphics(visual ? visual : view);
                     line.x = 4;
                     line.centered = view[32] & 1;
                     char label[64];
@@ -689,7 +699,7 @@ private:
                     else std::snprintf(line.text, sizeof(line.text), "%s", label);
                     if (last_pressed_ == int(i)) {
                         auto &detail = panes[0].lines[1];
-                        detail.graphics = Document::read_graphics(visual ? visual + 16 : view);
+                        detail.graphics = styled_graphics(visual ? visual + 16 : view);
                         detail.centered = true;
                         s.document->counter_text(detail.text, sizeof(detail.text), visual ? reinterpret_cast<const char *>(visual + 32) : label, hardware_.counters);
                     }
@@ -697,7 +707,12 @@ private:
                 navigation_captions(panes, view);
                 present(panes); dirty_ = false; return;
             }
-            for (auto &pane : panes) pane.graphics = document_.graphics(1);
+            for (auto &pane : panes) {
+                pane.graphics = bindings_.style() ? styled_graphics(bindings_.style()) : document_.graphics(1);
+                ScreenGraphics song;
+                if (!bindings_.style() && outputs_.song_style(song)) pane.graphics = song;
+                for (auto &line : pane.lines) line.graphics = pane.graphics;
+            }
             std::snprintf(panes[1].lines[0].text, 64, "%s", bindings_.title());
             for (unsigned i = 0; i < count_; ++i) {
                 const auto &s = states_[i];
@@ -748,7 +763,7 @@ private:
             unsigned input = hardware_.control_input(i ? ControlRole::confirm : ControlRole::back);
             if (view && input >= 6) continue;
             auto &line = view ? panes[input % 3].lines[input < 3 ? 2 : 0] : panes[2].lines[i];
-            line.graphics = view ? Document::read_graphics(view) : panes[2].graphics;
+            line.graphics = view ? styled_graphics(view) : panes[2].graphics;
             line.graphics.font = ui::localized_face; line.graphics.size = line.graphics.line_height = 16;
             line.centered = bool(view);
             const char *next = hardware_.control_label(ControlRole::back), *modifier = hardware_.control_label(ControlRole::confirm);
@@ -760,8 +775,21 @@ private:
     CNTRL_FLASH_ROUTINE(switches_present)
 #endif
     void present(Pane (&panes)[3]) {
+        ScreenGraphics song;
+        if (bindings_ && (bindings_.data[67] == 2 || outputs_.song_style(song))) for (auto &pane : panes) for (auto &line : pane.lines) if (line.text[0]) line.fit = true;
         if (page_ == ~0u) ui::present(hardware_, panes, 1);
         else for (unsigned i = 0; i < 3; ++i) { panes[i].page = page_; hardware_.show(i, panes[i]); }
+    }
+    ScreenGraphics styled_graphics(const uint8_t *bytes) const {
+        auto result = Document::read_graphics(bytes);
+        ScreenGraphics song;
+        if (outputs_.song_style(song)) {
+            const unsigned authored = bytes[3] & 8 ? bytes[3] & 7 : 7;
+            if (!(authored & 1)) result.foreground = song.foreground;
+            if (!(authored & 2)) result.background = song.background;
+            if (!(authored & 4)) result.font = song.font;
+        }
+        return result;
     }
 };
 } // namespace cntrl

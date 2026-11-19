@@ -112,6 +112,14 @@ Channels and program numbers are one-based. Program patches resolve logical
 bank mappings through their instrument context. A sequence at one step runs
 all its children on that activation; it does not add song steps.
 
+Songs can set `[songs.style]` with `foreground_color`, `background_color` and
+`font_name`, using the controller's embedded font families. The song browser,
+current/next previews and full-pedal patch displays share these defaults;
+explicit patch styling wins per property. Library-level `fill_in_styles = true`
+uses the existing seeded color and font generator for missing properties.
+Set `seed` and `background_color` at the library root, or turn automatic styling
+off with `fill_in_styles = false`. See [song styles](../../../../doc/patches.md#automatic-song-styles).
+
 Songs have unique names, as do setlists. Setlists contain ordered song names,
 including repeated names. Playback tracks a zero-based setlist entry index and
 a step index within the current song. The optional last step uses the index
@@ -173,7 +181,7 @@ The payload begins with two little-endian 32-bit counts: songs and setlists.
 Each song stores its first patch selection, name, patch count, binding-map
 reference and last-step flag, then its remaining selections. Each setlist stores its name, entry
 count and binding-map reference followed by that many song names. Committed
-files use the `CSG6` journal; a `CSP7` appendix stores immutable compiled patch
+files use the `CSG7` journal; a `CSP8` appendix stores immutable compiled patch
 sources. Bindings at global, setlist and song scopes are described in
 [patch bindings](../../../../doc/control-bindings.md). Export older libraries with the old host
 before replacing the firmware, then remove ID fields and replace numeric setlist

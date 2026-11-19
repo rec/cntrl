@@ -118,6 +118,13 @@ public:
         return songs_.active_set()[0] && !menu.open() && !setups.open() && (song_ui.performing() || binding_return_songs);
     }
     bool song_last_step() const { return song_navigation_active() && songs_.last_step(); }
+    bool song_style(ScreenGraphics &style) const {
+        if (!song_navigation_active()) return false;
+        const auto *song = songs_.song(songs_.current_name());
+        if (!song) return false;
+        style.foreground = song->foreground; style.background = song->background; style.font = song->font;
+        return true;
+    }
     bool request_song_step(bool previous) {
         if (pending_song_step_) return false;
         pending_song_step_ = previous ? -1 : 1;

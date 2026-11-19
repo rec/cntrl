@@ -3,6 +3,7 @@
 import struct
 from copy import deepcopy
 from pathlib import Path
+from random import Random
 from typing import Annotated, cast
 from zlib import crc32
 
@@ -22,7 +23,10 @@ from . import (
     compiler,
     data_files,
     device_settings,
+    display,
+    formatting,
     global_config,
+    graphics,
     inputs,
     midi_assets,
     models,
@@ -38,6 +42,7 @@ from .usb_frames import Kind
 class Song(models.BindingScope, frozen=True):
     bindings: dict[str, object] = Field(default_factory=dict)
     name: str
+    style: models.Style | None = None
     add_last_step: bool = True
     patches: list[
         Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)]
@@ -63,6 +68,17 @@ class Song(models.BindingScope, frozen=True):
             raise ValueError('\n'.join(errors))
         return result
 
+    @field_validator('style')
+    @classmethod
+    def supported_style(cls, value: models.Style | None) -> models.Style | None:
+        if value is not None and (
+            value.icon is not None or value.horizontal_scale is not None
+        ):
+            raise ValueError(
+                'song styles support foreground_color, background_color and font_name'
+            )
+        return value
+
     model_config = ConfigDict(extra='forbid')
 
 
@@ -81,6 +97,9 @@ class Library(models.BindingScope, frozen=True):
     midi: dict[str, object] | None = None
     fonts: dict[str, str] = Field(default_factory=dict)
     tag_styles: dict[str, models.Style] = Field(default_factory=dict)
+    fill_in_styles: Annotated[bool, Field(strict=True)] = True
+    seed: Annotated[int, Field(strict=True)] | None = 0
+    background_color: str = '0xFFF8D8'
     songs: list[Song] = Field(default_factory=list)
     setlists: list[Setlist] = Field(default_factory=list)
     model_config = ConfigDict(extra='forbid')
@@ -127,12 +146,30 @@ def encode(
     trace: data_files.Trace | None = None,
     movie_assets: dict[int, bytes] | None = None,
 ) -> bytes:
+    if library.fill_in_styles and library.seed is None:
+        library = library.model_copy(update={'seed': Random().getrandbits(63)})
     for items in (library.songs, library.setlists):
         names = [s.name for s in items]
         if len(set(names)) != len(names):
             raise ValueError(
                 'song and setlist names must be unique within each collection'
             )
+    preferences = models.Setup(
+        fill_in_styles=library.fill_in_styles,
+        seed=library.seed,
+        background_color=library.background_color,
+    )
+    styles = (
+        formatting.cycle_styles(
+            preferences,
+            [s.name for s in library.songs],
+            target.model_copy(
+                update={'fonts': [f for f in target.fonts if f.id != 255]}
+            ),
+        )
+        if target is not None
+        else {}
+    )
     positions: list[list[int]] = []
     values_for_source: list[dict[str, object]] = []
     paths: list[str] = []
@@ -271,6 +308,27 @@ def encode(
     if not source:
         browser = 0
     for song, values in zip(library.songs, positions, strict=True):
+        style = display.merge_style(
+            models.Style(
+                foreground_color='black', background_color='white', font_name='Arimo'
+            ),
+            styles.get(song.name),
+            song.style,
+        )
+        font = (
+            next(
+                (f for f in target.fonts if f.name == style.font_name and f.id != 255),
+                None,
+            )
+            if target is not None
+            else None
+        )
+        if font is None:
+            raise ValueError(
+                f'song {song.name!r}: font {style.font_name!r} '
+                'is not embedded in the controller'
+            )
+        foreground, background = graphics.colors(style, 0)
         selections = []
         for position in values:
             document, reference, origin, node = (
@@ -295,6 +353,9 @@ def encode(
                 len(selections),
                 scope_roots.get((2, song.name), 0xFFFFFFFF),
                 song.add_last_step,
+                foreground,
+                background,
+                font.id,
             )
             + b''.join(selections[1:])
         )
@@ -310,7 +371,7 @@ def encode(
     payload = (
         struct.pack('<II', len(library.songs), len(library.setlists))
         + b''.join(records + sets)
-        + b'CSP7'
+        + b'CSP8'
     )
     if source:
         source = (
@@ -321,7 +382,32 @@ def encode(
         payload += struct.pack('<I', len(source)) + source
     if len(payload) > 0xFFFFFFFF - 20:
         raise ValueError('song library exceeds the SD file format size')
-    return binary_format.wrap(payload, binary_format.Kind.songs)
+    data = binary_format.wrap(payload, binary_format.Kind.songs)
+    preferences = library.model_dump(
+        include={'fill_in_styles', 'seed', 'background_color'},
+        exclude_defaults=True,
+        exclude_none=True,
+    )
+    authored_styles = [
+        s.style.model_dump(exclude_none=True) if s.style is not None else {}
+        for s in library.songs
+    ]
+    if any(authored_styles):
+        preferences['authored_styles'] = authored_styles
+    if preferences:
+        document = binary_format.unpack(data, binary_format.Kind.songs)
+        data = document.model_copy(
+            update={
+                'records': [
+                    *document.records,
+                    binary_format.Record(
+                        tag=binary_format.SONG_FORMATTING,
+                        data=tomlkit.dumps(preferences).encode(),
+                    ),
+                ]
+            }
+        ).pack()
+    return data
 
 
 def upgrade(
@@ -361,6 +447,13 @@ def upgrade(
 def decode(data: bytes) -> Library:
     _, song_headers, positions, sets, sources = _parse(data)
     context: dict[str, object] = {'instruments': {}, 'patches': {}}
+    authored_styles: list[object] = []
+    if data.startswith(binary_format.MAGIC):
+        for record in binary_format.unpack(data, binary_format.Kind.songs).records:
+            if record.tag == binary_format.SONG_FORMATTING:
+                preferences = tomlkit.parse(record.data.decode()).unwrap()
+                authored_styles = preferences.pop('authored_styles', [])
+                context.update(preferences)
     instruments: dict[str, object] = {}
     definitions: dict[str, object] = {}
     profiles: list[object] = []
@@ -417,8 +510,8 @@ def decode(data: bytes) -> Library:
     if sources:
         context['definitions'] = {'profiles': profiles, 'programs': programs}
     songs = []
-    for (name, binding, add_last_step), values in zip(
-        song_headers, positions, strict=True
+    for index, ((name, binding, add_last_step), values) in enumerate(
+        zip(song_headers, positions, strict=True)
     ):
         patches = []
         for document, reference, label, source, node in values:
@@ -462,6 +555,9 @@ def decode(data: bytes) -> Library:
                     'patches': patches,
                     'bindings': bindings,
                     'add_last_step': add_last_step,
+                    'style': (authored_styles[index] or None)
+                    if index < len(authored_styles)
+                    else None,
                 }
             )
         )
@@ -510,9 +606,10 @@ def _current_core(data: bytes) -> bytes:
         raise ValueError('invalid song library size')
     ns, nl = struct.unpack_from('<II', data)
     for song_size, set_size, marker in (
-        (SONG.size, SET.size, b'CSP7'),
-        (SONG.size - 1, SET.size, b'CSP6'),
-        (SONG.size - 5, SET.size - 4, b'CSP5'),
+        (SONG.size, SET.size, b'CSP8'),
+        (73, SET.size, b'CSP7'),
+        (72, SET.size, b'CSP6'),
+        (68, SET.size - 4, b'CSP5'),
     ):
         offset = 8
         prefix = bytearray(data[:offset])
@@ -536,8 +633,17 @@ def _current_core(data: bytes) -> bytes:
                     if marker != b'CSP5'
                     else struct.pack('<I', 0xFFFFFFFF)
                 )
-                if song and marker != b'CSP7':
-                    prefix += b'\x01'
+                if song:
+                    prefix += (
+                        data[offset + 72 : offset + 73]
+                        if marker in (b'CSP7', b'CSP8')
+                        else b'\x01'
+                    )
+                    prefix += (
+                        data[offset + 73 : offset + song_size]
+                        if marker == b'CSP8'
+                        else struct.pack('<HHB', 0, 65535, 17)
+                    )
                 offset += header_size
                 size = (count - 1) * SELECTION.size if song else count * 64
                 if size > len(data) - offset:
@@ -550,8 +656,8 @@ def _current_core(data: bytes) -> bytes:
         if valid and data[offset : offset + 4] == marker:
             return (
                 data
-                if marker == b'CSP7'
-                else bytes(prefix) + b'CSP7' + data[offset + 4 :]
+                if marker == b'CSP8'
+                else bytes(prefix) + b'CSP8' + data[offset + 4 :]
             )
     raise ValueError('invalid song records or missing song Patch sources')
 
@@ -579,7 +685,15 @@ def _parse(
             raise ValueError('truncated song')
         first = SELECTION.unpack_from(data, offset)
         offset += SELECTION.size
-        name, count, binding, add_last_step = SONG.unpack_from(data, offset)
+        (
+            name,
+            count,
+            binding,
+            add_last_step,
+            _foreground,
+            _background,
+            _font,
+        ) = SONG.unpack_from(data, offset)
         offset += SONG.size
         if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
             raise ValueError('invalid song patch count')
@@ -590,6 +704,7 @@ def _parse(
         positions.append(values)
         if add_last_step > 1:
             raise ValueError('invalid add_last_step flag')
+
         song_headers.append((_string(name), binding, bool(add_last_step)))
     sets = []
     set_bindings = []
@@ -606,7 +721,7 @@ def _parse(
         ]
         offset += count * 64
         sets.append(Setlist(name=_string(name), songs=entries))
-    if data[offset : offset + 4] != b'CSP7':
+    if data[offset : offset + 4] != b'CSP8':
         raise ValueError('missing song Patch sources')
     offset += 4
     prefix = offset
@@ -1045,5 +1160,5 @@ def run(command: Copy | Download) -> None:
 
 
 SELECTION = struct.Struct('<64s64s64sII')
-SONG = struct.Struct('<64sIIB')
+SONG = struct.Struct('<64sIIBHHB')
 SET = struct.Struct('<64sII')

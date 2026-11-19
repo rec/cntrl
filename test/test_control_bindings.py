@@ -62,6 +62,9 @@ def test_scoped_bindings_override_and_preserve_ordinary_actions(
         songs=[
             songs.Song(
                 name='One',
+                style=models.Style(
+                    foreground_color='navy', background_color='white', font_name='Arimo'
+                ),
                 add_last_step=False,
                 patches=['default'],
                 bindings={'A': cc(22, 1), 'configurable-1': expression(11)},
@@ -86,6 +89,7 @@ def test_scoped_bindings_override_and_preserve_ordinary_actions(
             'full': {'bindings': {'F': 'boost'}, 'inherits': 'both'},
         }
     }
+    library = library.model_copy(update={'seed': 42})
     encoded = songs.encode(library, binding_target(), {'Foreign': foreign})
     restored = songs.decode(encoded)
     assert restored.bindings == library.bindings

@@ -86,6 +86,9 @@ def unpack(data: bytes, kind: Kind) -> Document:
                 or int.from_bytes(data[cursor : cursor + size], 'little') & (1 << 27)
             ):
                 raise ValueError('invalid device-global setting overrides')
+        elif tag == SONG_FORMATTING and kind == Kind.songs:
+            if flags or any(r.tag == SONG_FORMATTING for r in records):
+                raise ValueError('invalid song formatting preferences')
         elif flags & REQUIRED:
             raise ValueError(f'unsupported required persistent record {tag}')
         records.append(
@@ -137,7 +140,12 @@ def require_structural_edit(data: bytes, kind: Kind = Kind.setup) -> None:
 
 def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
     return data.startswith(MAGIC) and any(
-        r.tag not in (SOURCE, SETTING_OVERRIDES) or kind != Kind.setup
+        not (
+            kind == Kind.setup
+            and r.tag in (SOURCE, SETTING_OVERRIDES)
+            or kind == Kind.songs
+            and r.tag == SONG_FORMATTING
+        )
         for r in unpack(data, kind).records[1:]
     )
 
@@ -167,6 +175,7 @@ RECORD = struct.Struct('<HHI')
 CORE = 1
 SOURCE = 2
 SETTING_OVERRIDES = 3
+SONG_FORMATTING = 4
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096
@@ -177,6 +186,7 @@ ARCHIVE_KINDS = (
     (b'CNSA', 'CNSA'),
     (b'CSG5', 'song-journal-5'),
     (b'CSG6', 'song-journal-6'),
+    (b'CSG7', 'song-journal-7'),
     (b'CREV', 'revision-journal'),
     (b'CNST', 'setup-journal'),
     (b'CSEL', 'selection-journal'),

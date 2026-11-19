@@ -64,6 +64,37 @@ appearance. Set `fill_in_styles = false` to retain only authored styling and
 application defaults. Styles are generated during compilation, with no pedal
 random generator or new firmware record format.
 
+## Automatic song styles
+
+Song libraries also accept `fill_in_styles`, `seed` and `background_color`.
+The defaults match setups. The same cycle formatter assigns missing song
+foregrounds and font families, using the controller's embedded fonts. Authored
+song style properties override generated properties individually. With
+`fill_in_styles = false`, unspecified song properties use black text, a white
+background and Arimo.
+
+```toml
+fill_in_styles = true
+seed = 42
+
+[[songs]]
+name = 'Our song'
+patches = ['verse', 'chorus']
+
+[songs.style]
+foreground_color = 'navy'
+background_color = '0xFFFFF0'
+font_name = 'CourierPrime'
+```
+
+Song styles color the current, selected and next song panes. Song names and
+patch labels use the song font; shared headings and control instructions keep
+the UI font. Full-pedal patch displays inherit song properties that the patch,
+switch or `binding_view` has not explicitly set. The patch's own styles take
+precedence. Resolved styles and formatting preferences survive downloads,
+recompilation, renames, edits and undo. Generation happens on the computer;
+pedal captures use their application defaults until compiled with the library.
+
 ## Simple program lists
 
 For an instrument that stays in one bank, list its program names in order:

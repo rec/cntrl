@@ -47,8 +47,9 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | --- | --- |
 | Kind 1 | Setup document |
 | Kind 2 | Indexed setup bundle, with a `CSTB` version-1 core |
-| Kind 3 | Song library, with the counts/records/`CSP7` core described below |
+| Kind 3 | Song library, with the counts/records/`CSP8` core described below |
 | Tag 1 | Required, first, singleton core snapshot |
+| Tag 4, kind 3 | Optional singleton TOML song formatting preferences and authored song styles |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
 The setup core snapshot uses the explicitly encoded `CSW1` schema 48,
@@ -111,30 +112,45 @@ An offset is meaningful only with its own document and saved name table.
 The song core begins with u32 song and setlist counts. Each song has one
 200-byte selection (document[64], patch key[64], UTF-8 display label[64], u32
 captured-source index, u32 graph-node index), followed by name[64], u32 nonzero
-selection count, u32 binding-map node, u8 `add_last_step` (0 or 1), then the
+selection count, u32 binding-map node, u8 `add_last_step` (0 or 1), u16 RGB565
+foreground, u16 RGB565 background and u8 embedded font ID, then the
 remaining selections. Each setlist
 has name[64], u32 entry count, u32 binding-map node, and that many song names[64].
 A binding-map node of `0xffffffff` means no bindings at that scope; other values
 refer to a control-map node in captured source zero. These references survive
 renames, occurrence edits and undo. All fixed text fields are zero padded
 and terminated. Names and external document/key references use the existing
-ASCII name rules; display labels are UTF-8. The four bytes `CSP7` follow the
+ASCII name rules; display labels are UTF-8. The four bytes `CSP8` follow the
 setlists. Captured sources then repeat as u32 byte length plus the complete setup
 document, until the end of the core. External document selections use source
 index `0xffffffff`; captured source and node indices are zero based.
 Order, repetitions and node identities are significant.
 
-Host backup readers also accept the preceding `CSP5` and `CSP6` library layouts.
+Song formatting metadata stores `fill_in_styles`, `seed`, `background_color`
+and an `authored_styles` list aligned with song record order. Each style table
+contains only authored properties; an empty or absent entry has no overrides.
+Renames and setlist edits preserve this order, and new pedal captures append.
+Keeping authored properties separate from resolved core graphics lets later
+host recompilation change generated defaults without replacing explicit styles.
+
+Host backup readers also accept the preceding `CSP5`, `CSP6` and `CSP7` library layouts.
 `CSP5` song and setlist headers omit the binding-map field. Offline upgrade inserts
 `0xffffffff` for those fields and sets `add_last_step` to 1 for both older formats.
-It writes `CSP7`, preserving selections, labels,
+Upgrade adds black/white/Arimo display values to older song records and writes
+`CSP8`, preserving selections, labels,
 setlist entries and captured sources. Empty libraries migrate the same way.
 Opaque outer metadata blocks this structural migration; the original backup
 remains unchanged.
 
 Control-map nodes (kind 10) use their flag byte as an inheritance mask: bit zero
 includes switches and bit one includes expression assignments. The default is
-2. Binding-scope directory nodes (kind 19) have zero flags and a 67-byte payload:
+2. Payload byte 67 selects no display metadata (0), the three-band binding view
+(1), or a single 16-byte default style after the switch records (2). In binding
+graphics, byte 3 has bit 3 set when authored-property information is present;
+bits 0, 1 and 2 mark explicit foreground, background and font. Older zero bytes
+retain fixed graphics values. This byte is not a runtime flag icon.
+
+Binding-scope directory nodes (kind 19) have zero flags and a 67-byte payload:
 u8 kind (global 0, setlist 1, song 2), name[64], and u16 control-map node. Global
 uses an empty name. Song/setlist records retain their direct map references;
 directory names describe the compiled source and do not determine playback
@@ -151,7 +167,7 @@ reads at most 512 bytes without allocating an entire bundle or library. Song
 publication hashes the complete envelope, writes only an inactive journal slot,
 then independently checks its bytes, records and core before selecting it.
 
-New song journal files use `CSG6`: magic[4], u32 generation, u32 envelope length,
+New song journal files use `CSG7`: magic[4], u32 generation, u32 envelope length,
 u32 envelope CRC-32, u32 undo generation (zero means no undo), u32 CRC-32 of the
 preceding 20 header bytes, the envelope, then `DONE`. Thus undo availability and
 its consumed state survive reboot. The newest integrity-valid generation must

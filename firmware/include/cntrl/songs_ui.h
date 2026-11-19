@@ -184,6 +184,15 @@ private:
         using Role = ControlRole;
         Pane panes[3];
         for (auto &p : panes) for (auto &line : p.lines) { line.graphics.line_height = line.graphics.size = 16; line.graphics.font = ui::localized_face; line.wrap = true; }
+        auto style = [&](unsigned pane, const Song *song) {
+            if (!song) return;
+            auto &p = panes[pane];
+            p.graphics.foreground = song->foreground; p.graphics.background = song->background;
+            for (auto &line : p.lines) { line.graphics.foreground = song->foreground; line.graphics.background = song->background; }
+            if (pane != 1 || (mode_ != song_actions && mode_ != patch_actions)) { p.lines[1].graphics.font = song->font; p.lines[1].fit = true; }
+        };
+        style(0, songs_.song(songs_.current_name()));
+        if (mode_ == song_actions || mode_ == patches || mode_ == patch_actions || (mode_ == naming && !naming_set_)) style(1, songs_.song(song_name_));
         if (songs_.busy()) {
             std::strcpy(panes[1].lines[0].text, ui::i18n::text(ui::i18n::Message::saving_wait));
             ui::present(hardware_, panes, 1);
@@ -194,19 +203,24 @@ private:
         SongSelection current_patch;
         if (songs_.current_patch(current_patch)) {
             text(0, 2, current_patch.label[0] ? current_patch.label : current_patch.document[0] ? current_patch.key : ui::i18n::text(ui::i18n::Message::patch));
+            panes[0].lines[2].graphics.font = panes[0].lines[1].graphics.font; panes[0].lines[2].fit = true;
         }
         if (songs_.last_step()) text(0, 2, ui::i18n::text(ui::i18n::Message::last_step));
         const Setlist *set = current_set(); unsigned next = songs_.next_position();
         text(2, 0, ui::i18n::text(ui::i18n::Message::next));
         SongEntry next_entry;
         const Song *upcoming = set && next < set->count && songs_.entry(set->name, next, next_entry) ? songs_.song(next_entry.song) : nullptr;
+        style(2, upcoming);
         text(2, 1, upcoming ? upcoming->name : set && !set->count ? ui::i18n::text(ui::i18n::Message::add_songs) : ui::i18n::text(ui::i18n::Message::end_of_set));
         SongSelection next_patch;
         if (songs_.upcoming_patch(next_patch)) {
+            style(2, songs_.song(songs_.current_name()));
             text(2, 0, ui::i18n::text(ui::i18n::Message::next_patch));
             text(2, 1, next_patch.label[0] ? next_patch.label : next_patch.document[0] ? next_patch.key : ui::i18n::text(ui::i18n::Message::patch));
         }
         if (songs_.upcoming_last_step()) {
+            style(2, songs_.song(songs_.current_name()));
+            panes[2].lines[1].graphics.font = ui::localized_face;
             text(2, 0, ui::i18n::text(ui::i18n::Message::next_patch));
             text(2, 1, ui::i18n::text(ui::i18n::Message::last_step));
         }
@@ -232,12 +246,14 @@ private:
             if (!songs_.counts().songs) text(1, 1, ui::i18n::text(ui::i18n::Message::save_song_first));
             else {
                 const auto *found = songs_.song(picker_); if (!found) return; const Song s = *found;
+                style(1, &s);
                 text(1, 1, s.name);
                 ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::patches_count, (unsigned long)(s.count + s.add_last_step));
             }
         } else if (set && set->count) {
             cursor_ %= set->count; SongEntry selected;
             const auto *item = songs_.entry(set->name, cursor_, selected) ? songs_.song(selected.song) : nullptr;
+            style(1, item);
             text(1, 1, item ? item->name : ui::i18n::text(ui::i18n::Message::missing_song));
             std::snprintf(panes[1].lines[2].text, 64, "%u/%u", cursor_ + 1, unsigned(set->count));
         } else text(1, 1, ui::i18n::text(ui::i18n::Message::add_songs));
@@ -250,7 +266,7 @@ private:
             std::snprintf(panes[2].lines[2].text, 64, "%s+%s %s", hardware_.control_label(Role::confirm), hardware_.control_label(Role::back), ui::i18n::text(ui::i18n::Message::back));
         } else prompt.add(Role::back, mode_ == adding ? ui::i18n::text(ui::i18n::Message::done_action) : ui::i18n::text(ui::i18n::Message::back));
         text(2, 3, prompt.text());
-        if (feedback_[0]) text(0, 2, feedback_);
+        if (feedback_[0]) { text(0, 2, feedback_); panes[0].lines[2].graphics.font = ui::localized_face; }
         for (unsigned i = 0; i < 3; ++i) {
             unsigned rows = 0;
             for (const auto &line : panes[i].lines) rows += (unsigned(std::strlen(line.text)) + 11) / 12;

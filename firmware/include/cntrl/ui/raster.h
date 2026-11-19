@@ -67,7 +67,7 @@ public:
         return x < clip_.right && x + width > clip_.left && y + b.top < clip_.bottom && y + b.top + height > clip_.top;
     }
     Position position(const TextLine &line, unsigned index) const {
-        if (line.wrap && line.graphics.font == localized_face)
+        if (line.wrap && (line.graphics.font == localized_face || line.fit))
             return localized_position(fonts_, line, index, int(viewport_.width) - int(settings_.pad) - int(line.x));
         Position result; Glyph current;
         int previous = 0;

@@ -15,6 +15,8 @@ struct Song : SongSelection {
     uint32_t count = 1;
     uint32_t bindings = 0xffffffff;
     uint8_t add_last_step = 1;
+    uint16_t foreground = 0, background = 0xffff;
+    uint8_t font = 17;
 };
 struct SongContinuation {
     uint32_t generation = 0, crc = 0, entry = 0xffffffff, patch = 0, source_crc = 0;
@@ -26,7 +28,7 @@ struct SongEntry { char song[64] = {}; };
 struct Setlist { char name[64] = {}; uint32_t count = 0, bindings = 0xffffffff; };
 struct SongCounts { uint32_t songs = 0, sets = 0; };
 #pragma pack(pop)
-static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 273 && sizeof(Setlist) == 72 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
+static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 278 && sizeof(Setlist) == 72 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
 template<class T>
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(song_record_encode)
@@ -35,7 +37,10 @@ inline void encode_song_record(const T &value, uint8_t *bytes) {
     if constexpr (std::is_base_of_v<SongSelection, T>) {
         std::memcpy(bytes, value.document, 64); std::memcpy(bytes + 64, value.key, 64); std::memcpy(bytes + 128, value.label, 64);
         put32(bytes + 192, value.source); put32(bytes + 196, value.node);
-        if constexpr (std::is_same_v<T, Song>) { std::memcpy(bytes + 200, value.name, 64); put32(bytes + 264, value.count); put32(bytes + 268, value.bindings); bytes[272] = value.add_last_step; }
+        if constexpr (std::is_same_v<T, Song>) { std::memcpy(bytes + 200, value.name, 64); put32(bytes + 264, value.count); put32(bytes + 268, value.bindings); bytes[272] = value.add_last_step;
+            bytes[273] = uint8_t(value.foreground); bytes[274] = uint8_t(value.foreground >> 8);
+            bytes[275] = uint8_t(value.background); bytes[276] = uint8_t(value.background >> 8);
+            bytes[277] = value.font; }
     } else if constexpr (std::is_same_v<T, Setlist>) {
         std::memcpy(bytes, value.name, 64); put32(bytes + 64, value.count); put32(bytes + 68, value.bindings);
     } else if constexpr (std::is_same_v<T, SongCounts>) {
@@ -47,7 +52,8 @@ inline void decode_song_record(const uint8_t *bytes, T &value) {
     if constexpr (std::is_base_of_v<SongSelection, T>) {
         std::memcpy(value.document, bytes, 64); std::memcpy(value.key, bytes + 64, 64); std::memcpy(value.label, bytes + 128, 64);
         value.source = u32(bytes + 192); value.node = u32(bytes + 196);
-        if constexpr (std::is_same_v<T, Song>) { std::memcpy(value.name, bytes + 200, 64); value.count = u32(bytes + 264); value.bindings = u32(bytes + 268); value.add_last_step = bytes[272]; }
+        if constexpr (std::is_same_v<T, Song>) { std::memcpy(value.name, bytes + 200, 64); value.count = u32(bytes + 264); value.bindings = u32(bytes + 268); value.add_last_step = bytes[272];
+            value.foreground = u16(bytes + 273); value.background = u16(bytes + 275); value.font = bytes[277]; }
     } else if constexpr (std::is_same_v<T, Setlist>) {
         std::memcpy(value.name, bytes, 64); value.count = u32(bytes + 64); value.bindings = u32(bytes + 68);
     } else if constexpr (std::is_same_v<T, SongCounts>) {
@@ -146,7 +152,7 @@ public:
             }
         }
         if (!found) {
-            if (!commit(active_, 12, counts_, 8, 0, "CSP7", 4, nullptr, nullptr)) return false;
+            if (!commit(active_, 12, counts_, 8, 0, "CSP8", 4, nullptr, nullptr)) return false;
             while (busy()) tick(); // Initialization precedes the live main loop.
             return success();
         }
@@ -500,7 +506,7 @@ private:
             if (!graph_started) {
                 uint8_t magic[4];
                 if (position > length || 4 > length - position || !storage.read(slot, base + position, magic, 4)
-                    || std::memcmp(magic, "CSP7", 4)) return false;
+                    || std::memcmp(magic, "CSP8", 4)) return false;
                 records_end = position; position += 4; graph_started = true; return true;
             }
             if (source_remaining) {
@@ -654,7 +660,8 @@ private:
         return true;
     }
     static bool valid_song(const Song &s) {
-        return s.count && s.add_last_step <= 1 && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64) && valid_selection(s);
+        return s.count && s.add_last_step <= 1 && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64)
+            && valid_selection(s);
     }
     static bool valid_selection(const SongSelection &s) {
         return (!s.label[0] || label_valid(reinterpret_cast<const uint8_t *>(s.label), sizeof(s.label))) && (s.document[0]
@@ -743,7 +750,7 @@ private:
         uint8_t header[24], tail[4];
         committed = false;
         if (!storage_.read(slot, 0, header, 16)) return false;
-        bool current = !std::memcmp(header, "CSG6", 4);
+        bool current = !std::memcmp(header, "CSG7", 4);
         if (!current && std::memcmp(header, "CSG5", 4)) return false;
         const unsigned base = current ? 24 : 16;
         if (current && (!storage_.read(slot, 16, header + 16, 8) || checksum(header, 20) != u32(header + 20))) return false;
@@ -924,7 +931,7 @@ private:
         phase_ = Phase::idle;
     }
     void header(uint8_t *bytes) const {
-        std::memcpy(bytes, "CSG6", 4); put32(bytes + 4, generation_ + 1);
+        std::memcpy(bytes, "CSG7", 4); put32(bytes + 4, generation_ + 1);
         put32(bytes + 8, 28 + job_.length + job_.extensions); put32(bytes + 12, job_.crc);
         put32(bytes + 16, job_.undo ? 0 : generation_);
         put32(bytes + 20, checksum(bytes, 20));
