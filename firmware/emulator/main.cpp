@@ -581,6 +581,9 @@ public:
         board.blocked = blocked;
     }
     void command(const std::vector<uint8_t> &bytes);
+    void input_state() const {
+        frame({8, uint8_t(!board.stock_firmware && !board.stock_pending && application.song_ui.editing_name())});
+    }
 private:
     void import_movies() {
         auto directory = filesystem.path("/cntrl/movies");
@@ -717,6 +720,7 @@ void Session::command(const std::vector<uint8_t> &bytes) {
         for (auto &view : application.views) view.dirty = true;
         renderer.invalidate(); settle();
     }
+    else if (p[0] == 15 && length == 2) { application.song_ui.key(p[1]); settle(); }
     else throw std::runtime_error("unsupported or malformed emulator command");
 }
 } // namespace cntrl::emulator
@@ -732,11 +736,12 @@ int main(int argc,char **argv) {
         cntrl::memory_budget = 32u * 1024 * 1024;
         cntrl::emulator::FontFiles fonts(argc - 4,argv + 4);
         cntrl::emulator::PreviewFonts preview(*fonts.fonts);
-        cntrl::emulator::Session session(argv[1],argv[2],preview,argv[3][0] == '1'); cntrl::emulator::ack();
+        cntrl::emulator::Session session(argv[1],argv[2],preview,argv[3][0] == '1'); session.input_state(); cntrl::emulator::ack();
         std::vector<uint8_t> bytes;
         while (cntrl::emulator::request(bytes)) {
             try { session.command(bytes); }
             catch (const std::runtime_error &error) { cntrl::emulator::error(error.what()); }
+            session.input_state();
             cntrl::emulator::ack();
         }
         return 0;

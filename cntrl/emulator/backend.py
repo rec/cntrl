@@ -164,6 +164,7 @@ class Session:
         self.events: list[Event] = []
         self.failed = False
         self.stock_firmware = False
+        self.editing_name = False
         self.held: set[str] = set()
         self.font_samples: list[font_comparison.FontSample] = []
         self.font_sample_index = 0
@@ -387,6 +388,8 @@ class Session:
                         ),
                     )
                 )
+            elif payload[0] == 8 and len(payload) == 2 and payload[1] <= 1:
+                self.editing_name = bool(payload[1])
             else:
                 raise ValueError('unknown native emulator response')
 
@@ -423,6 +426,11 @@ class Session:
         """Read the checked heap, charged using the target allocator's alignment."""
         self.request(b'\x0c')
         return self.memory_usage
+
+    def key(self, key: int) -> None:
+        if key not in (8, 10, 27) and not 32 <= key <= 126:
+            raise ValueError('name input requires printable ASCII or an editing key')
+        self.request(b'\x0f' + bytes([key]))
 
     def button(self, control_id: str, pressed: bool) -> None:
         if control_id not in self.target.buttons:

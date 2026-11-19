@@ -52,6 +52,8 @@ class CapturedSession(Session):
         self.closed = False
         self.failed = False
         self.stock_firmware = False
+        self.editing_name = False
+        self.keys: list[int] = []
         self.mode = 'setup preview'
 
     def button(self, control_id: str, pressed: bool) -> None:
@@ -60,6 +62,9 @@ class CapturedSession(Session):
             self.held.add(control_id)
         else:
             self.held.discard(control_id)
+
+    def key(self, key: int) -> None:
+        self.keys.append(key)
 
     def advance(self, time_us: int) -> None:
         self.time_us = time_us
@@ -192,6 +197,39 @@ def test_keyboard_chord_tracks_keys_without_character_text(
     )
     assert not canvas.active
     assert session.inputs[-1] == ('d', False)
+    canvas.close()
+
+
+def test_name_typing_takes_precedence_over_pedal_shortcuts(
+    application: QtWidgets.QApplication,
+) -> None:
+    session = CapturedSession()
+    session.editing_name = True
+    canvas = ControllerCanvas(session, lambda message: None)
+    for code, text, modifier, repeat in [
+        (QtCore.Qt.Key.Key_A, 'a', QtCore.Qt.KeyboardModifier.NoModifier, False),
+        (QtCore.Qt.Key.Key_B, 'B', QtCore.Qt.KeyboardModifier.ShiftModifier, False),
+        (QtCore.Qt.Key.Key_Backspace, '', QtCore.Qt.KeyboardModifier.NoModifier, False),
+        (QtCore.Qt.Key.Key_Return, '', QtCore.Qt.KeyboardModifier.NoModifier, False),
+        (QtCore.Qt.Key.Key_Enter, '', QtCore.Qt.KeyboardModifier.KeypadModifier, False),
+        (QtCore.Qt.Key.Key_Escape, '', QtCore.Qt.KeyboardModifier.NoModifier, False),
+        (QtCore.Qt.Key.Key_A, 'a', QtCore.Qt.KeyboardModifier.NoModifier, True),
+        (QtCore.Qt.Key.Key_A, 'a', QtCore.Qt.KeyboardModifier.ControlModifier, False),
+        (QtCore.Qt.Key.Key_A, 'a', QtCore.Qt.KeyboardModifier.AltModifier, False),
+        (QtCore.Qt.Key.Key_A, 'a', QtCore.Qt.KeyboardModifier.MetaModifier, False),
+        (QtCore.Qt.Key.Key_Eacute, 'é', QtCore.Qt.KeyboardModifier.NoModifier, False),
+    ]:
+        QtWidgets.QApplication.sendEvent(
+            canvas,
+            QtGui.QKeyEvent(QtCore.QEvent.Type.KeyPress, code, modifier, text, repeat),
+        )
+    key(canvas, QtCore.QEvent.Type.KeyRelease)
+    assert session.keys == [ord('a'), ord('B'), 8, 10, 10, 27]
+    assert not session.inputs and not canvas.active
+    session.editing_name = False
+    key(canvas, QtCore.QEvent.Type.KeyPress)
+    key(canvas, QtCore.QEvent.Type.KeyRelease)
+    assert session.inputs == [('a', True), ('a', False)]
     canvas.close()
 
 
