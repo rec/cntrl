@@ -14,8 +14,10 @@ def target() -> models.Target:
 
 
 @pytest.mark.parametrize('version', [36, 38])
+@pytest.mark.parametrize('legacy_library', [False, True])
 def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     version: int,
+    legacy_library: bool,
     target: models.Target,
 ) -> None:
     original = bytearray(bytes.fromhex((ROOT / 'setup36.golden').read_text()))
@@ -44,7 +46,19 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
         + songs.text('Saved', 64) * 2
         + b'CSP6'
     )
-    library = prefix + (struct.pack('<I', len(source)) + source) * 2
+    stored_prefix = (
+        struct.pack('<II', 1, 1)
+        + first
+        + struct.pack('<64sI', songs.text('Saved', 64), 2)
+        + second
+        + struct.pack('<64sI', songs.text('Tonight', 64), 2)
+        + songs.text('Saved', 64) * 2
+        + b'CSP5'
+        if legacy_library
+        else prefix
+    )
+    library = stored_prefix + (struct.pack('<I', len(source)) + source) * 2
+    assert songs.decode(library).setlists[0].songs == ['Saved', 'Saved']
     upgraded = songs.upgrade(library, {}, target=target)
     core = binary_format.core(upgraded, binary_format.Kind.songs)
     assert core[: len(prefix)] == prefix
@@ -68,6 +82,36 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
 def test_empty_song_library_upgrade_preserves_its_bytes(target: models.Target) -> None:
     source = songs.encode(songs.Library())
     assert songs.upgrade(source, {}, target=target) == source
+
+
+@pytest.mark.parametrize('wrapped', [False, True])
+def test_csp5_empty_library_migrates_to_csp6(
+    target: models.Target, wrapped: bool
+) -> None:
+    source = struct.pack('<II', 0, 0) + b'CSP5'
+    if wrapped:
+        source = binary_format.wrap(source, binary_format.Kind.songs)
+    assert songs.decode(source) == songs.Library()
+    assert songs.source_snapshots(source) == set()
+    upgraded = songs.upgrade(source, {}, target=target)
+    assert upgraded == songs.encode(songs.Library())
+    assert songs.upgrade(upgraded, {}, target=target) == upgraded
+
+
+def test_csp5_migration_rejects_opaque_metadata(target: models.Target) -> None:
+    source = binary_format.Document(
+        kind=binary_format.Kind.songs,
+        records=[
+            binary_format.Record(
+                tag=binary_format.CORE,
+                required=True,
+                data=struct.pack('<II', 0, 0) + b'CSP5',
+            ),
+            binary_format.Record(tag=399, data=b'opaque references'),
+        ],
+    ).pack()
+    with pytest.raises(ValueError, match='opaque metadata'):
+        songs.upgrade(source, {}, target=target)
 
 
 def test_upgrade_rejects_truncated_embedded_sources(target: models.Target) -> None:

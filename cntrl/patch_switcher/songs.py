@@ -331,7 +331,9 @@ def upgrade(
 ) -> bytes:
     """Upgrade embedded setups while preserving song and node selections."""
     original = data
-    data = binary_format.core(data, binary_format.Kind.songs)
+    data = _current_core(data)
+    if data != binary_format.core(original, binary_format.Kind.songs):
+        binary_format.require_structural_edit(original, binary_format.Kind.songs)
     prefix, _, _, _, sources = _parse(data)
     result = bytearray(data[:prefix])
     for source in sources:
@@ -477,7 +479,9 @@ def decode(data: bytes) -> Library:
 
 def reindex(data: bytes, names: list[str]) -> bytes:
     """Relink captured setup references to the deployed bundle's sorted table."""
-    core = binary_format.core(data, binary_format.Kind.songs)
+    core = _current_core(data)
+    if core != binary_format.core(data, binary_format.Kind.songs):
+        binary_format.require_structural_edit(data, binary_format.Kind.songs)
     prefix, _, _, _, sources = _parse(core)
     result = bytearray(core[:prefix])
     for source in sources:
@@ -491,6 +495,51 @@ def reindex(data: bytes, names: list[str]) -> bytes:
     )
 
 
+def _current_core(data: bytes) -> bytes:
+    data = binary_format.core(data, binary_format.Kind.songs)
+    if len(data) < 12:
+        raise ValueError('invalid song library size')
+    ns, nl = struct.unpack_from('<II', data)
+    for header_size, marker in ((SONG.size, b'CSP6'), (SONG.size - 4, b'CSP5')):
+        offset = 8
+        prefix = bytearray(data[:offset])
+        valid = True
+        for song, records in ((True, ns), (False, nl)):
+            for _ in range(records):
+                first_size = SELECTION.size if song else 0
+                if offset + first_size + header_size > len(data):
+                    valid = False
+                    break
+                prefix += data[offset : offset + first_size]
+                offset += first_size
+                count = struct.unpack_from('<I', data, offset + 64)[0]
+                if song and not count:
+                    valid = False
+                    break
+                prefix += data[offset : offset + 68]
+                prefix += (
+                    data[offset + 68 : offset + 72]
+                    if marker == b'CSP6'
+                    else struct.pack('<I', 0xFFFFFFFF)
+                )
+                offset += header_size
+                size = (count - 1) * SELECTION.size if song else count * 64
+                if size > len(data) - offset:
+                    valid = False
+                    break
+                prefix += data[offset : offset + size]
+                offset += size
+            if not valid:
+                break
+        if valid and data[offset : offset + 4] == marker:
+            return (
+                data
+                if marker == b'CSP6'
+                else bytes(prefix) + b'CSP6' + data[offset + 4 :]
+            )
+    raise ValueError('invalid song records or missing song Patch sources')
+
+
 def _parse(
     data: bytes,
 ) -> tuple[
@@ -500,7 +549,7 @@ def _parse(
     list[Setlist],
     list[bytes],
 ]:
-    data = binary_format.core(data, binary_format.Kind.songs)
+    data = _current_core(data)
     if len(data) < 12:
         raise ValueError('invalid song library size')
     ns, nl = struct.unpack_from('<II', data)
@@ -908,7 +957,7 @@ def run(command: Copy | Download) -> None:
                     source = source_archive.attach(embedded[0], archive)
                     data = binary_format.replace_core(
                         data,
-                        binary_format.core(data, binary_format.Kind.songs)[:prefix]
+                        _current_core(data)[:prefix]
                         + struct.pack('<I', len(source))
                         + source,
                         binary_format.Kind.songs,

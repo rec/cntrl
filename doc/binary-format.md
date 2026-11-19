@@ -123,6 +123,13 @@ document, until the end of the core. External document selections use source
 index `0xffffffff`; captured source and node indices are zero based.
 Order, repetitions and node identities are significant.
 
+Host backup readers also accept the preceding `CSP5` library layout. Its song
+and setlist headers omit the binding-map field. Offline upgrade inserts
+`0xffffffff` for those fields and writes `CSP6`, preserving selections, labels,
+setlist entries and captured sources. Empty libraries migrate the same way.
+Opaque outer metadata blocks this structural migration; the original backup
+remains unchanged.
+
 Control-map nodes (kind 10) use their flag byte as an inheritance mask: bit zero
 includes switches and bit one includes expression assignments. The default is
 2. Binding-scope directory nodes (kind 19) have zero flags and a 67-byte payload:
