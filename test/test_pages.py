@@ -64,6 +64,7 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     data = compiler.compile_show({'fill_in_styles': False}, {}, [], device)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     pages = exported['pages']
+    assert exported['layout']['focus'] == ('tools' if count >= 2 else 'main')
     assert pages['patch-switcher']['min_windows'] == 0
     if count == 3:
         assert exported['regions']['tools']['pages'][-3:] == [
@@ -79,6 +80,14 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     if count >= 2:
         assert pages['language']['min_windows'] == 2
     assert compiler.compile_show(exported, {}, [], device) == data
+
+
+def test_default_tools_honor_explicit_performance_focus() -> None:
+    data = compiler.compile_show(
+        {'layout': {'focus': 'performance'}, 'fill_in_styles': False}, {}, [], target()
+    )
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['layout']['focus'] == 'performance'
 
 
 def test_explicit_pong_needs_three_displays() -> None:

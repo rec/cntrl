@@ -19,8 +19,9 @@ next page. Scrolling wraps at either end, and the initial highlight follows the
 active language. Browsing alone does not change the UI language. The existing
 reverse-page gesture still works. The old nested menu selector is removed.
 
-The page is included in the default catalogue on targets with at least two
-displays. A one-display target omits it by default and rejects an explicit
+The page is included in the default utility-page cycle immediately before None,
+after Pong on targets with at least three displays. A one-display target omits
+it by default and rejects an explicit
 `type = 'language'` page; USB language commands remain available.
 For explicit page catalogues, add a named page with `type = 'language'` and put
 it in the desired region. The page always claims two windows, regardless of

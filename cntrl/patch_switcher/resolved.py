@@ -569,7 +569,11 @@ def export(data: bytes) -> str:
         ]
         try:
             authored = Setup.model_validate(
-                {k: source[k] for k in ('pages', 'regions', 'layout') if k in source}
+                {
+                    k: source.get(k, result.get(k))
+                    for k in ('pages', 'regions', 'layout')
+                    if k in source or k in result
+                }
             )
             same_pages = (
                 layout.pack(authored, windows)
