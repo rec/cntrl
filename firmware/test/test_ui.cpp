@@ -723,7 +723,16 @@ int main() {
     assert(display.pixels[view.lines[0].graphics.top * 24 + title_x] == 0xffff);
     pages.viewport({200, 128, 0, 0});
     const auto status_view = pages.view(0,0,status);
-    assert(std::strcmp(status_view.lines[6].text, "Starts:42  Git:000a1b2") == 0);
+    assert(std::strcmp(status_view.lines[6].text, "Starts:42") == 0);
+    assert(std::strcmp(status_view.lines[7].text, "0:00:00") == 0);
+    assert(std::strcmp(status_view.lines[8].text, "000a1b2") == 0);
+    for (unsigned i : {7u, 8u}) {
+        const auto &line = status_view.lines[i];
+        const auto bounds = fonts.bounds(line.graphics.font, line.graphics.size, 0, line.text);
+        assert(line.x + bounds.left + bounds.width == 200);
+        assert(line.y == status_view.lines[i - 2].y);
+        assert(line.color_mask == (uint64_t(1) << std::strlen(line.text)) - 1);
+    }
     {
         auto captured_status = status;
         captured_status.disk_valid = true;
@@ -760,13 +769,13 @@ int main() {
         cntrl::ui::i18n::translated_ui = true;
         const auto localized = pages.view(0, 0, status);
         assert(localized.lines[0].graphics.font == cntrl::ui::localized_face);
-        for (unsigned i = 1; i <= 6; ++i)
+        for (unsigned i = 1; i <= 8; ++i)
             assert(localized.lines[i].graphics.font == cntrl::ui::status_face);
         cntrl::ui::i18n::translated_ui = false;
         pages.configure(settings);
     }
     for (unsigned i = 1; i <= 6; ++i) assert(!std::strstr(status_view.lines[i].text,": "));
-    for (const auto *label : {"Starts:","Git:"}) {
+    for (const auto *label : {"Starts:"}) {
         const auto &line = status_view.lines[6];
         const unsigned first = unsigned(std::strstr(line.text,label) - line.text);
         for (unsigned i = first; i < first + std::strlen(label); ++i)
@@ -804,8 +813,9 @@ int main() {
         preview.configure(sample_settings); preview.font_preview("UW ttyp0 R 6x12",12);
         const auto sample = preview.view(0,0,status);
         assert(std::strncmp(sample.lines[0].text,"UW ttyp",7) == 0);
-        assert(std::strcmp(sample.lines[6].text,"Starts:42 ") == 0);
-        for (unsigned i = 1; i <= 6; ++i) {
+        assert(std::strcmp(sample.lines[6].text,"St") == 0);
+        assert(std::strcmp(sample.lines[8].text,"000a1b2") == 0);
+        for (unsigned i = 1; i <= 8; ++i) {
             assert(sample.lines[i].graphics.font == 254);
             assert(sample.lines[i].graphics.size == 12);
         }
