@@ -1241,7 +1241,6 @@ public:
 #endif
         return reserved;
     }
-    bool keyboard(unsigned i, bool pressed) { return board.keyboard_button(i, pressed); }
     bool monitor(unsigned i, bool pressed) { return board.monitor_button(i, pressed); }
     bool looper(unsigned i, bool pressed) { return board.looper_button(i, pressed); }
     bool expression(unsigned i) { return board.expression_button(i); }
@@ -1305,7 +1304,6 @@ public:
         (void)i; return std::nullopt;
 #endif
     }
-    void keyboard_release(unsigned input) { board.keyboard_button(input, false); }
     bool panic_open() const {
 #if CNTRL_PANIC
         return board.panic.open();

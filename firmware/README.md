@@ -558,7 +558,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
-| Page layout, after optional expression, clock, keyboard, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 window count and one u8 surrender-order entry per display. At most four patch-switchers and 36 pages. Page types follow `layout.PAGE_TYPES` |
+| Page layout, after optional expression, clock, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 window count and one u8 surrender-order entry per display. At most four patch-switchers and 36 pages. Page types follow `layout.PAGE_TYPES`; ID 9 is unassigned |
 | Movie lists, after page layout | `CMOV`, u16 startup count, u16 idle count, then startup and idle CRC32 asset keys as u32 values |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
 | Display header, 16 bytes | `CDSP`, u16 style count, page count, text count, page-data byte count; u32 source-metadata byte count |
@@ -694,7 +694,7 @@ A zero channel denotes an unassigned jack.
 ### Pages
 
 By default the rightmost window starts on Status. F cycles through Status, Firmware,
-MIDI Cable Test, Panic, TRS Ports, Expression, MIDI Clock, Clock Tempo, Keyboard and Tap Tempo using
+MIDI Cable Test, Panic, TRS Ports, Expression, MIDI Clock, Clock Tempo and Tap Tempo using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Tap
 Tempo. Sending and undo keep an auxiliary page in place.

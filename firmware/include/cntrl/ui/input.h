@@ -24,7 +24,6 @@ public:
         }
         application_.held = pressed | auxiliary_held;
         if (controls_.confirm < controls_.count && (events[controls_.confirm] & release_event)) {
-            services.keyboard_release(controls_.confirm);
             if (services.panic_open()) services.panic_release(now);
         }
         const bool replay = !application_.feature_open(application_services_) && controls_.previous < controls_.count && pressed == (1u << controls_.previous);

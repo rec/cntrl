@@ -150,8 +150,8 @@ return probe messages to exercise the input indicators. Leaving the page stops
 the test and restores normal setup routing.
 
 Panic remains available and sends through the shared firmware's MIDI output
-path. When the selected controller supports USB keyboard output, its Keyboard
-page and patches emit inspectable eight-byte HID reports in the event log and
+path. When the selected controller supports USB keyboard output, keyboard
+patch actions emit inspectable eight-byte HID reports in the event log and
 saved trace. They do not type into other applications. Stock-firmware selection
 emits a visible simulated transition and suspends the CNTRL runtime; restart
 the session to return. The emulator cannot execute the pedal's stock ARM image.

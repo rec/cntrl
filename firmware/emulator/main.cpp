@@ -389,7 +389,6 @@ struct Actions {
     void invoke(ui::Operation operation) { board.app->controller().executor().invoke(StatePatch{unsigned(operation)}); }
     void browse(bool reverse) { board.browse_page(reverse); }
     bool midi_reserved() const { return board.panic_owns_midi; }
-    bool keyboard(unsigned i,bool pressed) { return board.keyboard_button(i,pressed); }
     bool monitor(unsigned i,bool pressed) { return board.monitor_button(i,pressed); }
     bool looper(unsigned i,bool pressed) { return board.looper_button(i,pressed); }
     bool expression(unsigned i) { return board.expression_button(i); }
@@ -504,7 +503,6 @@ public:
         }
     }
     std::optional<unsigned> debounce(unsigned index) const { return switches.debounce_ms(index); }
-    void keyboard_release(unsigned index) { board.keyboard_button(index,false); }
     bool panic_open() const { return board.panic.open(); }
     void panic_release(uint32_t) { board.panic.button(false); }
     bool animation_controls(uint8_t pressed,uint32_t now,bool replay) { return movie_session.controls(pressed,now,replay); }
@@ -559,8 +557,7 @@ public:
         if (board.stock_firmware) return;
         board.leave_panic();
         board.leave_cable_test();
-        for (unsigned i = 0; i < target::button_count; ++i) board.keyboard_button(i,false);
-        board.poll_keyboard();
+        board.release_keyboard();
         board.held = 0; std::fill(std::begin(board.contacts),std::end(board.contacts),uint8_t(0));
         for (unsigned i = 0; i < 32; ++i) if (application.held & (uint64_t(1) << i)) switches.button(i,false,board.milliseconds());
         application.held = 0; std::fill(buttons.begin(),buttons.end(),ButtonState{});

@@ -54,7 +54,7 @@ function bodies, not complete independently linked features:
 | `midi::Monitor`/`MonitorDecoder` | 1886 | Monitor: 4–8 KiB |
 | `animation::Player`, `Session`, `Receiver`, `ColorCycle`, `Router` | 3908 | Movie playback: 6–12 KiB |
 | `SetupUi`, `ModuleMenu`, `StorageListing`, `HistoryImport`, `DiskSpeed` | 6304 | Optional storage tools: 8–16 KiB; some ownership remains resident |
-| `Keyboard` | 416 | Keyboard controls/page: 2–4 KiB |
+| `Keyboard` | 416 | Keyboard patch actions: 2–4 KiB |
 
 Useful context: selected `Routing<...>` bodies occupy 29360 bytes, while
 `ui::Renderer`/`Raster`/`Pages`/`PageHost` together occupy 25716 bytes. These

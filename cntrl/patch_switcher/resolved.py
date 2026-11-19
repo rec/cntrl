@@ -298,11 +298,7 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
     if flags & page_settings.CLOCK_FLAG:
         cursor += page_settings.CLOCK.size
     if data[cursor : cursor + 4] == b'CKBD':
-        cursor += (
-            6
-            + struct.unpack_from('<H', data, cursor + 4)[0]
-            * page_settings.KEYBOARD.size
-        )
+        raise ValueError('Keyboard page has been removed; recompile this setup')
     gestures = None
     shifted = None
     if flags & GESTURES_FLAG:
@@ -556,13 +552,6 @@ def export(data: bytes) -> str:
     if flags & page_settings.CLOCK_FLAG:
         pages.update(page_settings.unpack_clock(data, cursor, names))
         cursor += page_settings.CLOCK.size
-    if data[cursor : cursor + 4] == b'CKBD':
-        pages['keyboard'] = page_settings.unpack_keyboard(data, cursor + 4)
-        cursor += (
-            6
-            + struct.unpack_from('<H', data, cursor + 4)[0]
-            * page_settings.KEYBOARD.size
-        )
     result['page_settings'] = pages
     if flags & GESTURES_FLAG:
         cursor += 5 * GESTURES.size
@@ -727,12 +716,6 @@ def export(data: bytes) -> str:
             hooks += page_settings.EXPRESSION.size * 4
         if flags & page_settings.CLOCK_FLAG:
             hooks += page_settings.CLOCK.size
-        if data[hooks : hooks + 4] == b'CKBD':
-            hooks += (
-                6
-                + struct.unpack_from('<H', data, hooks + 4)[0]
-                * page_settings.KEYBOARD.size
-            )
         if flags & GESTURES_FLAG:
             hooks += 5 * GESTURES.size
         if data[hooks : hooks + 4] == b'CHOK':
@@ -775,12 +758,6 @@ def export(data: bytes) -> str:
                 address += page_settings.EXPRESSION.size * 4
             if flags & page_settings.CLOCK_FLAG:
                 address += page_settings.CLOCK.size
-            if data[address : address + 4] == b'CKBD':
-                address += (
-                    6
-                    + struct.unpack_from('<H', data, address + 4)[0]
-                    * page_settings.KEYBOARD.size
-                )
             fields = GESTURES.unpack_from(data, address + i * GESTURES.size)
             if fields[len(GESTURE_EVENTS)]:
                 gesture: dict[str, object] = {
@@ -873,7 +850,16 @@ def _patch(
         # Export the actual program when an edit changes its catalogue identity
         # or clears an inherited setting (TOML has no null override).
     value = {k: v for k, v in properties.items() if not k.startswith('_')}
-    if kind == 18:
+    if kind == 20:
+        if flags or size != 8 or data[cursor] > 1:
+            raise ValueError('invalid keyboard action')
+        value.update(
+            operation='keyboard',
+            action='press' if data[cursor] else 'release',
+            modifiers=data[cursor + 1],
+            keys=[k for k in data[cursor + 2 : cursor + 8] if k],
+        )
+    elif kind == 18:
         if flags or size != 6:
             raise ValueError('invalid global setting action')
         field, clear, encoded = struct.unpack_from('<BBI', data, cursor)

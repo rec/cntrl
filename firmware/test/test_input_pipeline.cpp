@@ -62,7 +62,6 @@ struct Actions {
     void invoke(cntrl::ui::Operation) { assert(false); }
     void browse(bool reverse) { page_directions.push_back(reverse); }
     bool midi_reserved() const { return false; }
-    bool keyboard(unsigned, bool) { return false; }
     bool monitor(unsigned, bool) { return false; }
     bool looper(unsigned, bool) { return false; }
     bool expression(unsigned) { return false; }
@@ -88,7 +87,6 @@ struct Services {
     bool scan_available() const { return hardware.timestamp >= pending_until; }
     void scan(uint32_t now, uint32_t) { ++scans; input.scan(sampled, now, *this); }
     std::optional<unsigned> debounce(unsigned) const { return std::nullopt; }
-    void keyboard_release(unsigned) {}
     bool panic_open() const { return false; }
     void panic_release(uint32_t) {}
     bool animation_controls(uint8_t, uint32_t, bool) { return false; }

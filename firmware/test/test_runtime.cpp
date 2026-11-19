@@ -55,7 +55,6 @@ struct Actions {
     void switch_button(unsigned, bool pressed, uint32_t) { actions.push_back(pressed ? 20 : 21); }
     void browse(bool reverse) { actions.push_back(reverse ? 31 : 30); }
     bool midi_reserved() const { return reserved; }
-    bool keyboard(unsigned, bool) { return false; }
     bool monitor(unsigned, bool pressed) { if (monitoring) actions.push_back(pressed ? 91 : 92); return monitoring; }
     bool looper(unsigned, bool) { return false; }
     bool expression(unsigned) { return false; }

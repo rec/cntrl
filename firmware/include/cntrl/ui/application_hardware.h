@@ -41,7 +41,8 @@ public:
         const auto &platform = static_cast<const Platform &>(*this);
         return midi::available_outputs(platform.midi_outputs(), [&](const char *name) { return platform.available(name); });
     }
-    bool keyboard_button(unsigned input, bool pressed) { return presentation().keyboard_button(input, pressed); }
+    KeyboardDelivery keyboard_action(const KeyboardKeys &keys, bool pressed) override { return presentation().keyboard_action(keys, pressed); }
+    bool release_keyboard() override { return presentation().release_keyboard(); }
     bool monitor_button(unsigned input, bool pressed) { return presentation().monitor_button(input, pressed); }
     bool looper_button(unsigned input, bool pressed) { return presentation().looper_button(input, pressed); }
     void poll_keyboard() { presentation().poll_keyboard(); }

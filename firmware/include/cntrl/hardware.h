@@ -9,6 +9,7 @@
 #include "memory.h"
 #include "relay_outputs.h"
 #include "counters.h"
+#include "keyboard.h"
 
 namespace cntrl {
 enum class LanguagePreparation { pending, ready, failed };
@@ -87,6 +88,8 @@ struct Hardware : RelayDriver {
     virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
     virtual void configure_trs_ports(const uint8_t *) {}
     virtual bool supports_keyboard() const { return false; }
+    virtual KeyboardDelivery keyboard_action(const KeyboardKeys &, bool) { return KeyboardDelivery::failed; }
+    virtual bool release_keyboard() { return true; }
     virtual bool supports_trs_mode(unsigned, midi::TrsMode mode) const { return mode == midi::TrsMode::off; }
     virtual bool output_idle() const { return true; }
     virtual bool configuration_handoff() { return output_idle(); }

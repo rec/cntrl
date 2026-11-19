@@ -66,8 +66,9 @@ def test_fewer_frame_buffers_leave_more_capacity_for_midi_storage() -> None:
 @pytest.mark.parametrize('version', [44, 45])
 def test_previous_development_setup_requires_upgrade_and_keeps_defaults(
     version: int,
+    legacy_setups: dict[int, bytes],
 ) -> None:
-    core = bytes.fromhex((ROOT / f'setup{version}.golden').read_text())
+    core = legacy_setups[version]
     previous = bytearray(binary_format.wrap(core))
     struct.pack_into('<H', previous, 4, 0x8000 | version)
     struct.pack_into('<I', previous, 16, 0)

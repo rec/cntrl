@@ -438,6 +438,16 @@ class Relay(Presentation, frozen=True):
         return self
 
 
+class Keyboard(Presentation, frozen=True):
+    operation: Literal['keyboard']
+    action: Literal['press', 'release']
+    keys: Annotated[
+        list[Annotated[int, Field(strict=True, ge=4, le=115)]],
+        Field(min_length=1, max_length=6),
+    ]
+    modifiers: Annotated[int, Field(strict=True, ge=0, le=255)] = 0
+
+
 class PlayMidiFile(Presentation, frozen=True):
     operation: Literal['play-midi-file']
     filename: Annotated[str, Field(max_length=95)] = ''
@@ -587,6 +597,7 @@ ConcretePatch = (
         | MidiLooperAction
         | MidiStream
         | Relay
+        | Keyboard
         | ScrollCounter,
         Field(discriminator='operation'),
     ]
@@ -881,17 +892,6 @@ class ExpressionAssignment(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class KeyboardShortcut(BaseModel, frozen=True):
-    name: Annotated[str, Field(min_length=1, max_length=31, pattern=r'^[ -~]+$')]
-    keys: Annotated[
-        list[Annotated[int, Field(strict=True, ge=4, le=115)]],
-        Field(min_length=1, max_length=6),
-    ]
-    modifiers: Annotated[int, Field(strict=True, ge=0, le=255)] = 0
-
-    model_config = ConfigDict(extra='forbid')
-
-
 class LooperSettings(BaseModel, frozen=True):
     inputs: Annotated[list[str], Field(min_length=1)] | None = None
     outputs: Annotated[list[str], Field(min_length=1)] | None = None
@@ -1008,7 +1008,6 @@ class ArpeggiatorSettings(LooperSettings, frozen=True):
 class PageSettings(BaseModel, frozen=True):
     arpeggiator: ArpeggiatorSettings | None = None
     looper: LooperSettings | None = None
-    keyboard: list[KeyboardShortcut] = Field(default_factory=list)
     expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)
     clock_outputs: list[str] = Field(default_factory=list)
     clock_bpms: Annotated[
@@ -1128,7 +1127,6 @@ class Page(BaseModel, frozen=True):
         'expression',
         'clock-transport',
         'clock-tempo',
-        'keyboard',
         'midi-monitor',
         'midi-looper',
         'arpeggiator',
@@ -1280,7 +1278,6 @@ class Setup(BindingScope, frozen=True):
                     'expression',
                     'clock-transport',
                     'clock-tempo',
-                    'keyboard',
                     'tap-tempo',
                     'pong',
                     'language',

@@ -4,8 +4,8 @@
 #include <cstdint>
 
 namespace cntrl {
-struct KeyboardShortcut {
-    char name[32] = {};
+enum class KeyboardDelivery { pending, complete, failed };
+struct KeyboardKeys {
     uint8_t modifiers = 0, keys[6] = {};
 };
 struct KeyboardReport {
@@ -22,28 +22,29 @@ struct KeyboardSink {
 };
 class Keyboard {
 public:
-    bool press(unsigned owner, const KeyboardShortcut &shortcut) {
-        if (!connected_) return false;
-        unsigned index = 0;
-        while (index < held_.size() && held_[index].owner != owner) ++index;
-        const bool added = index == held_.size();
-        if (added && !held_.append({owner, {}})) return false;
-        auto previous = held_[index].report;
-        held_[index].report.modifiers = shortcut.modifiers;
-        std::memcpy(held_[index].report.keys, shortcut.keys, 6);
+    KeyboardDelivery execute(const KeyboardKeys &shortcut, bool pressed, KeyboardSink &sink) {
+        if (!connected_) return KeyboardDelivery::failed;
+        if (!sent_valid_) return KeyboardDelivery::pending;
+        KeyboardReport keys;
+        keys.modifiers = shortcut.modifiers;
+        std::memcpy(keys.keys, shortcut.keys, 6);
+        bool exists = false;
+        for (const auto &held : held_) if (held == keys) exists = true;
+        if (pressed == exists) return KeyboardDelivery::complete;
+        if (pressed && !held_.append(keys)) return KeyboardDelivery::failed;
         KeyboardReport next;
-        if (!report(next)) {
-            if (added) held_.erase_if([owner](const Hold &hold) { return hold.owner == owner; });
-            else held_[index].report = previous;
-            return false;
+        const bool valid = report(next, pressed ? nullptr : &keys);
+        const bool delivered = valid && (next == sent_ || sink.keyboard_report(next));
+        if ((pressed && !delivered) || (!pressed && delivered)) {
+            held_.erase_if([&keys](const KeyboardReport &held) { return held == keys; });
         }
-        return true;
-    }
-    void release(unsigned owner) {
-        for (auto i = held_.begin(); i != held_.end(); ++i)
-            if (i->owner == owner) { held_.erase(i); return; }
+        if (!valid) return KeyboardDelivery::failed;
+        if (!delivered) return KeyboardDelivery::pending;
+        sent_ = next;
+        return KeyboardDelivery::complete;
     }
     void clear() { held_.release(); }
+    bool released() const { return !connected_ || (sent_valid_ && sent_ == KeyboardReport{}); }
     void poll(bool connected, KeyboardSink &sink) {
         if (connected != connected_) {
             clear(); connected_ = connected; sent_valid_ = false;
@@ -56,15 +57,15 @@ public:
         }
     }
 private:
-    struct Hold { unsigned owner; KeyboardReport report; };
-    CheckedList<Hold> held_;
+    CheckedList<KeyboardReport> held_;
     KeyboardReport sent_;
     bool connected_ = false, sent_valid_ = false;
-    bool report(KeyboardReport &next) const {
+    bool report(KeyboardReport &next, const KeyboardReport *omit = nullptr) const {
         unsigned count = 0;
         for (const auto &h : held_) {
-            next.modifiers |= h.report.modifiers;
-            for (uint8_t key : h.report.keys) {
+            if (omit && h == *omit) continue;
+            next.modifiers |= h.modifiers;
+            for (uint8_t key : h.keys) {
                 if (!key) continue;
                 bool found = false;
                 for (unsigned i = 0; i < count; ++i) if (next.keys[i] == key) found = true;

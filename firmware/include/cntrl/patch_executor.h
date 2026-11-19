@@ -176,6 +176,14 @@ public:
         const char *output = nullptr;
         const uint8_t *bytes = nullptr; unsigned length = 0;
         switch (n[0]) {
+        case 20: {
+            KeyboardKeys keys;
+            keys.modifiers = p[1]; std::memcpy(keys.keys, p + 2, 6);
+            const auto delivery = hardware_.keyboard_action(keys, p[0]);
+            if (delivery == KeyboardDelivery::pending) return;
+            if (delivery == KeyboardDelivery::failed) { fail(ui::i18n::Message::application_operation_failed); return; }
+            started_ = true; complete_leaf(); return;
+        }
         case 18:
             if (!hardware_.global_setting(p[0], u32(p + 2), p[1] != 0)) { fail(ui::i18n::Message::global_setting_rejected); return; }
             started_ = true; complete_leaf(); return;
@@ -417,6 +425,7 @@ private:
     }
     void dispatch_stock(uint8_t buttons) {
         if (!leaving()) return;
+        if (!hardware_.release_keyboard()) return;
         // Count the visit before checkpointing, so a return resumes after it.
         ++completed_; if (depth_) --depth_;
         builtin_stock_ = 0; started_ = true; status_ = Status::suspended;

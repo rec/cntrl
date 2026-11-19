@@ -731,7 +731,6 @@ def compile_show(
         packed_pages = page_settings.pack(show, target)
         clock = page_settings.pack_clock(show, target)
         expression = page_settings.pack_expression(show, target, jacks)
-        keyboard = page_settings.pack_keyboard(show, target)
         looper_settings = looper.pack(show, target)
         arpeggiator_settings = arpeggiator.pack(show, target)
         page_layout = layout.pack(
@@ -859,7 +858,6 @@ def compile_show(
     body += (
         expression
         + clock
-        + keyboard
         + gestures
         + (
             b'CHOK' + b''.join(hook_records)
@@ -1091,6 +1089,7 @@ class PatchCompiler:
                 models.MidiLooperAction,
                 models.MidiStream,
                 models.Relay,
+                models.Keyboard,
                 models.ScrollCounter,
             ),
         ):
@@ -1223,6 +1222,11 @@ class PatchCompiler:
                     value.enabled,
                 ),
             )
+        elif isinstance(value, models.Keyboard):
+            if 'usb-hid-keyboard' not in self.target.functions:
+                self.errors.append(f'{path}: USB HID keyboard unavailable on target')
+            keys = bytes(sorted(set(value.keys))).ljust(6, b'\0')
+            kind, payload = 20, bytes((value.action == 'press', value.modifiers)) + keys
         elif isinstance(value, models.Relay):
             if value.relay not in self.target.relay_outputs:
                 self.errors.append(f'{path}.relay: unsupported contact {value.relay!r}')

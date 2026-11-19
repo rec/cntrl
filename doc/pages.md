@@ -3,7 +3,7 @@
 A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
 `patch-switcher`, `status`, `tap-tempo`, `firmware`, `cable-test`, `panic`,
-`trs-ports`, `expression`, `clock-transport`, `clock-tempo`, `keyboard`,
+`trs-ports`, `expression`, `clock-transport`, `clock-tempo`,
 `midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, and `None`.
 Select a region or a page in the Pages and tools menu. F and the existing
 reverse-page control cycle only the focused region. Page and region names
@@ -160,8 +160,8 @@ not anchor content to a physical side.
 The encoded layout supports up to 255 named pages, subject to available memory.
 Display IDs and window counts follow the target's declared displays.
 
-Page preferences, expression assignments and keyboard shortcuts remain under
-`[page_settings]`. Patch display templates remain `[patch_views.NAME]`, referenced
+Page preferences and expression assignments remain under `[page_settings]`.
+Keyboard output uses patch actions. Patch display templates remain `[patch_views.NAME]`, referenced
 by `[windows.NAME]` through `view = 'NAME'`.
 
 ## Empty setups
