@@ -76,7 +76,7 @@ struct Panic {
     bool running = false;
     unsigned ticks = 0;
     bool active() const { return running; }
-    void tick(bool ready) { ++ticks; if (ready) running = false; }
+    void tick(uint32_t, bool ready) { ++ticks; if (ready) running = false; }
 };
 struct Services : cntrl::midi::Sink {
     cntrl::midi::Monitor *observer = nullptr;

@@ -143,13 +143,22 @@ public:
             pixel(t.x + col, t.y + row, knob * knob + dy * dy <= (int(height) - 4) * (int(height) - 4) ? (t.disabled ? 0xc618 : 0xffff) : t.disabled ? 0x8410 : t.enabled ? 0x07e0 : 0);
         }
     }
-    void corners() {
+    void corners(bool outlined = false) {
         const unsigned radius = std::min({viewport_.corner_radius, viewport_.width / 2, viewport_.height / 2}), diameter = 2 * radius;
+        if (outlined) {
+            rectangle(radius, 0, viewport_.width - 2 * radius, 1, settings_.foreground);
+            rectangle(radius, int(viewport_.height) - 1, viewport_.width - 2 * radius, 1, settings_.foreground);
+            rectangle(0, radius, 1, viewport_.height - 2 * radius, settings_.foreground);
+            rectangle(int(viewport_.width) - 1, radius, 1, viewport_.height - 2 * radius, settings_.foreground);
+        }
         for (unsigned y = 0; y < radius; ++y) for (unsigned x = 0; x < radius; ++x) {
             const unsigned dx = diameter - 2 * x - 1, dy = diameter - 2 * y - 1;
-            if (dx * dx + dy * dy <= diameter * diameter) continue;
-            pixel(x, y, 0); pixel(viewport_.width - 1 - x, y, 0);
-            pixel(x, viewport_.height - 1 - y, 0); pixel(viewport_.width - 1 - x, viewport_.height - 1 - y, 0);
+            const unsigned distance = dx * dx + dy * dy;
+            const bool outside = distance > diameter * diameter;
+            if (!outside && (!outlined || distance <= (diameter - 2) * (diameter - 2))) continue;
+            const uint16_t color = outside ? 0 : settings_.foreground;
+            pixel(x, y, color); pixel(viewport_.width - 1 - x, y, color);
+            pixel(x, viewport_.height - 1 - y, color); pixel(viewport_.width - 1 - x, viewport_.height - 1 - y, color);
         }
     }
 private:

@@ -11,6 +11,7 @@ struct Hardware : TestInputHardware, cntrl::PanicOutputs {
     std::vector<std::pair<uint8_t, bool>> brightness;
     bool connected[4] = {true, true, true, true}, blocked[4] = {};
     unsigned attempts = 0;
+    uint32_t now = 0;
     static unsigned index(const char *output) {
         const char *names[] = {"din", "trs", "usb-device", "usb-host"};
         for (unsigned i = 0; i < 4; ++i) if (!std::strcmp(output, names[i])) return i;
@@ -40,7 +41,7 @@ struct Hardware : TestInputHardware, cntrl::PanicOutputs {
 
 void tick(cntrl::Panic &panic, Hardware &hw, unsigned count) {
     for (unsigned i = 0; i < count; ++i) {
-        unsigned before = hw.attempts; panic.tick(true);
+        unsigned before = hw.attempts; panic.tick(++hw.now, true);
         assert(hw.attempts - before <= 1);
     }
 }
@@ -72,7 +73,7 @@ void test_tap_without_display_side_effects() {
 void test_hold_full_loop_and_release() {
     Hardware hw; cntrl::Panic panic(hw, hw);
     panic.enter(192); panic.button(true);
-    tick(panic, hw, 4 * 48);
+    tick(panic, hw, 1001);
     check_controllers(hw);
     assert(panic.status() == cntrl::Panic::Status::notes_off);
     for (const auto &messages : hw.messages) assert(messages.size() == 48);
@@ -111,7 +112,7 @@ void test_quick_tap_waits_for_handoff_and_retries_until_complete() {
     Hardware hw; cntrl::Panic panic(hw, hw);
     hw.blocked[2] = true;
     panic.enter(77); panic.button(true); panic.button(false);
-    for (unsigned i = 0; i < 10000; ++i) panic.tick(false);
+    for (unsigned i = 0; i < 10000; ++i) panic.tick(++hw.now, false);
     assert(panic.active() && !hw.attempts);
     tick(panic, hw, 10000);
     assert(panic.active() && panic.status() == cntrl::Panic::Status::ready);
@@ -125,4 +126,26 @@ void test_quick_tap_waits_for_handoff_and_retries_until_complete() {
     check_controllers(hw);
 }
 
-int main() { test_tap_without_display_side_effects(); test_hold_full_loop_and_release(); test_backpressure_and_disconnection(); test_quick_tap_waits_for_handoff_and_retries_until_complete(); }
+void test_all_off_lasts_one_second_on_every_held_loop() {
+    for (uint32_t start : {0u, UINT32_MAX - 500}) {
+        Hardware hw; hw.now = start; cntrl::Panic panic(hw, hw);
+        panic.enter(192); panic.button(true);
+        tick(panic, hw, 1000);
+        assert(panic.status() == cntrl::Panic::Status::all_off);
+        for (const auto &messages : hw.messages) assert(messages.size() == 48);
+        check_controllers(hw);
+        tick(panic, hw, 1);
+        assert(panic.status() == cntrl::Panic::Status::notes_off);
+        tick(panic, hw, 4 * 16 * 128);
+        assert(panic.status() == cntrl::Panic::Status::all_off);
+        tick(panic, hw, 999);
+        assert(panic.status() == cntrl::Panic::Status::all_off);
+        for (const auto &messages : hw.messages) assert(messages.size() == 48 + 2048 + 48);
+        tick(panic, hw, 1);
+        assert(panic.status() == cntrl::Panic::Status::notes_off);
+        panic.button(false);
+        assert(panic.status() == cntrl::Panic::Status::ready);
+    }
+}
+
+int main() { test_tap_without_display_side_effects(); test_hold_full_loop_and_release(); test_backpressure_and_disconnection(); test_quick_tap_waits_for_handoff_and_retries_until_complete(); test_all_off_lasts_one_second_on_every_held_loop(); }

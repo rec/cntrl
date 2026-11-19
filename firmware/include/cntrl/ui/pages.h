@@ -274,9 +274,10 @@ public:
             button.color = pressed ? red : dark_red; button.ring_color = settings_[R::ring_color];
             if (pressed) {
                 pane.graphics.foreground = red;
-                const unsigned height = vertical(24);
+                const unsigned height = vertical(48);
                 line(pane, 1, panic == cntrl::Panic::Status::notes_off ? i18n::text(i18n::Message::notes_off) : i18n::text(i18n::Message::all_off),
                      (viewport_.height - height) / 2, height, settings_[R::status_font], true, i18n::text(i18n::Message::notes_off));
+                pane.lines[1].graphics.foreground = 0x07e0;
             }
             return pane;
         }
@@ -595,7 +596,7 @@ private:
         const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::tap && page_ != Page::pong;
         if (ordinary) {
             face = 17;
-            maximum_size = std::min(maximum_size, index ? 12u : 16u);
+            maximum_size = std::min(maximum_size, index ? (page_ == Page::panic ? 24u : 12u) : 16u);
         } else if (!preview && page_ == Page::status && index) face = status_face;
         if (!preview && i18n::translated_ui && face != status_face) face = localized_face;
         l.graphics = pane.graphics; l.graphics.font = uint8_t(face);

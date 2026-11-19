@@ -34,11 +34,13 @@ public:
         hardware_.set_brightness(down ? 255 : brightness_, down);
         if (down && !active()) {
             first_ = true; phase_ = Phase::controllers; reset_progress();
+            start_pending_ = true;
         } else if (!down && !first_) phase_ = Phase::idle;
     }
     // At most one three-byte message per poll. A blocked output cannot starve others.
-    void tick(bool outputs_ready) {
+    void tick(uint32_t now, bool outputs_ready) {
         if (!active()) return;
+        if (start_pending_) { phase_started_ = now; start_pending_ = false; }
         if (!outputs_ready) return;
         for (unsigned attempt = 0; attempt < connections_.count; ++attempt) {
             unsigned port = cursor_;
@@ -65,9 +67,11 @@ public:
             break;
         }
         for (const auto &progress : progress_) if (!progress.done) return;
+        if (held_ && phase_ == Phase::controllers && uint32_t(now - phase_started_) < 1000) return;
         dirty_ = true; first_ = false;
         if (!held_) phase_ = Phase::idle;
         else phase_ = phase_ == Phase::controllers ? Phase::notes : Phase::controllers;
+        phase_started_ = now;
         reset_progress();
     }
 private:
@@ -80,6 +84,8 @@ private:
     Phase phase_ = Phase::idle;
     bool dirty_ = true;
     bool open_ = false, held_ = false, first_ = false;
+    bool start_pending_ = false;
+    uint32_t phase_started_ = 0;
     uint8_t brightness_ = 192;
     unsigned cursor_ = 0;
     void reset_progress() { for (auto &progress : progress_) progress = Progress(); cursor_ = 0; }
