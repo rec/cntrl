@@ -4,6 +4,16 @@ The emulator runs cntrl's shared C++ application in a native host process. A
 Python/PySide6 window supplies the controls and shows the production renderer's
 pixels. It does not run an ARM image or a manufacturer's original firmware.
 
+Desktop controls, help text, status captions and dialogs follow the language
+selected on the emulated pedal, including changes made during a session. The
+desktop catalogue supports exactly the pedal's languages. Shared captions reuse
+the pedal translations; desktop-only text lives in `cntrl/emulator/messages.toml`
+and `dialogs.toml`, outside the pedal's language packs. File dialogs use Qt widgets
+so their captions follow the pedal rather than the operating system language.
+Controller labels, authored names, port identifiers and replay data remain literal.
+Mirrored sessions use their captured language preference and installed packs;
+if the shared runtime falls back to English, the desktop follows that choice.
+
 Display images use integer scaling in physical screen pixels, including on
 Retina and fractional-DPI screens. Every pedal pixel occupies an equal-sized
 square block, with no smoothing. Small black margins inside the bezels are

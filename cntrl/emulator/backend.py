@@ -165,6 +165,7 @@ class Session:
         self.failed = False
         self.stock_firmware = False
         self.editing_name = False
+        self.language = 'en'
         self.held: set[str] = set()
         self.font_samples: list[font_comparison.FontSample] = []
         self.font_sample_index = 0
@@ -390,6 +391,8 @@ class Session:
                 )
             elif payload[0] == 8 and len(payload) == 2 and payload[1] <= 1:
                 self.editing_name = bool(payload[1])
+            elif payload[0] == 9:
+                self.language = payload[1:].decode()
             else:
                 raise ValueError('unknown native emulator response')
 

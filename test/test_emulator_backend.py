@@ -16,7 +16,13 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.emulator.replay import Scenario
 from cntrl.fonts import assets, catalogue, ui
-from cntrl.patch_switcher import compiler, device_globals, models, setup_bundle
+from cntrl.patch_switcher import (
+    compiler,
+    device_globals,
+    languages,
+    models,
+    setup_bundle,
+)
 from cntrl.patch_switcher.cli import compile_to_file
 from cntrl.patch_switcher.global_overlay import Overlay
 
@@ -26,6 +32,60 @@ class BackendFiles(BaseModel, frozen=True):
     target: models.Target
     executable: Path
     setup: Path
+
+
+@pytest.mark.parametrize('mirrored', [False, True])
+@pytest.mark.parametrize('installed', [False, True])
+def test_native_language_status_tracks_boot_and_pedal_selection(
+    backend_files: BackendFiles, tmp_path: Path, mirrored: bool, installed: bool
+) -> None:
+    files = backend_files
+    target = files.target.model_copy(
+        update={
+            'controls': models.TargetControls(confirm='a', next='b'),
+        }
+    )
+    setup = tmp_path / 'language.bin'
+    language_page = len(target.displays) > 1
+    write_bundle(
+        {
+            'language': {
+                'pages': {'tool': {'type': 'language' if language_page else 'status'}},
+            }
+        },
+        target,
+        setup,
+    )
+    executable = backend.build(
+        target, files.setup.parent / 'language-native', Path(__file__).parents[1]
+    )
+    global_folder = tmp_path / 'cntrl/global'
+    global_folder.mkdir(parents=True)
+    (global_folder / '0.bin').write_bytes(
+        device_globals.journal(Overlay(language='fr'))
+    )
+    if installed:
+        folder = tmp_path / 'cntrl/languages'
+        folder.mkdir()
+        (folder / 'fr.bin').write_bytes(languages.pack('fr'))
+    if mirrored:
+        (tmp_path / 'mirror.toml').write_text('')
+        (tmp_path / 'status-snapshot.bin').write_bytes(b'CSS1' + bytes(107))
+    with backend.Session(files.layout, target, executable, tmp_path, setup) as session:
+        assert session.language == ('fr' if installed else 'en')
+        if installed and language_page:
+            session.button('b', True)
+            session.advance(session.time_us + 60000)
+            session.button('b', False)
+            session.advance(session.time_us + 60000)
+            session.button('a', True)
+            session.advance(session.time_us + 60000)
+            session.button('a', False)
+            session.advance(1_000_000)
+            assert session.language == 'en'
+    assert sorted(p.name for p in (tmp_path / 'cntrl/languages').glob('*.bin')) == (
+        ['fr.bin'] if installed else []
+    )
 
 
 def control_setup(value: int) -> dict[str, object]:

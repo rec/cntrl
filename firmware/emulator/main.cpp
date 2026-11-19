@@ -583,6 +583,10 @@ public:
     void command(const std::vector<uint8_t> &bytes);
     void input_state() const {
         frame({8, uint8_t(!board.stock_firmware && !board.stock_pending && application.song_ui.editing_name())});
+        const char *language = board.current_language();
+        std::vector<uint8_t> state{9};
+        state.insert(state.end(), language, language + std::strlen(language));
+        frame(state);
     }
 private:
     void import_movies() {
