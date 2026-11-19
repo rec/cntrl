@@ -8,7 +8,8 @@ stay in place.
 
 Press C to start and temporarily set the screens to maximum brightness. Release
 C to restore the brightness that was active on entry. While C is held, the
-indicator is bright red and centered red text shows the current phase:
+indicator is bright red, the red focus outline follows the rounded page corners,
+and centered green text in a font up to 24 pixels shows the current phase:
 `All off` for controller resets or `Notes off` for the individual Note Off sweep.
 Release immediately removes the phase text and returns the indicator to dark red,
 including while the initial reset pass is still finishing. Browsing the page
@@ -29,7 +30,8 @@ A press starts this sequence on every available MIDI output, on channels 1..16:
 A tap completes this first controller sweep even after C is released. A blocked
 output is retried until it accepts the messages or becomes unavailable; there
 is no release timeout. Once all outputs have completed the pass, a continued
-hold starts Note Off messages with
+hold keeps `All off` visible for at least one second from the start of each
+controller sweep before starting Note Off messages with
 velocity 0, covering every note on every channel and output. Notes described to
 the user as 1..128 are encoded as MIDI values 0..127.
 

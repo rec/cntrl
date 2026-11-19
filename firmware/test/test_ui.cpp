@@ -285,6 +285,18 @@ static void pong_motion_only_changes_intersecting_windows() {
         assert((a.x != b.x || a.y != b.y || a.width != b.width || a.height != b.height) == (i == 1));
     }
 }
+static void focused_outline_follows_the_rounded_page_corners() {
+    Fonts fonts;
+    uint16_t pixels[8 * 8];
+    cntrl::ui::Raster raster(fonts, pixels);
+    cntrl::ScreenGraphics settings; settings.background = 0xffff; settings.foreground = 0xf800;
+    raster.configure({8, 8, 0, 3}, settings);
+    raster.corners(true);
+    const char *rows[] = {".######.", "##    ##", "#      #", "#      #", "#      #", "#      #", "##    ##", ".######."};
+    for (unsigned y = 0; y < 8; ++y) for (unsigned x = 0; x < 8; ++x)
+        assert(pixels[y * 8 + x] == (rows[y][x] == '.' ? 0 : rows[y][x] == '#' ? 0xf800 : 0xffff));
+}
+
 static void panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed() {
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
     cntrl::PageSettings settings;
@@ -306,7 +318,8 @@ static void panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pre
         const auto pressed = pages.view(1, 1000, {}, {}, phase);
         assert(pressed.heading_band && !std::strcmp(pressed.lines[0].text, "Panic"));
         assert(!std::strcmp(pressed.lines[1].text, phase == cntrl::Panic::Status::all_off ? "All off" : "Notes off"));
-        assert(pressed.lines[1].graphics.foreground == 0xf800 && pressed.circles[0].color == 0xf800);
+        assert(pressed.graphics.foreground == 0xf800 && pressed.circles[0].color == 0xf800);
+        assert(pressed.lines[1].graphics.foreground == 0x07e0 && pressed.lines[1].graphics.size == 24);
         const auto bounds = fonts.bounds(pressed.lines[1].graphics.font, pressed.lines[1].graphics.size, 0, pressed.lines[1].text);
         assert(pressed.lines[1].x + bounds.left + bounds.width / 2 == 80);
         assert(pressed.lines[1].y + bounds.top + bounds.height / 2 == 64);
@@ -681,6 +694,7 @@ static void expression_reuses_its_initial_layout_and_redraws_only_changed_conten
 int main() {
     cable_test_preserves_its_original_font_and_indicators();
     panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed();
+    focused_outline_follows_the_rounded_page_corners();
     cntrl::memory_budget = 192 * 1024;
     menu_page_shows_its_physical_confirm_label();
     moving_shapes_repaint_only_their_damage_and_restore_overlaps();

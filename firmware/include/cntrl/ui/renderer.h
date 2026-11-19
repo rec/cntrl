@@ -354,14 +354,7 @@ private:
         if ((letter_ || raster_.intersects(line, y)) && raster_.letter(line, letter_, y)) ++letter_;
         else { letter_ = 0; if (++field_ == max_lines) {
             backgrounds(true);
-            if (painting_.focused) {
-                const auto viewport = screens_[unsigned(drawing_)].viewport;
-                raster_.rectangle(0,0,viewport.width,1,painting_.graphics.foreground);
-                raster_.rectangle(0,int(viewport.height) - 1,viewport.width,1,painting_.graphics.foreground);
-                raster_.rectangle(0,0,1,viewport.height,painting_.graphics.foreground);
-                raster_.rectangle(int(viewport.width) - 1,0,1,viewport.height,painting_.graphics.foreground);
-            }
-            raster_.corners(); rendering_ = false;
+            raster_.corners(painting_.focused); rendering_ = false;
         } }
     }
 #ifdef CNTRL_FLASH_ROUTINE
