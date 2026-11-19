@@ -3,10 +3,16 @@
 Do not create `.json` files unless explicitly requested by the user. Prefer
 TOML for configuration and structured data.
 
+# Avoid special purpose scripts
+
+`cntrl` already has commands that accomplish nearly every task you want. Please use
+these and avoid creating special-purpose scripts. You can add new functionality to
+`cntrl`, but avoid hard-coding filenames or directories there.
+
 # Hardware catalogue invariant
 
-All Morningstar-specific code, tests, data, firmware, analysis and documentation
-must live under `cntrl/maker/morningstar/mc/`.
+Code should try to be generic and write to the generic API of a MIDI controller,
+with specific implementations for specific hardware platforms.
 
 Use nested dictionaries with readable line lengths for hardware declarations.
 Do not use dotted assignments or wrapper tables. Compound table headers are
@@ -19,6 +25,21 @@ USB protocol, direction, or physical-specification objects.
 Use `@`-prefixed tables for shared port definitions and references. Repeated
 hardware is a list of references. Controller tables contain button labels,
 display shorthand, and port declarations. Keep the catalogue format compact.
+
+# Respect intellectual property
+
+Great care should be taken to never store, preserve or distribute any intellectual
+property that is not free and open source.
+
+Firmware needs to be handled particularly carefully. No copies, original or derivative,
+are to be preserved or distributed. No analysis of that firmwave may be performed except
+as needed to establish the functioning of the hardware system.
+
+All device-specific code, tests, data, analysis and documentation must be kept in a
+manufacturer-specific directory, and a device-specific subdirectory. For example, work
+specific to the Morningstar MC Pro series of footpedals must live under
+`cntrl/maker/morningstar/mc/`.  As much code as possible should be generic and
+applicable to any MIDi controller.
 
 # Emulator fidelity
 
