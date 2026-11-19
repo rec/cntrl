@@ -725,6 +725,35 @@ int main() {
     const auto status_view = pages.view(0,0,status);
     assert(std::strcmp(status_view.lines[6].text, "Starts:42  Git:000a1b2") == 0);
     {
+        auto captured_status = status;
+        captured_status.disk_valid = true;
+        captured_status.disk_used = 3ull << 30; captured_status.disk_free = 27ull << 30;
+        captured_status.ram_used[0] = 400 * 1024; captured_status.ram_free[0] = 112 * 1024;
+        captured_status.ram_used[1] = 250 * 1024; captured_status.ram_free[1] = 262 * 1024;
+        captured_status.cycles = 4; captured_status.patches = 32; captured_status.starts = 118;
+        pages.time(123456789, 0, false);
+        const auto original = pages.view(123456789, 0, captured_status);
+        const auto snapshot = pages.capture_status(captured_status);
+        uint8_t bytes[cntrl::ui::StatusSnapshot::wire_size]; snapshot.encode(bytes);
+        cntrl::ui::StatusSnapshot decoded;
+        assert(!decoded.decode(bytes, sizeof(bytes) - 1));
+        assert(decoded.decode(bytes, sizeof(bytes)));
+        assert(decoded.performance.disk_used == captured_status.disk_used);
+        assert(decoded.performance.disk_free == captured_status.disk_free);
+        assert(decoded.performance.starts == 118 && decoded.git_commit == CNTRL_GIT_COMMIT);
+        assert(decoded.uptime_ms == 123456789);
+        pages.status_snapshot = &decoded;
+        pages.time(987654321, 0, false);
+        const auto captured = pages.view(987654321, 0, {});
+        for (unsigned i = 0; i < cntrl::max_lines; ++i) {
+            assert(!std::strcmp(captured.lines[i].text, original.lines[i].text));
+            assert(captured.lines[i].x == original.lines[i].x && captured.lines[i].y == original.lines[i].y);
+            assert(captured.lines[i].color_mask == original.lines[i].color_mask);
+        }
+        bytes[0] = 'X'; assert(!decoded.decode(bytes, sizeof(bytes)));
+        pages.status_snapshot = nullptr;
+    }
+    {
         auto localized_settings = settings;
         localized_settings.words[cntrl::PageSettings::status_font] = cntrl::ui::status_face;
         pages.configure(localized_settings);

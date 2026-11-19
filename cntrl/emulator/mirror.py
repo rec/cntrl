@@ -41,6 +41,9 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
     """Normalize the active deployment root, preserving journal and asset bytes."""
     first = True
     selected = client.current()
+    snapshot = client.request_data('CNTRL STATUS SNAPSHOT')
+    if len(snapshot) != 111 or snapshot[:4] != b'CSS1':
+        raise ValueError('pedal returned an unsupported Status snapshot')
 
     def next_line() -> str:
         nonlocal first
@@ -103,4 +106,5 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
     (directory / 'mirror.toml').write_text(
         tomlkit.dumps(dict(status=status, selected=selected, files=files))
     )
+    (directory / 'status-snapshot.bin').write_bytes(snapshot)
     return setup

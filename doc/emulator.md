@@ -53,6 +53,22 @@ pedal's persistent format must match the emulator. `--controller`, if supplied,
 must match the connected model. Mirroring reads the pedal without changing it;
 later emulator edits affect only the local snapshot.
 
+The Status page also uses a captured pedal snapshot, including RAM and disk
+usage, startup count, uptime, Git ID, cycle/patch counts and clock/tap values.
+These values stay fixed for comparison; they are not live pedal telemetry or
+measurements of the host computer. Setup previews continue to report their
+emulated session. Capturing requires firmware with `CNTRL STATUS SNAPSHOT`;
+unsupported firmware is rejected rather than replaced with placeholder values.
+
+`status-snapshot.bin` preserves the command's 111-byte `CSS1` payload. Integers
+are little-endian: two RAM used/free pairs (four uint32s), disk used/free and
+startup count (three uint64s), uptime milliseconds (uint64), Git ID and
+cycle/patch counts (three uint32s), disk-valid and startup-state bytes, a
+32-byte NUL-terminated startup error, tap period milliseconds (uint32), clock
+period microseconds (uint64) and a clock-active byte. Startup states are
+unavailable (0), ready (1) and error (2). The shared page renders the decoded
+values using its existing layout and text fitting.
+
 Each capture creates a fresh `mirror-<identifier>` subdirectory beneath
 `.cntrl-emulator/<profile>/`, or beneath `--storage DIRECTORY`. The snapshot's
 `mirror.toml` records the source status, selection and captured file hashes.

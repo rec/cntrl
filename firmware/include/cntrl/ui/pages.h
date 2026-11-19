@@ -14,6 +14,7 @@
 #include "controls.h"
 #include "pong.h"
 #include "flags.h"
+#include "status_snapshot.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -21,20 +22,17 @@
 #include <charconv>
 
 namespace cntrl::ui {
-enum class StartsStatus { unavailable, ready, error };
-
-struct PerformanceStatus {
-    uint32_t ram_used[2] = {}, ram_free[2] = {};
-    uint64_t disk_used = 0, disk_free = 0;
-    bool disk_valid = false;
-    uint64_t starts = 0;
-    StartsStatus starts_status = StartsStatus::unavailable;
-    char starts_error[32] = {};
-    unsigned cycles = 0, patches = 0;
-};
-
 class Pages {
 public:
+    const StatusSnapshot *status_snapshot = nullptr;
+    StatusSnapshot capture_status(const PerformanceStatus &performance) const {
+        StatusSnapshot result{performance, uptime_, 0};
+        result.tap_period_ms = tap_.period(); result.clock_period_us = clock_.period_us(); result.clock_active = clock_.active();
+#ifdef CNTRL_GIT_COMMIT
+        result.git_commit = CNTRL_GIT_COMMIT;
+#endif
+        return result;
+    }
     Pages(const Fonts &fonts, Viewport viewport) : fonts_(fonts), viewport_(viewport) {}
     void outputs(cntrl::midi::Outputs value) { outputs_ = value; }
     void controls(Controls value) { controls_ = value; }
@@ -281,8 +279,9 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_view)
 #endif
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1) {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1) {
         using R = cntrl::PageSettings;
+        const auto &status = status_snapshot ? status_snapshot->performance : live_status;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
@@ -436,8 +435,8 @@ public:
             char rows[5][64] = {};
             i18n::format(rows[0], sizeof(rows[0]), i18n::Message::cycles_patches, status.cycles, status.patches);
             char tap[24], clock[24], tap_label[32];
-            number_text(tap, sizeof(tap), tap_.period(), false, true);
-            number_text(clock, sizeof(clock), clock_.period_us(), true, true);
+            number_text(tap, sizeof(tap), status_snapshot ? status_snapshot->tap_period_ms : tap_.period(), false, true);
+            number_text(clock, sizeof(clock), status_snapshot ? status_snapshot->clock_period_us : clock_.period_us(), true, true);
             i18n::format(rows[1], sizeof(rows[1]), i18n::Message::clock_value, clock + std::strspn(clock," "));
             std::snprintf(rows[2], sizeof(rows[2]), "RAM:%lu/%luk %lu/%luk",
                 (unsigned long)(status.ram_used[0] / 1024),
@@ -449,7 +448,7 @@ public:
                 uint64_t tenths = (status.disk_used * 10 + gibibyte / 2) / gibibyte;
                 i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_value, (unsigned long)(tenths / 10), (unsigned long)(tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
             } else i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_unknown);
-            uint64_t seconds = uptime_ / 1000;
+            uint64_t seconds = (status_snapshot ? status_snapshot->uptime_ms : uptime_) / 1000;
             auto disk_length = std::strlen(rows[3]);
             i18n::format(rows[3] + disk_length, sizeof(rows[3]) - disk_length, i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
             if (status.starts_status == StartsStatus::ready) {
@@ -459,7 +458,7 @@ public:
             else i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
 #ifdef CNTRL_GIT_COMMIT
             const auto starts_length = std::strlen(rows[4]);
-            std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", unsigned(CNTRL_GIT_COMMIT));
+            std::snprintf(rows[4] + starts_length, sizeof(rows[4]) - starts_length, "  Git:%07x", unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
 #endif
             i18n::format(tap_label, sizeof(tap_label), i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
@@ -497,7 +496,7 @@ public:
                 }
             }
             clock_.poll(now_us);
-            pane.lines[2].stippled = clock_.period_us() && !clock_.active();
+            pane.lines[2].stippled = status_snapshot ? status_snapshot->clock_period_us && !status_snapshot->clock_active : clock_.period_us() && !clock_.active();
         }
         return pane;
     }
