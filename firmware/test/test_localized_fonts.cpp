@@ -1,4 +1,6 @@
+#define CNTRL_GIT_COMMIT 0xb7c7eb4
 #include <cntrl/ui/fonts.h>
+#include <cntrl/ui/pages.h>
 #include <cntrl/ui/raster.h>
 #include <cntrl/ui/renderer.h>
 #include <cassert>
@@ -9,6 +11,37 @@
 static std::vector<uint8_t> read(const char *path) {
     std::ifstream input(path, std::ios::binary);
     return {std::istreambuf_iterator<char>(input), {}};
+}
+
+static void status_values_fit(const cntrl::ui::Fonts &fonts) {
+    cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
+    cntrl::PageSettings settings;
+    settings.words[cntrl::PageSettings::title_height] = 12;
+    settings.words[cntrl::PageSettings::padding] = 2;
+    pages.configure(settings);
+    cntrl::ui::PerformanceStatus status;
+    status.disk_valid = true;
+    status.disk_used = 1024ull * 1024 * 1024;
+    status.disk_free = 29 * status.disk_used;
+    status.starts_status = cntrl::ui::StartsStatus::ready;
+    status.starts = 116;
+    pages.time(123456789, 0, false);
+    const auto pane = pages.view(123456789, 0, status);
+    assert(!std::strcmp(pane.lines[5].text, "Disk:1.0/30G"));
+    assert(!std::strcmp(pane.lines[6].text, " Up:34:17:36"));
+    assert(!std::strcmp(pane.lines[7].text, "Starts:116"));
+    assert(!std::strcmp(pane.lines[8].text, "Git:b7c7eb4"));
+    for (unsigned i = 1; i <= 8; ++i) {
+        const auto &line = pane.lines[i];
+        assert(!std::strstr(line.text, "..."));
+        const auto bounds = fonts.bounds(line.graphics.font, line.graphics.size, 0, line.text);
+        const int pad = i == 2 || i == 3 ? 1 : 2;
+        assert(line.x + bounds.left >= pad);
+        assert(line.x + bounds.left + bounds.width <= 160 - pad);
+        assert(line.y + bounds.top >= 0);
+        assert(line.y + bounds.top + bounds.height <= 126);
+        assert(bounds.height <= line.graphics.line_height);
+    }
 }
 
 struct Display : cntrl::ui::Display {
@@ -99,6 +132,7 @@ int main(int argc, char **argv) {
         {cntrl::ui::status_face, status.data(), unsigned(status.size())},
     };
     cntrl::ui::AssetFonts fonts(embedded, 2);
+    status_values_fit(fonts);
     cntrl::ui::Glyph actual, accent;
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "Œāé", 2, actual));
     assert(!fonts.glyph(cntrl::ui::status_face, 13, 0, "ã", 0, actual));
