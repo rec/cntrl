@@ -79,10 +79,7 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     pages = exported['pages']
     assert exported['layout']['focus'] == ('tools' if count >= 2 else 'main')
-    assert list(pages).index('menu') == list(pages).index('status') + 1
-    assert pages['menu']['min_windows'] == 1
-    if count >= 2:
-        assert exported['regions']['tools']['pages'][1] == 'menu'
+    assert not {'menu', 'trs-ports', 'expression'} & pages.keys()
     assert pages['patch-switcher']['min_windows'] == 0
     if count == 3:
         assert exported['regions']['tools']['pages'][-3:] == [
@@ -99,6 +96,24 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     if count >= 2:
         assert pages['language']['min_windows'] == 2
     assert compiler.compile_show(exported, {}, [], device) == data
+
+
+@pytest.mark.parametrize('kind', ['trs-ports', 'expression'])
+def test_removed_utility_pages_cannot_be_authored(kind: str) -> None:
+    with pytest.raises(compiler.CompilationError, match='type'):
+        compiler.compile_show({'pages': {'removed': {'type': kind}}}, {}, [], target())
+
+
+@pytest.mark.parametrize('kind', [5, 6])
+def test_saved_removed_utility_pages_require_recompilation(kind: int) -> None:
+    data = bytearray(
+        layout.pack(models.Setup(pages={'tool': models.Page(type='status')}), ['lcd'])
+    )
+    data[12 + 32 + 32] = kind
+    with pytest.raises(
+        ValueError, match='TRS Ports and Expression pages have been removed'
+    ):
+        layout.unpack(bytes(data), 0)
 
 
 def test_default_tools_honor_explicit_performance_focus() -> None:

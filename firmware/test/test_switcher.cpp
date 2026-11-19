@@ -782,6 +782,7 @@ static void test_pages_run_independently(const std::string &path) {
             {4u, uint8_t(37)}, {5u, uint8_t(0)}, {6u, uint8_t(0)}, {7u, uint8_t(1)}, {app_offset + 34, uint8_t(3)}, {app_offset + 35, uint8_t(2)},
             {8u, uint8_t(2)}, {9u, uint8_t(2)}, {10u, uint8_t(1)},
             {12u, uint8_t(10)}, {app_offset, uint8_t(128)}, {regions_offset, uint8_t(128)},
+            {page_offset, uint8_t(5)}, {page_offset, uint8_t(6)},
             {page_offset + 1, uint8_t(1)}, {page_offset + 38, uint8_t(4)},
             {regions_offset, uint8_t(0)}, {regions_offset + 32, uint8_t(1)}, {regions_offset + 33, uint8_t(0)},
             {cycles_offset, uint8_t(36)}, {cycles_offset + 1, uint8_t(5)},

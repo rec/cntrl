@@ -68,36 +68,28 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { status = 1, cable = 3, panic, ports, expression, none = 10, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu, time };
+    enum class Page { status = 1, cable = 3, panic, none = 10, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu, time };
     struct ViewState {
-        unsigned index = 0, jack = 0, language = 0;
+        unsigned index = 0, language = 0;
         Page page = Page::none;
-        midi::TrsMode candidate = midi::TrsMode::off, active_port = midi::TrsMode::off;
-        const char *port_message = nullptr, *port_name = i18n::definitions[unsigned(i18n::Message::no_configurable_ports)].text;
-        bool port_available = false, dirty = true, flashing = false, held = false;
+        bool dirty = true, flashing = false, held = false;
         uint32_t refreshed = 0;
-        char expression[3][40] = {}, looper_prompt[96] = {};
+        char looper_prompt[96] = {};
         Pong pong;
     };
     ViewState save_view() const {
         ViewState view;
-        view.index = index_; view.page = page_; view.jack = jack; view.candidate = candidate;
+        view.index = index_; view.page = page_;
         view.language = language;
-        view.active_port = active_port_;
-        view.port_message = port_message_; view.port_name = port_name_; view.port_available = port_available_;
         view.dirty = dirty_; view.flashing = flashing_; view.held = held_; view.refreshed = refreshed_;
-        std::memcpy(view.expression,expression_lines_,sizeof(expression_lines_));
         std::memcpy(view.looper_prompt,looper_prompt,sizeof(looper_prompt));
         view.pong = pong;
         return view;
     }
     void restore_view(const ViewState &view) {
-        index_ = view.index; page_ = view.page; jack = view.jack; candidate = view.candidate;
+        index_ = view.index; page_ = view.page;
         language = view.language;
-        active_port_ = view.active_port;
-        port_message_ = view.port_message; port_name_ = view.port_name; port_available_ = view.port_available;
         dirty_ = view.dirty; flashing_ = view.flashing; held_ = view.held; refreshed_ = view.refreshed;
-        std::memcpy(expression_lines_,view.expression,sizeof(expression_lines_));
         std::memcpy(looper_prompt,view.looper_prompt,sizeof(looper_prompt));
         pong = view.pong;
     }
@@ -126,7 +118,6 @@ public:
         if (unsigned bpm = settings_.words[R::slot1]) generator.set_tempo((60000000u + bpm / 2) / bpm);
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
         for (auto &clock : clocks_) clock.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
-        prepare_expression_layout();
         clock_changed_ = true;
         dirty_ = true;
     }
@@ -156,17 +147,6 @@ public:
             break;
         }
         dirty_ = true;
-    }
-    using PortMode = cntrl::midi::TrsMode;
-    unsigned jack = 0;
-    PortMode candidate = PortMode::off;
-    void port_status(PortMode active, const char *message = nullptr) {
-        active_port_ = active; port_message_ = i18n::stable(message); dirty_ = true;
-    }
-    void port_name(const char *label, bool available) { port_name_ = i18n::stable(label); port_available_ = available; dirty_ = true; }
-    void next_port_mode() {
-        candidate = PortMode((unsigned(candidate) + 1) % 5);
-        port_message_ = nullptr; dirty_ = true;
     }
     cntrl::ClockGenerator generator;
     unsigned clock_outputs() const { return settings_[cntrl::PageSettings::clock_outputs]; }
@@ -243,21 +223,6 @@ public:
         for (auto &clock : clocks_) clock.poll(now_us);
         select_available_clock(); tap_.flash(now, 0);
     }
-    void expression_status(const char *title, const char *position, const char *prompt) {
-        const char *fields[] = {title, position, prompt};
-        for (unsigned i = 0; i < 3; ++i) {
-            if (std::strcmp(expression_lines_[i], fields[i])) {
-                std::snprintf(expression_lines_[i], sizeof(expression_lines_[i]), "%s", fields[i]);
-                dirty_ = true;
-            }
-        }
-    }
-    bool expression_status_due(uint32_t now) {
-        // Sampling a value does not make an unchanged page dirty.
-        if (!dirty_ && uint32_t(now - refreshed_) < 80) return false;
-        refreshed_ = now;
-        return true;
-    }
     bool due(uint32_t now) {
         using R = cntrl::PageSettings;
         if (page_ == Page::pong) { pong.advance(now); return dirty_ || uint32_t(now - refreshed_) >= 20; }
@@ -291,13 +256,6 @@ public:
         if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
         if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
         if (page_ == Page::arpeggiator) { arpeggiator_view(pane); return pane; }
-        if (page_ == Page::expression) {
-            pane.heading_band = true;
-            std::copy_n(expression_layout_, 5, pane.lines);
-            for (unsigned i = 0; i < 3; ++i)
-                std::snprintf(pane.lines[i + 1].text, sizeof(pane.lines[i + 1].text), "%s", expression_lines_[i]);
-            return pane;
-        }
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
         if (page_ == Page::panic) {
             page_heading(pane, i18n::text(i18n::Message::panic));
@@ -320,7 +278,7 @@ public:
         }
         const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
-        const char *heading = page_ == Page::time ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : page_ == Page::ports ? i18n::text(i18n::Message::trs_ports) : "";
+        const char *heading = page_ == Page::time ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : "";
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) heading = preview_label_;
 #endif
@@ -348,20 +306,6 @@ public:
                 }
             }
             pane.toggle = {uint16_t(horizontal(design_height)), uint16_t(vertical(110)), true, cable.enabled, false};
-            return pane;
-        }
-        if (page_ == Page::ports) {
-            const char *names[] = {i18n::text(i18n::Message::off), i18n::text(i18n::Message::midi_type_a), i18n::text(i18n::Message::midi_type_b), i18n::text(i18n::Message::expression), i18n::text(i18n::Message::aux_switch)};
-            char current[40];
-            if (port_available_) std::snprintf(current, sizeof(current), "%.23s: %s", i18n::translated(port_name_), names[unsigned(active_port_)]);
-            else std::snprintf(current, sizeof(current), "%s", i18n::translated(port_name_));
-            const unsigned font = settings_[R::status_font];
-            line(pane, 1, current, vertical(34), vertical(22), font, true);
-            line(pane, 2, port_message_ ? i18n::translated(port_message_) : names[unsigned(candidate)], vertical(60), vertical(22), font, true);
-            if (port_available_) {
-                line(pane, 3, prompt(i18n::Message::jack_mode_prompt, controls_.previous, controls_.next), vertical(87), vertical(17), font, true);
-                line(pane, 4, prompt(i18n::Message::apply_prompt, controls_.confirm), vertical(106), vertical(17), font, true);
-            }
             return pane;
         }
         if (page_ == Page::time) {
@@ -637,10 +581,6 @@ private:
     Viewport viewport_;
     cntrl::PageLayout layout_;
     unsigned index_ = 0;
-    PortMode active_port_ = PortMode::off;
-    const char *port_message_ = nullptr;
-    const char *port_name_ = i18n::definitions[unsigned(i18n::Message::no_configurable_ports)].text;
-    bool port_available_ = false;
     unsigned selected_clock_ = 0;
     bool sending_clock_ = false;
     unsigned horizontal(unsigned value) const { return value * viewport_.width / design_width; }
@@ -789,45 +729,6 @@ private:
         header.graphics.foreground = 0xffff; header.graphics.background = 0;
         header.graphics.top = header.y; header.y = 0;
     }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(page_expression_layout)
-#endif
-    void prepare_expression_layout() {
-        using R = cntrl::PageSettings;
-        // Configure may run while another page is selected.
-        const auto previous_page = page_;
-        page_ = Page::expression;
-        cntrl::Pane pane;
-        pane.graphics.background = settings_[R::background];
-        pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
-        page_heading(pane, i18n::text(i18n::Message::expression));
-        const unsigned font = settings_[R::status_font];
-        // Fit port labels and status messages once, sharing one stable body size.
-        unsigned size = 96;
-        const auto fit = [&](const char *text) {
-            line(pane, 1, text, vertical(30), vertical(20), font, false, nullptr, 0, 0, size);
-            size = pane.lines[1].graphics.size;
-        };
-        fit(i18n::text(i18n::Message::no_configurable_ports));
-        fit(i18n::text(i18n::Message::raw_uncalibrated_sample));
-        fit(i18n::text(i18n::Message::select_expression_role));
-        fit(i18n::text(i18n::Message::reconnect_heel));
-        fit(prompt(i18n::Message::calibrate_prompt, controls_.confirm));
-        for (const auto &port : outputs_) if (port.port != midi::no_port) {
-            char text[40];
-            i18n::format(text, sizeof(text), i18n::Message::unassigned_port, port.label); fit(text);
-            std::snprintf(text, sizeof(text), "%.20s  CC 888 Ch 88", port.label); fit(text);
-        }
-        for (unsigned i = 0; i < 3; ++i) {
-            line(pane, i + 1, "Ag0123456789", vertical(30 + 24 * i), vertical(20), font, false, nullptr, 0, 0, size);
-            pane.lines[i + 1].text[0] = 0;
-        }
-        line(pane, 4, prompt(i18n::Message::jack_cancel_prompt, controls_.previous, controls_.next), vertical(105), vertical(18), font, true);
-        std::copy_n(pane.lines, 5, expression_layout_);
-        page_ = previous_page;
-    }
-    TextLine expression_layout_[5]; // Heading, three live values, and control hint.
-    char expression_lines_[3][40] = {};
     cntrl::PageSettings settings_;
 #ifdef CNTRL_EMULATOR
     char preview_label_[48] = {};

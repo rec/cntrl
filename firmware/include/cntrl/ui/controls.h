@@ -74,8 +74,6 @@ public:
                 if (services.midi_reserved() && i != controls_.confirm && i != controls_.back) continue;
                 if (services.time(i, events[i], now)) continue;
                 if ((press || release) && services.monitor(i, press)) continue;
-                if (press && services.expression(i)) continue;
-                if (press && services.port(i)) continue;
                 if (services.has_controller()) {
                     if (press) services.controller(controls_.bindings[i].controller_button, true, now);
                     if (release) services.controller(controls_.bindings[i].controller_button, false, now);

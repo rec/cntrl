@@ -160,32 +160,6 @@ struct PageDisplay : cntrl::ui::Display {
         return true;
     }
 };
-static void page_ports_follow_declared_sparse_ids_and_supported_modes(cntrl::Documents &documents, cntrl::ui::Application &app) {
-    PagePlatform platform; PageFonts fonts; PageDisplay display;
-    uint16_t work[64 * 64] = {};
-    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64);
-    constexpr cntrl::ui::ControlBinding bindings[] = {{0, "Previous"}, {1, "Next"}, {2, "Confirm"}};
-    cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0, 1, 2, 0, 1, 2, 2, 0, 2, bindings, 3});
-    cntrl::midi::OutputConnection endpoints[] = {
-        {"north", "North", 0, cntrl::midi::OutputTransport::physical, false, true, 1},
-        {"south", "South", 1, cntrl::midi::OutputTransport::physical, false, true, 3}};
-    platform.endpoints = {endpoints, 2}; cntrl::PageSettings settings; settings.words[cntrl::PageSettings::title_height] = 8;
-    host.configure_page_settings(settings);
-    uint8_t layout[12 + 32 + 35] = {'C', 'P', 'A', 'G', 1, 1, 2, 0};
-    layout[12 + 32 + 32] = unsigned(cntrl::ui::Pages::Page::ports); layout[12 + 32 + 33] = 1;
-    host.pages_.layout({layout});
-    assert(host.pages_.jack == 1); assert(host.trs_button(1));
-    assert(host.pages_.candidate == cntrl::midi::TrsMode::midi_a);
-    assert(host.trs_button(1)); assert(host.pages_.candidate == cntrl::midi::TrsMode::off);
-    assert(host.trs_button(0)); assert(host.pages_.jack == 3);
-    assert(host.trs_button(1)); assert(host.pages_.candidate == cntrl::midi::TrsMode::expression);
-    const auto named = host.pages_.view(0, 0, {}); assert(std::strcmp(named.lines[1].text, "South: Off") == 0);
-    assert(host.trs_button(0)); assert(host.pages_.jack == 1);
-    platform.endpoints = {}; host.configure_page_settings(settings);
-    const unsigned selected = host.pages_.jack; assert(host.trs_button(0)); assert(host.pages_.jack == selected);
-    const auto none = host.pages_.view(0, 0, {});
-    assert(std::strstr(none.lines[1].text, "No configurable") != nullptr && !none.lines[3].text[0] && !none.lines[4].text[0]);
-}
 static void pong_keeps_navigation_until_serve(cntrl::Documents &documents, cntrl::ui::Application &app) {
     PagePlatform platform; PageFonts fonts; PageDisplay display;
     uint16_t work[64 * 64] = {};
@@ -432,8 +406,6 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
         bool time(unsigned input, uint8_t events, uint32_t now) { return host.time_button(input, events, now); }
         bool monitor(unsigned input, bool pressed) { return host.monitor_button(input, pressed); }
         bool looper(unsigned input, bool pressed) { return host.looper_button(input, pressed); }
-        bool expression(unsigned input) { return host.expression_button(input); }
-        bool port(unsigned input) { return host.trs_button(input); }
         bool has_controller() const { return app.visible(); }
         void controller(unsigned input, bool pressed, uint32_t now) { app.controller().button(input, pressed, now); }
         void tap(uint32_t now) { host.tap_tempo(now); }
@@ -487,19 +459,6 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     platform.idle = true;
     host.display(4052, false);
     assert(platform.panic.active() && platform.panic_owns_midi);
-    const cntrl::midi::OutputConnection jack{"jack","Expression jack",0,cntrl::midi::OutputTransport::physical,true,true,3};
-    platform.endpoints = {&jack,1};
-    host.configure_page_settings(documents.document().page_settings());
-    select_tool(cntrl::ui::Pages::Page::expression);
-    host.display(5000,false);
-    assert(std::strcmp(host.pages_.view(5000,5000000,{}).lines[2].text,"50%") == 0);
-    assert(!host.pages_.due(5080));
-    host.display(5080,false);
-    assert(!host.pages_.due(5080));
-    platform.expression.position_text = "51%";
-    host.display(5160,false);
-    assert(std::strcmp(host.pages_.view(5160,5160000,{}).lines[2].text,"51%") == 0);
-    assert(!host.pages_.due(5240));
 }
 static void selecting_pages_preserves_state_and_background_work(const char *path) {
     struct Context : Hardware {
@@ -641,7 +600,6 @@ int main(int argc, char **argv) {
         uint32_t revision = 0; assert(!source.revision(missing, revision));
         assert(!source.activate(missing, {}, false));
         firmware_handoff_is_durable_and_corrupt_return_is_rejected(hardware, documents, app, songs, source);
-        page_ports_follow_declared_sparse_ids_and_supported_modes(documents, app);
         pong_keeps_navigation_until_serve(documents, app);
         monitor_page_controls_and_capture_follow_lifecycle(documents, app);
         looper_page_confirms_clear_but_explicit_bindings_execute_immediately(documents, app);

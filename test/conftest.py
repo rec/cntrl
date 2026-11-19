@@ -32,7 +32,7 @@ def legacy_setups() -> dict[int, bytes]:
         start = page + (8 if layout_version == 1 else 12) + windows * 32
         for index in range(count):
             record = start + index * (34 + windows)
-            if (kind := data[record + 32]) in (0, 2, 7, 8, 9):
+            if (kind := data[record + 32]) in (0, 2, 5, 6, 7, 8, 9):
                 data[record : record + 32] = f'status-{kind}'.encode().ljust(32, b'\0')
                 data[record + 32] = 1
         struct.pack_into('<I', data, 20, crc32(data[28:]))

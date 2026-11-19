@@ -1123,8 +1123,6 @@ class Page(BaseModel, frozen=True):
         'status',
         'cable-test',
         'panic',
-        'trs-ports',
-        'expression',
         'midi-monitor',
         'midi-looper',
         'arpeggiator',
@@ -1270,11 +1268,8 @@ class Setup(BindingScope, frozen=True):
                 t: Page(type=t)
                 for t in (
                     'status',
-                    'menu',
                     'cable-test',
                     'panic',
-                    'trs-ports',
-                    'expression',
                     'time',
                     'pong',
                     'language',
