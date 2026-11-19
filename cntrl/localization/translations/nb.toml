@@ -2,6 +2,8 @@ language = 'nb'
 name = 'Norsk bokmål'
 
 [messages]
+time = { text = 'Tid' }
+time_controls = { text = '{send:s} sending/{source:s} kilde' }
 panic = { text = 'Panikk' }
 language_scroll = { text = '{up:s} og {down:s} for å bla' }
 language_select = { text = '{button:s} for å velge' }

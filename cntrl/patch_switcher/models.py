@@ -1015,7 +1015,7 @@ class PageSettings(BaseModel, frozen=True):
         list[Annotated[int, Field(strict=True, ge=20, le=600)]],
         Field(min_length=1, max_length=4),
     ] = Field(default_factory=lambda: [120])
-    clock_source: Literal['internal', 'external'] = 'internal'
+    autoselect_clock: Annotated[bool, Field(strict=True)] = True
     refresh_interval: Annotated[
         float,
         Field(strict=True, ge=0.001, le=65.535),
@@ -1027,7 +1027,7 @@ class PageSettings(BaseModel, frozen=True):
         Field(strict=True, ge=0.001, le=65.535),
         units.unit_validator('second'),
         AfterValidator(millisecond_resolution),
-    ] = 1.0
+    ] = 0.250
     clocks_per_quarter: Annotated[int, Field(strict=True, ge=1, le=960)] = 24
     clock_average_beats: Annotated[int, Field(strict=True, ge=1, le=16)] = 1
     tap_intervals: Annotated[int, Field(strict=True, ge=1, le=8)] = 4
@@ -1080,7 +1080,7 @@ class PageSettings(BaseModel, frozen=True):
     ring_color: str = 'black'
     background_color: str = '0xFFF085'
     digits: Annotated[int, Field(strict=True, ge=1, le=4)] = 3
-    decimals: Annotated[int, Field(strict=True, ge=0, le=2)] = 1
+    decimals: Annotated[int, Field(strict=True, ge=0, le=2)] = 2
 
     @model_validator(mode='after')
     def feasible_taps(self) -> 'PageSettings':
@@ -1119,7 +1119,7 @@ class Scrolling(BaseModel, frozen=True):
 class Page(BaseModel, frozen=True):
     type: Literal[
         'patch-switcher',
-        'tap-tempo',
+        'time',
         'status',
         'cable-test',
         'panic',
@@ -1149,7 +1149,7 @@ class Page(BaseModel, frozen=True):
             object.__setattr__(self, 'min_windows', 0)
         elif self.type in ('banked', 'pong'):
             object.__setattr__(self, 'min_windows', 3)
-        elif self.type == 'language':
+        elif self.type in ('language', 'time'):
             object.__setattr__(self, 'min_windows', 2)
         elif self.type != 'patch-switcher':
             object.__setattr__(self, 'min_windows', 1)
@@ -1165,7 +1165,7 @@ class Page(BaseModel, frozen=True):
                 3
                 if self.type in ('banked', 'pong')
                 else 2
-                if self.type == 'language'
+                if self.type in ('language', 'time')
                 else 1,
                 available,
             )
@@ -1275,7 +1275,7 @@ class Setup(BindingScope, frozen=True):
                     'panic',
                     'trs-ports',
                     'expression',
-                    'tap-tempo',
+                    'time',
                     'pong',
                     'language',
                     'None',

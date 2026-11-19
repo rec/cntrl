@@ -39,22 +39,35 @@ def test_pong_reserves_three_windows_and_round_trips() -> None:
     assert compiler.compile_show(exported, {}, [], target()) == data
 
 
+@pytest.mark.parametrize('kind', ['language', 'time'])
 @pytest.mark.parametrize('count', [2, 3])
-def test_language_page_reserves_two_windows_and_round_trips(count: int) -> None:
+def test_two_window_page_reserves_two_windows_and_round_trips(
+    count: int, kind: str
+) -> None:
     device = target().model_copy(update={'displays': target().displays[:count]})
-    source = {'pages': {'languages': {'type': 'language'}}, 'fill_in_styles': False}
+    source = {'pages': {'languages': {'type': kind}}, 'fill_in_styles': False}
     data = compiler.compile_show(source, {}, [], device)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['pages']['languages']['min_windows'] == 2
     assert compiler.compile_show(exported, {}, [], device) == data
 
 
-def test_language_page_requires_two_displays() -> None:
+@pytest.mark.parametrize('kind', ['language', 'time'])
+def test_two_window_page_requires_two_displays(kind: str) -> None:
     device = target().model_copy(update={'displays': target().displays[:1]})
     with pytest.raises(compiler.CompilationError, match='target display count'):
-        compiler.compile_show(
-            {'pages': {'languages': {'type': 'language'}}}, {}, [], device
+        compiler.compile_show({'pages': {'languages': {'type': kind}}}, {}, [], device)
+
+
+def test_stored_standalone_tap_tempo_requires_recompilation() -> None:
+    data = bytearray(
+        layout.pack(
+            models.Setup(pages={'tap': models.Page(type='time')}), ['left', 'right']
         )
+    )
+    data[12 + 2 * 32 + 32] = 0
+    with pytest.raises(ValueError, match='Tap Tempo page.*recompile.*Time'):
+        layout.unpack(bytes(data), 0)
 
 
 @pytest.mark.parametrize('count', [1, 2, 3])
@@ -82,6 +95,7 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
         assert 'pong' not in pages
         assert 'None' in pages
     assert ('language' in pages) == (count >= 2)
+    assert ('time' in pages) == (count >= 2)
     if count >= 2:
         assert pages['language']['min_windows'] == 2
     assert compiler.compile_show(exported, {}, [], device) == data
@@ -141,6 +155,7 @@ def test_migrated_legacy_setup_keeps_live_patch_state_while_cycling_tools(
         {'apps': {}},
         {'pages': {'x': {'give_up_windows': ['right', 'right']}}},
         {'pages': {'x': {'type': 'unknown'}}},
+        {'pages': {'x': {'type': 'tap-tempo'}}},
         {'pages': {'x': {'type': 'clock-tempo'}}},
         {'pages': {'x': {'type': 'clock-transport'}}},
         {'pages': {'x': {'type': 'firmware'}}},
@@ -193,7 +208,8 @@ def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
     [
         t
         for t in layout.PAGE_TYPES
-        if t and t not in ('None', 'patch-switcher', 'banked', 'pong', 'language')
+        if t
+        and t not in ('None', 'patch-switcher', 'banked', 'pong', 'language', 'time')
     ],
 )
 @pytest.mark.parametrize('count', [0, 1, 3])
@@ -214,7 +230,7 @@ def test_tool_pages_always_compile_for_one_window(kind: str, count: int) -> None
 def test_saved_tool_window_counts_export_as_one_window(count: int) -> None:
     data = bytearray(
         layout.pack(
-            models.Setup(pages={'tap': models.Page(type='tap-tempo')}),
+            models.Setup(pages={'tap': models.Page(type='status')}),
             ['left', 'center', 'right'],
         )
     )

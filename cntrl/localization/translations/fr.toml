@@ -114,6 +114,12 @@ text = 'Tout coupé'
 [messages.tap_tempo]
 text = 'Tempo frappé'
 
+[messages.time]
+text = 'Temps'
+
+[messages.time_controls]
+text = '{send:s} envoi/{source:s} source'
+
 [messages.status]
 text = 'État'
 

@@ -5,6 +5,7 @@
 #include "renderer.h"
 #include "pixel_throb.h"
 #include <cntrl/midi_files.h>
+#include <cntrl/buttons.h>
 #include <cntrl/checked_array.h>
 #include <algorithm>
 
@@ -111,7 +112,7 @@ public:
             auto &arp = *pages_.arpeggiator;
             uint32_t now = platform_.microseconds();
             if (!arp.mono() && arp.state() == midi::MidiArpeggiator::State::stopped && !pages_.external_clock() && !pages_.generator.running())
-                pages_.generator.start(now,pages_.clock_outputs() & platform_.clock_available(),false);
+                pages_.generator.start(now,0,false);
             if (input == controls_.previous) arp.record(pages_.arpeggiator_beat_position(now));
             else arp.toggle(pages_.arpeggiator_beat_position(now));
             pages_.revisit(); return true;
@@ -320,6 +321,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_stop_clock)
 #endif
     bool stop_clock() {
+        if (pages_.clock_sending()) pages_.toggle_clock();
         pages_.generator.stop();
         pages_.generator.poll(platform_.microseconds(), platform_.clock_available(), platform_);
         if (looper_files_) {
@@ -401,6 +403,18 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_tap)
 #endif
+    bool time_button(unsigned input, uint8_t events, uint32_t now) {
+        if (pages_.page() != Pages::Page::time) return false;
+        if (input == controls_.confirm) {
+            if (events & press_event) pages_.tap(now);
+            if (events & hold_event) pages_.clear_tap();
+        } else if (input == controls_.next) {
+            if (events & press_event) pages_.toggle_clock();
+        } else if (input == controls_.next_section) {
+            if (events & press_event) pages_.cycle_clock();
+        } else return false;
+        return true;
+    }
     void tap_tempo(uint32_t now) {
         if (!documents_.document().valid()) return;
         auto &page = pages_;
@@ -575,7 +589,7 @@ public:
 #endif
                 , i, region.count
             );
-                if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language) content = Pages::window_view(content,i,region.count);
+                if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language && pages_.page() != Pages::Page::time) content = Pages::window_view(content,i,region.count);
                 content.focused = r == application_.allocation.focus() && pages_.page() != Pages::Page::pong; renderer_.show(screen,content);
             }
             save_view();

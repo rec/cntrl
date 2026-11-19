@@ -217,6 +217,10 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     pages = {}
     for _ in range(count):
         name = data[cursor : cursor + 32].split(b'\0')[0].decode('ascii')
+        if data[cursor + 32] == 0:
+            raise ValueError(
+                'Tap Tempo page has been removed; recompile this setup using Time'
+            )
         if data[cursor + 32] == 9:
             raise ValueError('Keyboard page has been removed; recompile this setup')
         if data[cursor + 32] in (2, 7, 8):
@@ -241,6 +245,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             'banked',
             'pong',
             'language',
+            'time',
         ):
             # Stored minima remain readable, but tool pages now have fixed width.
             pages[name]['min_windows'] = 1
@@ -282,7 +287,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
 
 
 PAGE_TYPES = (
-    'tap-tempo',
+    '',
     'status',
     '',
     'cable-test',
@@ -301,4 +306,5 @@ PAGE_TYPES = (
     'pong',
     'language',
     'menu',
+    'time',
 )

@@ -126,6 +126,14 @@ context = 'Panic status'
 en = 'Tap Tempo'
 context = 'Page heading'
 
+[messages.time]
+en = 'Time'
+context = 'Clock source and tap tempo page heading'
+
+[messages.time_controls]
+en = '{send:s} toggles send/{source:s} cycles source'
+context = 'Time page physical control labels for sending and source selection'
+
 [messages.status]
 en = 'Status'
 context = 'Page heading'

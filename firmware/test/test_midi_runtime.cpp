@@ -59,6 +59,8 @@ struct Generator {
 struct Pages {
     Generator generator;
     unsigned clock_owner() const { return 0; }
+    template<class Sink> void poll_clock(uint32_t now, unsigned available, Sink &sink) { generator.poll(now,available,sink); }
+    unsigned relay_clock_outputs(unsigned) const { return 0; }
     void clock_message(unsigned, uint8_t, uint32_t) {}
     cntrl::midi::BeatPosition beat_position(uint32_t) { return {}; }
     cntrl::midi::BeatPosition arpeggiator_beat_position(uint32_t) { return {}; }

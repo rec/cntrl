@@ -429,6 +429,7 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
         void switch_button(unsigned, bool, uint32_t) { assert(false); }
         void browse(bool reverse) { host.browse_page(reverse); }
         bool midi_reserved() const { return false; }
+        bool time(unsigned input, uint8_t events, uint32_t now) { return host.time_button(input, events, now); }
         bool monitor(unsigned input, bool pressed) { return host.monitor_button(input, pressed); }
         bool looper(unsigned input, bool pressed) { return host.looper_button(input, pressed); }
         bool expression(unsigned input) { return host.expression_button(input); }
@@ -486,12 +487,6 @@ static void legacy_single_patch_switcher_preserves_performance_while_cycling_too
     platform.idle = true;
     host.display(4052, false);
     assert(platform.panic.active() && platform.panic_owns_midi);
-    select_tool(cntrl::ui::Pages::Page::tap);
-    assert(!platform.panic.open() && !platform.panic_owns_midi);
-    const unsigned before_tap = hardware.sent, tap_callbacks = hardware.taps;
-    click(2, 4100); assert(hardware.taps == tap_callbacks + 1 && hardware.sent == before_tap);
-    edge(2, true, 4200); click(5, 4300); edge(2, false, 4400);
-    assert(hardware.sent == before_tap);
     const cntrl::midi::OutputConnection jack{"jack","Expression jack",0,cntrl::midi::OutputTransport::physical,true,true,3};
     platform.endpoints = {&jack,1};
     host.configure_page_settings(documents.document().page_settings());
@@ -526,11 +521,6 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         cntrl::Document checked; assert(checked.load(monitored.data(), unsigned(monitored.size()), hardware) == (count <= 3));
         if (checked.valid()) assert(checked.page_layout().minimum_windows(1) == 1);
     }
-    // Match the pedal's one-window Tap Tempo page followed by its patch page.
-    const unsigned tap = unsigned(document.page_layout().page(4) - bytes.data());
-    bytes[tap + 1] = 1;
-    cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size() - 28)));
-    assert(document.load(bytes.data(), unsigned(bytes.size()), hardware));
     TestStorage storage, library;
     cntrl::Controller primary(hardware, hardware, hardware);
     cntrl::Documents documents(storage, hardware, primary, hardware);

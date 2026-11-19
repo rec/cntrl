@@ -2,6 +2,8 @@ language = 'da'
 name = 'Dansk'
 
 [messages]
+time = { text = 'Tid' }
+time_controls = { text = '{send:s} sending/{source:s} kilde' }
 panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} og {down:s} for at rulle' }
 language_select = { text = '{button:s} for at vælge' }

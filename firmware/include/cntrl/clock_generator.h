@@ -20,6 +20,10 @@ public:
     unsigned bpm() const { return (60000000u + quarter_us_ / 2) / quarter_us_; }
     unsigned period_us() const { return quarter_us_; }
     bool running() const { return running_; }
+    void clock_outputs(unsigned mask) {
+        active_ = running_ ? mask : 0;
+        start_pending_ &= mask;
+    }
     midi::BeatPosition beat_position(uint32_t now) {
         advance_beats(now);
         return {beats_, restart_, running_};

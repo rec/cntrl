@@ -117,7 +117,11 @@ def test_legacy_documents_remain_explicit_and_override_metadata_is_checked(
 ) -> None:
     bare = compiler.compile_show({}, {}, [], target)
     assert device_settings.override_mask(bare) == (1 << 64) - 1
-    for payload in (bytes(7), (1 << 34).to_bytes(8, 'little')):
+    for payload in (
+        bytes(7),
+        (1 << 34).to_bytes(8, 'little'),
+        (1 << 27).to_bytes(8, 'little'),
+    ):
         with pytest.raises(ValueError, match='setting overrides'):
             binary_format.Document(
                 kind=binary_format.Kind.setup,

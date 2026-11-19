@@ -10,7 +10,7 @@ namespace cntrl {
 class GlobalSettings {
 public:
     static constexpr unsigned count = 34;
-    static constexpr uint64_t fields = (uint64_t(1) << count) - 1;
+    static constexpr uint64_t fields = ((uint64_t(1) << count) - 1) & ~(uint64_t(1) << 27);
     struct Values {
         uint64_t known = 0;
         uint32_t values[count] = {};
@@ -27,7 +27,7 @@ public:
     CNTRL_FLASH_ROUTINE(global_settings_valid)
 #endif
     static bool valid(unsigned field, uint32_t value) {
-        if (field >= count) return false;
+        if (field >= count || field == 27) return false;
         if (field == 0) return value <= 255;
         if (field == 1) return value <= 2147483;
         if (field == 7) return value <= 2;

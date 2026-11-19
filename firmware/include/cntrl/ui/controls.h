@@ -72,6 +72,7 @@ public:
                     continue;
                 }
                 if (services.midi_reserved() && i != controls_.confirm && i != controls_.back) continue;
+                if (services.time(i, events[i], now)) continue;
                 if ((press || release) && services.monitor(i, press)) continue;
                 if (press && services.expression(i)) continue;
                 if (press && services.port(i)) continue;

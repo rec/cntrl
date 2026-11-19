@@ -2,6 +2,8 @@ language = 'tr'
 name = 'Türkçe'
 
 [messages]
+time = { text = 'Zaman' }
+time_controls = { text = '{send:s} gönderim/{source:s} kaynak' }
 panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} ve {down:s} ile kaydırın' }
 language_select = { text = '{button:s} ile seçin' }

@@ -94,7 +94,7 @@ def test_pages_round_trip(
         'title_font': 'Arimo',
         'clock_bpms': [90, 123, 405],
         'clock_outputs': ['din', 'trs'],
-        'clock_source': 'external',
+        'autoselect_clock': False,
         'minimum_interval': '80 ms',
         'reset_gap': 4,
         'flash_fraction': '20%',
@@ -111,9 +111,7 @@ def test_pages_round_trip(
     settings = models.Setup.model_validate(exported).page_settings
     assert settings.clocks_per_quarter == 96 and settings.minimum_taps == 3
     assert settings.clock_bpms == [90, 123, 405]
-    assert (
-        settings.clock_outputs == ['din', 'trs'] and settings.clock_source == 'external'
-    )
+    assert settings.clock_outputs == ['din', 'trs'] and not settings.autoselect_clock
     assert settings.title_font == 'Arimo'
     assert settings.refresh_interval == 2 and settings.flash_fraction == 0.2
     assert settings.tempo_font == 'CourierPrime'
@@ -128,6 +126,8 @@ def test_pages_round_trip(
         {'clock_outputs': ['missing']},
         {'clock_bpms': []},
         {'clock_bpms': [0]},
+        {'clock_source': 'internal'},
+        {'autoselect_clock': 1},
         {'tap_intervals': 9},
         {'minimum_taps': 6},
         {'minimum_interval': 4, 'reset_gap': 3},

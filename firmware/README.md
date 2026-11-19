@@ -694,12 +694,20 @@ A zero channel denotes an unassigned jack.
 ### Pages
 
 By default the rightmost window starts on Status. F cycles through Status,
-MIDI Cable Test, Panic, TRS Ports, Expression, Tap Tempo, Pong, Language and None using
+Menu, MIDI Cable Test, Panic, TRS Ports, Expression, Time, Pong, Language and None using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
-steps backward immediately. F never repeats automatically. C taps only on Tap
-Tempo. Sending and undo keep an auxiliary page in place.
+steps backward immediately. F never repeats automatically. C taps only on Time.
+Sending and undo keep an auxiliary page in place.
 
-Tap Tempo displays fixed-position Courier digits (`---.-` initially). Two taps
+Time occupies two windows. Its left window shows Tap, DIN and TRS tempos with
+a green outline around the selected source. E cycles sources; B toggles MIDI
+Clock sending, initially off. DIN and TRS are measured independently and become
+blank after `clock_timeout` seconds without ticks. Automatic source selection
+keeps a valid selection, chooses a measured source when it expires, and falls
+back to Tap if none is measured. Set `autoselect_clock = false` to select manually.
+Selected input ticks are relayed directly when sending is on.
+
+The right window displays Tap Tempo in fixed-position Courier digits (`---.--` initially). Two taps
 produce the first result; subsequent taps average the latest four intervals.
 Intervals below 0.1 seconds are ignored. A gap longer than two established beat
 periods, or the configured reset gap (3 seconds by default), starts a fresh tap
@@ -707,7 +715,8 @@ sequence. Its first tap preserves the previous tempo; at least two fresh taps
 are needed to establish a new tempo. Each accepted tap anchors the beat.
 The smaller flasher has a 40-pixel
 red center and a 5-pixel black annulus. It lights for a configurable fraction of
-each computed beat, defaulting to 40%. Holding C also lights the indicator, even before a tempo is established. Releasing C resumes the normal beat flash. Tempo survives page changes until reboot.
+each computed beat, defaulting to 40%. Holding C clears the tap measurement.
+Tap tempo survives page changes and pauses between taps.
 
 Status snapshots the setup name on entry and refreshes other values every second.
 All page headings use the same font, size and weight, fitted against MIDI Cable Test
@@ -732,7 +741,8 @@ order and window counts under the setup's named `[pages.NAME]` tables. See [Page
 ```toml
 [page_settings]
 refresh_interval = 1
-clock_timeout = 1
+clock_timeout = 0.250
+autoselect_clock = true
 clocks_per_quarter = 24
 clock_average_beats = 1
 tap_intervals = 4
@@ -753,7 +763,7 @@ off_color = '0x600000'
 on_color = '0xFF0000'
 ring_color = 'black'
 digits = 3
-decimals = 1
+decimals = 2
 ```
 
 The first 23 page metadata words are, in order: refresh milliseconds, clock-timeout
@@ -763,7 +773,8 @@ flash fraction in thousandths, center diameter, annulus width, title height, tem
 padding, tempo font ID, status font ID, off RGB565, on RGB565, ring RGB565,
 integer digits, decimal digits, page-background RGB565, and title font ID.
 Clock preferences use an optional format 29 section with six words for the
-output mask, external-source flag and four zero-padded BPM slots. See
+output mask, clock options and four zero-padded BPM slots. Clock options use
+bit 1 to disable automatic source selection; other bits are reserved. See
 [MIDI Clock](../doc/midi-clock.md) for shared timing behavior and qualification.
 `flash_fraction` accepts 0.001..1 in steps of 0.001, including percentage strings.
 
@@ -791,7 +802,7 @@ continues cycling. Off leaves normal MIDI operation unchanged. See
 [the cable tester](../doc/midi-cable-test.md) for test behavior and port ownership.
 
 Panic follows the cable tester. Press C for its controller reset pass, or hold C
-to repeat controller and Note Off sweeps. F cancels and advances back to Tap Tempo.
+to repeat controller and Note Off sweeps. F cancels and advances to the next page.
 USB MIDI forwarding remains controlled by `is_midi_interface` and patch state
 operations. The cable tester shows DIN/TRS rows and Out/In columns: DIN test data
 is blue, TRS test data is green, and each input takes the color of its latest

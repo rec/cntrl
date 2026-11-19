@@ -46,6 +46,7 @@ public:
     bool monitor_button(unsigned input, bool pressed) { return presentation().monitor_button(input, pressed); }
     bool looper_button(unsigned input, bool pressed) { return presentation().looper_button(input, pressed); }
     void poll_keyboard() { presentation().poll_keyboard(); }
+    bool time_button(unsigned input, uint8_t events, uint32_t now) { return presentation().time_button(input, events, now); }
     void blank_performance() { presentation().blank_performance(); }
     void select_trs_jack() { presentation().select_trs_jack(); }
     bool trs_button(unsigned input) { return presentation().trs_button(input); }

@@ -391,6 +391,7 @@ struct Actions {
     void invoke(ui::Operation operation) { board.app->controller().executor().invoke(StatePatch{unsigned(operation)}); }
     void browse(bool reverse) { board.browse_page(reverse); }
     bool midi_reserved() const { return board.panic_owns_midi; }
+    bool time(unsigned i,uint8_t events,uint32_t now) { return board.time_button(i,events,now); }
     bool monitor(unsigned i,bool pressed) { return board.monitor_button(i,pressed); }
     bool looper(unsigned i,bool pressed) { return board.looper_button(i,pressed); }
     bool expression(unsigned i) { return board.expression_button(i); }

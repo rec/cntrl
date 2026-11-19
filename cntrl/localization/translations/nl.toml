@@ -2,6 +2,8 @@ language = 'nl'
 name = 'Nederlands'
 
 [messages]
+time = { text = 'Tijd' }
+time_controls = { text = '{send:s} zenden/{source:s} bron' }
 panic = { text = 'Paniek' }
 language_scroll = { text = '{up:s} en {down:s} om te bladeren' }
 language_select = { text = '{button:s} om te kiezen' }

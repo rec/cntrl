@@ -129,6 +129,8 @@ def run(command: List | Set | Clear | Restore) -> None:
             values = client.global_settings()
             print(f'language = {values.language or "en (default)"}')
             for field, setting in enumerate(device_settings.SETTINGS):
+                if setting is None:
+                    continue
                 if field not in values.values:
                     value = 'inherit'
                 else:

@@ -20,7 +20,7 @@ int main() {
     assert(tap.flash(12249, 250) && !tap.flash(12250, 250));
     tap.configure(2, 3, 100, 3000);
     tap.tap(UINT32_MAX - 100); tap.tap(399);
-    assert(tap.period() == 1000); // Retain the previous result until enough new taps.
+    assert(!tap.period()); // Reconfiguration clears the previous measurement.
     tap.tap(899); assert(tap.period() == 500);
     assert(tap.flash(1098, 400) && !tap.flash(1099, 400));
 

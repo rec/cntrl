@@ -2,7 +2,7 @@
 
 A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
-`patch-switcher`, `status`, `tap-tempo`, `cable-test`, `panic`,
+`patch-switcher`, `status`, `time`, `cable-test`, `panic`,
 `trs-ports`, `expression`,
 `midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`, `menu`, and `None`.
 Select a region or a page in the Pages and tools menu. F and the existing
@@ -10,9 +10,9 @@ reverse-page control cycle only the focused region. Page and region names
 contain 1 to 31 printable ASCII characters.
 
 The default utility-page cycle is Status, Menu, MIDI Cable Test, Panic, TRS Ports,
-Expression, Tap Tempo, Pong, Language, then None. Language appears immediately
+Expression, Time, Pong, Language, then None. Language appears immediately
 before None; Pong appears immediately before Language on targets with three
-or more displays. Language requires at least two displays and is omitted from
+or more displays. Time and Language require at least two displays and are omitted from
 the defaults on one-display targets.
 Setups using the default pages and automatically generated regions start with
 the tools region focused, so F browses this utility cycle. Explicit layout focus
@@ -142,7 +142,12 @@ give_up_windows = ['left', 'right', 'center']
 
 ## Window allocation
 
-Status, Tap Tempo, MIDI Monitor, MIDI Looper, Arpeggiator and the other utility
+Time and Language each use exactly two windows. Time's left window selects the
+clock source and toggles Send; its right window shows Tap Tempo. See
+[Shared MIDI clock](midi-clock.md) for controls and clock settings. The former
+standalone `tap-tempo` page is retired; recompile setups that contain it.
+
+Status, MIDI Monitor, MIDI Looper, Arpeggiator and the other utility
 pages use exactly one window. Their
 `min_windows` values are forced to one when compiling, exporting or allocating
 an existing saved setup. They do not acquire spare windows. The blank `None`

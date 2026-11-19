@@ -8,7 +8,7 @@ class TapTempo {
 public:
     void configure(unsigned window, unsigned taps, uint32_t minimum, uint32_t gap) {
         window_ = window; taps_ = taps; minimum_ = minimum; gap_ = gap;
-        count_ = next_ = 0; sum_ = 0; last_known_ = false;
+        count_ = next_ = 0; sum_ = period_ = 0; last_known_ = beat_known_ = false;
     }
     bool tap(uint32_t now) {
         if (!window_) return false;
@@ -47,7 +47,7 @@ class ClockTempo {
 public:
     void configure(unsigned clocks, unsigned beats, uint32_t timeout) {
         clocks_ = clocks; window_ = clocks * beats; timeout_ = timeout;
-        source_ = -1; count_ = 0; stale_ = true;
+        source_ = -1; count_ = 0; stale_ = true; measured_ = false; period_us_ = elapsed_ = 0;
         beat_value_ = 0; beat_remainder_ = 0; ++restart_;
         playing_ = true; first_tick_ = true; waiting_ = false;
         continuing_value_ = continuing_remainder_ = 0; continuing_time_ = 0;
@@ -56,7 +56,7 @@ public:
         if (!clocks_) return;
         holdover_position(now);
         if (source_ < 0 || stale_ || uint32_t(now - last_) > timeout_) {
-            source_ = int(source); last_ = now; count_ = 0; elapsed_ = 0; stale_ = false; first_tick_ = false; waiting_ = false; return;
+            source_ = int(source); last_ = now; count_ = 0; elapsed_ = 0; stale_ = false; measured_ = false; first_tick_ = false; waiting_ = false; return;
         }
         if (source_ != int(source)) return;
         if (playing_) {
@@ -74,6 +74,7 @@ public:
             if (period_us_) continuing_remainder_ = continuing_remainder_ * period / period_us_;
             else continuing_value_ = beat_value_;
             period_us_ = period;
+            measured_ = true;
             elapsed_ = 0; count_ = 0;
         }
     }
@@ -113,6 +114,7 @@ public:
         }
     }
     bool active() const { return source_ >= 0 && !stale_; }
+    bool measured() const { return active() && measured_; }
     bool available() const { return active() || waiting_ || (!playing_ && source_ >= 0); }
 private:
     uint64_t beat_value_ = 0;
@@ -123,7 +125,7 @@ private:
     int source_ = -1;
     uint32_t timeout_ = 0, last_ = 0;
     uint64_t period_us_ = 0, elapsed_ = 0;
-    bool stale_ = true;
+    bool stale_ = true, measured_ = false;
     uint64_t continuing_value_ = 0, continuing_remainder_ = 0;
     uint32_t continuing_time_ = 0;
 };
