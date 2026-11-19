@@ -14,6 +14,8 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from cntrl.emulator.backend import OutputEvent, Session
 from cntrl.emulator.gui import ControllerCanvas, EmulatorWindow, display_rectangle
 from cntrl.emulator.layout import EmulatorLayout, Placement
+from cntrl.emulator.localization import dialog_messages, messages
+from cntrl.localization import catalogue
 from cntrl.models import Button, Controller
 from cntrl.patch_switcher.models import MidiEndpoint, Target, TargetDisplay
 
@@ -53,6 +55,7 @@ class CapturedSession(Session):
         self.failed = False
         self.stock_firmware = False
         self.editing_name = False
+        self.language = 'en'
         self.keys: list[int] = []
         self.mode = 'setup preview'
 
@@ -456,9 +459,148 @@ def test_simulated_firmware_transition_is_visible_and_stops_controls(
         OutputEvent(kind='firmware', time_us=0, message='Simulated stock firmware')
     )
     window.display_updates()
-    assert window.log.toPlainText() == 'Simulated stock firmware'
+    assert window.log.toPlainText() == (
+        'Simulated stock firmware selected; restart the session to return to CNTRL.'
+    )
     assert window.clock_label.text() == 'Simulated stock firmware'
     assert not window.timer.isActive()
     assert not window.running.isChecked() and not window.running.isEnabled()
     assert not window.canvas.isEnabled()
+    window.close()
+
+
+@pytest.mark.parametrize(
+    'language,caption',
+    [
+        ('en', 'Real time'),
+        ('fr', 'Temps réel'),
+        ('de', 'Echtzeit'),
+        ('es', 'Tiempo real'),
+        ('it', 'Tempo reale'),
+        ('pt-PT', 'Tempo real'),
+        ('nl', 'Realtime'),
+        ('pl', 'Czas rzeczywisty'),
+        ('cs', 'Reálný čas'),
+        ('sk', 'Reálny čas'),
+        ('hu', 'Valós idő'),
+        ('ro', 'Timp real'),
+        ('sv', 'Realtid'),
+        ('da', 'Realtid'),
+        ('nb', 'Sanntid'),
+        ('fi', 'Reaaliaika'),
+        ('tr', 'Gerçek zaman'),
+    ],
+)
+def test_desktop_follows_pedal_language_without_resetting_inputs(
+    application: QtWidgets.QApplication, language: str, caption: str
+) -> None:
+    session = CapturedSession()
+    session.target = session.target.model_copy(
+        update={
+            'trs_ports': {'expression': ['expression']},
+            'midi_endpoints': [
+                MidiEndpoint(name='expression', label='Expression', route=0, port=3)
+            ],
+            'relay_outputs': ['relay'],
+        }
+    )
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    slider = window.findChild(QtWidgets.QSlider)
+    assert slider is not None
+    slider.setValue(731)
+    window.step.setValue(27)
+    click(window.canvas, 'a', QtCore.Qt.MouseButton.RightButton)
+    session.messages.append(
+        OutputEvent(kind='relay', endpoint='relay', value=1, time_us=0)
+    )
+    session.language = language
+    window.display_updates()
+    assert window.running.text() == caption
+    assert (
+        window.relay_labels['relay'].text()
+        == catalogue.translation(language).messages['on'].text
+    )
+    assert window.connected['expression'].isChecked()
+    assert slider.value() == 731 and session.expressions == [(3, 731)]
+    assert window.step.value() == 27 and window.canvas.active == {'a'}
+    assert session.inputs == [('a', True)]
+    assert session.controller.controls[0].name == 'A'
+    session.language = 'en'
+    window.display_updates()
+    assert window.running.text() == 'Real time'
+    assert window.relay_labels['relay'].text() == 'On'
+    window.close()
+
+
+def test_desktop_starts_in_the_mirrored_pedals_language(
+    application: QtWidgets.QApplication,
+) -> None:
+    session = CapturedSession()
+    session.mode = 'pedal mirror'
+    session.language = 'fr'
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    assert window.running.text() == 'Temps réel'
+    assert window.windowTitle() == 'Test controller [miroir de la pédale]'
+    assert set(catalogue.locales()) == {
+        'en',
+        'fr',
+        'de',
+        'es',
+        'it',
+        'pt-PT',
+        'nl',
+        'pl',
+        'cs',
+        'sk',
+        'hu',
+        'ro',
+        'sv',
+        'da',
+        'nb',
+        'fi',
+        'tr',
+    }
+    for language in catalogue.locales():
+        assert messages(language).keys() == messages('en').keys()
+        assert dialog_messages(language).keys() == dialog_messages('en').keys()
+    window.close()
+
+
+def test_save_and_host_dialogs_use_the_pedals_language(
+    application: QtWidgets.QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = CapturedSession()
+    session.language = 'fr'
+    window = EmulatorWindow(session)
+    window.timer.stop()
+
+    def save_dialog(dialog: QtWidgets.QFileDialog) -> int:
+        assert dialog.windowTitle() == 'Enregistrer une capture de l’émulateur'
+        assert (
+            dialog.labelText(QtWidgets.QFileDialog.DialogLabel.Accept) == 'Enregistrer'
+        )
+        assert (
+            dialog.labelText(QtWidgets.QFileDialog.DialogLabel.FileName)
+            == 'Nom du fichier :'
+        )
+        assert dialog.testOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog)
+        assert QtCore.QCoreApplication.translate('QFileSystemModel', 'Name') == 'Nom'
+        assert (
+            QtCore.QCoreApplication.translate('QFileDialog', 'Go back') == 'Précédent'
+        )
+        return 0
+
+    def host_dialog(dialog: QtWidgets.QInputDialog) -> int:
+        assert dialog.windowTitle() == 'Entrée MIDI de l’hôte'
+        assert dialog.okButtonText() == 'OK'
+        assert dialog.cancelButtonText() == 'Annuler'
+        return 0
+
+    monkeypatch.setattr(QtWidgets.QFileDialog, 'exec', save_dialog)
+    monkeypatch.setattr(QtWidgets.QInputDialog, 'exec', host_dialog)
+    assert window.save_path('screenshot_title', 'controller.png', 'png') == ''
+    assert not window.host_choice('host_input', 'DIN', ['Port 1'])[1]
     window.close()

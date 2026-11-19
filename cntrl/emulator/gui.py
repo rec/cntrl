@@ -13,6 +13,7 @@ from .. import models
 from .backend import Session
 from .host_midi import HostMidi
 from .layout import Canvas, Placement
+from .localization import dialog_messages, messages
 from .replay import Scenario
 
 
@@ -320,11 +321,12 @@ class EmulatorWindow(QtWidgets.QMainWindow):
     def __init__(self, session: Session) -> None:
         super().__init__()
         self.session = session
-        self.setWindowTitle(
-            session.controller.name
-            + f' [{session.mode}]'
-            + (' [provisional geometry]' if session.layout.provisional else '')
-        )
+        self.language = session.language
+        self.setLocale(QtCore.QLocale(self.language))
+        self.translations = messages(self.language)
+        self.dialog_translator = DialogTranslator(self)
+        QtWidgets.QApplication.installTranslator(self.dialog_translator)
+        self.captions: list[tuple[Callable[[str], None], str, dict[str, object]]] = []
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.document().setMaximumBlockCount(2000)
@@ -334,15 +336,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         central = QtWidgets.QWidget()
         column = QtWidgets.QVBoxLayout(central)
         column.addWidget(self.canvas, 1)
-        column.addWidget(
-            QtWidgets.QLabel(
-                'Hold: right-click or Shift-click. '
-                'Keyboard: single-letter control IDs. '
-                'Changing focus releases all switches.'
-            )
-        )
+        column.addWidget(self.caption(QtWidgets.QLabel(), 'help'))
         time_controls = QtWidgets.QHBoxLayout()
-        self.running = QtWidgets.QCheckBox('Real time')
+        self.running = self.caption(QtWidgets.QCheckBox(), 'real_time')
         self.running.setChecked(True)
         self.running.toggled.connect(self.clock_mode)
         time_controls.addWidget(self.running)
@@ -351,16 +347,16 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.step.setValue(10)
         self.step.setSuffix(' ms')
         time_controls.addWidget(self.step)
-        advance = QtWidgets.QPushButton('Advance')
+        advance = self.caption(QtWidgets.QPushButton(), 'advance')
         advance.clicked.connect(self.advance)
         time_controls.addWidget(advance)
-        release = QtWidgets.QPushButton('Release switches')
+        release = self.caption(QtWidgets.QPushButton(), 'release')
         release.clicked.connect(self.release_inputs)
         time_controls.addWidget(release)
-        screenshot = QtWidgets.QPushButton('Save screenshot')
+        screenshot = self.caption(QtWidgets.QPushButton(), 'screenshot')
         screenshot.clicked.connect(self.screenshot)
         time_controls.addWidget(screenshot)
-        replay = QtWidgets.QPushButton('Save replay…')
+        replay = self.caption(QtWidgets.QPushButton(), 'replay')
         replay.clicked.connect(self.save_replay)
         time_controls.addWidget(replay)
         self.clock_label = QtWidgets.QLabel()
@@ -369,9 +365,15 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         inspector = QtWidgets.QTabWidget()
         self.blocked: dict[str, QtWidgets.QCheckBox] = {}
         self.connected: dict[str, QtWidgets.QCheckBox] = {}
-        inspector.addTab(self.log, 'MIDI and errors')
-        inspector.addTab(self.endpoint_controls(), 'Connections and input')
-        inspector.addTab(self.expression_controls(), 'Expression and outputs')
+        for panel, key in [
+            (self.log, 'midi_tab'),
+            (self.endpoint_controls(), 'connections_tab'),
+            (self.expression_controls(), 'expression_tab'),
+        ]:
+            index = inspector.addTab(panel, self.text(key))
+            self.captions.append(
+                (lambda text, i=index: inspector.setTabText(i, text), key, {})
+            )
         inspector.setMaximumHeight(270)
         column.addWidget(inspector)
         self.setCentralWidget(central)
@@ -382,6 +384,20 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(10)
+        self.relay_values: dict[str, int] = {}
+        self.display_updates()
+
+    def text(self, key: str, **fields: object) -> str:
+        return self.translations[key].format(**fields)
+
+    def caption[T: QtWidgets.QLabel | QtWidgets.QAbstractButton](
+        self, widget: T, key: str, **fields: object
+    ) -> T:
+        widget.setText(self.text(key, **fields))
+        if isinstance(widget, QtWidgets.QLabel):
+            widget.setWordWrap(True)
+        self.captions.append((widget.setText, key, fields))
+        return widget
 
     def clock_mode(self, running: bool) -> None:
         self.origin = monotonic_ns()
@@ -406,7 +422,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 continue
             row = QtWidgets.QHBoxLayout()
             row.addWidget(QtWidgets.QLabel(e.label))
-            connected = QtWidgets.QCheckBox('Connected (virtual)')
+            connected = self.caption(QtWidgets.QCheckBox(), 'connected')
             connected.setChecked(True)
             connected.toggled.connect(
                 lambda state, endpoint=e.name: self.session.connection(endpoint, state)
@@ -416,7 +432,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             if e.input:
                 value = QtWidgets.QLineEdit('90 3c 64')
                 row.addWidget(value)
-                send = QtWidgets.QPushButton('Inject hex')
+                send = self.caption(QtWidgets.QPushButton(), 'inject')
                 send.clicked.connect(
                     lambda checked=False, endpoint=e.name, field=value: self.inject(
                         endpoint, field.text()
@@ -424,44 +440,46 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 )
                 row.addWidget(send)
             if e.output:
-                blocked = QtWidgets.QCheckBox('Block output')
+                blocked = self.caption(QtWidgets.QCheckBox(), 'block')
                 self.blocked[e.name] = blocked
                 blocked.toggled.connect(
                     lambda state, endpoint=e.name: self.session.block(endpoint, state)
                 )
                 row.addWidget(blocked)
-            host = QtWidgets.QPushButton('Host MIDI…')
+            host = self.caption(QtWidgets.QPushButton(), 'host')
             host.clicked.connect(
                 lambda checked=False, endpoint=e.name: self.connect_host(endpoint)
             )
             row.addWidget(host)
             rows.addLayout(row)
-        rows.addWidget(QtWidgets.QLabel('Controller port declarations:'))
+        rows.addWidget(self.caption(QtWidgets.QLabel(), 'ports'))
         for p in self.session.controller.ports:
-            rows.addWidget(QtWidgets.QLabel(port_description(p)))
+            label = QtWidgets.QLabel()
+            self.captions.append(
+                (
+                    lambda text, label=label, port=p: label.setText(
+                        port_description(port, text)
+                    ),
+                    'not_emulated',
+                    {},
+                )
+            )
+            label.setText(port_description(p, self.text('not_emulated')))
+            rows.addWidget(label)
         return panel
 
     def expression_controls(self) -> QtWidgets.QWidget:
         panel = QtWidgets.QWidget()
         rows = QtWidgets.QFormLayout(panel)
-        rows.addRow(
-            QtWidgets.QLabel(
-                'Expression and auxiliary inputs follow the port mode configured '
-                'in the running setup.'
-            )
-        )
-        rows.addRow(
-            QtWidgets.QLabel(
-                'Aux contacts: hold click; right-click or Shift-click to latch.'
-            )
-        )
+        rows.addRow(self.caption(QtWidgets.QLabel(), 'expression_help'))
+        rows.addRow(self.caption(QtWidgets.QLabel(), 'aux_help'))
         for name, modes in self.session.target.trs_ports.items():
             port = next(
                 (e.port for e in self.session.target.midi_endpoints if e.name == name),
                 None,
             )
             if port is None:
-                rows.addRow(name, QtWidgets.QLabel('No execution target port binding'))
+                rows.addRow(name, self.caption(QtWidgets.QLabel(), 'no_binding'))
                 continue
             if 'expression' in modes:
                 slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -477,25 +495,24 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 self.auxiliary_contacts[port] = []
                 for index in range(2):
                     button = AuxiliaryContact(
-                        f'Contact {index + 1}',
+                        '',
                         lambda pressed, slot=port, contact=index: self.auxiliary(
                             slot, contact, pressed
                         ),
                     )
+                    self.caption(button, 'contact', number=index + 1)
                     self.auxiliary_contacts[port].append(button)
                     buttons.addWidget(button)
-                rows.addRow(f'{name} (Aux)', contacts)
+                rows.addRow(
+                    self.caption(QtWidgets.QLabel(), 'aux_label', name=name), contacts
+                )
         self.relay_labels: dict[str, QtWidgets.QLabel] = {}
         for n in self.session.target.relay_outputs:
-            label = QtWidgets.QLabel('Unknown')
+            label = QtWidgets.QLabel(self.text('unknown_title'))
             self.relay_labels[n] = label
             rows.addRow(n, label)
         if not self.session.target.trs_ports and not self.relay_labels:
-            rows.addRow(
-                QtWidgets.QLabel(
-                    'No configurable expression or relay outputs declared.'
-                )
-            )
+            rows.addRow(self.caption(QtWidgets.QLabel(), 'no_outputs'))
         return panel
 
     def auxiliary(self, port: int, contact: int, pressed: bool) -> None:
@@ -534,7 +551,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.display_updates()
             if connection := self.host.pop(endpoint, None):
                 connection.close()
-            self.log.appendPlainText(f'{endpoint}: disconnected host MIDI')
+            self.log.appendPlainText(self.text('host_disconnected', endpoint=endpoint))
             return
         declaration = next(
             e for e in self.session.target.midi_endpoints if e.name == endpoint
@@ -544,26 +561,19 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             connection.refresh()
             if declaration.input:
                 names = [f'{i}: {p.name}' for i, p in enumerate(connection.input_ports)]
-                choice, accepted = QtWidgets.QInputDialog.getItem(
-                    self, 'Host MIDI input', endpoint, names, editable=False
-                )
+                choice, accepted = self.host_choice('host_input', endpoint, names)
                 if accepted:
                     connection.connect_input(names.index(choice))
             if declaration.output:
                 names = [
                     f'{i}: {p.name}' for i, p in enumerate(connection.output_ports)
                 ]
-                choice, accepted = QtWidgets.QInputDialog.getItem(
-                    self, 'Host MIDI output', endpoint, names, editable=False
-                )
+                choice, accepted = self.host_choice('host_output', endpoint, names)
                 if accepted:
                     connection.connect_output(names.index(choice))
             if connection.input_connected or connection.output_connected:
                 self.host[endpoint] = connection
-                self.log.appendPlainText(
-                    f'{endpoint}: host MIDI connected; '
-                    'click Host MIDI again to disconnect'
-                )
+                self.log.appendPlainText(self.text('host_connected', endpoint=endpoint))
             else:
                 connection.close()
         except (midi.MidiError, ValueError, TypeError, OSError) as error:
@@ -598,12 +608,28 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.running.setEnabled(False)
         self.release_inputs()
         self.canvas.setEnabled(False)
-        self.log.appendPlainText(f'Native emulator stopped: {error}')
+        self.log.appendPlainText(self.text('stopped', error=error))
 
     def display_updates(self) -> None:
-        messages = self.session.messages[:]
-        del self.session.messages[: len(messages)]
-        for e in messages:
+        if self.language != self.session.language:
+            self.language = self.session.language
+            self.setLocale(QtCore.QLocale(self.language))
+            self.translations = messages(self.language)
+            for setter, key, fields in self.captions:
+                setter(self.text(key, **fields))
+        mode = self.text('mirror' if self.session.mode == 'pedal mirror' else 'preview')
+        self.setWindowTitle(
+            self.session.controller.name
+            + f' [{mode}]'
+            + (
+                f' [{self.text("provisional")}]'
+                if self.session.layout.provisional
+                else ''
+            )
+        )
+        updates = self.session.messages[:]
+        del self.session.messages[: len(updates)]
+        for e in updates:
             if e.kind == 'midi':
                 self.log.appendPlainText(
                     f'{e.time_us / 1000:.3f} ms {e.endpoint}: {e.data.hex(" ")}'
@@ -615,15 +641,27 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                     except (midi.MidiError, ValueError, TypeError, OSError) as error:
                         self.host_failed(e.endpoint, error)
             elif e.kind == 'relay' and e.endpoint in self.relay_labels:
-                self.relay_labels[e.endpoint].setText('On' if e.value else 'Off')
+                self.relay_values[e.endpoint] = e.value
+            elif e.kind == 'keyboard':
+                self.log.appendPlainText(self.text('keyboard', data=e.data.hex(' ')))
+            elif e.kind == 'firmware':
+                self.log.appendPlainText(self.text('stock_message'))
             else:
                 self.log.appendPlainText(e.message)
+        for name, label in self.relay_labels.items():
+            label.setText(
+                self.text(
+                    ('on' if self.relay_values[name] else 'off')
+                    if name in self.relay_values
+                    else 'unknown_title'
+                )
+            )
         if self.session.stock_firmware:
             self.timer.stop()
             self.running.setChecked(False)
             self.running.setEnabled(False)
             self.canvas.setEnabled(False)
-            self.clock_label.setText('Simulated stock firmware')
+            self.clock_label.setText(self.text('stock'))
             return
         self.clock_label.setText(f'{self.session.time_us / 1_000_000:.3f} s')
         self.canvas.update()
@@ -633,22 +671,50 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.connected[endpoint].setChecked(False)
         connection.close()
         self.session.cleanup()
-        self.log.appendPlainText(f'{endpoint}: host MIDI disconnected: {error}')
+        self.log.appendPlainText(
+            self.text('host_failed', endpoint=endpoint, error=error)
+        )
+
+    def host_choice(
+        self, title: str, endpoint: str, names: list[str]
+    ) -> tuple[str, bool]:
+        dialog = QtWidgets.QInputDialog(self)
+        dialog.setWindowTitle(self.text(title))
+        dialog.setLabelText(endpoint)
+        dialog.setComboBoxItems(names)
+        dialog.setComboBoxEditable(False)
+        dialog.setOkButtonText(self.text('ok'))
+        dialog.setCancelButtonText(self.text('cancel'))
+        accepted = dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
+        choice = dialog.textValue()
+        dialog.deleteLater()
+        return choice, accepted
+
+    def save_path(self, title: str, filename: str, file_filter: str) -> str:
+        dialog = QtWidgets.QFileDialog(self, self.text(title))
+        dialog.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog)
+        dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptMode.AcceptSave)
+        dialog.selectFile(filename)
+        dialog.setNameFilter(self.text(file_filter))
+        for label, key in [
+            (QtWidgets.QFileDialog.DialogLabel.LookIn, 'look_in'),
+            (QtWidgets.QFileDialog.DialogLabel.FileName, 'filename'),
+            (QtWidgets.QFileDialog.DialogLabel.FileType, 'filetype'),
+            (QtWidgets.QFileDialog.DialogLabel.Accept, 'save'),
+            (QtWidgets.QFileDialog.DialogLabel.Reject, 'cancel'),
+        ]:
+            dialog.setLabelText(label, self.text(key))
+        path = dialog.selectedFiles()[0] if dialog.exec() else ''
+        dialog.deleteLater()
+        return path
 
     def screenshot(self) -> None:
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, 'Save emulator screenshot', 'controller.png', 'PNG images (*.png)'
-        )
+        path = self.save_path('screenshot_title', 'controller.png', 'png')
         if path and not self.canvas.grab().save(str(Path(path))):
-            self.log.appendPlainText(f'could not save screenshot: {path}')
+            self.log.appendPlainText(self.text('screenshot_error', path=path))
 
     def save_replay(self) -> None:
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self,
-            'Save input replay',
-            'replay.toml',
-            'TOML scenarios (*.toml)',
-        )
+        path = self.save_path('replay_title', 'replay.toml', 'toml')
         if not path:
             return
         scenario = Scenario(
@@ -675,14 +741,64 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             c.close()
         self.host.clear()
         self.session.close()
+        QtWidgets.QApplication.removeTranslator(self.dialog_translator)
         event.accept()
 
 
-def port_description(port: models.Port | models.UsbPort | str) -> str:
+class DialogTranslator(QtCore.QTranslator):
+    """Translate Qt's file-dialog chrome without relying on OS language packs."""
+
+    def __init__(self, window: EmulatorWindow) -> None:
+        super().__init__(window)
+        self.window = window
+        self.keys = {v: n for n, v in messages('en').items() if '{' not in v}
+
+    def isEmpty(self) -> bool:
+        return False
+
+    def translate(
+        self,
+        context: str,
+        sourceText: str,
+        disambiguation: str | None = None,
+        n: int = -1,
+    ) -> str:
+        source = sourceText.replace('&', '')
+        if context in (
+            'QFileDialog',
+            'QFileSystemModel',
+            'QPlatformTheme',
+            'QDialogButtonBox',
+            'QLineEdit',
+            'QWidgetTextControl',
+            'QAbstractSpinBox',
+        ):
+            source = {
+                'Go back': 'Back',
+                'Go forward': 'Forward',
+                'Go to the parent directory': 'Parent Directory',
+                'Create New Folder': 'New Folder',
+                'Create a New Folder': 'New Folder',
+                'Change to list view mode': 'List View',
+                'Change to detail view mode': 'Detail View',
+                'Kind': 'Type',
+                'List of places and bookmarks': 'Sidebar',
+                'Folder': 'Directory',
+                'Directories': 'Directory',
+            }.get(source, source)
+            if source in self.keys:
+                return self.window.text(self.keys[source])
+            return dialog_messages(self.window.language).get(source, '')
+        return ''
+
+
+def port_description(
+    port: models.Port | models.UsbPort | str, not_emulated: str = 'not emulated'
+) -> str:
     if isinstance(port, models.Port):
         modes = ', '.join(f'{m.protocol.kind}: {m.direction}' for m in port.modes)
         unsupported = any(m.protocol.kind in ('cv', 'ethernet') for m in port.modes)
-        return f'{port.name} ({modes})' + (' [not emulated]' if unsupported else '')
+        return f'{port.name} ({modes})' + (f' [{not_emulated}]' if unsupported else '')
     if isinstance(port, models.UsbPort):
         return f'{port.kind}' + (' host' if port.host else '')
     return str(port)
