@@ -35,7 +35,8 @@ from .data_files import validate_name
 from .usb_frames import Kind
 
 
-class Song(BaseModel, frozen=True):
+class Song(models.BindingScope, frozen=True):
+    bindings: dict[str, object] = Field(default_factory=dict)
     name: str
     patches: list[
         Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)]
@@ -64,13 +65,15 @@ class Song(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Setlist(BaseModel, frozen=True):
+class Setlist(models.BindingScope, frozen=True):
+    bindings: dict[str, object] = Field(default_factory=dict)
     name: str
     songs: list[str] = Field(default_factory=list)
     model_config = ConfigDict(extra='forbid')
 
 
-class Library(BaseModel, frozen=True):
+class Library(models.BindingScope, frozen=True):
+    bindings: dict[str, object] = Field(default_factory=dict)
     instruments: dict[str, object] = Field(default_factory=dict)
     definitions: models.Definitions | None = None
     patches: dict[str, object] = Field(default_factory=dict)
@@ -143,7 +146,13 @@ def encode(
         positions.append(values)
     source = b''
     roots: list[int] = []
-    if values_for_source or library.patches or library.midi is not None:
+    if (
+        values_for_source
+        or library.patches
+        or library.midi is not None
+        or library.bindings
+        or any(s.bindings for s in library.setlists)
+    ):
         if target is None:
             raise ValueError(
                 'song patches require --target to compile their setup context'
@@ -162,6 +171,7 @@ def encode(
                     'fonts',
                     'tag_styles',
                     'definitions',
+                    'bindings',
                 },
                 exclude_unset=True,
                 exclude_none=True,
@@ -193,7 +203,13 @@ def encode(
                 raise compiler.CompilationError(errors)
         port_modes = cast(dict[str, models.TrsMode], context['trs_ports'])
         auxiliary_switches = cast(dict[str, str], context['auxiliary_switches'])
-        pending = [context.get('patches', {}), values_for_source]
+        scopes = [
+            (k, s.name, s.model_dump()['bindings'])
+            for k, v in ((1, library.setlists), (2, library.songs))
+            for s in v
+            if s.bindings
+        ]
+        pending: list[object] = [context, *({'bindings': b} for _, _, b in scopes)]
         while pending:
             value = pending.pop()
             if isinstance(value, dict):
@@ -222,6 +238,7 @@ def encode(
                 documents,
                 movie_assets,
                 source_snapshots=trace.files if trace is not None else None,
+                binding_scopes=scopes,
             )
         except compiler.CompilationError as error:
             messages = error.errors
@@ -247,6 +264,9 @@ def encode(
         ]
         browser = first
     records = []
+    scope_roots = (
+        {(k, n): r for k, n, r in resolved.binding_scopes(source)} if source else {}
+    )
     if not source:
         browser = 0
     for song, values in zip(library.songs, positions, strict=True):
@@ -269,17 +289,26 @@ def encode(
             )
         records.append(
             selections[0]
-            + SONG.pack(text(song.name, 64), len(selections))
+            + SONG.pack(
+                text(song.name, 64),
+                len(selections),
+                scope_roots.get((2, song.name), 0xFFFFFFFF),
+            )
             + b''.join(selections[1:])
         )
     sets = []
     for s in library.setlists:
         entries = [text(n, 64) for n in s.songs]
-        sets.append(SET.pack(text(s.name, 64), len(entries)) + b''.join(entries))
+        sets.append(
+            SET.pack(
+                text(s.name, 64), len(entries), scope_roots.get((1, s.name), 0xFFFFFFFF)
+            )
+            + b''.join(entries)
+        )
     payload = (
         struct.pack('<II', len(library.songs), len(library.setlists))
         + b''.join(records + sets)
-        + b'CSP5'
+        + b'CSP6'
     )
     if source:
         source = (
@@ -367,6 +396,14 @@ def decode(data: bytes) -> Library:
             definitions[_qualified(prefix, key, 63)] = _rebind(
                 value, prefix, renamed, tag_names
             )
+        for kind, _name, root in resolved.binding_scopes(source):
+            if kind == 0:
+                context['bindings'] = _rebind(
+                    {'bindings': resolved.binding_map(source, root)},
+                    prefix,
+                    renamed,
+                    tag_names,
+                )['bindings']
     context['instruments'] = instruments
     context['patches'] = definitions
     context['fonts'] = fonts
@@ -376,7 +413,7 @@ def decode(data: bytes) -> Library:
     if sources:
         context['definitions'] = {'profiles': profiles, 'programs': programs}
     songs = []
-    for name, values in zip(song_headers, positions, strict=True):
+    for (name, binding), values in zip(song_headers, positions, strict=True):
         patches = []
         for document, reference, label, source, node in values:
             if document[0]:
@@ -399,7 +436,41 @@ def decode(data: bytes) -> Library:
                     source_tags[source],
                 )
             patches.append(value)
-        songs.append(Song(name=name, patches=patches))
+        bindings = (
+            resolved.binding_map(sources[0], binding) if binding != 0xFFFFFFFF else {}
+        )
+        bindings = (
+            _rebind(
+                {'bindings': bindings},
+                'source-0-' if len(sources) > 1 else '',
+                source_fonts[0],
+                source_tags[0],
+            )['bindings']
+            if bindings
+            else {}
+        )
+        songs.append(
+            Song.model_validate(
+                {'name': name, 'patches': patches, 'bindings': bindings}
+            )
+        )
+    sets = [
+        Setlist.model_validate(
+            dict(
+                name=s.name,
+                songs=s.songs,
+                bindings=_rebind(
+                    {'bindings': s.model_dump()['bindings']},
+                    'source-0-' if len(sources) > 1 else '',
+                    source_fonts[0],
+                    source_tags[0],
+                )['bindings'],
+            )
+        )
+        if s.bindings
+        else s
+        for s in sets
+    ]
     result = Library.model_validate(context | {'songs': songs, 'setlists': sets})
     return result
 
@@ -424,7 +495,7 @@ def _parse(
     data: bytes,
 ) -> tuple[
     int,
-    list[str],
+    list[tuple[str, int]],
     list[list[tuple[bytes, bytes, bytes, int, int]]],
     list[Setlist],
     list[bytes],
@@ -443,7 +514,7 @@ def _parse(
             raise ValueError('truncated song')
         first = SELECTION.unpack_from(data, offset)
         offset += SELECTION.size
-        name, count = SONG.unpack_from(data, offset)
+        name, count, binding = SONG.unpack_from(data, offset)
         offset += SONG.size
         if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
             raise ValueError('invalid song patch count')
@@ -452,12 +523,14 @@ def _parse(
             values.append(SELECTION.unpack_from(data, offset))
             offset += SELECTION.size
         positions.append(values)
-        song_headers.append(_string(name))
+        song_headers.append((_string(name), binding))
     sets = []
+    set_bindings = []
     for _ in range(nl):
         if offset + SET.size > len(data):
             raise ValueError('truncated setlist')
-        name, count = SET.unpack_from(data, offset)
+        name, count, binding = SET.unpack_from(data, offset)
+        set_bindings.append(binding)
         offset += SET.size
         if count > (len(data) - offset) // 64:
             raise ValueError('invalid setlist count')
@@ -466,7 +539,7 @@ def _parse(
         ]
         offset += count * 64
         sets.append(Setlist(name=_string(name), songs=entries))
-    if data[offset : offset + 4] != b'CSP5':
+    if data[offset : offset + 4] != b'CSP6':
         raise ValueError('missing song Patch sources')
     offset += 4
     prefix = offset
@@ -480,6 +553,23 @@ def _parse(
             raise ValueError('truncated song Patch source')
         sources.append(data[offset : offset + length])
         offset += length
+    if not sources and (
+        any(b != 0xFFFFFFFF for _, b in song_headers)
+        or any(b != 0xFFFFFFFF for b in set_bindings)
+    ):
+        raise ValueError('missing binding-map source')
+    sets = [
+        Setlist.model_validate(
+            dict(
+                name=s.name,
+                songs=s.songs,
+                bindings=resolved.binding_map(sources[0], b),
+            )
+        )
+        if b != 0xFFFFFFFF
+        else s
+        for s, b in zip(sets, set_bindings, strict=True)
+    ]
     return prefix, song_headers, positions, sets, sources
 
 
@@ -888,5 +978,5 @@ def run(command: Copy | Download) -> None:
 
 
 SELECTION = struct.Struct('<64s64s64sII')
-SONG = struct.Struct('<64sI')
-SET = struct.Struct('<64sI')
+SONG = struct.Struct('<64sII')
+SET = struct.Struct('<64sII')

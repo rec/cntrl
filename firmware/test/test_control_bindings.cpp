@@ -1,6 +1,7 @@
 #include "patch_hardware.h"
 #include "storage.h"
 #include <cntrl/switches.h>
+#include <cntrl/songs.h>
 #include <cassert>
 #include <fstream>
 #include <iterator>
@@ -17,6 +18,15 @@ struct Board : TestPatchHardware, cntrl::midi::Sink, cntrl::Replies {
     uint32_t now = 0;
     unsigned pins = 0;
     bool exiting = false;
+    bool expression_enabled = true;
+    const cntrl::Document *foreign = nullptr;
+    uint32_t source_signature = 0;
+    uint32_t names_signature() const override { return source_signature; }
+    bool acquire(uint16_t index, const cntrl::Document *&document, uint32_t &revision) override {
+        if (index || !foreign) return false;
+        document = foreign; revision = cntrl::u32(foreign->data() + foreign->core_offset() + 20); return true;
+    }
+    bool expression_available(unsigned) const override { return expression_enabled; }
     std::string response;
     void reply(const char *text) override { response = text; }
     void data(const uint8_t *, unsigned) override { assert(false); }
@@ -55,12 +65,104 @@ struct Board : TestPatchHardware, cntrl::midi::Sink, cntrl::Replies {
     }
 };
 
+struct ScopedSongs : cntrl::SongResolver {
+    Board &board;
+    cntrl::Songs *songs = nullptr;
+    std::vector<uint8_t> bytes;
+    cntrl::Document document;
+    explicit ScopedSongs(Board &board) : board(board) {}
+    bool activate(const cntrl::SongSelection &selection, const cntrl::SongContinuation &context, bool) override {
+        bytes.resize(songs->source_size(0));
+        if (!songs->read_source(0, 0, bytes.data(), unsigned(bytes.size()))
+            || !document.load(bytes.data(), unsigned(bytes.size()), board)) return false;
+        board.source_signature = document.names_signature();
+        const auto *set = songs->setlist(context.set);
+        unsigned set_bindings = set ? set->bindings : ~0u;
+        const auto *song = songs->song(context.song);
+        return song && board.switches.binding_context(&document, set_bindings, song->bindings)
+            && board.entry.start(document, selection.node);
+    }
+    cntrl::SongExecution execution_status() const override { return board.entry.busy() ? cntrl::SongExecution::pending : cntrl::SongExecution::completed; }
+    bool revision(const cntrl::SongSelection &, uint32_t &) override { return false; }
+    bool capture_source(const cntrl::Document *&) override { return false; }
+};
+
+void scoped_bindings(Board &board, const std::vector<uint8_t> &bytes) {
+    TestStorage storage; ScopedSongs resolver(board); cntrl::Songs songs(storage, resolver); resolver.songs = &songs;
+    assert(songs.boot() && songs.import_begin(unsigned(bytes.size())));
+    assert(songs.import_write(bytes.data(), unsigned(bytes.size())));
+    assert(songs.import_finish(unsigned(bytes.size()), cntrl::checksum(bytes.data(), unsigned(bytes.size()))));
+    while (songs.busy()) songs.tick();
+    assert(songs.success());
+    auto next = [&]() { assert(songs.next()); board.tick(); songs.tick(); };
+    auto recall = [&](const char *name) { assert(board.entry.start(resolver.document, unsigned(resolver.document.named_patch(name)))); board.tick(); };
+    auto press = [&](unsigned input) { board.button(input, true); board.button(input, false); };
+    songs.choose("Set"); next();
+    assert(board.switches.expression(0).controller == 11);
+    board.expression_enabled = false;
+    recall("both");
+    assert(board.entry.status() == cntrl::PatchExecutor::Status::failed);
+    assert(board.switches.expression(0).controller == 11);
+    board.expression_enabled = true;
+    auto count = board.sent.size();
+    press(0); press(1); press(3);
+    assert(board.sent.size() == count); // Switches do not inherit by default.
+    press(2);
+    assert(board.sent.size() == count + 1 && board.sent.back().bytes[1] == 30);
+    assert(board.switches.performance() && board.switches.expression(0).controller == 11);
+    press(2); // An ordinary action leaves the map and pedal assignment intact.
+    assert(board.sent.size() == count + 2);
+    assert(board.switches.binding_context());
+    press(4); // A bound map change retains its enclosing song despite a browser action.
+    assert(board.switches.expression(0).controller == 11);
+    assert(board.switches.binding_context(&resolver.document,
+        unsigned(resolver.document.binding_scope(1, "Set")), unsigned(resolver.document.binding_scope(2, "One"))));
+    recall("both");
+    press(0); assert(board.sent.back().bytes[1] == 22); // Song overrides global A.
+    press(1); assert(board.sent.back().bytes[1] == 21); // Set B.
+    press(3); assert(board.sent.back().bytes[1] == 30); // Global D.
+    assert(board.switches.expression(0).controller == 11);
+    recall("switch");
+    assert(!board.switches.expression(0).channel);
+    press(0); assert(board.sent.back().bytes[1] == 22);
+    recall("none"); count = board.sent.size();
+    press(0); press(1); assert(board.sent.size() == count);
+    assert(!board.switches.expression(0).channel);
+    recall("override"); assert(board.switches.expression(0).controller == 1);
+    recall("own"); press(0); assert(board.sent.back().bytes[1] == 23);
+    recall("foreign");
+    assert(board.switches.expression(0).controller == 11);
+    board.foreign = nullptr; // The installed map owns its external source.
+    press(3); assert(board.sent.back().bytes[1] == 30); // Global reference uses the library's boost.
+    press(5); assert(board.sent.back().bytes[1] == 31); // Local reference uses the foreign boost.
+    press(0); assert(board.sent.back().bytes[1] == 22);
+    next(); assert(board.switches.expression(0).controller == 10); // Song Two inherits the set.
+    songs.choose("Other"); next(); assert(board.switches.expression(0).controller == 74);
+    songs.choose("Plain"); next(); assert(board.switches.expression(0).controller == 7);
+    assert(songs.rename_song("One", "Renamed")); while (songs.busy()) songs.tick(); assert(songs.success());
+    assert(songs.rename_setlist("Set", "Renamed set")); while (songs.busy()) songs.tick(); assert(songs.success());
+    songs.choose("Renamed set"); next(); assert(board.switches.expression(0).controller == 11);
+    next(); assert(board.switches.expression(0).controller == 10);
+    assert(songs.undo()); while (songs.busy()) songs.tick(); assert(songs.success());
+    songs.choose("Set"); next(); assert(board.switches.expression(0).controller == 11);
+    assert(board.switches.binding_context());
+    recall("default"); assert(board.switches.expression(0).controller == 7); // Browser has no lingering song scope.
+}
+
 int main(int argc, char **argv) {
     cntrl::memory_budget = 192 * 1024;
-    assert(argc == 3);
+    assert(argc == 3 || argc == 4);
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), {}};
     Board board; cntrl::Document document;
+    if (!std::strcmp(argv[2], "--scopes")) {
+        assert(argc == 4);
+        std::ifstream source(argv[3], std::ios::binary);
+        std::vector<uint8_t> foreign_bytes{std::istreambuf_iterator<char>(source), {}};
+        cntrl::Document foreign;
+        assert(foreign.load(foreign_bytes.data(), unsigned(foreign_bytes.size()), board));
+        board.foreign = &foreign; scoped_bindings(board, bytes); return 0;
+    }
     assert(document.load(bytes.data(), unsigned(bytes.size()), board));
     if (!std::strcmp(argv[2], "--validate")) return 0;
     if (!std::strcmp(argv[2], "--reject")) {

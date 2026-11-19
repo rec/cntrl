@@ -246,7 +246,7 @@ public:
     TextMessages &text_messages() { return midi_runtime.text_messages; }
     midi::Bridge &midi_bridge() { return bridge; }
     ExpressionPedals &expression_controls() { return *expression; }
-    bool expression_available(unsigned port) const { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
+    bool expression_available(unsigned port) const override { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
     bool looper_storage_ready() const { return true; }
     bool switch_firmware() {
         if (!target::supports_stock_firmware || stock_firmware || stock_pending || documents->busy() || documents->dirty() || !output_idle() || !stop_clock()) return false;
@@ -294,6 +294,7 @@ public:
     bool acquire(uint16_t index,const Document *&document,uint32_t &revision) override { return sources->acquire(index,document,revision); }
     uint32_t names_signature() const override { return sources ? sources->names_signature() : 0; }
     midi::Bridge::Delivery bind_controls(const Document &d,unsigned node,PatchExecutor &invocation) override { return switches->bind_controls(d,node,invocation); }
+    bool binding_context(const Document *d = nullptr,unsigned set = ~0u,unsigned song = ~0u) override { return switches->binding_context(d,set,song); }
     bool gate_midi_stream(const char *name,bool enabled) override { return midi_runtime.streams().gate(name,enabled); }
     bool select_midi_streams(const Document &d,unsigned node) override {
         unsigned scope; if (!d.stream_scope(node,scope)) return false;

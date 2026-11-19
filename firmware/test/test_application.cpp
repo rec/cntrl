@@ -133,7 +133,7 @@ struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink {
     Expression &expression_controls() { return expression; }
     Bridge &midi_bridge() { return bridge; }
     unsigned midi_file_clock_outputs() const { return 0; }
-    bool expression_available(unsigned) const { return true; }
+    bool expression_available(unsigned) const override { return true; }
 };
 struct PageFonts : cntrl::ui::Fonts {
     bool supports(unsigned, unsigned, uint32_t = 0) const override { return true; }

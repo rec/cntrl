@@ -1,7 +1,7 @@
 # Songs and setlists
 
 The implementation supports songs, an on-pedal song library and editable
-setlists. Song positions now use the unified Patch schema and CSG5 records. See
+setlists. Song positions use the unified Patch schema and binding-aware song records. See
 [authoring, execution and required format changes](../../../../doc/patches.md).
 Hardware qualification of this format is pending. Song sections remain deferred as described in
 [the plan](../../../../plan/songs-and-setlists.md).
@@ -158,10 +158,12 @@ capacity constraints, rather than the former 64-song/16-setlist/64-entry caps.
 Names and patch-selection fields retain their existing format bounds.
 
 The payload begins with two little-endian 32-bit counts: songs and setlists.
-Each song stores its first patch selection, name and patch count, then its
-remaining selections. Each setlist stores its name and entry count followed by
-that many song names. Committed files use the `CSG5` envelope; a `CSP5` appendix
-stores immutable compiled patch sources. Export older libraries with the old host
+Each song stores its first patch selection, name, patch count and binding-map
+reference, then its remaining selections. Each setlist stores its name, entry
+count and binding-map reference followed by that many song names. Committed
+files use the `CSG6` journal; a `CSP6` appendix stores immutable compiled patch
+sources. Bindings at global, setlist and song scopes are described in
+[patch bindings](../../../../doc/control-bindings.md). Export older libraries with the old host
 before replacing the firmware, then remove ID fields and replace numeric setlist
 references with song names before copying them with the new host. There is no
 legacy decoder.
@@ -242,4 +244,4 @@ Function patches can be selected from a setup just like MIDI patches. Source
 references remain MIDI selections; use an inline function for firmware visits.
 
 Host exports contain names and ordered patch lists. Recompile and copy song
-libraries using the matching CSG5 host and firmware format.
+libraries using the matching binding-aware host and firmware format.

@@ -290,6 +290,7 @@ def compile_show(
     *,
     source_snapshots: dict[Path, bytes] | None = None,
     setting_overrides: dict[str, object] | None = None,
+    binding_scopes: list[tuple[int, str, dict[str, object]]] | None = None,
 ) -> bytes:
     errors: list[str] = []
     generated: dict[int, bytes] = {}
@@ -398,6 +399,26 @@ def compile_show(
         _text(key, 64, target, f'patches.{key}', errors, unicode=True)
         if (index := compiler.parse(raw, f'patches.{key}', key)) is not None:
             named[key] = index
+    scopes = list(binding_scopes or [])
+    if show.bindings:
+        scopes.insert(0, (0, '', show.bindings))
+    for kind, name, bindings in scopes:
+        if kind not in (0, 1, 2) or len(name.encode()) >= 64:
+            errors.append('binding scope names must contain fewer than 64 bytes')
+            continue
+        path = f'binding_scopes.{kind}.{name}'
+        child = compiler.parse(
+            {'bindings': bindings, 'inherits': 'none'}, path, name or 'Global'
+        )
+        if child is not None:
+            marker = len(compiler.nodes)
+            compiler.nodes.append(
+                struct.pack('<BBHB64sH', 19, 0, 67, kind, name.encode(), child)
+            )
+            compiler.values.append(models.Sequence(patches=[]))
+            compiler.paths.append(path)
+            compiler.labels.append(name or 'Global')
+            compiler.children[marker] = [child]
     patch_cycles: list[bytes] = []
     records: list[bytes] = []
     banks: list[int] = []
@@ -1093,7 +1114,10 @@ class PatchCompiler:
                 name,
             )
             payload = self.compile_bindings(value, child, path)
-            self.nodes[index] = struct.pack('<BBH', 10, 0, len(payload)) + payload
+            inheritance = list(models.Inherits).index(value.inherits)
+            self.nodes[index] = (
+                struct.pack('<BBH', 10, inheritance, len(payload)) + payload
+            )
             self.children[index] = [child]
             return index
         flags = 0

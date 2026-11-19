@@ -45,10 +45,83 @@ Pressing B selects `chorus`, replacing the map. Pressing A on `chorus` selects
 the current map. E advances through the current song's patches, then to the
 next song in the selected setlist. F returns to the preceding performance UI.
 
+## Binding scopes and inheritance
+
+Bindings can also live at the top level of the existing `global.toml` defaults,
+at the root of a setup or song library, and on each setlist and song. Global
+defaults are resolved when compiling; changing the global file requires
+recompiling its consumers. Setlist and song bindings follow the active set and
+song at playback. Renaming either on the pedal preserves its bindings, as do
+saved edits and undo.
+
+Higher scopes merge by control: a song assignment replaces the setlist's entire
+assignment for that control, and a setlist assignment replaces the global one.
+Other controls remain inherited. The tables accept the same switch and
+expression assignments used on patches.
+
+Every patch has an `inherits` setting:
+
+| Value | Higher-scope controls included in a new patch map |
+| --- | --- |
+| `none` | None |
+| `switch` | Switch assignments only |
+| `expression` | Expression assignments only; the default |
+| `both` | Switch and expression assignments |
+
+The patch's own bindings override the inherited assignments. A full-pedal patch
+therefore leaves unused switches inactive by default, while retaining the song's
+expression assignments. Inheritance resolves enclosing scopes, not the previous
+patch. Derivation with `parent` still resolves authored patch fields separately.
+
+For example, in a song library:
+
+```toml
+[bindings.expression-jack]
+output = 'din'
+channel = 1
+controller = 7
+
+[patches.verse]
+bindings = {A = 'boost', E = {operation = 'next-song-patch'}}
+
+[patches.boost]
+output = 'din'
+channel = 1
+controller = 7
+value = 110
+
+[[songs]]
+name = 'One'
+patches = ['verse']
+bindings = {expression-jack = {output = 'din', channel = 1, controller = 11}}
+
+[[setlists]]
+name = 'Tonight'
+songs = ['One']
+bindings = {expression-jack = {output = 'din', channel = 1, controller = 10}}
+```
+
+Verse inherits CC11 from One, overriding Tonight's CC10 and the global CC7.
+Pressing A executes Boost without replacing Verse's map. A patch without
+`bindings` remains an ordinary action, even if it specifies `inherits`. Use
+`bindings = {}` to explicitly install an inherited-only map. Combining that
+with `inherits = 'none'` installs an entirely empty map.
+
+The resolved map supports up to eight switches. A three-display `binding_view`
+shows up to six; larger maps use the ordinary switch presentation. Inherited
+switch actions retain their source definitions and routing even when the
+selected patch comes from another setup.
+
+Song records now include binding references and use the `CSP6` source appendix.
+Recompile song libraries and use matching host and firmware versions; earlier
+song cores are rejected.
+
+## Replacing maps
+
 A derived patch inherits its parent's bindings. Supplying another `bindings`
-table replaces that entire map. Omitting the table leaves the current map
-unchanged; an empty table explicitly owns the surface without assigning any
-controls. Unassigned switches do nothing while a map is active. Normal page
+table replaces that entire authored map. Omitting the table leaves the current
+map unchanged; an empty table owns the surface with only the categories selected
+by `inherits`. Unassigned switches do nothing while a map is active. Normal page
 navigation does not intercept D or F, or any other switch.
 
 ## Momentary switches and gestures
@@ -133,9 +206,9 @@ have the `expression` TRS role in the active setup. `reverse` and `curve` work
 as in `page_settings.expression`. Calibration and input filtering are shared
 with the existing expression subsystem. Set `mirror_output` to a second enabled
 MIDI output to send each expression value there as well as to `output`.
-A map owns all expression assignments;
-unassigned pedals are inactive until another map or the normal setup restores
-their assignments.
+A resolved map owns all expression assignments. Pedals supplied by enclosing
+scopes remain active when `inherits` includes expression; all other unassigned
+pedals are inactive until another map or the normal setup restores them.
 
 Maps are stored in the compiled patch graph, including song sources and setup
 bundles. Saving and history preserve them. The active map keeps an owned copy

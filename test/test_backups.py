@@ -182,7 +182,7 @@ def test_song_restore_preserves_recorded_source_memory_estimates(
 ) -> None:
     original_library = songs.encode(songs.Library(midi={}), target)
     library = bytearray(binary_format.core(original_library, binary_format.Kind.songs))
-    offset = library.index(b'CSP5') + 8
+    offset = library.index(b'CSP6') + 8
     original = bytes(library[offset:])
     source = bytearray(binary_format.core(original))
     metadata = source.index(b'CMTA') + compiler.METADATA.size - 8

@@ -139,7 +139,7 @@ public:
         return true;
     }
     Controller(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner = 8)
-        : hardware_(hardware), executor_(hardware, outputs, sources, owner) {}
+        : hardware_(hardware), outputs_(outputs), executor_(hardware, outputs, sources, owner) {}
     ~Controller() { executor_.cancel(); }
     bool prepare(const Document &document) {
         cancel_preparation();
@@ -333,14 +333,14 @@ public:
                 history_.clear();
                 clear_programs();
             }
-            if (!executor_.start(document_, document_.browser_root(p), false, true)) { navigation(before); return false; }
+            if (!outputs_.binding_context() || !executor_.start(document_, document_.browser_root(p), false, true)) { navigation(before); return false; }
             sending_ = int(p); undoing_ = false;
         } else if (operation == 8) {
             if (executor_.busy()) return false;
             if (!can_undo(depth_)) return true;
             const ProgramHistory &a = history_[depth_ - 1];
             sending_ = int(a.patch); undoing_ = true;
-            if (!executor_.start(document_, document_.browser_root(unsigned(a.previous)), false, true)) { sending_ = -1; return false; }
+            if (!outputs_.binding_context() || !executor_.start(document_, document_.browser_root(unsigned(a.previous)), false, true)) { sending_ = -1; return false; }
         } else return false;
         render();
         return true;
@@ -360,6 +360,7 @@ private:
         hardware_.transition(reverse != bool(direction & 1), document_.scroll_ms(direction >= 2), pane, direction >= 2, direction == 0, action == 1);
     }
     Hardware &hardware_;
+    PatchOutputs &outputs_;
     PatchExecutor executor_;
     Document document_;
     CheckedList<ProgramHistory> history_;
@@ -487,6 +488,6 @@ private:
     }
 };
 #if UINTPTR_MAX == UINT32_MAX
-static_assert(sizeof(Controller) == 448, "Update layout.estimate_ram for the Controller ABI");
+static_assert(sizeof(Controller) == 456, "Update layout.estimate_ram for the Controller ABI");
 #endif
 } // namespace cntrl

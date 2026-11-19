@@ -43,6 +43,66 @@ def test_song_patch_names_inherit_bindings() -> None:
     assert restored.patches['verse']['bindings']['F'] == {'operation': 'back'}
 
 
+def test_scoped_bindings_override_and_preserve_ordinary_actions(
+    tmp_path: Path, binding_runner: Path
+) -> None:
+    def expression(controller: int) -> dict[str, object]:
+        return {'output': 'din', 'channel': 1, 'controller': controller}
+
+    library = songs.Library(
+        bindings={'A': cc(20, 1), 'D': 'boost', 'configurable-1': expression(7)},
+        patches={
+            'boost': cc(30, 1),
+            'default': {'bindings': {'C': 'boost', 'E': 'both'}},
+            **{n: {'bindings': {}, 'inherits': n} for n in ('none', 'switch', 'both')},
+            'override': {'bindings': {'configurable-1': expression(1)}},
+            'own': {'bindings': {'A': cc(23, 1)}, 'inherits': 'both'},
+            'foreign': {'document': 'Foreign', 'patch': 'full'},
+        },
+        songs=[
+            songs.Song(
+                name='One',
+                patches=['default'],
+                bindings={'A': cc(22, 1), 'configurable-1': expression(11)},
+            ),
+            songs.Song(name='Two', patches=['default']),
+        ],
+        setlists=[
+            songs.Setlist(
+                name='Set',
+                songs=['One', 'Two'],
+                bindings={'B': cc(21, 1), 'configurable-1': expression(10)},
+            ),
+            songs.Setlist(
+                name='Other', songs=['Two'], bindings={'configurable-1': expression(74)}
+            ),
+            songs.Setlist(name='Plain', songs=['Two']),
+        ],
+    )
+    foreign = {
+        'patches': {
+            'boost': cc(31, 1),
+            'full': {'bindings': {'F': 'boost'}, 'inherits': 'both'},
+        }
+    }
+    encoded = songs.encode(library, binding_target(), {'Foreign': foreign})
+    restored = songs.decode(encoded)
+    assert restored.bindings == library.bindings
+    assert restored.songs == library.songs
+    assert restored.setlists == library.setlists
+    assert (
+        songs.decode(songs.encode(restored, binding_target(), {'Foreign': foreign}))
+        == restored
+    )
+    fixture = tmp_path / 'scopes.bin'
+    fixture.write_bytes(encoded)
+    source = tmp_path / 'foreign.bin'
+    source.write_bytes(compiler.compile_show(foreign, {}, [], binding_target()))
+    subprocess.run(
+        [str(binding_runner), str(fixture), '--scopes', str(source)], check=True
+    )
+
+
 def test_imported_maps_preserve_local_control_references(
     tmp_path: Path, binding_runner: Path
 ) -> None:

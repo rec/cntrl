@@ -47,7 +47,7 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | --- | --- |
 | Kind 1 | Setup document |
 | Kind 2 | Indexed setup bundle, with a `CSTB` version-1 core |
-| Kind 3 | Song library, with the counts/records/`CSP5` core described below |
+| Kind 3 | Song library, with the counts/records/`CSP6` core described below |
 | Tag 1 | Required, first, singleton core snapshot |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
@@ -111,14 +111,25 @@ An offset is meaningful only with its own document and saved name table.
 The song core begins with u32 song and setlist counts. Each song has one
 200-byte selection (document[64], patch key[64], UTF-8 display label[64], u32
 captured-source index, u32 graph-node index), followed by name[64], u32 nonzero
-selection count, then the remaining selections. Each setlist has name[64], u32
-entry count, and that many song names[64]. All fixed text fields are zero padded
+selection count, u32 binding-map node, then the remaining selections. Each setlist
+has name[64], u32 entry count, u32 binding-map node, and that many song names[64].
+A binding-map node of `0xffffffff` means no bindings at that scope; other values
+refer to a control-map node in captured source zero. These references survive
+renames, occurrence edits and undo. All fixed text fields are zero padded
 and terminated. Names and external document/key references use the existing
-ASCII name rules; display labels are UTF-8. The four bytes `CSP5` follow the
+ASCII name rules; display labels are UTF-8. The four bytes `CSP6` follow the
 setlists. Captured sources then repeat as u32 byte length plus the complete setup
 document, until the end of the core. External document selections use source
 index `0xffffffff`; captured source and node indices are zero based.
 Order, repetitions and node identities are significant.
+
+Control-map nodes (kind 10) use their flag byte as an inheritance mask: bit zero
+includes switches and bit one includes expression assignments. The default is
+2. Binding-scope directory nodes (kind 19) have zero flags and a 67-byte payload:
+u8 kind (global 0, setlist 1, song 2), name[64], and u16 control-map node. Global
+uses an empty name. Song/setlist records retain their direct map references;
+directory names describe the compiled source and do not determine playback
+identity after an on-pedal rename.
 
 Bundle numeric saves retain outer metadata. Deleting or reindexing entries with
 opaque metadata is refused. Song structural edits with opaque library metadata

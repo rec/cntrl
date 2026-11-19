@@ -7,7 +7,7 @@ class SongSources : public cntrl::SongResolver, public cntrl::SongCapture {
 public:
     SongSources(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, SetupTable &setups,
                 Documents &documents, Application &application, Songs &songs, unsigned owner = 8)
-        : executor(hardware, outputs, sources, owner), hardware_(hardware), sources_(sources), setups_(setups),
+        : executor(hardware, outputs, sources, owner), hardware_(hardware), outputs_(outputs), sources_(sources), setups_(setups),
           documents_(documents), application_(application), songs_(songs) {}
     cntrl::PatchExecutor executor;
     ~SongSources() override { executor.cancel(); }
@@ -83,10 +83,26 @@ public:
         }
         context_ = context;
         if (valid) {
+            MemoryBuffer scope_bytes;
+            Document scope_document;
+            unsigned size = songs_.source_size(0);
+            const Document *scope_source = song.source == 0 && !song.document[0] ? source : nullptr;
+            const auto *set = songs_.setlist(context.set);
+            unsigned set_bindings = set ? set->bindings : ~0u;
+            const auto *current_song = songs_.song(context.song);
+            unsigned song_bindings = current_song ? current_song->bindings : ~0u;
+            if (!scope_source && size) {
+                if (!scope_bytes.resize(size) || !songs_.read_source(0, 0, scope_bytes.data, size)
+                    || !scope_document.load(scope_bytes.data, size, hardware_)) { sources_.end(); return false; }
+                scope_source = &scope_document;
+            }
+            if (scope_source && set_bindings == ~0u && song_bindings == ~0u && scope_source->binding_scope(0) < 0) scope_source = nullptr;
+            if (!scope_source && (set_bindings != ~0u || song_bindings != ~0u)) { sources_.end(); return false; }
             auto previous = application_.controller().navigation();
             if (!resume) application_.controller().external_selection();
             valid = resume ? node == context.node && executor.resume(*source, node, context.completed, context.sources_crc)
                            : executor.start(*source, node, false, true);
+            if (valid && !outputs_.binding_context(scope_source, set_bindings, song_bindings)) { executor.cancel(); valid = false; }
             if (!valid && !resume) application_.controller().navigation(previous);
         }
         sources_.end(); return valid;
@@ -102,6 +118,7 @@ public:
     }
 private:
     Hardware &hardware_;
+    PatchOutputs &outputs_;
     PatchSources &sources_;
     SetupTable &setups_;
     Documents &documents_;

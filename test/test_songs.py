@@ -199,7 +199,7 @@ def test_captured_sources_with_colliding_instrument_aliases_export_independently
         + left[8:end]
         + songs.SELECTION.pack(*position)
         + right[8 + songs.SELECTION.size : end]
-        + b'CSP5'
+        + b'CSP6'
         + left[end + 4 :]
         + right[end + 4 :]
     )

@@ -1,5 +1,6 @@
 #pragma once
 #include "document.h"
+#include "memory.h"
 
 namespace cntrl {
 // Patch entry, title, expression assignments, then ordinary switch records
@@ -23,6 +24,50 @@ struct ControlBindings {
         result.reverse = p[36]; result.curve = ExpressionCurve(p[37] & 3);
         result.mirror_route = p[37] >> 2 ? (p[37] >> 2) - 1 : 255;
         return result;
+    }
+};
+
+// Each resolved switch retains its source document, so inherited actions keep
+// their own patch names, instruments and references.
+struct ResolvedBindings : CheckedHeapAllocation {
+    struct Switch {
+        const Document *document = nullptr;
+        const uint8_t *record = nullptr;
+        const uint8_t *visual = nullptr;
+    };
+    Switch switches[8] = {};
+    ExpressionAssignment expressions[4] = {};
+    unsigned count = 0;
+    bool overlay(const Document &document, ControlBindings map, bool buttons, bool expression) {
+        if (buttons) for (unsigned i = 0; i < map.count(); ++i) {
+            const auto *record = map.record(i);
+            unsigned at = 0;
+            while (at < count && switches[at].record[0] != record[0]) ++at;
+            if (at == count) { if (count == 8) return false; ++count; }
+            switches[at] = {&document, record, map.view() ? map.view() + binding_view_header_size + i * binding_view_record_size : nullptr};
+        }
+        if (expression) for (unsigned i = 0; i < 4; ++i) {
+            auto assignment = map.expression(i);
+            if (assignment.channel) expressions[i] = assignment;
+        }
+        return true;
+    }
+    bool scope(const Document &document, unsigned kind, const char *name, unsigned inheritance) {
+        int root = document.binding_scope(kind, name);
+        return root < 0 || overlay(document, {document.node(unsigned(root)) + 4}, inheritance & 1, inheritance & 2);
+    }
+};
+#if UINTPTR_MAX == UINT32_MAX
+static_assert(sizeof(ResolvedBindings) == 256, "Update banked.estimate_ram for resolved bindings");
+#endif
+
+struct BindingDocument : CheckedHeapAllocation {
+    MemoryBuffer bytes;
+    Document document;
+    bool copy(const Document &source, const Hardware &hardware) {
+        if (!bytes.resize(source.length())) return false;
+        std::memcpy(bytes.data, source.data(), source.length());
+        return document.load(bytes.data, bytes.size, hardware);
     }
 };
 } // namespace cntrl

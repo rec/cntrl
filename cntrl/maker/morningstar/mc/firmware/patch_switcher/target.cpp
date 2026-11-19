@@ -177,7 +177,7 @@ public:
     cntrl::midi::TrsMode port_mode(unsigned jack) const { return trs_ports.mode(jack); }
     unsigned port_count() const { return cntrl::target::port_count; }
     auto &expression_controls() { return expression_.controls(); }
-    bool expression_available(unsigned jack) const { return trs_ports.expression_pin(jack) >= 0; }
+    bool expression_available(unsigned jack) const override { return trs_ports.expression_pin(jack) >= 0; }
     auto &animation_session() { return splash_session; }
     bool display_priority_due() const { return switch_scan_due(); }
     bool display_busy() const { return display_dma_pending(); }
@@ -295,14 +295,14 @@ public:
     FLASHMEM bool banked(const cntrl::Document &document, unsigned node) override { return application.activate_banked(document, node); }
     cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &document, unsigned node, cntrl::PatchExecutor &invocation) override {
 #if CNTRL_SWITCHES
-        cntrl::ControlBindings bindings{document.node(node) + 4};
-        for (unsigned i = 0; i < 4; ++i)
-            if (bindings.expression(i).channel && !expression_available(i)) return cntrl::midi::Bridge::Delivery::cancelled;
         return switches.bind_controls(document, node, invocation);
 #else
         (void)document; (void)node; (void)invocation;
         return cntrl::midi::Bridge::Delivery::cancelled;
 #endif
+    }
+    bool binding_context(const cntrl::Document *document = nullptr, unsigned set = ~0u, unsigned song = ~0u) override {
+        return switches.binding_context(document, set, song);
     }
     bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override {
 #if CNTRL_ORIGINAL_FIRMWARE

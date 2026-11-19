@@ -19,7 +19,16 @@ public:
     void language_changed() { if (open_) render(); }
     bool performance() const { return bool(bindings_); }
     unsigned revision() const { return revision_; }
-    ExpressionAssignment expression(unsigned input) const { return bindings_.expression(input); }
+    ExpressionAssignment expression(unsigned input) const { return resolved_ ? resolved_->expressions[input] : ExpressionAssignment{}; }
+    bool binding_context(const Document *document = nullptr, unsigned set = ~0u, unsigned song = ~0u) {
+        if (!document) { context_.reset(); return true; }
+        for (unsigned root : {set, song}) if (root != ~0u && (root >= document->nodes() || document->node(root)[0] != 10)) return false;
+        std::unique_ptr<BindingDocument> candidate(new (std::nothrow) BindingDocument);
+        if (!candidate || !candidate->copy(*document, hardware_)) return false;
+        context_ = std::move(candidate);
+        context_set_ = set; context_song_ = song;
+        return true;
+    }
     void refresh() { rendering_ = dirty_ = true; }
     void bank_context(unsigned bank, unsigned page) { bank_ = int(bank); bank_page_ = int(page); dirty_ = true; }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -34,6 +43,16 @@ public:
             if (!pending_document_.load(pending_.data, pending_.size, hardware_)) { pending_.clear(); return midi::Bridge::Delivery::cancelled; }
             prepared_controls_.reset(new (std::nothrow) Switches(hardware_, outputs_, sources_, page_, owner_));
             if (!prepared_controls_) { pending_.clear(); return midi::Bridge::Delivery::cancelled; }
+            const auto *context = owns(invocation) ? scope_source_.get() : context_.get();
+            if (context) {
+                auto &candidate = *prepared_controls_;
+                candidate.scope_source_.reset(new (std::nothrow) BindingDocument);
+                if (!candidate.scope_source_ || !candidate.scope_source_->copy(context->document, hardware_)) {
+                    prepared_controls_.reset(); pending_.clear(); return midi::Bridge::Delivery::cancelled;
+                }
+                candidate.context_set_ = owns(invocation) ? scope_set_ : context_set_;
+                candidate.context_song_ = owns(invocation) ? scope_song_ : context_song_;
+            }
             prepared_controls_->initialize(pending_document_, held_, ControlBindings{pending_document_.node(node) + 4});
             if (!prepared_controls_->open_) { prepared_controls_.reset(); pending_.clear(); return midi::Bridge::Delivery::cancelled; }
             if (!pending_invocation_) sources_.begin();
@@ -111,6 +130,13 @@ private:
         state_storage_.swap(candidate.state_storage_); states_ = candidate.states_; candidate.states_ = nullptr;
         count_ = candidate.count_; candidate.count_ = 0;
         document_ = candidate.document_; bindings_ = candidate.bindings_; ++revision_;
+        resolved_ = std::move(candidate.resolved_);
+        scope_source_ = std::move(candidate.scope_source_);
+        scope_set_ = candidate.context_set_; scope_song_ = candidate.context_song_;
+        for (unsigned i = 0; i < count_; ++i) {
+            if (states_[i].document == &candidate.document_) states_[i].document = &document_;
+            if (resolved_ && resolved_->switches[i].document == &candidate.document_) resolved_->switches[i].document = &document_;
+        }
         pinned_ = candidate.pinned_; candidate.pinned_ = false;
         held_ = disarmed_ = candidate.held_; open_ = dirty_ = true; closing_ = abandoned_ = shifted_ = false;
         selected_ = last_pressed_ = -1; clear_events(); transition_ = 0; hooks_enabled_ = candidate.hooks_enabled_; exit_started_ = false;
@@ -120,21 +146,43 @@ private:
     CNTRL_FLASH_ROUTINE(switches_initialize)
 #endif
     void initialize(const Document &document, uint32_t held, ControlBindings bindings) {
-        const unsigned count = bindings ? bindings.count() : document.switches();
+        document_ = document;
+        resolved_.reset();
+        if (bindings) {
+            resolved_.reset(new (std::nothrow) ResolvedBindings);
+            if (!resolved_) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_state_memory_exhausted)); return; }
+            unsigned inheritance = bindings.data[-3];
+            bool merged = true;
+            if (scope_source_) {
+                const auto &source = scope_source_->document;
+                merged = merged && resolved_->scope(source, 0, "", inheritance);
+                for (unsigned root : {context_set_, context_song_}) if (root != ~0u)
+                    merged = merged && resolved_->overlay(source, {source.node(root) + 4}, inheritance & 1, inheritance & 2);
+            } else merged = resolved_->scope(document_, 0, "", inheritance);
+            if (!merged || !resolved_->overlay(document_, bindings, true, true)) {
+                hardware_.error("Too many inherited switch bindings"); return;
+            }
+            for (unsigned i = 0; i < 4; ++i) if (resolved_->expressions[i].channel && !outputs_.expression_available(i)) {
+                hardware_.error(ui::i18n::text(ui::i18n::Message::cannot_install_patch_bindings)); return;
+            }
+        }
+        const unsigned count = bindings ? resolved_->count : document.switches();
         if (!state_storage_.resize(count * sizeof(State))) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_state_memory_exhausted)); return; }
         states_ = reinterpret_cast<State *>(state_storage_.data);
         for (unsigned i = 0; i < count; ++i) new (states_ + i) State(hardware_, outputs_, sources_, owner_ + i);
         count_ = count;
         unpin(); sources_.begin(); pinned_ = true;
         document_ = document; bindings_ = bindings; ++revision_;
-        count_ = bindings_ ? bindings_.count() : document.switches(); held_ = disarmed_ = held;
+        count_ = count; held_ = disarmed_ = held;
         open_ = dirty_ = true; closing_ = abandoned_ = false;
         shifted_ = false;
         selected_ = -1; clear_events(); transition_ = 0; hooks_enabled_ = false; exit_started_ = false;
         for (unsigned i = 0; i < count_; ++i) {
             State &s = states_[i]; s.executor.cancel();
             if (!s.executor.retain_owner()) { hardware_.error(ui::i18n::text(ui::i18n::Message::switch_delivery_memory_unavailable)); open_ = false; unpin(); return; }
-            s.record = bindings_ ? bindings_.record(i) : document_.switch_assignment(i);
+            s.document = bindings_ ? resolved_->switches[i].document : &document_;
+            s.visual = bindings_ ? resolved_->switches[i].visual : nullptr;
+            s.record = bindings_ ? resolved_->switches[i].record : document_.switch_assignment(i);
             s.actions = s.record + 2; s.shifted = bindings_ ? (u16(s.record + binding_shifted_offset) != 65535 ? s.record + binding_shifted_offset : nullptr) : document_.switch_shifted(s.record[0]);
             s.layer = s.input_layer = false;
             s.settings = gestures(s.record[0]);
@@ -158,7 +206,7 @@ private:
                     else if (settings) node = u16(settings + (part - 2) * 2);
                 } else if (s.hooks) node = u16(s.hooks + (branch - 2 * layer_actions) * 2);
                 if (node == 65535) continue;
-                if (!s.executor.start(document_, node, s.record[1] != 0 || s.settings || s.hooks || s.shifted)) {
+                if (!s.executor.start(*s.document, node, s.record[1] != 0 || s.settings || s.hooks || s.shifted)) {
                     s.executor.cancel(); open_ = false; unpin(); return;
                 }
                 unsigned resources_count = s.executor.resource_count();
@@ -190,7 +238,7 @@ public:
     CNTRL_FLASH_ROUTINE(switches_button)
 #endif
     void button(unsigned button, bool down, uint32_t now = 0) {
-        if (!open_ || button >= document_.inputs() || button >= 32) return;
+        if (!open_ || button >= 32 || (!bindings_ && button >= document_.inputs())) return;
         unsigned bit = 1u << button;
         if (bool(held_ & bit) == down) return;
         if (down) {
@@ -240,7 +288,7 @@ public:
         // Setup replacement cancels actions, including repeating release hooks.
         if (pending_invocation_) { pending_invocation_ = nullptr; sources_.end(); }
         prepared_controls_.reset(); pending_.clear(); pending_document_ = Document();
-        destroy_states(); unpin(); bound_.clear(); bindings_ = {};
+        destroy_states(); unpin(); bound_.clear(); bindings_ = {}; scope_source_.reset(); context_.reset(); resolved_ = {};
         clear_events(); held_ = disarmed_ = 0; transition_ = 0;
         open_ = closing_ = shifted_ = hooks_enabled_ = false; ++revision_;
     }
@@ -318,7 +366,7 @@ public:
                 bool baseline = !press && s.unknown && s.requested;
                 if (s.queued || (press ? s.presses != 0 : baseline || s.requested != s.active)) {
                     unsigned node = s.queued ? s.queue[0] : u16(s.actions + (press || (s.requested && !baseline) ? 0 : 2));
-                    if (s.executor.start(document_, node, !press || s.settings || s.hooks || s.shifted)) {
+                    if (s.executor.start(*s.document, node, !press || s.settings || s.hooks || s.shifted)) {
                         bool captured = true;
                         if (node == u16(s.actions)) captured = capture(s.on[s.layer], s.executor);
                         if (node == u16(s.actions + 2)) captured = capture(s.off[s.layer], s.executor) && captured;
@@ -368,6 +416,8 @@ private:
         State(Hardware &hardware, PatchOutputs &outputs, PatchSources &sources, unsigned owner)
             : executor(hardware, outputs, sources, owner) { executor.retain_counter_reservations(); }
         PatchExecutor executor;
+        const Document *document = nullptr;
+        const uint8_t *visual = nullptr;
         CheckedArray<PatchExecutor::Resource> resources;
         unsigned resource_count = 0, baseline_resources = 0;
         const uint8_t *record = nullptr;
@@ -396,6 +446,10 @@ private:
         count_ = 0; states_ = nullptr; state_storage_.clear();
     }
     ControlBindings bindings_;
+    std::unique_ptr<ResolvedBindings> resolved_;
+    std::unique_ptr<BindingDocument> context_, scope_source_;
+    unsigned context_set_ = ~0u, context_song_ = ~0u;
+    unsigned scope_set_ = ~0u, scope_song_ = ~0u;
     MemoryBuffer bound_, pending_;
     std::unique_ptr<Switches> prepared_controls_;
     Document pending_document_;
@@ -431,7 +485,9 @@ private:
     }
     const uint8_t *gestures(unsigned input) const {
         if (!bindings_) return document_.switch_gestures(input);
-        const auto *p = bindings_.find(input);
+        const uint8_t *p = nullptr;
+        for (unsigned i = 0; i < resolved_->count; ++i)
+            if (resolved_->switches[i].record[0] == input) p = resolved_->switches[i].record;
         return p && u16(p + 72 + gesture_debounce_offset) ? p + 72 : nullptr;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -593,7 +649,7 @@ private:
         if (!rendering_) return;
         if (bindings_) {
             Pane panes[3];
-            if (const uint8_t *view = bindings_.view()) {
+            if (const uint8_t *view = count_ <= 6 ? bindings_.view() : nullptr) {
                 for (auto &pane : panes) {
                     pane.three_bands = true;
                     pane.graphics.background = 0;
@@ -612,21 +668,21 @@ private:
                 document_.counter_text(status.text, sizeof(status.text), view[33] ? reinterpret_cast<const char *>(view + 33) : " ", hardware_.counters, bank_, bank_page_);
                 for (unsigned i = 0; i < count_; ++i) {
                     const auto &s = states_[i];
-                    const uint8_t *visual = view + binding_view_header_size + i * binding_view_record_size;
+                    const uint8_t *visual = s.visual;
                     auto &line = panes[i % 3].lines[i < 3 ? 2 : 0];
-                    line.graphics = Document::read_graphics(visual);
+                    line.graphics = Document::read_graphics(visual ? visual : view);
                     line.x = 4;
                     line.centered = view[32] & 1;
                     char label[64];
-                    document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
-                    const char *input = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : document_.input_label(s.record[0]);
+                    s.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
+                    const char *input = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : s.document->input_label(s.record[0]);
                     if (view[32] & 2) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", input, label);
                     else std::snprintf(line.text, sizeof(line.text), "%s", label);
                     if (last_pressed_ == int(i)) {
                         auto &detail = panes[0].lines[1];
-                        detail.graphics = Document::read_graphics(visual + 16);
+                        detail.graphics = Document::read_graphics(visual ? visual + 16 : view);
                         detail.centered = true;
-                        document_.counter_text(detail.text, sizeof(detail.text), reinterpret_cast<const char *>(visual + 32), hardware_.counters);
+                        s.document->counter_text(detail.text, sizeof(detail.text), visual ? reinterpret_cast<const char *>(visual + 32) : label, hardware_.counters);
                     }
                 }
                 present(panes); dirty_ = false; return;
@@ -639,8 +695,8 @@ private:
                 const unsigned row = 2 + i / 3;
                 const char *state = s.unknown ? ui::i18n::text(ui::i18n::Message::unknown_title) : s.executor.busy() || s.queued ? ui::i18n::text(ui::i18n::Message::pending) : s.record[1] ? (s.active ? ui::i18n::text(ui::i18n::Message::on) : ui::i18n::text(ui::i18n::Message::off)) : "";
                 char label[64];
-                document_.counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
-                const char *input = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : document_.input_label(s.record[0]);
+                s.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
+                const char *input = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : s.document->input_label(s.record[0]);
                 std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", input, label, state[0] ? " | " : "", state);
                 if (ui::i18n::translated_ui) pane.lines[row].graphics.font = 253;
             }

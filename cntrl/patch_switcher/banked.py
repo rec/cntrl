@@ -126,11 +126,11 @@ def empty_page(
 
 def estimate_ram(pages: dict[str, models.Page], document_bytes: int) -> int:
     # Stable document copy (including the 28-byte persistence envelope), page
-    # object and up to eight switch states. The
+    # object, resolved bindings and up to eight switch states. The
     # embedded runtime asserts these Cortex-M7 object size bounds. Variable
     # executor queues use the existing runtime reserve, as ordinary switches do.
     count = sum(p.type == 'banked' for p in pages.values())
-    return count * (((document_bytes + 28 + 7) // 8 * 8 + 8) + 1048 + 4104) + (
+    return count * (((document_bytes + 28 + 7) // 8 * 8 + 8) + 1048 + 264 + 4104) + (
         (len(pages) * 4 + 7) // 8 * 8 + 8 if count else 0
     )
 

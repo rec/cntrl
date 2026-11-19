@@ -37,6 +37,19 @@ def test_defaults_merge_named_fields_and_replace_lists_without_mutation() -> Non
     assert defaults['instruments'] == {'synth': {'output': 'din', 'channel': 1}}
 
 
+def test_binding_overrides_replace_whole_assignments_by_control() -> None:
+    inherited = {
+        'bindings': {
+            'A': {'on': 'hold', 'mode': 'momentary', 'off': 'release'},
+            'B': 'next',
+        }
+    }
+    assert global_config.overlay(inherited, {'bindings': {'A': 'boost'}}) == {
+        'bindings': {'A': 'boost', 'B': 'next'}
+    }
+    assert inherited['bindings']['A']['mode'] == 'momentary'
+
+
 @pytest.mark.parametrize('value', [False, 0, '', [], 'None', None])
 def test_explicit_values_are_not_absence(value: object) -> None:
     assert global_config.overlay({'value': 'inherited'}, {'value': value}) == {

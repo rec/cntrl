@@ -1,6 +1,7 @@
 """Setup and instrument-table formats, separate from hardware catalogues."""
 
 import re
+from enum import StrEnum, auto
 from fractions import Fraction
 from functools import cached_property
 from typing import Annotated, Literal
@@ -168,7 +169,29 @@ class BindingView(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Presentation(BaseModel, frozen=True):
+class Inherits(StrEnum):
+    none = auto()
+    switch = auto()
+    expression = auto()
+    both = auto()
+
+
+class BindingScope(BaseModel, frozen=True):
+    bindings: dict[str, object] | None = None
+
+    @field_validator('bindings')
+    @classmethod
+    def control_bindings(
+        cls, value: dict[str, object] | None
+    ) -> dict[str, object] | None:
+        return (
+            None if value is None else {k: parse_binding(v) for k, v in value.items()}
+        )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class Presentation(BindingScope, frozen=True):
     pickup: Annotated[
         Annotated[bool, Field(strict=True)] | None, BeforeValidator(parse_pickup)
     ] = None
@@ -179,17 +202,9 @@ class Presentation(BaseModel, frozen=True):
         default_factory=list
     )
     bindings: dict[str, object] | None = None
+    inherits: Inherits = Inherits.expression
     binding_view: BindingView | None = None
     midi: dict[str, object] | None = None
-
-    @field_validator('bindings')
-    @classmethod
-    def control_bindings(
-        cls, value: dict[str, object] | None
-    ) -> dict[str, object] | None:
-        if value is None:
-            return None
-        return {k: parse_binding(v) for k, v in value.items()}
 
     model_config = ConfigDict(extra='forbid')
 
@@ -1176,7 +1191,8 @@ class PageLayout(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Setup(BaseModel, frozen=True):
+class Setup(BindingScope, frozen=True):
+    bindings: dict[str, object] = Field(default_factory=dict)
     regions: dict[str, PageRegion] = Field(default_factory=dict, max_length=255)
     layout: PageLayout | None = None
     pickup: Annotated[

@@ -22,6 +22,7 @@ from . import (
     midi_endpoints,
     midi_messages,
     midi_processing,
+    models,
     page_settings,
     pickup,
     relay_outputs,
@@ -470,6 +471,30 @@ def patch(data: bytes, node: int) -> dict[str, object]:
     labels = input_labels(data)
     metadata = cast(dict[str, object], source.get('patch_metadata', {}))
     return _patch(data, offset, node, metadata, set(), labels)
+
+
+def binding_scopes(data: bytes) -> list[tuple[int, str, int]]:
+    data = binary_format.core(data)
+    graph = graph_offset(data)
+    count = GRAPH.unpack_from(data, graph)[2]
+    result = []
+    for i in range(count):
+        address = graph + struct.unpack_from('<I', data, graph + GRAPH.size + i * 4)[0]
+        if data[address] == 19:
+            kind, name, root = struct.unpack_from('<B64sH', data, address + 4)
+            result.append((kind, _text(name, 0, 64), root))
+    return result
+
+
+def binding_map(data: bytes, root: int) -> dict[str, object]:
+    data = binary_format.core(data)
+    graph = graph_offset(data)
+    if root >= GRAPH.unpack_from(data, graph)[2]:
+        raise ValueError('missing binding-map node')
+    address = graph + struct.unpack_from('<I', data, graph + GRAPH.size + root * 4)[0]
+    if data[address] != 10:
+        raise ValueError('scope must reference a binding-map node')
+    return cast(dict[str, object], patch(data, root)['bindings'])
 
 
 def export(data: bytes) -> str:
@@ -1042,6 +1067,8 @@ def _patch(
             ],
         )
     elif kind == 10:
+        if data[cursor - 3] != 2:
+            value['inherits'] = list(models.Inherits)[data[cursor - 3]].value
         entry = _patch(
             data,
             offset,

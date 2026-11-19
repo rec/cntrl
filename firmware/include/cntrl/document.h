@@ -623,6 +623,13 @@ public:
     }
     const uint8_t *switch_assignment(unsigned i) const { return data_ + graph_ + 16 + nodes() * 4 + patches_ * 2 + i * 72; }
     unsigned nodes() const { return u16(data_ + graph_ + 8); }
+    int binding_scope(unsigned kind, const char *name = "") const {
+        for (unsigned i = 0; i < nodes(); ++i) {
+            const auto *p = node(i);
+            if (p[0] == 19 && p[4] == kind && !std::strcmp(reinterpret_cast<const char *>(p + 5), name)) return u16(p + 69);
+        }
+        return -1;
+    }
     unsigned graph_metadata() const { return graph_; }
     const uint8_t *node(unsigned i) const { return data_ + graph_ + u32(data_ + graph_ + 16 + i * 4); }
     unsigned browser_root(unsigned i) const { return u16(data_ + graph_ + 16 + nodes() * 4 + i * 2); }
@@ -979,7 +986,7 @@ private:
                 } else for (unsigned j = 1; j < 97; ++j) if (p[j]) return false;
                 break;
             case 10: {
-                if (!hardware.switch_capacity() || n[1] || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
+                if (!hardware.switch_capacity() || n[1] > 3 || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
                     || p[66] > 8 || p[66] > input_count || p[67] > 1
                     || length != 220u + binding_record_size * p[66] + (p[67] ? binding_view_header_size + binding_view_record_size * p[66] : 0)) return false;
                 if (p[67]) {
@@ -1049,6 +1056,11 @@ private:
             case 18:
                 if (n[1] || length != 6 || p[0] >= GlobalSettings::count || p[1] > 1
                     || (p[1] ? u32(p + 2) != 0 : !GlobalSettings::valid(p[0], u32(p + 2)))) return false;
+                break;
+            case 19:
+                if (n[1] || length != 67 || p[0] > 2 || u16(p + 65) >= i
+                    || (p[0] ? !text_valid(p + 1, 64) : p[1] != 0)) return false;
+                if (g[u32(g + 16 + u16(p + 65) * 4)] != 10) return false;
                 break;
             case 16:
                 if (n[1] || length != 37 || u16(p) >= counter_count || !text_valid(p + 2, 32)

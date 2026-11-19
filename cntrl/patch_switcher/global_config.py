@@ -275,7 +275,13 @@ def overlay(defaults: dict[str, object], setup: dict[str, object]) -> dict[str, 
 
 def merge_values(result: dict[str, object], incoming: dict[str, object]) -> None:
     for k, v in incoming.items():
-        if isinstance(v, dict) and isinstance(previous := result.get(k), dict):
+        if (
+            k == 'bindings'
+            and isinstance(v, dict)
+            and isinstance(previous := result.get(k), dict)
+        ):
+            result[k] = previous | deepcopy(v)
+        elif isinstance(v, dict) and isinstance(previous := result.get(k), dict):
             merge_values(previous, v)
         else:
             result[k] = deepcopy(v)

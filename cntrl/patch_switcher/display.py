@@ -322,7 +322,7 @@ def compile_display(
     source = {
         k: v
         for k, v in show.model_dump(exclude_none=True).items()
-        if k in SOURCE_FIELDS
+        if k in SOURCE_FIELDS and (k != 'bindings' or v)
     }
     if show.pickup_pairing_ms == 2:
         source.pop('pickup_pairing_ms', None)
@@ -496,6 +496,7 @@ FIELDS = {
     'scrolling.vertical_duration': 23,
 }
 SOURCE_FIELDS = (
+    'bindings',
     'pickup',
     'pickup_pairing_ms',
     'midi',
