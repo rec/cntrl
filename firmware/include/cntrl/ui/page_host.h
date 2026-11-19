@@ -88,7 +88,7 @@ public:
             if (count) {
                 pages_.language = std::min(pages_.language, count - 1);
                 if (input == controls_.confirm) platform_.request_language(platform_.language_tag(pages_.language));
-                else pages_.language = (pages_.language + count + (input == controls_.next ? -1 : 1)) % count;
+                else pages_.language = (pages_.language + count + (input == controls_.next_section ? -1 : 1)) % count;
             }
             pages_.revisit(); return true;
         }

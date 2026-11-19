@@ -14,7 +14,7 @@ of installed languages in their native names, with small country flags; the
 second has the Language caption and controls. On the default three-display
 layout these are the center and right windows. English uses the UK flag.
 
-Use **B** to scroll up, **E** to scroll down, **C** to select and **F** for the
+Use **E** to scroll up, **B** to scroll down, **C** to select and **F** for the
 next page. Scrolling wraps at either end, and the initial highlight follows the
 active language. Browsing alone does not change the UI language. The existing
 reverse-page gesture still works. The old nested menu selector is removed.

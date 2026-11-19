@@ -646,7 +646,7 @@ private:
         if (!languages) return;
         if (window) {
             page_heading(pane, i18n::text(i18n::Message::language));
-            const unsigned inputs[] = {controls_.next, controls_.next_section, controls_.confirm, controls_.back};
+            const unsigned inputs[] = {controls_.next_section, controls_.next, controls_.confirm, controls_.back};
             char labels[4][32];
             for (unsigned i = 0; i < 4; ++i) {
                 utf8::copy(labels[i], sizeof(labels[i]), languages->input_label(inputs[i]));
