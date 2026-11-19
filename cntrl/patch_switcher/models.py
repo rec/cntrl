@@ -1130,6 +1130,7 @@ class Page(BaseModel, frozen=True):
         'banked',
         'pong',
         'language',
+        'menu',
         'None',
     ] = 'patch-switcher'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
@@ -1268,6 +1269,7 @@ class Setup(BindingScope, frozen=True):
                 t: Page(type=t)
                 for t in (
                     'status',
+                    'menu',
                     'cable-test',
                     'panic',
                     'trs-ports',

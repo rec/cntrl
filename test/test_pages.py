@@ -19,6 +19,7 @@ def target() -> models.Target:
         {},
         {'live': {}},
         {'status': {'type': 'status'}},
+        {'menu': {'type': 'menu'}},
         {'live': {}, 'status': {'type': 'status'}},
     ],
 )
@@ -65,6 +66,10 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     pages = exported['pages']
     assert exported['layout']['focus'] == ('tools' if count >= 2 else 'main')
+    assert list(pages).index('menu') == list(pages).index('status') + 1
+    assert pages['menu']['min_windows'] == 1
+    if count >= 2:
+        assert exported['regions']['tools']['pages'][1] == 'menu'
     assert pages['patch-switcher']['min_windows'] == 0
     if count == 3:
         assert exported['regions']['tools']['pages'][-3:] == [

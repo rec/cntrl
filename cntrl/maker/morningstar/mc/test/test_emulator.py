@@ -310,11 +310,15 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
     target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
     source = {
         'fill_in_styles': False,
-        'pages': {'performance': {'type': 'patch-switcher'}},
+        'pages': {
+            'performance': {'type': 'patch-switcher', 'min_windows': 0},
+            'status': {'type': 'status'},
+            'menu': {'type': 'menu'},
+        },
+        'layout': {'focus': 'tools'},
         'patch_cycles': {
             'Sound': [
-                {'operation': 'menu'},
-                {'type': 'program-change', 'output': 'din', 'channel': 1, 'program': 1},
+                {'type': 'program-change', 'output': 'din', 'channel': 1, 'program': 1}
             ]
         },
     }
@@ -355,7 +359,17 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
         assert not session.editing_name
         session.key(ord('x'))  # Typing outside Rename is ignored by the shared UI.
         session.advance(1000000)
-        press('a')  # Activate the Menu patch.
+        press('f')  # Status to Menu in the right-hand utility region.
+        cli.save(session, tmp_path / 'menu-page')
+        menu = session.frames['lcd-3']
+        press('c')  # Open Pages and tools without a configured Menu action.
+        press('f')  # Back restores the utility page.
+        assert session.frames['lcd-3'] == menu
+        press('f')  # Page cycling remains available.
+        assert session.frames['lcd-3'] != menu
+        press('f')
+        assert session.frames['lcd-3'] == menu
+        press('c')
         press('b')
         press('c')  # Songs and setlists.
         for _ in range(3):

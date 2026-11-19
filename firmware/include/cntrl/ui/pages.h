@@ -67,7 +67,7 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { tap, status, cable = 3, panic, ports, expression, none = 10, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language };
+    enum class Page { tap, status, cable = 3, panic, ports, expression, none = 10, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu };
     struct ViewState {
         unsigned index = 0, jack = 0, language = 0;
         Page page = Page::none;
@@ -243,6 +243,12 @@ public:
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
+        if (page_ == Page::menu) {
+            page_heading(pane, i18n::text(i18n::Message::pages_and_tools));
+            i18n::format(prompt_, sizeof(prompt_), i18n::Message::control_action, "", label(controls_.confirm), i18n::text(i18n::Message::ok));
+            line(pane, 1, prompt_, vertical(64), vertical(24), settings_[R::status_font], true);
+            return pane;
+        }
         if (page_ == Page::language) { language_view(pane, window); return pane; }
         if (page_ == Page::pong) { pong_view(pane, window); return pane; }
         if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }

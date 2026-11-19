@@ -73,6 +73,10 @@ public:
     CNTRL_FLASH_ROUTINE(looper_button)
 #endif
     bool looper_button(unsigned input, bool pressed) {
+        if (pages_.page() == Pages::Page::menu && input == controls_.confirm) {
+            if (pressed) application_.operation_ui(Operation::menu_open, platform_);
+            return true;
+        }
         if (pages_.page() == Pages::Page::language) {
             if (input != controls_.next && input != controls_.next_section && input != controls_.confirm && input != controls_.back) return false;
             if (!pressed) return true;
