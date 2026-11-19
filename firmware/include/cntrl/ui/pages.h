@@ -446,7 +446,12 @@ public:
             constexpr uint64_t gibibyte = 1024ull * 1024 * 1024;
             if (status.disk_valid) {
                 uint64_t tenths = (status.disk_used * 10 + gibibyte / 2) / gibibyte;
-                i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_value, (unsigned long)(tenths / 10), (unsigned long)(tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
+                const bool integer = tenths >= 100;
+                const auto whole = integer ? (status.disk_used + gibibyte / 2) / gibibyte : tenths / 10;
+                i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_value, (unsigned long)whole, (unsigned long)(integer ? 0 : tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
+                // Retain the translated label while omitting its fixed fractional field.
+                if (integer) if (char *fraction = std::strstr(rows[3], ".0/"))
+                    std::memmove(fraction, fraction + 2, std::strlen(fraction + 2) + 1);
             } else i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_unknown);
             uint64_t seconds = (status_snapshot ? status_snapshot->uptime_ms : uptime_) / 1000;
             i18n::format(uptime, sizeof(uptime), i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));

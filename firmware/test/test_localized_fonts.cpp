@@ -118,6 +118,19 @@ int main(int argc, char **argv) {
         assert(!std::strcmp(pane.lines[6].text, "Starts:119"));
         assert(!std::strcmp(pane.lines[7].text, "Up:0:57:36"));
         assert(!std::strcmp(pane.lines[8].text, "Git:b7c7eb4"));
+        const struct { unsigned hundredths; const char *text; } disk_cases[] = {
+            {990, "Disk:9.9/30G"},
+            {996, "Disk:10/30G"},
+            {1000, "Disk:10/30G"},
+            {1049, "Disk:10/30G"},
+            {1050, "Disk:11/30G"},
+        };
+        for (const auto &test : disk_cases) {
+            status.disk_used = uint64_t(test.hundredths) * 1024 * 1024 * 1024 / 100;
+            status.disk_free = 30ull * 1024 * 1024 * 1024 - status.disk_used;
+            const auto disk = pages.view(3456789, 0, status);
+            assert(!std::strcmp(disk.lines[5].text, test.text));
+        }
         for (unsigned i : {7u, 8u}) {
             const auto &right = pane.lines[i], &left = pane.lines[i - 2];
             const auto r = fonts.bounds(right.graphics.font, right.graphics.size, 0, right.text);
