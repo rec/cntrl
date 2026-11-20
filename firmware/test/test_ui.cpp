@@ -650,6 +650,7 @@ void test_time_sources_and_clock_output() {
     settings.words[R::clock_timeout] = 250; settings.words[R::clocks_per_quarter] = 24; settings.words[R::clock_beats] = 1;
     settings.words[R::tap_intervals] = 4; settings.words[R::minimum_taps] = 2; settings.words[R::minimum_interval] = 100; settings.words[R::reset_gap] = 3000;
     settings.words[R::digits] = 3; settings.words[R::decimals] = 2; settings.words[R::title_height] = 12;
+    settings.words[R::diameter] = 40; settings.words[R::annulus] = 5; settings.words[R::padding] = 4;
     settings.words[R::status_font] = 17; settings.words[R::tempo_font] = 8; settings.words[R::clock_outputs] = 1;
     Fonts fonts; cntrl::ui::Pages pages(fonts,{160,128,0,0}); pages.outputs(test_midi_outputs); pages.configure(settings);
     auto layout = page_fixture(2,{unsigned(cntrl::ui::Pages::Page::time)},{{0}}); pages.layout({layout.data()});
@@ -658,6 +659,8 @@ void test_time_sources_and_clock_output() {
     assert(!left.toggle.enabled && left.toggle.x == 80 && left.rectangles[0].color == 0x07e0);
     auto right = pages.view(0,0,{}, {}, cntrl::Panic::Status::ready,1,2);
     assert(!std::strcmp(right.lines[0].text,"Tap Tempo") && std::strstr(right.lines[1].text,"---.--"));
+    assert(right.circles[0].diameter > 25);
+    assert(right.circles[0].x + (right.circles[0].diameter + 2 * right.circles[0].annulus + 1) / 2 == 156);
     pages.tap(0); pages.tap(500);
     assert(pages.source_period(0) == 500000 && pages.clock_selection() == 0);
     for (unsigned i = 0; i <= 24; ++i) {
@@ -675,6 +678,12 @@ void test_time_sources_and_clock_output() {
     assert(pages.clock_selection() == 0 && !pages.source_period(2));
     pages.tap(1000); pages.tap(1500); assert(pages.clock_selection() == 0);
     pages.poll_clock(1500000,1,sink); assert(sink.messages.empty() && pages.beat_position(1500000).running);
+    pages.cycle_clock(); pages.poll_clock(1500000,1,sink);
+    assert(pages.clock_selection() == 1 && !pages.source_period(1));
+    pages.cycle_clock(); pages.poll_clock(1500000,1,sink);
+    assert(pages.clock_selection() == 2 && !pages.source_period(2));
+    pages.cycle_clock(); pages.poll_clock(1500000,1,sink);
+    assert(pages.clock_selection() == 0);
     pages.toggle_clock(); pages.poll_clock(1500000,1,sink); pages.poll_clock(1521000,1,sink);
     assert(sink.messages == std::vector<uint8_t>{0xf8});
     pages.toggle_clock(); pages.poll_clock(1542000,1,sink); assert(sink.messages.size() == 1);
@@ -684,6 +693,15 @@ void test_time_sources_and_clock_output() {
     pages.toggle_clock(); assert(pages.relay_clock_outputs(0) == 1 && !pages.relay_clock_outputs(1));
     pages.cycle_clock(); assert(pages.clock_selection() == 2 && pages.relay_clock_outputs(1) == 1);
     pages.cycle_clock(); assert(pages.clock_selection() == 0);
+    settings.words[R::clock_options] = 0; pages.configure(settings);
+    pages.tap(3000); pages.tap(3500);
+    pages.cycle_clock(); pages.poll_clock(3500000,1,sink);
+    assert(pages.clock_selection() == 1 && !pages.source_period(1));
+    for (unsigned i = 0; i <= 24; ++i) pages.clock_message(0,0xf8,3500000 + i * 20000);
+    pages.poll_clock(3980000,1,sink);
+    assert(pages.clock_selection() == 1 && pages.source_period(1));
+    pages.poll_clock(4240000,1,sink);
+    assert(pages.clock_selection() == 0);
 }
 int main() {
     test_time_sources_and_clock_output();
@@ -857,7 +875,9 @@ int main() {
     pages.configure(settings); pages.viewport({320, 256, 0, 0});
     layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::time); pages.layout(cntrl::PageLayout{layout});
     const auto large_tap = pages.view(0, 0, status, {}, cntrl::Panic::Status::ready, 1, 2);
-    assert(large_tap.circles[0].x == 160 && large_tap.circles[0].diameter == 18 && large_tap.circles[0].annulus == 5);
+    assert(large_tap.circles[0].x + 14 == 320 - settings.words[cntrl::PageSettings::padding]);
+    assert(large_tap.circles[0].y + 14 == 256 - settings.words[cntrl::PageSettings::padding]);
+    assert(large_tap.circles[0].diameter == 18 && large_tap.circles[0].annulus == 5);
     assert(large_tap.lines[1].graphics.line_height == 40 && large_tap.lines[0].graphics.line_height == 34);
 
 }

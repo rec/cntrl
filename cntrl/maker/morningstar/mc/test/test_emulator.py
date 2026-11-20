@@ -166,6 +166,41 @@ def test_real_setup_preparation_is_quiet(
     assert captured.out == captured.err == ''
 
 
+def test_real_setup_patch_switcher_remains_operable_beside_tools(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[5]
+    layout, target, setup, storage = cli.prepare(
+        cli.Emulate(
+            setup=root / 'simple-setup.toml',
+            controller='mc6-pro',
+            storage=tmp_path / 'session',
+        ),
+        compile_to_file,
+    )
+    executable = backend.build(target, tmp_path / 'native', root)
+    with backend.Session(layout, target, executable, storage, setup) as session:
+
+        def press(button: str) -> None:
+            session.button(button, True)
+            session.advance(session.time_us + 60000)
+            session.button(button, False)
+            session.advance(session.time_us + 60000)
+
+        session.advance(1000000)
+        session.messages.clear()
+        press('a')
+        press('b')
+        press('a')
+        press('e')
+        press('a')
+        assert [(m.endpoint, m.data) for m in session.messages if m.kind == 'midi'] == [
+            ('din', b'\xc0\x05'),
+            ('din', b'\xc0\x06'),
+            ('din', b'\xc0\x0a'),
+        ]
+
+
 @pytest.mark.parametrize('controller', ['mc6_pro', 'mc8_pro'])
 def test_exported_profiles_build_without_the_physical_sdk(
     tmp_path: Path, controller: str

@@ -114,7 +114,7 @@ public:
         generator.stop();
         settings_ = settings;
         using R = cntrl::PageSettings;
-        selected_clock_ = 0; sending_clock_ = false;
+        selected_clock_ = 0; sending_clock_ = waiting_for_clock_ = false;
         if (unsigned bpm = settings_.words[R::slot1]) generator.set_tempo((60000000u + bpm / 2) / bpm);
         tap_.configure(settings[R::tap_intervals], settings[R::minimum_taps], settings[R::minimum_interval], settings[R::reset_gap]);
         for (auto &clock : clocks_) clock.configure(settings[R::clocks_per_quarter], settings[R::clock_beats], uint32_t(settings[R::clock_timeout]) * 1000);
@@ -124,7 +124,7 @@ public:
     void stop_setup() {
         generator.stop(); tap_ = TapTempo();
         for (auto &clock : clocks_) clock = ClockTempo();
-        selected_clock_ = 0; sending_clock_ = false;
+        selected_clock_ = 0; sending_clock_ = waiting_for_clock_ = false;
         held_ = flashing_ = false; clock_changed_ = dirty_ = true;
     }
     void browse(bool reverse) {
@@ -158,7 +158,10 @@ public:
         return source == 0 ? uint64_t(tap_.period()) * 1000 : source <= 2 && clocks_[source - 1].measured() ? clocks_[source - 1].period_us() : 0;
     }
     void toggle_clock() { sending_clock_ = !sending_clock_; dirty_ = true; }
-    void cycle_clock() { select_clock((selected_clock_ + 1) % 3); }
+    void cycle_clock() {
+        select_clock((selected_clock_ + 1) % 3);
+        waiting_for_clock_ = !source_period(selected_clock_);
+    }
     void clear_tap() {
         using R = cntrl::PageSettings;
         tap_.configure(settings_[R::tap_intervals], settings_[R::minimum_taps], settings_[R::minimum_interval], settings_[R::reset_gap]);
@@ -319,9 +322,9 @@ public:
             line(pane, 1, number, pad + heading_height, settings_[R::tempo_height], settings_[R::tempo_font], false, sample);
             flashing_ = held_ || tap_.flash(now, settings_[R::flash_fraction]);
             pane.circles[0].diameter = settings_[R::diameter]; pane.circles[0].annulus = settings_[R::annulus];
-            pane.circles[0].x = uint16_t(viewport_.width / 2);
-            unsigned start = pad + heading_height + settings_[R::tempo_height];
-            pane.circles[0].y = uint16_t((start + viewport_.height - pad) / 2);
+            const unsigned inset = (pane.circles[0].diameter + 2 * pane.circles[0].annulus + 1) / 2 + pad;
+            pane.circles[0].x = uint16_t(std::max(0, int(viewport_.width) - int(inset)));
+            pane.circles[0].y = uint16_t(std::max(0, int(viewport_.height) - int(inset)));
             pane.circles[0].color = settings_[flashing_ ? R::on_color : R::off_color];
             pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
@@ -412,11 +415,13 @@ private:
         return input && input->input && input->transport == midi::OutputTransport::physical ? input->route : ~0u;
     }
     void select_clock(unsigned source) {
+        waiting_for_clock_ = false;
         if (selected_clock_ == source) return;
         selected_clock_ = source; clock_changed_ = dirty_ = true;
     }
     void select_available_clock() {
-        if ((settings_[cntrl::PageSettings::clock_options] & 2) || source_period(selected_clock_)) return;
+        if (source_period(selected_clock_)) { waiting_for_clock_ = false; return; }
+        if ((settings_[cntrl::PageSettings::clock_options] & 2) || waiting_for_clock_) return;
         for (unsigned i = 0; i < 3; ++i) if (source_period(i)) { select_clock(i); return; }
         select_clock(0);
     }
@@ -582,7 +587,7 @@ private:
     cntrl::PageLayout layout_;
     unsigned index_ = 0;
     unsigned selected_clock_ = 0;
-    bool sending_clock_ = false;
+    bool sending_clock_ = false, waiting_for_clock_ = false;
     unsigned horizontal(unsigned value) const { return value * viewport_.width / design_width; }
     unsigned vertical(unsigned value) const { return value * viewport_.height / design_height; }
     void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
