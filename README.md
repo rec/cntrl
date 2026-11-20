@@ -13,6 +13,20 @@ Windows and Linux development setup.
 Use the [desktop emulator](doc/emulator.md) to exercise the shared application
 with a controller layout, virtual MIDI and local session storage without a pedal.
 
+## Crash reporting
+
+Unhandled Python exceptions in `cntrl` and `cntrl emulate` automatically file an
+issue in `rec/cntrl`, titled `Stack trace in cntrl` or `Stack trace in emulator`.
+This requires the GitHub CLI (`gh`) to be installed and authenticated with
+`gh auth login`.
+
+Reports include the build gitref, Python and operating system details, and the
+complete traceback as the final appendix. Tracebacks can contain local paths
+and exception messages containing user data; these are published in the issue.
+Nothing is copied to the clipboard. The traceback is also printed to stderr,
+including when issue creation fails. Normal command errors and cancellation do
+not file issues.
+
 ## What is `cntrl`?
 
 It's a toolkit to write new firmware for MIDI controllers.

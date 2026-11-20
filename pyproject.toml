@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cntrl = "cntrl.patch_chooser.cli:main"
+cntrl = "cntrl.entrypoint:main"
 
 [project.optional-dependencies]
 emulator = ["pyside6-essentials>=6.10", "middy>=0.2.0"]
@@ -57,6 +57,9 @@ include = [
 
 [tool.hatch.build.targets.wheel.force-include]
 "doc/instrument-definitions.md" = "cntrl/patch_chooser/instrument-definitions.md"
+
+[tool.hatch.build.hooks.custom]
+path = "scripts/build_hook.py"
 
 [tool.pytest.ini_options]
 testpaths = ["test", "cntrl"]
