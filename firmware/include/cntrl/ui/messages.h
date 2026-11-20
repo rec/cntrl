@@ -37,7 +37,8 @@ enum class Message : uint16_t {
     all_off,
     tap_tempo,
     time,
-    time_controls,
+    time_toggle_send,
+    time_cycle_source,
     status,
     midi_cable_test,
     trs_ports,
@@ -359,8 +360,8 @@ enum class Message : uint16_t {
     perform_song,
     hold_menu,
 };
-inline constexpr unsigned message_count = 355;
-inline constexpr uint32_t catalogue_schema = 0x4d8625fdu;
+inline constexpr unsigned message_count = 356;
+inline constexpr uint32_t catalogue_schema = 0x9f600946u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -447,15 +448,19 @@ inline const char tap_tempo_text[] CNTRL_I18N_STORAGE = "Tap Tempo";
 inline const char tap_tempo_short[] CNTRL_I18N_STORAGE = "";
 inline const char time_text[] CNTRL_I18N_STORAGE = "Time";
 inline const char time_short[] CNTRL_I18N_STORAGE = "";
-inline const char time_controls_text[] CNTRL_I18N_STORAGE = "{send:s} toggles send/{source:s} cycles source";
-inline const char time_controls_short[] CNTRL_I18N_STORAGE = "";
-inline const char time_controls_send_name[] CNTRL_I18N_STORAGE = "send";
-inline const char time_controls_send_spec[] CNTRL_I18N_STORAGE = "s";
-inline const char time_controls_source_name[] CNTRL_I18N_STORAGE = "source";
-inline const char time_controls_source_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field time_controls_fields[] CNTRL_I18N_STORAGE = {
-    {time_controls_send_name, time_controls_send_spec},
-    {time_controls_source_name, time_controls_source_spec},
+inline const char time_toggle_send_text[] CNTRL_I18N_STORAGE = "{send:s} toggles send";
+inline const char time_toggle_send_short[] CNTRL_I18N_STORAGE = "";
+inline const char time_toggle_send_send_name[] CNTRL_I18N_STORAGE = "send";
+inline const char time_toggle_send_send_spec[] CNTRL_I18N_STORAGE = "s";
+inline const Field time_toggle_send_fields[] CNTRL_I18N_STORAGE = {
+    {time_toggle_send_send_name, time_toggle_send_send_spec},
+};
+inline const char time_cycle_source_text[] CNTRL_I18N_STORAGE = "{source:s} cycles source";
+inline const char time_cycle_source_short[] CNTRL_I18N_STORAGE = "";
+inline const char time_cycle_source_source_name[] CNTRL_I18N_STORAGE = "source";
+inline const char time_cycle_source_source_spec[] CNTRL_I18N_STORAGE = "s";
+inline const Field time_cycle_source_fields[] CNTRL_I18N_STORAGE = {
+    {time_cycle_source_source_name, time_cycle_source_source_spec},
 };
 inline const char status_text[] CNTRL_I18N_STORAGE = "Status";
 inline const char status_short[] CNTRL_I18N_STORAGE = "";
@@ -1519,7 +1524,8 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {all_off_text, all_off_short, nullptr, 0},
     {tap_tempo_text, tap_tempo_short, nullptr, 0},
     {time_text, time_short, nullptr, 0},
-    {time_controls_text, time_controls_short, time_controls_fields, 2},
+    {time_toggle_send_text, time_toggle_send_short, time_toggle_send_fields, 1},
+    {time_cycle_source_text, time_cycle_source_short, time_cycle_source_fields, 1},
     {status_text, status_short, nullptr, 0},
     {midi_cable_test_text, midi_cable_test_short, nullptr, 0},
     {trs_ports_text, trs_ports_short, nullptr, 0},

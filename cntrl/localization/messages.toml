@@ -134,9 +134,13 @@ context = 'Page heading'
 en = 'Time'
 context = 'Clock source and tap tempo page heading'
 
-[messages.time_controls]
-en = '{send:s} toggles send/{source:s} cycles source'
-context = 'Time page physical control labels for sending and source selection'
+[messages.time_toggle_send]
+en = '{send:s} toggles send'
+context = 'Time page physical control label for toggling clock sending'
+
+[messages.time_cycle_source]
+en = '{source:s} cycles source'
+context = 'Time page physical control label for cycling clock sources'
 
 [messages.status]
 en = 'Status'

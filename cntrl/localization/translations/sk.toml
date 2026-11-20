@@ -4,7 +4,8 @@ name = 'Slovenčina'
 [messages]
 patch_chooser = { text = 'Výber zvukov' }
 time = { text = 'Čas' }
-time_controls = { text = '{send:s} odosielanie/{source:s} zdroj' }
+time_toggle_send = { text = '{send:s} prepína vysielanie' }
+time_cycle_source = { text = '{source:s} mení zdroj' }
 panic = { text = 'Panika' }
 language_scroll = { text = '{up:s} a {down:s}: posun' }
 language_select = { text = '{button:s}: vybrať' }
