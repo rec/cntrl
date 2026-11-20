@@ -314,8 +314,8 @@ public:
     void tick(uint32_t now = 0, std::optional<uint32_t> held = std::nullopt) {
         if (held) held_ = *held;
         if (!open_) { install_pending(); return; }
-        bool last_step = outputs_.song_last_step();
-        if (last_step != last_step_) { last_step_ = last_step; dirty_ = true; }
+        bool boundary = outputs_.song_boundary();
+        if (boundary != boundary_) { boundary_ = boundary; dirty_ = true; }
         ScreenGraphics song;
         bool styled = outputs_.song_style(song);
         if (styled != song_styled_ || (styled && (song.foreground != song_foreground_ || song.background != song_background_ || song.font != song_font_))) {
@@ -473,7 +473,7 @@ private:
     unsigned count_ = 0, held_ = 0, disarmed_ = 0;
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
     bool shifted_ = false;
-    bool last_step_ = false;
+    bool boundary_ = false;
     bool song_styled_ = false;
     uint16_t song_foreground_ = 0, song_background_ = 0xffff;
     uint8_t song_font_ = 17;
@@ -659,7 +659,7 @@ private:
 #endif
     void render() {
         if (!rendering_) return;
-        if (outputs_.song_last_step()) { dirty_ = false; return; }
+        if (outputs_.song_boundary()) { dirty_ = false; return; }
         if (bindings_) {
             Pane panes[3];
             if (const uint8_t *view = count_ <= 6 && (!outputs_.song_navigation_active() || hardware_.input_count() <= 6) ? bindings_.view() : nullptr) {
@@ -769,7 +769,17 @@ private:
             const char *next = hardware_.control_label(ControlRole::back), *modifier = hardware_.control_label(ControlRole::confirm);
             if (i) std::snprintf(line.text, sizeof(line.text), "%s+%s %s", modifier, next, ui::i18n::text(ui::i18n::Message::back));
             else std::snprintf(line.text, sizeof(line.text), "%s %s", next, ui::i18n::text(ui::i18n::Message::next_action));
+            if (view && i) {
+                char menu[64]; ui::i18n::format(menu, sizeof(menu), ui::i18n::Message::hold_menu, modifier);
+                std::snprintf(line.text, sizeof(line.text), "%s+%s %s; %.40s", modifier, next, ui::i18n::text(ui::i18n::Message::back), menu);
+                line.wrap = true;
+            }
         }
+        if (view) return;
+        auto &menu = panes[2].lines[3];
+        menu.graphics = panes[2].graphics;
+        menu.graphics.font = ui::localized_face; menu.graphics.size = menu.graphics.line_height = 8;
+        ui::i18n::format(menu.text, sizeof(menu.text), ui::i18n::Message::hold_menu, hardware_.control_label(ControlRole::confirm));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_present)

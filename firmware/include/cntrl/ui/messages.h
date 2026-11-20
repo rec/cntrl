@@ -354,10 +354,13 @@ enum class Message : uint16_t {
     language_select,
     language_next_page,
     panic,
-    last_step,
+    empty_position,
+    startup_set,
+    perform_song,
+    hold_menu,
 };
-inline constexpr unsigned message_count = 352;
-inline constexpr uint32_t catalogue_schema = 0x808819beu;
+inline constexpr unsigned message_count = 355;
+inline constexpr uint32_t catalogue_schema = 0x4d8625fdu;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -1468,8 +1471,19 @@ inline const Field language_next_page_fields[] CNTRL_I18N_STORAGE = {
 };
 inline const char panic_text[] CNTRL_I18N_STORAGE = "Panic";
 inline const char panic_short[] CNTRL_I18N_STORAGE = "";
-inline const char last_step_text[] CNTRL_I18N_STORAGE = "Last step";
-inline const char last_step_short[] CNTRL_I18N_STORAGE = "";
+inline const char empty_position_text[] CNTRL_I18N_STORAGE = "Empty position";
+inline const char empty_position_short[] CNTRL_I18N_STORAGE = "";
+inline const char startup_set_text[] CNTRL_I18N_STORAGE = "Toggle startup set";
+inline const char startup_set_short[] CNTRL_I18N_STORAGE = "";
+inline const char perform_song_text[] CNTRL_I18N_STORAGE = "Perform song";
+inline const char perform_song_short[] CNTRL_I18N_STORAGE = "";
+inline const char hold_menu_text[] CNTRL_I18N_STORAGE = "Hold {control:s}: menu";
+inline const char hold_menu_short[] CNTRL_I18N_STORAGE = "";
+inline const char hold_menu_control_name[] CNTRL_I18N_STORAGE = "control";
+inline const char hold_menu_control_spec[] CNTRL_I18N_STORAGE = "s";
+inline const Field hold_menu_fields[] CNTRL_I18N_STORAGE = {
+    {hold_menu_control_name, hold_menu_control_spec},
+};
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {patch_chooser_text, patch_chooser_short, nullptr, 0},
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
@@ -1822,7 +1836,10 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {language_select_text, language_select_short, language_select_fields, 1},
     {language_next_page_text, language_next_page_short, language_next_page_fields, 1},
     {panic_text, panic_short, nullptr, 0},
-    {last_step_text, last_step_short, nullptr, 0},
+    {empty_position_text, empty_position_short, nullptr, 0},
+    {startup_set_text, startup_set_short, nullptr, 0},
+    {perform_song_text, perform_song_short, nullptr, 0},
+    {hold_menu_text, hold_menu_short, hold_menu_fields, 1},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

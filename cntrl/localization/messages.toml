@@ -1401,7 +1401,19 @@ context = 'Language page navigation control'
 en = 'Panic'
 context = 'Panic page heading'
 
-[messages.last_step]
-en = 'Last step'
-context = 'Silent end-of-song step before the next song'
+[messages.empty_position]
+en = 'Empty position'
+context = 'Playback boundary outside a song'
+
+[messages.startup_set]
+en = 'Toggle startup set'
+context = 'Set edit action: save this set for startup, or clear it if already selected'
+
+[messages.perform_song]
+en = 'Perform song'
+context = 'Start a standalone song at its initial empty position'
+
+[messages.hold_menu]
+en = 'Hold {control:s}: menu'
+context = 'Hold the named physical control to open Pages and tools during song performance'
 

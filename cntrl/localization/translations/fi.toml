@@ -192,7 +192,10 @@ next = { text = 'Seuraava' }
 add_songs = { text = 'Lisää kappaleita' }
 end_of_set = { text = 'Soittolistan loppu' }
 next_patch = { text = 'Seuraava askel' }
-last_step = { text = 'Viimeinen askel' }
+empty_position = { text = 'Tyhjä paikka' }
+startup_set = { text = 'Vaihda aloitussetti' }
+perform_song = { text = 'Soita kappale' }
+hold_menu = { text = 'Pidä {control:s}: valikko' }
 perform_setlist = { text = 'Soita soittolista' }
 setlists = { text = 'Soittolistat' }
 songs = { text = 'Kappaleet' }

@@ -65,11 +65,10 @@ def test_scoped_bindings_override_and_preserve_ordinary_actions(
                 style=models.Style(
                     foreground_color='navy', background_color='white', font_name='Arimo'
                 ),
-                add_last_step=False,
                 patches=['default'],
                 bindings={'A': cc(22, 1), 'configurable-1': expression(11)},
             ),
-            songs.Song(name='Two', add_last_step=False, patches=['default']),
+            songs.Song(name='Two', patches=['default']),
         ],
         setlists=[
             songs.Setlist(

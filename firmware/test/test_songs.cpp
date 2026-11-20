@@ -275,7 +275,7 @@ void test_names_and_positions_survive_edits() {
     assert(!std::strcmp(songs.current_name(), "B"));
     unsigned sends = board.sends;
     assert(completed(storage, songs, songs.insert(sets[0], 3, "Missing")));
-    assert(songs.next() && songs.last_step() && board.sends == sends);
+    assert(songs.next() && songs.boundary() && board.sends == sends);
     assert(!songs.next() && !std::strcmp(songs.last_error(), "Song missing") && board.sends == sends);
 }
 void test_envelope_metadata_and_recovery() {
@@ -307,7 +307,7 @@ void test_envelope_metadata_and_recovery() {
     upload(after_undo, required);
     assert(!after_undo.success() && snapshot(after_undo) == original && board.sends == 0);
     std::vector<uint8_t> record(24);
-    std::memcpy(record.data(), "CSG7", 4);
+    std::memcpy(record.data(), "CSG8", 4);
     cntrl::put32(record.data() + 4, after_undo.generation() + 1);
     cntrl::put32(record.data() + 8, unsigned(required.size()));
     cntrl::put32(record.data() + 12, cntrl::checksum(required.data(), unsigned(required.size())));
@@ -343,11 +343,11 @@ int main() {
     assert(songs.next_position() == 1); assert(completed(storage, songs, songs.move(set, 0, 2))); assert(songs.next_position() == 3);
     assert(completed(storage, songs, songs.remove(set, 2))); assert(songs.removed()); assert(songs.next_position() == 2);
     assert(completed(storage, songs, songs.undo())); assert(!songs.removed()); assert(songs.next_position() == 3);
-    assert(songs.next() && songs.last_step() && board.sends == 1);
+    assert(songs.next() && songs.boundary() && board.sends == 1);
     board.missing = true; assert(!songs.next()); assert(board.sends == 1);
     board.missing = false; assert(songs.next()); assert(board.sends == 2);
-    assert(songs.next() && songs.last_step()); assert(songs.next());
-    assert(songs.next() && songs.last_step()); assert(!songs.next()); assert(board.sends == 3);
+    assert(songs.next() && songs.boundary()); assert(songs.next());
+    assert(songs.next() && songs.boundary()); assert(!songs.next()); assert(board.sends == 3);
     assert(completed(storage, songs, songs.insert(set, songs.setlist(set)->count, b))); assert(songs.next());
     assert(completed(storage, songs, songs.rename_song(b, "Z"))); assert(completed(storage, songs, songs.rename_setlist(set, "S")));
     std::strcpy(set, "S");
@@ -400,7 +400,7 @@ int main() {
     assert(sequence.next() && target.switches == 1 && target.sends == 1);
     cntrl::Songs returned(visits, target); assert(returned.boot());
     assert(target.sends == 1); assert(returned.resume(target.saved)); assert(target.sends == 2);
-    assert(returned.next() && returned.last_step());
+    assert(returned.next() && returned.boundary());
     assert(!returned.next() && !std::strcmp(returned.last_error(), "End of set"));
     assert(completed(visits, returned, returned.move_patch(item.name, 1, true)));
     cntrl::SongSelection check; assert(returned.patch_at(item.name, 0, check) && !std::strcmp(check.key, "stock"));
@@ -411,7 +411,7 @@ int main() {
     unsigned sends = target.sends;
     cntrl::Songs final_return(visits, target); assert(final_return.boot());
     assert(final_return.resume(target.saved) && target.sends == sends);
-    assert(final_return.last_step());
+    assert(final_return.boundary());
     assert(completed(visits, final_return, final_return.remove_patch(item.name, 0)));
     assert(final_return.patch_at(item.name, 0, check) && !std::strcmp(check.key, "stock"));
     assert(!completed(visits, final_return, final_return.remove_patch(item.name, 0)));

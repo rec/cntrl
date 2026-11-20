@@ -192,7 +192,10 @@ next = { text = 'Næste' }
 add_songs = { text = 'Tilføj sange' }
 end_of_set = { text = 'Slut på sætlisten' }
 next_patch = { text = 'Næste trin' }
-last_step = { text = 'Sidste trin' }
+empty_position = { text = 'Tom position' }
+startup_set = { text = 'Skift startsæt' }
+perform_song = { text = 'Spil sang' }
+hold_menu = { text = 'Hold {control:s}: menu' }
 perform_setlist = { text = 'Spil sætliste' }
 setlists = { text = 'Sætlister' }
 songs = { text = 'Sange' }

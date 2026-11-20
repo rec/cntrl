@@ -8,7 +8,7 @@ from cntrl.patch_chooser import compiler, models, songs
 from scripts.native_tests import NativePrograms
 
 
-def test_song_step_navigation_and_silent_last_step(
+def test_song_step_navigation_and_boundaries(
     tmp_path: Path, native_programs: NativePrograms
 ) -> None:
     target = models.Target.model_validate(
@@ -50,7 +50,6 @@ def test_song_step_navigation_and_silent_last_step(
             ),
             songs.Song(
                 name='Two',
-                add_last_step=False,
                 patches=[
                     {
                         'controller': 20,
@@ -66,7 +65,6 @@ def test_song_step_navigation_and_silent_last_step(
     )
     encoded = songs.encode(library, target)
     restored = songs.decode(encoded)
-    assert [s.add_last_step for s in restored.songs] == [True, False]
     assert [len(s.patches) for s in restored.songs] == [3, 2]
     fixture = tmp_path / 'songs.bin'
     fixture.write_bytes(encoded)
@@ -74,3 +72,32 @@ def test_song_step_navigation_and_silent_last_step(
     setup.write_bytes(compiler.compile_show({}, {}, [], target))
     runner = native_programs.build('test/test_song_steps.cpp')
     subprocess.run([str(runner), str(fixture), str(setup)], check=True)
+    hooked = library.model_copy(
+        update={
+            'songs': [
+                s.model_copy(
+                    update={
+                        'enter': {
+                            'type': 'control-change',
+                            'controller': 21,
+                            'value': 11 + i * 10,
+                        },
+                        'exit': {
+                            'type': 'control-change',
+                            'controller': 21,
+                            'value': 12 + i * 10,
+                        },
+                    }
+                )
+                for i, s in enumerate(library.songs)
+            ]
+        }
+    )
+    encoded = songs.encode(hooked, target)
+    assert [
+        (s.enter['value'], s.exit['value'])
+        for s in songs.decode(encoded).songs
+        if s.enter is not None and s.exit is not None
+    ] == [(11, 12), (21, 22)]
+    fixture.write_bytes(encoded)
+    subprocess.run([str(runner), str(fixture), str(setup), '--hooks'], check=True)

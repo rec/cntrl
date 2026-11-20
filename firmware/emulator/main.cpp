@@ -248,7 +248,7 @@ public:
     ExpressionPedals &expression_controls() { return *expression; }
     bool expression_available(unsigned port) const override { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
-    bool song_last_step() const override { return app && app->song_last_step(); }
+    bool song_boundary() const override { return app && app->song_boundary(); }
     bool song_style(ScreenGraphics &style) const override { return app && app->song_style(style); }
     bool looper_storage_ready() const { return true; }
     bool switch_firmware() {
@@ -297,6 +297,13 @@ public:
     bool acquire(uint16_t index,const Document *&document,uint32_t &revision) override { return sources->acquire(index,document,revision); }
     uint32_t names_signature() const override { return sources ? sources->names_signature() : 0; }
     midi::Bridge::Delivery bind_controls(const Document &d,unsigned node,PatchExecutor &invocation) override { return switches->bind_controls(d,node,invocation); }
+    midi::Bridge::Delivery prepare_leave(PatchExecutor &invocation) override {
+        if (switches->open()) {
+            const auto result = switches->prepare_leave(invocation);
+            if (result != midi::Bridge::Delivery::complete) return result;
+        }
+        return bridge.idle() ? midi::Bridge::Delivery::complete : midi::Bridge::Delivery::pending;
+    }
     bool binding_context(const Document *d = nullptr,unsigned set = ~0u,unsigned song = ~0u) override { return switches->binding_context(d,set,song); }
     bool gate_midi_stream(const char *name,bool enabled) override { return midi_runtime.streams().gate(name,enabled); }
     bool select_midi_streams(const Document &d,unsigned node) override {
@@ -441,6 +448,7 @@ public:
         languages.boot(global_settings.values().language);
         documents.bind_globals(global_settings);
         documents.boot(); songs.boot();
+        application.startup();
         if (!documents.document().valid()) throw std::runtime_error("emulator setup failed validation");
         settle();
     }

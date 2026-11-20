@@ -13,7 +13,10 @@ from . import device_settings, devices, global_overlay, transport
 
 
 class Snapshot(BaseModel, frozen=True):
-    format: Literal[1, 2]
+    format: Literal[1, 2, 3]
+    startup_set: (
+        Annotated[str, Field(min_length=1, max_length=63, pattern=r'^[ -~]+$')] | None
+    ) = None
     values: dict[str, Annotated[int, Field(strict=True, ge=0, le=0xFFFFFFFF)]] = Field(
         default_factory=dict
     )
@@ -33,6 +36,8 @@ class Snapshot(BaseModel, frozen=True):
     def versioned_language(self) -> 'Snapshot':
         if self.format == 1 and self.language is not None:
             raise ValueError('version-1 globals cannot contain a language')
+        if self.format < 3 and self.startup_set is not None:
+            raise ValueError('startup sets require version-3 globals')
         return self
 
     @field_validator('values')
@@ -84,7 +89,8 @@ class GlobalCLI(BaseModel, frozen=True):
 
 def dump(overlay: global_overlay.Overlay) -> bytes:
     snapshot = Snapshot(
-        format=2,
+        format=3,
+        startup_set=overlay.startup_set,
         values={str(k): v for k, v in sorted(overlay.values.items())},
         language=overlay.language,
     )
@@ -96,18 +102,20 @@ def load(data: bytes) -> global_overlay.Overlay:
     return global_overlay.Overlay(
         values={int(k): v for k, v in snapshot.values.items()},
         language=snapshot.language,
+        startup_set=snapshot.startup_set,
     )
 
 
 def journal(overlay: global_overlay.Overlay) -> bytes:
     """Bootstrap an empty emulator store from a portable overlay snapshot."""
     known = sum(1 << i for i in overlay.values)
-    body = struct.pack('<4sIIQ', b'CGLO', 2, 1, known)
+    body = struct.pack('<4sIIQ', b'CGLO', 3, 1, known)
     body += struct.pack(
         '<' + 'I' * len(device_settings.SETTINGS),
         *(overlay.values.get(i, 0) for i in range(len(device_settings.SETTINGS))),
     )
     body += (overlay.language or '').encode().ljust(16, b'\0')
+    body += (overlay.startup_set or '').encode().ljust(64, b'\0')
     return body + struct.pack('<I4s', crc32(body), b'DONE')
 
 

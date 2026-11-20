@@ -126,11 +126,11 @@ def test_songs_fill_missing_styles_with_the_cycle_formatter(
     offset = 8
     for original in value.songs:
         header = songs.SONG.unpack_from(core, offset + songs.SELECTION.size)
-        assert header[6] == next(
+        assert header[7] == next(
             f.id for f in device.fonts if f.name == expected[original.name].font_name
         )
-        assert header[5] == graphics.colors(expected[original.name], 0)[1]
-        assert header[4] == graphics.rgb565(
+        assert header[6] == graphics.colors(expected[original.name], 0)[1]
+        assert header[5] == graphics.rgb565(
             graphics.color(
                 original.style.foreground_color
                 if original.style is not None
@@ -144,8 +144,8 @@ def test_songs_fill_missing_styles_with_the_cycle_formatter(
         songs.encode(changed, device, COMPANIONS), binary_format.Kind.songs
     )
     header = songs.SONG.unpack_from(updated, 8 + songs.SELECTION.size)
-    assert header[4] == graphics.rgb565(graphics.color('red'))
-    assert header[5] == graphics.rgb565(graphics.color('0xE8F0FF'))
+    assert header[5] == graphics.rgb565(graphics.color('red'))
+    assert header[6] == graphics.rgb565(graphics.color('0xE8F0FF'))
 
 
 def test_song_styles_can_disable_automatic_formatting(target: models.Target) -> None:
@@ -155,7 +155,7 @@ def test_song_styles_can_disable_automatic_formatting(target: models.Target) -> 
     assert not restored.fill_in_styles
     assert restored.songs == value.songs
     core = binary_format.core(data, binary_format.Kind.songs)
-    assert songs.SONG.unpack_from(core, 8 + songs.SELECTION.size)[4:7] == (0, 65535, 17)
+    assert songs.SONG.unpack_from(core, 8 + songs.SELECTION.size)[5:8] == (0, 65535, 17)
     assert songs.encode(restored, target, COMPANIONS) == data
 
 
@@ -268,7 +268,7 @@ def test_captured_sources_with_colliding_instrument_aliases_export_independently
         + left[8:end]
         + songs.SELECTION.pack(*position)
         + right[8 + songs.SELECTION.size : end]
-        + b'CSP8'
+        + b'CSP9'
         + left[end + 4 :]
         + right[end + 4 :]
     )
@@ -364,6 +364,24 @@ def test_nested_stock_return_finishes_its_position_before_advancing(
         check=True,
     )
     native_tests.run_native([str(executable), str(image)], check=True)
+    original = selection.songs[0]
+    hooked = original.model_copy(
+        update={
+            'enter': original.patches[0],
+            'patches': original.patches[1:],
+            'exit': {
+                'patches': [
+                    {'output': 'din', 'channel': 1, 'controller': 68, 'value': 1},
+                    {'operation': 'stock-firmware', 'exit_buttons': 'A+F'},
+                    {'output': 'din', 'channel': 1, 'controller': 69, 'value': 1},
+                ]
+            },
+        }
+    )
+    image.write_bytes(
+        songs.encode(selection.model_copy(update={'songs': [hooked]}), target)
+    )
+    native_tests.run_native([str(executable), str(image), '--hooks'], check=True)
 
 
 @pytest.mark.parametrize('large', [False, True])

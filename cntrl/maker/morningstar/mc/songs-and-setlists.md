@@ -8,7 +8,7 @@ Hardware qualification of this format is pending. Song sections remain deferred 
 
 ## On the pedal
 
-Open the module menu with A+D and choose **Songs and setlists**. A/B browse,
+Open Pages and tools from the Menu page and choose **Songs and setlists**. A/B browse,
 C confirms and F returns. The module offers Perform setlist, Setlists, Songs,
 Save as song and Save reference.
 
@@ -45,13 +45,25 @@ for editing; they do not recall it. D opens the edit menu:
 - Rename setlist changes the title.
 - Undo edit restores the most recent saved edit. It sends no MIDI.
 - Restart setlist makes the first entry next, without recalling it.
+- Toggle startup set saves this set as the pedal's startup choice, or clears that
+  choice if it is already selected. This preference is device-wide and survives reboot.
 - Done returns to the performance view.
 
-Songs have `add_last_step = true` by default. This adds a silent **Last step**
-after the authored steps, previewing the next song while leaving the current
-sound active. F again starts the next song. `add_last_step = false` skips it.
-Previous crosses song boundaries through the same ordered steps. Last steps
-send no MIDI in either direction, including after the final song in the set.
+Songs always have an **Empty position** before and after their authored patches.
+A set shares one empty position between songs: `. (A B C) . (one two three) .`.
+F advances and C+F reverses through those same positions. Leaving a song releases
+its controls and runs its optional `exit` action; entering runs its optional
+`enter` action before the patch. These actions use the ordinary patch format.
+The boundary separates one song's exit from the next song's enter.
+
+At startup the saved set opens on its initial empty position. No song or patch
+startup messages are sent until F is pressed. Reverse back to that position and
+advance to resend them. The song library's Perform song action starts a standalone
+song with the same leading and trailing empty positions.
+
+Hold C during performance to open Pages and tools and switch to Patch Chooser. Return through
+Songs and setlists, Perform setlist to continue the set. Full-pedal patches keep
+ownership of the surface while playing; the views are switched, not combined.
 
 Current and next songs remain visible while editing. Removing the current
 occurrence leaves its sound active, marks it removed and retains the continuation
@@ -106,8 +118,10 @@ songs = ['One Love', 'Linked sound', 'One Love']
 ```
 
 Each song requires a nonempty ordered `patches` list of operations, sequences or
-named patch references. Each occurrence is a song step; the automatic last step
-is not stored as another patch in this list.
+named patch references. Each occurrence is a song step; empty boundary positions
+are not stored as patches in this list. Optional song `enter` and `exit` fields
+accept ordinary patch actions or sequences, for example
+`enter = {output = 'din', channel = 1, program = 12}`.
 Channels and program numbers are one-based. Program patches resolve logical
 bank mappings through their instrument context. A sequence at one step runs
 all its children on that activation; it does not add song steps.
@@ -122,8 +136,8 @@ off with `fill_in_styles = false`. See [song styles](../../../../doc/patches.md#
 
 Songs have unique names, as do setlists. Setlists contain ordered song names,
 including repeated names. Playback tracks a zero-based setlist entry index and
-a step index within the current song. The optional last step uses the index
-immediately after the authored patches. Edits adjust these indices; undo restores
+a step index within the current song. Empty positions track the following set
+entry without an active song. Edits adjust these indices; undo restores
 the previous positions. There are no song, step or setlist-entry IDs.
 
 ```bash
@@ -179,9 +193,9 @@ Names and patch-selection fields retain their existing format bounds.
 
 The payload begins with two little-endian 32-bit counts: songs and setlists.
 Each song stores its first patch selection, name, patch count, binding-map
-reference and last-step flag, then its remaining selections. Each setlist stores its name, entry
+reference, enter/exit action references and style, then its remaining selections. Each setlist stores its name, entry
 count and binding-map reference followed by that many song names. Committed
-files use the `CSG7` journal; a `CSP8` appendix stores immutable compiled patch
+files use the `CSG8` journal; a `CSP9` appendix stores immutable compiled patch
 sources. Bindings at global, setlist and song scopes are described in
 [patch bindings](../../../../doc/control-bindings.md). Export older libraries with the old host
 before replacing the firmware, then remove ID fields and replace numeric setlist
@@ -250,12 +264,12 @@ patches = [
 ]
 ```
 
-F advances through song steps and the optional last step before the next song.
+F advances through song steps and the empty position before the next song.
 A stock visit returns directly to the following patch and transmits its MIDI.
-A final stock patch returns to the last step when enabled, or End of song when
-disabled, without starting the next song.
+A final stock patch returns to the trailing empty position, running the song's
+exit action without starting the next song.
 Ordinary boot sends nothing. Changed library or source data prevents automatic
-recall. The Original firmware module remains independent of song continuation.
+recall. Explicit stock-firmware actions remain available outside song playback.
 
 In the song library, choose Edit steps to browse occurrences. C opens actions
 for replacing with the selected browser patch, inserting it after the occurrence,

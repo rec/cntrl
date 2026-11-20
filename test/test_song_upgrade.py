@@ -14,7 +14,7 @@ def target() -> models.Target:
 
 
 @pytest.mark.parametrize('version', [36, 38])
-@pytest.mark.parametrize('library_format', [5, 6, 7])
+@pytest.mark.parametrize('library_format', [5, 6, 7, 8])
 def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     version: int,
     library_format: int,
@@ -45,7 +45,8 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
             songs.text('Saved', 64),
             2,
             0xFFFFFFFF,
-            True,
+            0xFFFFFFFF,
+            0xFFFFFFFF,
             0,
             65535,
             17,
@@ -53,15 +54,17 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
         + second
         + songs.SET.pack(songs.text('Tonight', 64), 2, 0xFFFFFFFF)
         + songs.text('Saved', 64) * 2
-        + b'CSP8'
+        + b'CSP9'
     )
     song_header = struct.pack('<64sI', songs.text('Saved', 64), 2)
     set_header = struct.pack('<64sI', songs.text('Tonight', 64), 2)
     if library_format >= 6:
         song_header += struct.pack('<I', 0xFFFFFFFF)
         set_header += struct.pack('<I', 0xFFFFFFFF)
-    if library_format == 7:
-        song_header += b'\x01'
+    if library_format >= 7:
+        song_header += b'\x00' if library_format == 8 else b'\x01'
+    if library_format == 8:
+        song_header += struct.pack('<HHB', 0, 65535, 17)
     stored_prefix = (
         struct.pack('<II', 1, 1)
         + first
@@ -150,7 +153,7 @@ def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
         ),
         target,
     )
-    assert source[source.index(b'CSP8') + 8 :].startswith(binary_format.MAGIC)
+    assert source[source.index(b'CSP9') + 8 :].startswith(binary_format.MAGIC)
     upgraded = songs.upgrade(source, {}, target=target)
     assert songs.decode(upgraded) == songs.decode(source)
     assert songs.upgrade(upgraded, {}, target=target) == upgraded
@@ -181,7 +184,7 @@ def test_captured_references_follow_the_reordered_deployed_bundle() -> None:
     linked = songs.reindex(library, ['Aardvark', 'Zulu'])
     assert songs.decode(linked) == songs.decode(library)
     core = binary_format.core(linked, binary_format.Kind.songs)
-    captured = core[core.index(b'CSP8') + 8 :]
+    captured = core[core.index(b'CSP9') + 8 :]
     graph = resolved.graph_offset(captured)
     core_source = binary_format.core(captured)
     graph -= binary_format.core_offset(captured)

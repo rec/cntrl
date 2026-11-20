@@ -18,6 +18,7 @@ public:
         }
     }
     const cntrl::SongContinuation &context() const { return context_; }
+    midi::Bridge::Delivery leave() override { return outputs_.prepare_leave(executor); }
     void recalled() override { application_.controller().cancel_gesture(); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(song_sources_capture)
@@ -87,7 +88,7 @@ public:
             Document scope_document;
             unsigned size = songs_.source_size(0);
             const Document *scope_source = song.source == 0 && !song.document[0] ? source : nullptr;
-            const auto *set = songs_.setlist(context.set);
+            const auto *set = context.solo ? nullptr : songs_.setlist(context.set);
             unsigned set_bindings = set ? set->bindings : ~0u;
             const auto *current_song = songs_.song(context.song);
             unsigned song_bindings = current_song ? current_song->bindings : ~0u;

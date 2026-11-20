@@ -291,7 +291,7 @@ public:
     bool looper_storage_ready() const { return midi_storage_idle(); }
     FLASHMEM bool state(unsigned operation, uint32_t value) override { return application.state(operation, value, *this); }
     bool song_navigation_active() const override { return application.song_navigation_active(); }
-    bool song_last_step() const override { return application.song_last_step(); }
+    bool song_boundary() const override { return application.song_boundary(); }
     bool song_style(cntrl::ScreenGraphics &style) const override { return application.song_style(style); }
     FLASHMEM bool banked(const cntrl::Document &document, unsigned node) override { return application.activate_banked(document, node); }
     cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &document, unsigned node, cntrl::PatchExecutor &invocation) override {
@@ -1196,6 +1196,7 @@ FLASHMEM void initialize_target() {
     documents.boot();
     cntrl::device::heap_phase(cntrl::device::HeapPhase::songs);
     bool songs_valid = !card.ready || songs.boot(deployment.root() == 0);
+    if (card.ready && songs_valid) application.startup();
     if (!songs_valid) board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_song_storage_invalid));
     if (card.ready && !deployment.prepare_runtime(setup_valid && songs_valid
             && (!setup_storage.setups().total_setup_ram() || documents.document().valid()))) {

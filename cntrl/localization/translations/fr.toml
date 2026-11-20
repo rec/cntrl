@@ -582,8 +582,17 @@ text = 'Fin de liste'
 [messages.next_patch]
 text = 'Étape suivante'
 
-[messages.last_step]
-text = 'Dernière étape'
+[messages.empty_position]
+text = 'Position vide'
+
+[messages.startup_set]
+text = 'Basculer le set initial'
+
+[messages.perform_song]
+text = 'Jouer le morceau'
+
+[messages.hold_menu]
+text = 'Maintenir {control:s} : menu'
 
 [messages.perform_setlist]
 text = 'Jouer la liste'

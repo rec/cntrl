@@ -192,7 +192,10 @@ next = { text = 'Sonraki' }
 add_songs = { text = 'Şarkı ekle' }
 end_of_set = { text = 'Liste sonu' }
 next_patch = { text = 'Sonraki adım' }
-last_step = { text = 'Son adım' }
+empty_position = { text = 'Boş konum' }
+startup_set = { text = 'Başlangıç setini değiştir' }
+perform_song = { text = 'Şarkıyı çal' }
+hold_menu = { text = '{control:s} basılı tut: menü' }
 perform_setlist = { text = 'Listeyi çal' }
 setlists = { text = 'Çalma listeleri' }
 songs = { text = 'Şarkılar' }

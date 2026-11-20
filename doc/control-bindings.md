@@ -115,27 +115,24 @@ shows up to six; larger maps use the ordinary switch presentation. Inherited
 switch actions retain their source definitions and routing even when the
 selected patch comes from another setup.
 
-Each song has `add_last_step = true` by default. After its authored steps, Next
-selects a **Last step** view that leaves the sound and active bindings in place
-and sends no MIDI. It previews the next song; Next again starts that song.
-The last song also has this step, followed by End of set. Set
-`add_last_step = false` to go directly from a song's final authored step to the
-next song. Previous walks the same step order backwards across song boundaries.
-Entering a last step backwards also sends no MIDI.
-
-While the last-step view is visible, hidden switch assignments cannot receive
-new presses. Releases for already-held controls still complete their cleanup,
-and expression assignments remain active. Leaving the last step restores the
-patch interface or installs the selected step's patch map normally.
+Playback always includes an **Empty position** before and after a song. A set
+shares one empty position between consecutive songs: `. (A B C) . (D E) .`.
+Previous walks exactly the same positions backwards. Empty positions are runtime
+boundaries, not authored patches. Leaving a song releases its controls and runs
+its optional `exit` action; stepping into a song runs its optional `enter` action
+before the selected patch. The next song's enter action requires another advance.
+Returning to the initial empty position and advancing resends song and patch
+startup actions. Selecting a song or set starts at that initial position without
+sending either action.
 
 Explicit patch actions use `next-song-step` and `previous-song-step`. Song
 authoring still uses an ordered `patches` list: each occurrence is a step, and
-the automatic last step is separate from that list.
+the mandatory empty positions are separate from that list.
 
-Song records include binding references, styles and the last-step flag and use `CSP8`.
+Song records include binding references, styles and enter/exit actions and use `CSP9`.
 Recompile song libraries and use matching host and firmware versions. Existing
-offline backup conversion preserves older selections and enables the default
-last step; firmware uses the current format.
+offline backup conversion preserves older selections; firmware uses the current
+format. The old optional last-step setting has been removed.
 
 ## Replacing maps
 

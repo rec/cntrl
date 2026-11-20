@@ -359,8 +359,14 @@ class SetupClient:
             raise ValueError('invalid device-global settings response')
         result: dict[int, int] = {}
         language: str | None = None
+        startup_set: str | None = None
         for item in fields[2:]:
             key, separator, value = item.partition('=')
+            if key == 'startup_set' and separator:
+                if startup_set is not None:
+                    raise ValueError('duplicate startup set response')
+                startup_set = bytes.fromhex(value).decode('ascii')
+                continue
             if key == 'language' and separator:
                 if language is not None:
                     raise ValueError('duplicate device-global language response')
@@ -380,7 +386,7 @@ class SetupClient:
                 raise ValueError('duplicate device-global settings response')
             result[field] = raw
         return global_overlay.Overlay.model_validate(
-            {'values': result, 'language': language}
+            {'values': result, 'language': language, 'startup_set': startup_set}
         )
 
     def set_language(self, tag: str) -> None:
@@ -402,6 +408,8 @@ class SetupClient:
         suffix = ''.join(f' {k}={v}' for k, v in sorted(overlay.values.items()))
         if overlay.language is not None:
             suffix += f' language={overlay.language}'
+        if overlay.startup_set is not None:
+            suffix += f' startup_set={overlay.startup_set.encode().hex()}'
         self.ok('CNTRL GLOBAL PUT' + suffix)
 
     def catalogue(self) -> list[SetupEntry]:

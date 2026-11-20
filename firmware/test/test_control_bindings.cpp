@@ -137,7 +137,7 @@ void scoped_bindings(Board &board, const std::vector<uint8_t> &bytes) {
     press(3); assert(board.sent.back().bytes[1] == 30); // Global reference uses the library's boost.
     press(5); assert(board.sent.back().bytes[1] == 31); // Local reference uses the foreign boost.
     press(0); assert(board.sent.back().bytes[1] == 22);
-    next(); assert(board.switches.expression(0).controller == 10); // Song Two inherits the set.
+    next(); assert(songs.boundary()); next(); assert(board.switches.expression(0).controller == 10); // Song Two inherits the set.
     songs.choose("Other"); next(); assert(board.switches.expression(0).controller == 74);
     songs.choose("Plain"); next(); assert(board.switches.expression(0).controller == 7);
     assert(songs.rename_song("One", "Renamed")); while (songs.busy()) songs.tick(); assert(songs.success());
@@ -146,7 +146,7 @@ void scoped_bindings(Board &board, const std::vector<uint8_t> &bytes) {
         && renamed->font == original_style.font);
     assert(songs.rename_setlist("Set", "Renamed set")); while (songs.busy()) songs.tick(); assert(songs.success());
     songs.choose("Renamed set"); next(); assert(board.switches.expression(0).controller == 11);
-    next(); assert(board.switches.expression(0).controller == 10);
+    next(); next(); assert(board.switches.expression(0).controller == 10);
     assert(songs.undo()); while (songs.busy()) songs.tick(); assert(songs.success());
     const auto *restored = songs.song("Renamed");
     assert(restored && restored->foreground == original_style.foreground && restored->background == original_style.background && restored->font == original_style.font);

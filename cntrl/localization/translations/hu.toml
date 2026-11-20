@@ -192,7 +192,10 @@ next = { text = 'Következő' }
 add_songs = { text = 'Dalok hozzáadása' }
 end_of_set = { text = 'Műsor vége' }
 next_patch = { text = 'Következő lépés' }
-last_step = { text = 'Utolsó lépés' }
+empty_position = { text = 'Üres pozíció' }
+startup_set = { text = 'Kezdő szett váltása' }
+perform_song = { text = 'Dal lejátszása' }
+hold_menu = { text = '{control:s} tartása: menü' }
 perform_setlist = { text = 'Műsorlista lejátszása' }
 setlists = { text = 'Műsorlisták' }
 songs = { text = 'Dalok' }
