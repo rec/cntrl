@@ -36,6 +36,10 @@ ticks. Tap remains measured until cleared by holding the confirm control
 if it becomes blank, another measured source is selected, or Tap if none is
 available. With it disabled, selection changes only through E or a successful
 tap measurement. Sending clock does not send transport Start or Stop messages.
+Selecting a blank source with E waits for that source instead of immediately
+falling back. Once it has received a measured clock, automatic fallback resumes
+if that clock later expires. The Tap Tempo circle sits at the bottom right of
+its window, using the configured `flasher_diameter` (40 pixels by default).
 Activating a setup, entering stock firmware or starting a port-owning
 diagnostic stops local generation.
 

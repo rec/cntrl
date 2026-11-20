@@ -97,6 +97,16 @@ def test_time_controls_measure_clear_select_and_relay(
         snapshot(2)
         assert session.frames['lcd-3'] == blank
         assert not [m for m in session.messages if m.kind == 'error']
+        tap_source = session.frames['lcd-2']
+        press('e')
+        din_source = session.frames['lcd-2']
+        assert din_source != tap_source
+        advance(1000000)
+        assert session.frames['lcd-2'] == din_source
+        press('e')
+        assert session.frames['lcd-2'] not in (tap_source, din_source)
+        press('e')
+        assert session.frames['lcd-2'] == tap_source
     path = tmp_path / 'rendered-time-page.png'
     image.save(path)
     file_regression.check(
