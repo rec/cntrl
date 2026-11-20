@@ -192,7 +192,10 @@ next = { text = 'Nästa' }
 add_songs = { text = 'Lägg till låtar' }
 end_of_set = { text = 'Slut på låtlistan' }
 next_patch = { text = 'Nästa steg' }
-last_step = { text = 'Sista steget' }
+empty_position = { text = 'Tom position' }
+startup_set = { text = 'Växla startset' }
+perform_song = { text = 'Spela låt' }
+hold_menu = { text = 'Håll {control:s}: meny' }
 perform_setlist = { text = 'Spela låtlista' }
 setlists = { text = 'Låtlistor' }
 songs = { text = 'Låtar' }

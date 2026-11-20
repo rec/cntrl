@@ -17,7 +17,12 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
     tmp_path: Path, file_regression: FileRegressionFixture
 ) -> None:
     target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
-    source = {'pages': {'menu': {'type': 'menu'}}, 'use_animations': False}
+    source = {
+        'pages': {'menu': {'type': 'menu'}, 'patches': {'type': 'patch-chooser'}},
+        'regions': {'main': {'pages': ['menu', 'patches']}},
+        'patch_cycles': {'Sounds': [{'output': 'din', 'channel': 1, 'program': 99}]},
+        'use_animations': False,
+    }
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'
     bundle.write_bytes(
@@ -50,6 +55,8 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
             'songs': [
                 {
                     'name': 'Our song',
+                    'enter': {'output': 'din', 'channel': 1, 'program': 11},
+                    'exit': {'output': 'din', 'channel': 1, 'program': 12},
                     'patches': ['scene', 'override', 'ordinary'],
                     'style': {
                         'foreground_color': 'navy',
@@ -59,8 +66,7 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
                 },
                 {
                     'name': 'Next song',
-                    'add_last_step': False,
-                    'patches': [{'type': 'delay', 'duration': '1 ms'}],
+                    'patches': ['scene'],
                     'style': {
                         'foreground_color': 'white',
                         'background_color': 'navy',
@@ -69,7 +75,7 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
                 },
                 {
                     'name': 'Final song',
-                    'patches': [{'type': 'delay', 'duration': '1 ms'}],
+                    'patches': ['scene'],
                     'style': {'background_color': 'blue', 'font_name': 'CourierPrime'},
                 },
             ],
@@ -79,7 +85,7 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         }
     )
     data = songs.encode(library, target)
-    header = struct.pack('<4sIIII', b'CSG7', 1, len(data), crc32(data), 0)
+    header = struct.pack('<4sIIII', b'CSG8', 1, len(data), crc32(data), 0)
     storage = tmp_path / 'session'
     folder = storage / 'cntrl/songs'
     folder.mkdir(parents=True)
@@ -88,7 +94,7 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
     )
     executable = backend.build(target, tmp_path / 'native', BASE.parents[3])
     layout = EmulatorLayout.load(BASE / 'emulator/mc6-pro.toml')
-    image = Image.new('RGB', (480, 640))
+    image = Image.new('RGB', (480, 768))
     with backend.Session(layout, target, executable, storage, bundle) as session:
 
         def press(button: str) -> None:
@@ -111,8 +117,18 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         press('b')
         press('c')  # Setlists.
         press('c')  # Choose Tonight.
+        press('d')  # Set edit menu.
+        for _ in range(7):
+            press('b')
+        press('c')  # Save Tonight as the device-wide startup set.
+        assert not [m for m in session.messages if m.kind in ('midi', 'error')]
+
+    with backend.Session(layout, target, executable, storage, bundle) as session:
+        session.advance(1000000)
+        assert not [m for m in session.messages if m.kind in ('midi', 'error')]
         snapshot(0)
         press('f')  # First song step installs the full-pedal patch.
+        assert [m.data for m in session.messages if m.kind == 'midi'] == [b'\xc0\x0a']
         snapshot(1)
         first = dict(session.frames)
         press('a')
@@ -122,12 +138,33 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         assert session.frames != first
         press('f')  # Ordinary switch views inherit the same song defaults.
         snapshot(3)
-        press('f')  # Last step restores the song overview and previews Next song.
+        press('f')  # Empty position restores the overview and previews Next song.
+        assert [m.data for m in session.messages if m.kind == 'midi'][-1] == b'\xc0\x0b'
         snapshot(4)
-        press('f')  # A MIDI-only step retains controls with new song defaults.
+        press('f')  # The next song installs its controls with its own defaults.
+        assert not [m for m in session.messages if m.kind == 'error']
         assert session.frames['lcd-2'][160:162] == b'\0\x10'
-        press('f')  # No last step or replacement control map forces this redraw.
+        press('f')  # The shared boundary separates the songs.
+        press('f')  # Final song installs its own display defaults.
         assert session.frames['lcd-2'][160:162] == b'\0\x1f'
+        midi_count = len([m for m in session.messages if m.kind == 'midi'])
+        session.button('c', True)
+        session.advance(session.time_us + 600000)
+        session.button('c', False)
+        session.advance(session.time_us + 120000)
+        for _ in range(5):
+            press('b')
+        press('c')  # Switch to Patch Chooser through Pages and tools.
+        press('a')  # Recall the chooser's patch using the pedal's physical label.
+        snapshot(5)
+        midi = [m.data for m in session.messages if m.kind == 'midi']
+        assert len(midi) == midi_count + 1 and midi[-1] == b'\xc0\x62'
+        press('f')  # Cycle to Menu.
+        press('c')
+        press('b')
+        press('c')  # Songs and setlists.
+        press('c')  # Resume performance without moving the cursor.
+        assert len([m for m in session.messages if m.kind == 'midi']) == len(midi)
         assert not [m for m in session.messages if m.kind == 'error']
     path = tmp_path / 'rendered-song-styles.png'
     image.save(path)

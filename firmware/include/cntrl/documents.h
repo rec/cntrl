@@ -41,6 +41,14 @@ public:
     bool busy() const { return browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
     bool dirty() const { return dirty_; }
     void bind_globals(GlobalSettings &globals) { globals_ = &globals; document_.bind_globals(&globals.values()); }
+    const char *startup_set() const { return globals_ ? globals_->values().startup_set : ""; }
+    bool startup_set(const char *name) {
+        if (!globals_ || busy() || dirty_) return false;
+        auto values = globals_->values();
+        if (std::strlen(name) >= sizeof(values.startup_set)) return false;
+        std::snprintf(values.startup_set, sizeof(values.startup_set), "%s", name);
+        return global_replace(values, false);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_global_change)
 #endif
@@ -61,7 +69,9 @@ public:
         for (unsigned i = 0; i < GlobalSettings::count; ++i)
             if (target->values().values[i] != values.values[i]) changed |= uint64_t(1) << i;
         const bool language_changed = std::strcmp(target->values().language, values.language) != 0;
-        if (!changed && !language_changed) { last_error_[0] = 0; return true; }
+        const bool startup_changed = std::strcmp(target->values().startup_set, values.startup_set) != 0;
+        if (!changed && !language_changed && !startup_changed) { last_error_[0] = 0; return true; }
+        if (startup_changed && (busy() || dirty_ || activity_busy)) return global_error("global-busy");
         if (changed && (busy() || dirty_ || ((changed & ~uint64_t(3)) && activity_busy))) return global_error("global-busy");
         if (changed & ~uint64_t(7)) {
             if (!validate_globals(values)) return false;

@@ -192,7 +192,10 @@ next = { text = 'Neste' }
 add_songs = { text = 'Legg til låter' }
 end_of_set = { text = 'Slutt på settlisten' }
 next_patch = { text = 'Neste trinn' }
-last_step = { text = 'Siste trinn' }
+empty_position = { text = 'Tom posisjon' }
+startup_set = { text = 'Bytt oppstartssett' }
+perform_song = { text = 'Spill sang' }
+hold_menu = { text = 'Hold {control:s}: meny' }
 perform_setlist = { text = 'Spill settliste' }
 setlists = { text = 'Settlister' }
 songs = { text = 'Låter' }

@@ -88,6 +88,9 @@ void old_journals_upgrade_without_changing_preferences(const std::filesystem::pa
     value = restarted.values(); std::strcpy(value.language, "fr-CA"); assert(restarted.commit(value));
     cntrl::GlobalSettings future(filesystem); assert(future.boot());
     assert(!std::strcmp(future.values().language, "fr-CA"));
+    value = future.values(); std::strcpy(value.startup_set, "Friday Show"); assert(future.commit(value));
+    cntrl::GlobalSettings show(filesystem); assert(show.boot());
+    assert(!std::strcmp(show.values().startup_set, "Friday Show") && !std::strcmp(show.values().language, "fr-CA"));
 }
 
 void inherited_settings_remain_separate_from_authored_setups(const char *bundle, const std::filesystem::path &directory) {

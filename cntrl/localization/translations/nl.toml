@@ -192,7 +192,10 @@ next = { text = 'Volgende' }
 add_songs = { text = 'Nummers toevoegen' }
 end_of_set = { text = 'Einde setlijst' }
 next_patch = { text = 'Volgende stap' }
-last_step = { text = 'Laatste stap' }
+empty_position = { text = 'Lege positie' }
+startup_set = { text = 'Opstartset wisselen' }
+perform_song = { text = 'Nummer spelen' }
+hold_menu = { text = '{control:s} vasthouden: menu' }
 perform_setlist = { text = 'Setlijst spelen' }
 setlists = { text = 'Setlijsten' }
 songs = { text = 'Nummers' }

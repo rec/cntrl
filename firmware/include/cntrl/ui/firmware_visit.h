@@ -10,7 +10,7 @@
 namespace cntrl::ui {
 struct RuntimeState { uint8_t brightness = 192; bool interface = false; };
 struct FirmwareVisitRecord {
-    static constexpr uint32_t format = 0x46564934;
+    static constexpr uint32_t format = 0x46564935;
     static constexpr unsigned header_size = 94 + sizeof(SongContinuation);
     uint32_t token = 0, setup_crc = 0;
     char setup[64] = {};
@@ -43,7 +43,7 @@ struct FirmwareVisitRecord {
         FirmwareVisitRecord candidate;
         candidate.token = u32(bytes + 4); candidate.setup_crc = u32(bytes + 8);
         std::memcpy(candidate.setup, bytes + 12, 64); std::memcpy(&candidate.continuation, bytes + 76, sizeof(continuation));
-        if (!text_valid(reinterpret_cast<const uint8_t *>(candidate.continuation.document), 64)
+        if (candidate.continuation.solo > 1 || !text_valid(reinterpret_cast<const uint8_t *>(candidate.continuation.document), 64)
             || !text_valid(reinterpret_cast<const uint8_t *>(candidate.continuation.set), 64)
             || !text_valid(reinterpret_cast<const uint8_t *>(candidate.continuation.song), 64)) return false;
         unsigned offset = 76 + sizeof(continuation);
@@ -208,24 +208,25 @@ private:
 #endif
     void resume() {
         const auto continuation = record_.continuation; stage_ = Stage::idle;
+        const bool song = continuation.caller == 1 || continuation.caller == 3 || continuation.caller == 4;
         if (record_.controller >= application_.layout.controllers()) { hardware_.error(i18n::text(i18n::Message::page_return_unavailable)); return; }
         application_.visible_index = record_.controller;
         if (!valid_ || !application_.controller().navigation(record_.initial_navigation)) { hardware_.error(i18n::text(i18n::Message::patch_return_unavailable)); return; }
         restoring = true;
-        const bool resumed = continuation.caller == 1 ? songs_.resume(continuation)
+        const bool resumed = song ? songs_.resume(continuation)
             : application_.controller().executor().resume(documents_.document(), continuation.node, continuation.completed, continuation.sources_crc);
         restoring = false;
         if (!resumed || !application_.controller().navigation(record_.return_navigation)) {
             application_.controller().executor().cancel(); sources_.executor.cancel(); hardware_.error(i18n::text(i18n::Message::patch_return_unavailable)); return;
         }
-        const auto &execution = continuation.caller == 1 ? sources_.executor : application_.controller().executor();
+        const auto &execution = song ? sources_.executor : application_.controller().executor();
         if (!navigation_.put(execution, record_.initial_navigation)) {
             application_.controller().executor().cancel(); sources_.executor.cancel();
             hardware_.error(i18n::text(i18n::Message::patch_return_memory_unavailable)); return;
         }
         hardware_.set_brightness(record_.runtime.brightness); hardware_.set_midi_interface(record_.runtime.interface);
         application_.pending_operation = record_.ui_operation;
-        if (continuation.caller == 1) application_.song_ui.perform(); else application_.return_to_switches = continuation.caller == 2;
+        if (song) application_.song_ui.perform(); else application_.return_to_switches = continuation.caller == 2;
     }
 };
 } // namespace cntrl::ui

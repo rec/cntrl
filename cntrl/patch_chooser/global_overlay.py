@@ -8,6 +8,9 @@ from . import device_settings
 
 
 class Overlay(BaseModel, frozen=True):
+    startup_set: (
+        Annotated[str, Field(min_length=1, max_length=63, pattern=r'^[ -~]+$')] | None
+    ) = None
     values: dict[int, Annotated[int, Field(strict=True, ge=0, le=0xFFFFFFFF)]] = Field(
         default_factory=dict
     )

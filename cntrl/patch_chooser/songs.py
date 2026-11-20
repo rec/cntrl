@@ -43,10 +43,24 @@ class Song(models.BindingScope, frozen=True):
     bindings: dict[str, object] = Field(default_factory=dict)
     name: str
     style: models.Style | None = None
-    add_last_step: bool = True
+    enter: (
+        Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)] | None
+    ) = None
+    exit: (
+        Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)] | None
+    ) = None
     patches: list[
         Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)]
     ] = Field(min_length=1)
+
+    @field_validator('enter', 'exit')
+    @classmethod
+    def validate_hook(cls, value: dict[str, object] | None) -> dict[str, object] | None:
+        return (
+            models.patch_adapter.validate_python(value).model_dump(exclude_none=True)
+            if value is not None
+            else None
+        )
 
     @field_validator('patches')
     @classmethod
@@ -182,6 +196,13 @@ def encode(
             paths.append(f'songs[{song_index}].patches[{patch_index}]')
             values.append(position)
         positions.append(values)
+    hooks: dict[tuple[str, str], int] = {}
+    for song_index, song in enumerate(library.songs):
+        for name in ('enter', 'exit'):
+            if (value := getattr(song, name)) is not None:
+                hooks[song.name, name] = len(values_for_source)
+                values_for_source.append(value)
+                paths.append(f'songs[{song_index}].{name}')
     source = b''
     roots: list[int] = []
     if (
@@ -300,13 +321,10 @@ def encode(
             struct.unpack_from('<H', source, offset + (first + i) * 2)[0]
             for i in range(len(values_for_source))
         ]
-        browser = first
     records = []
     scope_roots = (
         {(k, n): r for k, n, r in resolved.binding_scopes(source)} if source else {}
     )
-    if not source:
-        browser = 0
     for song, values in zip(library.songs, positions, strict=True):
         style = display.merge_style(
             models.Style(
@@ -338,11 +356,12 @@ def encode(
                 roots[position],
             )
             header = compiler.HEADER.unpack_from(source)
-            label_offset = 76 + header[4] * 68 + header[5] * 68 + browser * 82 + 12
+            label_offset = (
+                76 + header[4] * 68 + header[5] * 68 + (first + position) * 82 + 12
+            )
             label = (
                 source[label_offset : label_offset + 64].split(b'\0')[0].decode('utf-8')
             )
-            browser += 1
             selections.append(
                 SELECTION.pack(document, reference, label_text(label), origin, node)
             )
@@ -352,7 +371,12 @@ def encode(
                 text(song.name, 64),
                 len(selections),
                 scope_roots.get((2, song.name), 0xFFFFFFFF),
-                song.add_last_step,
+                *(
+                    roots[hooks[song.name, n]]
+                    if (song.name, n) in hooks
+                    else 0xFFFFFFFF
+                    for n in ('enter', 'exit')
+                ),
                 foreground,
                 background,
                 font.id,
@@ -371,7 +395,7 @@ def encode(
     payload = (
         struct.pack('<II', len(library.songs), len(library.setlists))
         + b''.join(records + sets)
-        + b'CSP8'
+        + b'CSP9'
     )
     if source:
         source = (
@@ -510,7 +534,7 @@ def decode(data: bytes) -> Library:
     if sources:
         context['definitions'] = {'profiles': profiles, 'programs': programs}
     songs = []
-    for index, ((name, binding, add_last_step), values) in enumerate(
+    for index, ((name, binding, enter, exit), values) in enumerate(
         zip(song_headers, positions, strict=True)
     ):
         patches = []
@@ -554,7 +578,16 @@ def decode(data: bytes) -> Library:
                     'name': name,
                     'patches': patches,
                     'bindings': bindings,
-                    'add_last_step': add_last_step,
+                    **{
+                        n: _rebind(
+                            resolved.patch(sources[0], r),
+                            'source-0-' if len(sources) > 1 else '',
+                            source_fonts[0],
+                            source_tags[0],
+                        )
+                        for n, r in (('enter', enter), ('exit', exit))
+                        if r != 0xFFFFFFFF
+                    },
                     'style': (authored_styles[index] or None)
                     if index < len(authored_styles)
                     else None,
@@ -606,7 +639,8 @@ def _current_core(data: bytes) -> bytes:
         raise ValueError('invalid song library size')
     ns, nl = struct.unpack_from('<II', data)
     for song_size, set_size, marker in (
-        (SONG.size, SET.size, b'CSP8'),
+        (SONG.size, SET.size, b'CSP9'),
+        (78, SET.size, b'CSP8'),
         (73, SET.size, b'CSP7'),
         (72, SET.size, b'CSP6'),
         (68, SET.size - 4, b'CSP5'),
@@ -635,13 +669,16 @@ def _current_core(data: bytes) -> bytes:
                 )
                 if song:
                     prefix += (
-                        data[offset + 72 : offset + 73]
-                        if marker in (b'CSP7', b'CSP8')
-                        else b'\x01'
+                        data[offset + 72 : offset + 80]
+                        if marker == b'CSP9'
+                        else struct.pack('<II', 0xFFFFFFFF, 0xFFFFFFFF)
                     )
                     prefix += (
-                        data[offset + 73 : offset + song_size]
-                        if marker == b'CSP8'
+                        data[
+                            offset + (80 if marker == b'CSP9' else 73) : offset
+                            + song_size
+                        ]
+                        if marker in (b'CSP8', b'CSP9')
                         else struct.pack('<HHB', 0, 65535, 17)
                     )
                 offset += header_size
@@ -656,8 +693,8 @@ def _current_core(data: bytes) -> bytes:
         if valid and data[offset : offset + 4] == marker:
             return (
                 data
-                if marker == b'CSP8'
-                else bytes(prefix) + b'CSP8' + data[offset + 4 :]
+                if marker == b'CSP9'
+                else bytes(prefix) + b'CSP9' + data[offset + 4 :]
             )
     raise ValueError('invalid song records or missing song Patch sources')
 
@@ -666,7 +703,7 @@ def _parse(
     data: bytes,
 ) -> tuple[
     int,
-    list[tuple[str, int, bool]],
+    list[tuple[str, int, int, int]],
     list[list[tuple[bytes, bytes, bytes, int, int]]],
     list[Setlist],
     list[bytes],
@@ -689,7 +726,8 @@ def _parse(
             name,
             count,
             binding,
-            add_last_step,
+            enter,
+            exit,
             _foreground,
             _background,
             _font,
@@ -702,10 +740,7 @@ def _parse(
             values.append(SELECTION.unpack_from(data, offset))
             offset += SELECTION.size
         positions.append(values)
-        if add_last_step > 1:
-            raise ValueError('invalid add_last_step flag')
-
-        song_headers.append((_string(name), binding, bool(add_last_step)))
+        song_headers.append((_string(name), binding, enter, exit))
     sets = []
     set_bindings = []
     for _ in range(nl):
@@ -721,7 +756,7 @@ def _parse(
         ]
         offset += count * 64
         sets.append(Setlist(name=_string(name), songs=entries))
-    if data[offset : offset + 4] != b'CSP8':
+    if data[offset : offset + 4] != b'CSP9':
         raise ValueError('missing song Patch sources')
     offset += 4
     prefix = offset
@@ -736,7 +771,7 @@ def _parse(
         sources.append(data[offset : offset + length])
         offset += length
     if not sources and (
-        any(b != 0xFFFFFFFF for _, b, _ in song_headers)
+        any(r != 0xFFFFFFFF for _, *v in song_headers for r in v)
         or any(b != 0xFFFFFFFF for b in set_bindings)
     ):
         raise ValueError('missing binding-map source')
@@ -1160,5 +1195,5 @@ def run(command: Copy | Download) -> None:
 
 
 SELECTION = struct.Struct('<64s64s64sII')
-SONG = struct.Struct('<64sIIBHHB')
+SONG = struct.Struct('<64sIIIIHHB')
 SET = struct.Struct('<64sII')

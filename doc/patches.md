@@ -577,7 +577,7 @@ unknown, rather than risk sending it twice.
 
 ## Required authoring and format changes
 
-The current setup format is 25; song records use CSG5. Setup
+Song records use the CSG8 journal and CSP9 core. Setup
 window graphics and page references use physical left-to-right order:
 next (0), sent (1), undo (2). Recompile and
 upload matching setup and song documents together before using this firmware.

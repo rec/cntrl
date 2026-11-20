@@ -187,6 +187,7 @@ ARCHIVE_KINDS = (
     (b'CSG5', 'song-journal-5'),
     (b'CSG6', 'song-journal-6'),
     (b'CSG7', 'song-journal-7'),
+    (b'CSG8', 'song-journal-8'),
     (b'CREV', 'revision-journal'),
     (b'CNST', 'setup-journal'),
     (b'CSEL', 'selection-journal'),

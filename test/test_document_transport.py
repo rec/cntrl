@@ -213,25 +213,29 @@ def test_portable_globals_bootstrap_the_native_runtime_journal(
     bundle_peer: Path, tmp_path: Path
 ) -> None:
     values = {0: 80, 1: 30, 9: 1}
+    overlay = global_overlay.Overlay(values=values, startup_set='Friday Show')
     folder = tmp_path / 'cntrl/global'
     folder.mkdir(parents=True)
-    (folder / '0.bin').write_bytes(
-        device_globals.journal(global_overlay.Overlay(values=values))
-    )
+    (folder / '0.bin').write_bytes(device_globals.journal(overlay))
     with (
         NativePeer([str(bundle_peer), str(tmp_path)]) as port,
         transport.SerialConnection(Path(port)) as connection,
     ):
         client = transport.SetupClient(connection)
-        assert client.global_settings() == global_overlay.Overlay(values=values)
+        assert client.global_settings() == overlay
         client.clear_global(9)
+        client.replace_globals(
+            global_overlay.Overlay(values={0: 80, 1: 30}, startup_set='Saturday Show')
+        )
     with (
         NativePeer([str(bundle_peer), str(tmp_path)]) as port,
         transport.SerialConnection(Path(port)) as connection,
     ):
         assert transport.SetupClient(
             connection
-        ).global_settings() == global_overlay.Overlay(values={0: 80, 1: 30})
+        ).global_settings() == global_overlay.Overlay(
+            values={0: 80, 1: 30}, startup_set='Saturday Show'
+        )
 
 
 def test_device_globals_sync_and_recovery_preserve_compiled_defaults(

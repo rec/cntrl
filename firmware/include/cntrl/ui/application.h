@@ -34,7 +34,7 @@ public:
     Application(Hardware &hardware, Documents &documents, Controller &primary, PatchOutputs &outputs, PatchSources &sources,
                 Songs &songs, SongCapture &capture, bool switches)
         : menu(hardware, tool_names_.data(), switches ? 3 : 2), setups(documents, hardware),
-          song_ui(songs, hardware, capture), hardware_(hardware), documents_(documents), primary_(primary),
+          song_ui(songs, hardware, capture, &documents), hardware_(hardware), documents_(documents), primary_(primary),
           outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) {}
     ~Application() { destroy_banked(pending_banked_); destroy_banked(banked_); destroy_controllers(pending_controllers_); destroy_controllers(controllers_); }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -115,9 +115,15 @@ public:
     }
     bool patch_pending() { return busy() || songs_.executing() || songs_.busy(); }
     bool song_navigation_active() const {
-        return songs_.active_set()[0] && !menu.open() && !setups.open() && (song_ui.performing() || binding_return_songs);
+        return songs_.performing() && !menu.open() && !setups.open() && (song_ui.performing() || binding_return_songs);
     }
-    bool song_last_step() const { return song_navigation_active() && songs_.last_step(); }
+    bool song_boundary() const { return song_navigation_active() && songs_.boundary(); }
+    void startup() {
+        const char *name = documents_.startup_set();
+        if (!name[0]) return;
+        if (!songs_.setlist(name)) { hardware_.error("Startup set missing"); return; }
+        songs_.choose(name); song_ui.perform(); controls_locked = true;
+    }
     bool song_style(ScreenGraphics &style) const {
         if (!song_navigation_active()) return false;
         const auto *song = songs_.song(songs_.current_name());
@@ -214,14 +220,20 @@ public:
         processing_index = PageLayout::max_controllers;
         for (unsigned i = 0; i < banked_.size(); ++i) if (banked_[i]) { processing_banked_ = i; banked_[i]->tick(now, uint32_t(held)); }
         processing_banked_ = PageLayout::max_pages;
+        if (pending_operation == 9 && !patch_pending()) {
+            if (outputs_.prepare_leave(controller().executor()) == midi::Bridge::Delivery::cancelled) {
+                pending_operation = 0; hardware_.error("Control cleanup failed");
+            }
+        }
         if (pending_song_step_ && !patch_pending()) {
             bool previous = pending_song_step_ < 0;
             pending_song_step_ = 0;
             if (!(previous ? songs_.previous() : songs_.next())) hardware_.error(songs_.last_error());
-            if (songs_.last_step()) song_ui.perform();
+            if (songs_.boundary()) song_ui.perform();
             else if (binding_return_songs) song_ui.leave();
             else song_ui.refresh();
         }
+        if (song_navigation_active() && songs_.boundary() && !song_ui.performing()) song_ui.perform();
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_state)

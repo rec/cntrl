@@ -192,7 +192,10 @@ next = { text = 'Seguinte' }
 add_songs = { text = 'Adicionar músicas' }
 end_of_set = { text = 'Fim do alinhamento' }
 next_patch = { text = 'Passo seguinte' }
-last_step = { text = 'Último passo' }
+empty_position = { text = 'Posição vazia' }
+startup_set = { text = 'Alternar set inicial' }
+perform_song = { text = 'Tocar música' }
+hold_menu = { text = 'Manter {control:s}: menu' }
 perform_setlist = { text = 'Tocar alinhamento' }
 setlists = { text = 'Alinhamentos' }
 songs = { text = 'Músicas' }

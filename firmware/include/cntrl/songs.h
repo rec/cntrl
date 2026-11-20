@@ -14,7 +14,7 @@ struct Song : SongSelection {
     char name[64] = {};
     uint32_t count = 1;
     uint32_t bindings = 0xffffffff;
-    uint8_t add_last_step = 1;
+    uint32_t enter = 0xffffffff, exit = 0xffffffff;
     uint16_t foreground = 0, background = 0xffff;
     uint8_t font = 17;
 };
@@ -23,12 +23,13 @@ struct SongContinuation {
     uint32_t node = 0, completed = 0, sources_crc = 0, caller = 0, source = 0xffffffff;
     char document[64] = {};
     char set[64] = {}, song[64] = {};
+    uint8_t solo = 0;
 };
 struct SongEntry { char song[64] = {}; };
 struct Setlist { char name[64] = {}; uint32_t count = 0, bindings = 0xffffffff; };
 struct SongCounts { uint32_t songs = 0, sets = 0; };
 #pragma pack(pop)
-static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 278 && sizeof(Setlist) == 72 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
+static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 285 && sizeof(Setlist) == 72 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
 template<class T>
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(song_record_encode)
@@ -37,10 +38,11 @@ inline void encode_song_record(const T &value, uint8_t *bytes) {
     if constexpr (std::is_base_of_v<SongSelection, T>) {
         std::memcpy(bytes, value.document, 64); std::memcpy(bytes + 64, value.key, 64); std::memcpy(bytes + 128, value.label, 64);
         put32(bytes + 192, value.source); put32(bytes + 196, value.node);
-        if constexpr (std::is_same_v<T, Song>) { std::memcpy(bytes + 200, value.name, 64); put32(bytes + 264, value.count); put32(bytes + 268, value.bindings); bytes[272] = value.add_last_step;
-            bytes[273] = uint8_t(value.foreground); bytes[274] = uint8_t(value.foreground >> 8);
-            bytes[275] = uint8_t(value.background); bytes[276] = uint8_t(value.background >> 8);
-            bytes[277] = value.font; }
+        if constexpr (std::is_same_v<T, Song>) { std::memcpy(bytes + 200, value.name, 64); put32(bytes + 264, value.count); put32(bytes + 268, value.bindings);
+            put32(bytes + 272, value.enter); put32(bytes + 276, value.exit);
+            bytes[280] = uint8_t(value.foreground); bytes[281] = uint8_t(value.foreground >> 8);
+            bytes[282] = uint8_t(value.background); bytes[283] = uint8_t(value.background >> 8);
+            bytes[284] = value.font; }
     } else if constexpr (std::is_same_v<T, Setlist>) {
         std::memcpy(bytes, value.name, 64); put32(bytes + 64, value.count); put32(bytes + 68, value.bindings);
     } else if constexpr (std::is_same_v<T, SongCounts>) {
@@ -52,8 +54,9 @@ inline void decode_song_record(const uint8_t *bytes, T &value) {
     if constexpr (std::is_base_of_v<SongSelection, T>) {
         std::memcpy(value.document, bytes, 64); std::memcpy(value.key, bytes + 64, 64); std::memcpy(value.label, bytes + 128, 64);
         value.source = u32(bytes + 192); value.node = u32(bytes + 196);
-        if constexpr (std::is_same_v<T, Song>) { std::memcpy(value.name, bytes + 200, 64); value.count = u32(bytes + 264); value.bindings = u32(bytes + 268); value.add_last_step = bytes[272];
-            value.foreground = u16(bytes + 273); value.background = u16(bytes + 275); value.font = bytes[277]; }
+        if constexpr (std::is_same_v<T, Song>) { std::memcpy(value.name, bytes + 200, 64); value.count = u32(bytes + 264); value.bindings = u32(bytes + 268);
+            value.enter = u32(bytes + 272); value.exit = u32(bytes + 276);
+            value.foreground = u16(bytes + 280); value.background = u16(bytes + 282); value.font = bytes[284]; }
     } else if constexpr (std::is_same_v<T, Setlist>) {
         std::memcpy(value.name, bytes, 64); value.count = u32(bytes + 64); value.bindings = u32(bytes + 68);
     } else if constexpr (std::is_same_v<T, SongCounts>) {
@@ -87,6 +90,7 @@ struct SongResolver {
     virtual SongExecution execution_status() const = 0;
     virtual bool capture_source(const Document *&) = 0;
     virtual bool revision(const SongSelection &, uint32_t &crc) = 0;
+    virtual midi::Bridge::Delivery leave() { return midi::Bridge::Delivery::complete; }
 };
 
 // Three committed generations permit an atomic edit or undo. Slot 3 is an
@@ -105,6 +109,7 @@ public:
     // One bounded storage/hash/validation step. Completion publishes atomically.
     void tick() {
         step();
+        transition_tick();
         if (invocation_pending_) {
             auto state = resolver_.execution_status();
             if (state == SongExecution::suspended) { pending_function_ = true; error_ = "Visiting stock firmware"; }
@@ -152,7 +157,7 @@ public:
             }
         }
         if (!found) {
-            if (!commit(active_, 12, counts_, 8, 0, "CSP8", 4, nullptr, nullptr)) return false;
+            if (!commit(active_, 12, counts_, 8, 0, "CSP9", 4, nullptr, nullptr)) return false;
             while (busy()) tick(); // Initialization precedes the live main loop.
             return success();
         }
@@ -307,37 +312,60 @@ public:
     void choose(const char *set) {
         if (executing()) { error_ = "Patch pending"; return; }
         if (busy()) { std::snprintf(job_.choose, 64, "%s", set); return; }
-        current_song_[0] = 0; patch_position_ = 0;
+        current_song_[0] = 0; solo_ = false; patch_position_ = 0;
         if (set != active_set_) std::snprintf(active_set_, 64, "%s", set);
-        position_ = 0xffffffffu; removed_ = false;
+        position_ = 0; removed_ = false;
     }
+    void choose_song(const char *name) {
+        if (busy() || executing() || !song(name)) return;
+        std::snprintf(active_set_, sizeof(active_set_), "%s", name); solo_ = true;
+        current_song_[0] = 0; position_ = patch_position_ = 0; removed_ = false;
+    }
+    bool performing() const { return active_set_[0]; }
     unsigned next_position() const {
+        if (solo_) return std::min(position_, 1u);
         const auto *p = setlist(active_set_); if (!p) return 0;
-        return position_ == 0xffffffffu ? 0 : std::min(position_ + unsigned(!removed_), unsigned(p->count));
+        return position_ == 0xffffffffu ? 0 : std::min(position_ + unsigned(!boundary() && !removed_), unsigned(p->count));
     }
     SongContinuation continuation() const {
         SongContinuation result; result.generation = generation_; result.crc = crc_;
-        result.entry = position_; result.patch = patch_position_;
+        result.entry = position_; result.patch = patch_position_; result.solo = solo_;
         std::snprintf(result.set, 64, "%s", active_set_); std::snprintf(result.song, 64, "%s", current_song_);
         return result;
     }
     void stop_execution() {
-        pending_function_ = resume_pending_ = invocation_pending_ = false;
+        pending_function_ = resume_pending_ = invocation_pending_ = false; transition_ = Transition::none;
         previous_cursor_ = {}; error_ = "";
     }
     void cancel_function() {
         if (!pending_function_) return;
         restore_cursor(previous_cursor_); removed_ = previous_removed_;
-        pending_function_ = invocation_pending_ = false; error_ = ui::i18n::text(ui::i18n::Message::firmware_switch_failed);
+        pending_function_ = invocation_pending_ = false; transition_ = Transition::none; error_ = ui::i18n::text(ui::i18n::Message::firmware_switch_failed);
     }
     bool resume(const SongContinuation &saved) {
         if (saved.generation != generation_ || saved.crc != crc_) { error_ = "Song data changed"; return false; }
         const Song *item = song(saved.song);
         if (!item) { error_ = "Song missing"; return false; }
+        if (saved.caller == 3 || saved.caller == 4) {
+            if (saved.source != 0 || saved.node != (saved.caller == 3 ? item->enter : item->exit)) return false;
+            SongSelection selection; selection.source = 0; selection.node = saved.node;
+            if (!resolver_.activate(selection, saved, true)) return false;
+            std::snprintf(transition_song_, sizeof(transition_song_), "%s", saved.song);
+            transition_entry_ = saved.entry; transition_patch_ = saved.patch;
+            transition_ = saved.caller == 3 ? Transition::entering : Transition::exiting;
+            std::snprintf(active_set_, sizeof(active_set_), "%s", saved.set); solo_ = saved.solo;
+            if (saved.caller == 3) { current_song_[0] = 0; position_ = saved.entry; patch_position_ = 0; }
+            else {
+                std::snprintf(current_song_, sizeof(current_song_), "%s", saved.song);
+                position_ = saved.patch; patch_position_ = saved.entry > saved.patch ? item->count - 1 : 0;
+            }
+            removed_ = false;
+            pending_function_ = false; return true;
+        }
         SongSelection current; SongEntry entry_value;
         unsigned at = saved.patch, count = item->count;
-        if (!patch_at(saved.song, at, current) || !entry(saved.set, saved.entry, entry_value)
-            || std::strcmp(entry_value.song, saved.song)) return false;
+        if (!patch_at(saved.song, at, current) || (!saved.solo && (!entry(saved.set, saved.entry, entry_value)
+            || std::strcmp(entry_value.song, saved.song)))) return false;
         if (at + 1 < count) {
             SongSelection upcoming;
             if (!patch_at(saved.song, at + 1, upcoming)) return false;
@@ -356,7 +384,11 @@ public:
         if (current && !removed_) {
             if (patch_position_ == 0xffffffffu) { error_ = "Current patch removed"; return false; }
             if (patch_position_ + 1 < current->count) return activate_patch(current_song_, patch_position_ + 1, position_);
-            if (patch_position_ < current->count && current->add_last_step) return enter_last_step(current_song_, current->count, position_);
+            return leave_song(position_ + 1);
+        }
+        if (solo_) {
+            if (position_) { error_ = "End of song"; return false; }
+            return enter_patch(active_set_, 0, 0);
         }
         SongEntry value;
         const auto *set = setlist(active_set_);
@@ -366,7 +398,7 @@ public:
         if (position >= count) { error_ = ui::i18n::text(ui::i18n::Message::end_of_set); return false; }
         if (!entry(active_set_, position, value)) { error_ = "Setlist read failed"; return false; }
         const auto *p = song(value.song); if (!p) { error_ = "Song missing"; return false; }
-        return activate_patch(value.song, 0, position);
+        return enter_patch(value.song, 0, position);
     }
     bool previous() {
         if (busy() || executing()) { error_ = "Song work pending"; return false; }
@@ -374,37 +406,37 @@ public:
         if (current && !removed_) {
             if (patch_position_ == 0xffffffffu) { error_ = "Current step removed"; return false; }
             if (patch_position_) return activate_patch(current_song_, patch_position_ - 1, position_);
+            return leave_song(position_);
         }
         if (!position_ || position_ == 0xffffffffu) { error_ = "Start of set"; return false; }
         const unsigned position = position_ - 1;
         SongEntry value;
-        if (!entry(active_set_, position, value)) { error_ = "Setlist read failed"; return false; }
+        if (solo_) std::snprintf(value.song, sizeof(value.song), "%s", active_set_);
+        else if (!entry(active_set_, position, value)) { error_ = "Setlist read failed"; return false; }
         const auto *item = song(value.song);
         if (!item) { error_ = "Song missing"; return false; }
-        return item->add_last_step ? enter_last_step(value.song, item->count, position)
-            : activate_patch(value.song, item->count - 1, position);
+        return enter_patch(value.song, item->count - 1, position);
     }
-    bool last_step() const {
+    bool boundary() const { return performing() && !current_song_[0]; }
+    bool upcoming_boundary() const {
         const auto *item = song(current_song_);
-        return item && !removed_ && item->add_last_step && patch_position_ == item->count;
-    }
-    bool upcoming_last_step() const {
-        const auto *item = song(current_song_);
-        return item && !removed_ && item->add_last_step && patch_position_ != 0xffffffffu && patch_position_ + 1 == item->count;
+        return item && !removed_ && patch_position_ != 0xffffffffu && patch_position_ + 1 == item->count;
     }
     bool current_patch(SongSelection &result) const {
         return patch_at(current_song_, patch_position_, result);
     }
     bool upcoming_patch(SongSelection &result) const {
+        if (boundary() && solo_ && !position_) return patch_at(active_set_, 0, result);
         const auto *item = song(current_song_);
         if (!item || removed_) return false;
         return patch_position_ != 0xffffffffu && patch_position_ + 1 < item->count
             && patch_at(current_song_, patch_position_ + 1, result);
     }
-    const char *active_set() const { return active_set_; }
+    const char *active_set() const { return solo_ ? "" : active_set_; }
+    const char *performance_name() const { return active_set_; }
     bool executing() const {
         auto state = resolver_.execution_status();
-        return state == SongExecution::pending || state == SongExecution::suspended;
+        return transition_ != Transition::none || state == SongExecution::pending || state == SongExecution::suspended;
     }
     bool invalid() const { return invalid_; }
     const char *current_name() const { return current_song_; }
@@ -506,7 +538,7 @@ private:
             if (!graph_started) {
                 uint8_t magic[4];
                 if (position > length || 4 > length - position || !storage.read(slot, base + position, magic, 4)
-                    || std::memcmp(magic, "CSP8", 4)) return false;
+                    || std::memcmp(magic, "CSP9", 4)) return false;
                 records_end = position; position += 4; graph_started = true; return true;
             }
             if (source_remaining) {
@@ -614,6 +646,11 @@ private:
     unsigned source_count_ = 0, records_end_ = 8;
     mutable unsigned verified_source_count_ = 0, verified_records_end_ = 8;
     char active_set_[64] = {}, current_song_[64] = {};
+    bool solo_ = false;
+    enum class Transition { none, cleanup, entering, exiting, finishing };
+    Transition transition_ = Transition::none;
+    char transition_song_[64] = {};
+    unsigned transition_patch_ = 0, transition_entry_ = 0;
     unsigned position_ = 0xffffffffu, patch_position_ = 0;
     SongContinuation undo_cursor_;
     bool undo_removed_ = false;
@@ -624,7 +661,7 @@ private:
     void restore_cursor(const SongContinuation &cursor) {
         std::snprintf(active_set_, 64, "%s", cursor.set);
         std::snprintf(current_song_, 64, "%s", cursor.song);
-        position_ = cursor.entry; patch_position_ = cursor.patch;
+        position_ = cursor.entry; patch_position_ = cursor.patch; solo_ = cursor.solo;
     }
     static void move_position(uint32_t &position, unsigned from, unsigned to) {
         if (position == from) position = to;
@@ -653,14 +690,58 @@ private:
         patch_position_ = position; position_ = entry_index; removed_ = false;
         error_ = resolver_.execution_status() == SongExecution::completed ? ui::i18n::text(ui::i18n::Message::completed_locally) : ui::i18n::text(ui::i18n::Message::pending); return true;
     }
-    bool enter_last_step(const char *name, unsigned count, unsigned entry_index) {
-        SongContinuation saved = continuation(); saved.entry = entry_index; saved.patch = count;
-        std::snprintf(saved.song, sizeof(saved.song), "%s", name);
-        restore_cursor(saved); removed_ = false; error_ = "";
-        return true;
+    bool enter_patch(const char *name, unsigned patch, unsigned entry_index) {
+        const auto *item = song(name);
+        if (!item) { error_ = "Song missing"; return false; }
+        if (item->enter == ~0u) return activate_patch(name, patch, entry_index);
+        std::snprintf(transition_song_, sizeof(transition_song_), "%s", name);
+        transition_patch_ = patch; transition_entry_ = entry_index;
+        return start_hook(item->enter, Transition::entering);
+    }
+    bool leave_song(unsigned gap) {
+        std::snprintf(transition_song_, sizeof(transition_song_), "%s", current_song_);
+        transition_entry_ = gap; transition_ = Transition::cleanup;
+        transition_tick(); return transition_ != Transition::none || !current_song_[0];
+    }
+    bool start_hook(unsigned node, Transition kind) {
+        SongSelection selection; selection.source = 0; selection.node = node;
+        SongContinuation saved = continuation(); saved.entry = transition_entry_;
+        saved.patch = kind == Transition::entering ? transition_patch_ : position_;
+        std::snprintf(saved.song, sizeof(saved.song), "%s", transition_song_);
+        saved.source = 0; saved.node = node; saved.caller = kind == Transition::entering ? 3 : 4;
+        previous_cursor_ = continuation(); previous_removed_ = removed_;
+        if (!resolver_.activate(selection, saved, false)) { transition_ = Transition::none; error_ = "Song action unavailable"; return false; }
+        transition_ = kind; error_ = ui::i18n::text(ui::i18n::Message::pending); return true;
+    }
+    void transition_tick() {
+        if (transition_ == Transition::none) return;
+        if (transition_ == Transition::cleanup) {
+            const auto delivery = resolver_.leave();
+            if (delivery == midi::Bridge::Delivery::pending) return;
+            if (delivery != midi::Bridge::Delivery::complete) { transition_ = Transition::none; error_ = "Song cleanup failed"; return; }
+            const auto *item = song(transition_song_);
+            if (!item) { transition_ = Transition::none; error_ = "Song missing"; return; }
+            if (item->exit != ~0u) { start_hook(item->exit, Transition::exiting); return; }
+            transition_ = Transition::exiting;
+        } else if (transition_ != Transition::finishing) {
+            const auto state = resolver_.execution_status();
+            if (state == SongExecution::pending) return;
+            if (state == SongExecution::suspended) { pending_function_ = true; return; }
+            if (state != SongExecution::completed) { transition_ = Transition::none; error_ = "Song action failed"; return; }
+            if (transition_ == Transition::exiting) transition_ = Transition::finishing;
+        }
+        if (transition_ == Transition::finishing) {
+            const auto delivery = resolver_.leave();
+            if (delivery == midi::Bridge::Delivery::pending) return;
+            if (delivery != midi::Bridge::Delivery::complete) { transition_ = Transition::none; error_ = "Song cleanup failed"; return; }
+        }
+        const bool entering = transition_ == Transition::entering; transition_ = Transition::none;
+        if (entering) activate_patch(transition_song_, transition_patch_, transition_entry_);
+        else { current_song_[0] = 0; position_ = transition_entry_; patch_position_ = 0; removed_ = false; error_ = ""; }
     }
     static bool valid_song(const Song &s) {
-        return s.count && s.add_last_step <= 1 && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64)
+        return s.count && text_valid(reinterpret_cast<const uint8_t *>(s.name), 64)
+            && (s.enter == ~0u || s.enter < 65535) && (s.exit == ~0u || s.exit < 65535)
             && valid_selection(s);
     }
     static bool valid_selection(const SongSelection &s) {
@@ -673,8 +754,7 @@ private:
         const auto *item = song(current_song_);
         if (!item) { error_ = "Song missing"; return false; }
         if (patch_position_ + 1 == item->count) {
-            if (item->add_last_step) return enter_last_step(current_song_, item->count, position_);
-            error_ = "End of song"; return true;
+            return leave_song(position_ + 1);
         }
         return activate_patch(current_song_, patch_position_ + 1, position_);
     }
@@ -750,7 +830,8 @@ private:
         uint8_t header[24], tail[4];
         committed = false;
         if (!storage_.read(slot, 0, header, 16)) return false;
-        bool current = !std::memcmp(header, "CSG7", 4);
+        const bool supported = !std::memcmp(header, "CSG8", 4);
+        bool current = supported || !std::memcmp(header, "CSG7", 4) || !std::memcmp(header, "CSG6", 4);
         if (!current && std::memcmp(header, "CSG5", 4)) return false;
         const unsigned base = current ? 24 : 16;
         if (current && (!storage_.read(slot, 16, header + 16, 8) || checksum(header, 20) != u32(header + 20))) return false;
@@ -759,7 +840,9 @@ private:
         if (serialized > binary::maximum_payload + binary::header_size || storage_.size(slot) != base + serialized + 4
             || !storage_.read(slot, base + serialized, tail, 4) || std::memcmp(tail, "DONE", 4)
             || !crc_range(slot, base, serialized, actual) || actual != crc) return false;
-        committed = true; binary::View view; Reader reader{storage_, slot, base};
+        committed = true;
+        if (current && !supported) return false;
+        binary::View view; Reader reader{storage_, slot, base};
         if (!binary::open_reader(reader, serialized, binary::Kind::songs, view)
             || !validate(slot, view.length, base + view.offset)
             || !read_song_record(storage_, slot, base + view.offset, &counts, 8)) return false;
@@ -811,6 +894,8 @@ private:
             if (!valid_song(s)) { finish_job(false); return; }
             if (job_.edit == Edit::rename_song && !std::strcmp(job_.playback.song, job_.target))
                 std::snprintf(job_.playback.song, 64, "%s", job_.name);
+            if (job_.edit == Edit::rename_song && job_.playback.solo && !std::strcmp(job_.playback.set, job_.target))
+                std::snprintf(job_.playback.set, 64, "%s", job_.name);
             plan(c.position - sizeof(Song), sizeof(Song), &s, sizeof(s)); return;
         }
         if (std::strcmp(c.set_value.name, job_.target)) return;
@@ -818,7 +903,7 @@ private:
             if (job_.edit == Edit::rename_set) {
                 Setlist s = c.set_value; std::memset(s.name, 0, 64); std::snprintf(s.name, 64, "%s", job_.name);
                 if (!text_valid(reinterpret_cast<const uint8_t *>(s.name), 64)) { finish_job(false); return; }
-                if (!std::strcmp(job_.playback.set, job_.target)) std::snprintf(job_.playback.set, 64, "%s", job_.name);
+                if (!job_.playback.solo && !std::strcmp(job_.playback.set, job_.target)) std::snprintf(job_.playback.set, 64, "%s", job_.name);
                 plan(c.position - sizeof(Setlist), sizeof(Setlist), &s, sizeof(s)); return;
             }
             if (job_.edit != Edit::insert && job_.edit != Edit::remove && job_.edit != Edit::move) return;
@@ -829,8 +914,8 @@ private:
                 if (length_ > 0xffffffffu - 20 - sizeof(SongEntry)) { finish_job(false); return; }
                 ++job_.change.value.count; job_.has_change = true;
                 SongEntry e; std::snprintf(e.song, 64, "%s", job_.song);
-                if (!std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu
-                    && (job_.at < position_ || (!removed_ && job_.at == position_))) ++job_.playback.entry;
+                if (!solo_ && !std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu
+                    && (job_.at < position_ || (!boundary() && !removed_ && job_.at == position_))) ++job_.playback.entry;
                 plan(c.position + job_.at * sizeof(SongEntry), 0, &e, sizeof(e));
             } else if (job_.edit == Edit::move && job_.at == job_.to) finish_job(true);
             return;
@@ -838,16 +923,16 @@ private:
         if (c.entry != job_.at + 1) return;
         if (job_.edit == Edit::remove) {
             --job_.change.value.count; job_.has_change = true;
-            if (!std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu) {
-                if (job_.at == position_) job_.removed = true;
+            if (!solo_ && !std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu) {
+                if (job_.at == position_ && !boundary()) job_.removed = true;
                 else if (job_.at < position_) --job_.playback.entry;
             }
             plan(c.position - sizeof(SongEntry), sizeof(SongEntry), nullptr, 0);
         } else if (job_.edit == Edit::move) {
             job_.has_move = true;
             job_.move = {job_.change.offset + unsigned(sizeof(Setlist)), job_.at, job_.to, c.entry_value};
-            if (!std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu) {
-                if (removed_) {
+            if (!solo_ && !std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu) {
+                if (removed_ || boundary()) {
                     if (job_.at < job_.playback.entry) --job_.playback.entry;
                     if (job_.to < job_.playback.entry) ++job_.playback.entry;
                 } else move_position(job_.playback.entry, job_.at, job_.to);
@@ -931,7 +1016,7 @@ private:
         phase_ = Phase::idle;
     }
     void header(uint8_t *bytes) const {
-        std::memcpy(bytes, "CSG7", 4); put32(bytes + 4, generation_ + 1);
+        std::memcpy(bytes, "CSG8", 4); put32(bytes + 4, generation_ + 1);
         put32(bytes + 8, 28 + job_.length + job_.extensions); put32(bytes + 12, job_.crc);
         put32(bytes + 16, job_.undo ? 0 : generation_);
         put32(bytes + 20, checksum(bytes, 20));
@@ -1011,8 +1096,8 @@ private:
         song_cache_ = Song(); set_cache_ = Setlist(); invalid_ = false;
         restore_cursor(job_.playback); removed_ = job_.removed;
         if (job_.choose[0]) {
-            current_song_[0] = 0; patch_position_ = 0;
-            std::snprintf(active_set_, 64, "%s", job_.choose); position_ = 0xffffffffu; removed_ = false;
+            current_song_[0] = 0; solo_ = false; patch_position_ = 0;
+            std::snprintf(active_set_, 64, "%s", job_.choose); position_ = 0; removed_ = false;
         }
         finish_job(true);
     }

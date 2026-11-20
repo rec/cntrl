@@ -67,7 +67,7 @@ struct SongBoard : TestPatchHardware, cntrl::SongResolver {
 };
 
 int main(int argc, char **argv) {
-    assert(argc == 2);
+    assert(argc == 2 || argc == 3);
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<uint8_t> payload{std::istreambuf_iterator<char>(file), {}};
     assert(!payload.empty());
@@ -76,7 +76,23 @@ int main(int argc, char **argv) {
     assert(songs.import_write(payload.data(), unsigned(payload.size())));
     assert(songs.import_finish(unsigned(payload.size()), cntrl::checksum(payload.data(), unsigned(payload.size()))));
     while (songs.busy()) songs.tick();
-    assert(songs.success()); songs.choose("Set"); assert(songs.next()); board.drain();
+    assert(songs.success());
+    if (argc == 3) {
+        songs.choose_song("Nested visit"); assert(songs.boundary() && board.events.empty());
+        assert(songs.next()); board.drain();
+        assert(board.visits == 1 && board.saved.caller == 3 && board.saved.solo && board.events == std::vector<unsigned>({64, 150}));
+        SongBoard entered; cntrl::Songs after_enter(storage, entered); entered.songs = &after_enter;
+        assert(after_enter.boot() && after_enter.resume(board.saved)); entered.drain();
+        assert(entered.events == std::vector<unsigned>({65, 66, 67}) && after_enter.continuation().patch == 0);
+        assert(after_enter.next()); entered.drain();
+        assert(entered.visits == 1 && entered.saved.caller == 4 && entered.events.back() == 68);
+        SongBoard exited; cntrl::Songs after_exit(storage, exited); exited.songs = &after_exit;
+        assert(after_exit.boot() && after_exit.resume(entered.saved)); exited.drain();
+        assert(after_exit.boundary() && exited.events == std::vector<unsigned>({69}));
+        assert(!after_exit.next());
+        return 0;
+    }
+    songs.choose("Set"); assert(songs.next()); board.drain();
     assert(board.visits == 1 && board.events == std::vector<unsigned>({64, 150}));
     assert(board.saved.completed == 3);
 
@@ -85,7 +101,7 @@ int main(int argc, char **argv) {
     assert(restored.resume(board.saved)); returned.drain();
     assert(returned.visits == 0 && returned.events == std::vector<unsigned>({65, 66, 67}));
     cntrl::SongSelection current; assert(restored.current_patch(current) && restored.continuation().patch == 1);
-    assert(restored.next() && restored.last_step());
+    assert(restored.next() && restored.boundary());
     assert(!restored.next());
 
     SongBoard changed; cntrl::Songs invalid(storage, changed); changed.songs = &invalid;

@@ -192,7 +192,10 @@ next = { text = 'Successivo' }
 add_songs = { text = 'Aggiungi brani' }
 end_of_set = { text = 'Fine scaletta' }
 next_patch = { text = 'Passo successivo' }
-last_step = { text = 'Ultimo passo' }
+empty_position = { text = 'Posizione vuota' }
+startup_set = { text = 'Imposta set iniziale' }
+perform_song = { text = 'Esegui brano' }
+hold_menu = { text = 'Tenere {control:s}: menu' }
 perform_setlist = { text = 'Esegui scaletta' }
 setlists = { text = 'Scalette' }
 songs = { text = 'Brani' }

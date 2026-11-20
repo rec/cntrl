@@ -210,3 +210,11 @@ restoration applies the overlay within the staged deployment. A backup without
 an overlay preserves the destination pedal's current overlay. A fresh emulator
 storage directory imports a recovered session's snapshot, while subsequent
 starts preserve its existing device preferences.
+
+The startup set is another device-wide preference. In Songs and setlists, choose
+a set, open its edit menu and select Toggle startup set. Its name appears below
+that action; selecting it again clears the choice. Startup opens the set's initial
+empty position without executing song or patch actions. The preference is saved
+as `startup_set` in version-3 portable snapshots and restored with the other
+device preferences. A missing saved set reports an error rather than choosing a
+different set.

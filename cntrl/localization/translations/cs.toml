@@ -192,7 +192,10 @@ next = { text = 'Další' }
 add_songs = { text = 'Přidat skladby' }
 end_of_set = { text = 'Konec seznamu' }
 next_patch = { text = 'Další krok' }
-last_step = { text = 'Poslední krok' }
+empty_position = { text = 'Prázdná pozice' }
+startup_set = { text = 'Přepnout úvodní set' }
+perform_song = { text = 'Hrát skladbu' }
+hold_menu = { text = 'Držet {control:s}: menu' }
 perform_setlist = { text = 'Hrát seznam' }
 setlists = { text = 'Seznamy skladeb' }
 songs = { text = 'Skladby' }

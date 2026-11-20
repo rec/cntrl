@@ -192,7 +192,10 @@ next = { text = 'Următor' }
 add_songs = { text = 'Adaugă piese' }
 end_of_set = { text = 'Sfârșit de listă' }
 next_patch = { text = 'Pasul următor' }
-last_step = { text = 'Ultimul pas' }
+empty_position = { text = 'Poziție goală' }
+startup_set = { text = 'Comută setul inițial' }
+perform_song = { text = 'Cântă piesa' }
+hold_menu = { text = 'Ține {control:s}: meniu' }
 perform_setlist = { text = 'Redă lista de piese' }
 setlists = { text = 'Liste de piese' }
 songs = { text = 'Piese' }

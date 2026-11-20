@@ -192,7 +192,10 @@ next = { text = 'Siguiente' }
 add_songs = { text = 'Añadir canciones' }
 end_of_set = { text = 'Fin del repertorio' }
 next_patch = { text = 'Siguiente paso' }
-last_step = { text = 'Último paso' }
+empty_position = { text = 'Posición vacía' }
+startup_set = { text = 'Alternar set inicial' }
+perform_song = { text = 'Tocar canción' }
+hold_menu = { text = 'Mantener {control:s}: menú' }
 perform_setlist = { text = 'Tocar repertorio' }
 setlists = { text = 'Repertorios' }
 songs = { text = 'Canciones' }

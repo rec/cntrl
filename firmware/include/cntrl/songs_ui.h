@@ -14,7 +14,7 @@ struct SongCapture {
 };
 class SongsUi {
 public:
-    SongsUi(Songs &songs, Hardware &hardware, SongCapture &capture) : songs_(songs), hardware_(hardware), capture_(capture) {}
+    SongsUi(Songs &songs, Hardware &hardware, SongCapture &capture, Documents *documents = nullptr) : songs_(songs), hardware_(hardware), capture_(capture), documents_(documents) {}
     bool open() const { return mode_ != closed; }
     bool performing() const { return mode_ == performance; }
     bool editing_name() const { return mode_ == naming; }
@@ -75,7 +75,7 @@ private:
         }
         unsigned count = mode_ == root ? 5 : mode_ == sets ? songs_.counts().sets + 1
             : mode_ == library || mode_ == adding ? songs_.counts().songs
-            : mode_ == editing ? 8 : mode_ == song_actions ? 3 : mode_ == patch_actions ? 5 : mode_ == patches ? (songs_.song(song_name_) ? songs_.song(song_name_)->count : 0)
+            : mode_ == editing ? 9 : mode_ == song_actions ? 4 : mode_ == patch_actions ? 5 : mode_ == patches ? (songs_.song(song_name_) ? songs_.song(song_name_)->count : 0)
             : mode_ == moving || mode_ == performance ? (current_set() ? current_set()->count : 0) : 0;
         if (button < 2 && (mode_ == library || mode_ == adding)) songs_.browse(picker_, picker_, button == 0);
         else if (button < 2 && count) cursor_ = (cursor_ + count + (button == 0 ? -1 : 1)) % count;
@@ -107,6 +107,7 @@ private:
                 else std::strcpy(feedback_, ui::i18n::text(ui::i18n::Message::song_read_failed));
             }
             else if (cursor_ == 2) { mode_ = patches; cursor_ = 0; }
+            else if (cursor_ == 3) { songs_.choose_song(song_name_); perform(); }
             else {
                 Song item;
                 if (!capture_.capture(item, false) || !songs_.change_song(song_name_, item)) fail();
@@ -137,6 +138,10 @@ private:
             else if (cursor_ == 4) begin_name(set->name, true);
             else if (cursor_ == 5) { if (!songs_.undo()) fail(); }
             else if (cursor_ == 6) { songs_.choose(set->name); mode_ = performance; cursor_ = 0; }
+            else if (cursor_ == 7) {
+                if (!documents_ || !documents_->startup_set(!std::strcmp(documents_->startup_set(), set->name) ? "" : set->name)) fail();
+                else std::strcpy(feedback_, ui::i18n::text(ui::i18n::Message::saved));
+            }
             else { mode_ = performance; cursor_ = 0; }
         } else if (mode_ == moving && button == 2) {
             if (!songs_.move(songs_.active_set(), entry_, cursor_)) fail(); else mode_ = performance;
@@ -147,6 +152,7 @@ private:
 private:
     enum Mode { closed, root, sets, library, song_actions, performance, editing, adding, moving, naming, patches, patch_actions };
     Songs &songs_; Hardware &hardware_; SongCapture &capture_;
+    Documents *documents_;
     Mode mode_ = closed, return_mode_ = root;
     unsigned patch_cursor_ = 0;
     unsigned cursor_ = 0, entry_ = 0, insertion_ = 0, added_ = 0, character_ = 0;
@@ -205,7 +211,7 @@ private:
             text(0, 2, current_patch.label[0] ? current_patch.label : current_patch.document[0] ? current_patch.key : ui::i18n::text(ui::i18n::Message::patch));
             panes[0].lines[2].graphics.font = panes[0].lines[1].graphics.font; panes[0].lines[2].fit = true;
         }
-        if (songs_.last_step()) text(0, 2, ui::i18n::text(ui::i18n::Message::last_step));
+        if (songs_.boundary()) text(0, 2, ui::i18n::text(ui::i18n::Message::empty_position));
         const Setlist *set = current_set(); unsigned next = songs_.next_position();
         text(2, 0, ui::i18n::text(ui::i18n::Message::next));
         SongEntry next_entry;
@@ -218,20 +224,23 @@ private:
             text(2, 0, ui::i18n::text(ui::i18n::Message::next_patch));
             text(2, 1, next_patch.label[0] ? next_patch.label : next_patch.document[0] ? next_patch.key : ui::i18n::text(ui::i18n::Message::patch));
         }
-        if (songs_.upcoming_last_step()) {
+        if (songs_.upcoming_boundary()) {
             style(2, songs_.song(songs_.current_name()));
             panes[2].lines[1].graphics.font = ui::localized_face;
             text(2, 0, ui::i18n::text(ui::i18n::Message::next_patch));
-            text(2, 1, ui::i18n::text(ui::i18n::Message::last_step));
+            text(2, 1, ui::i18n::text(ui::i18n::Message::empty_position));
         }
         const char *roots[] = {ui::i18n::text(ui::i18n::Message::perform_setlist), ui::i18n::text(ui::i18n::Message::setlists), ui::i18n::text(ui::i18n::Message::songs), ui::i18n::text(ui::i18n::Message::save_as_song), ui::i18n::text(ui::i18n::Message::save_reference)};
-        const char *edits[] = {ui::i18n::text(ui::i18n::Message::add_next), ui::i18n::text(ui::i18n::Message::add_to_end), ui::i18n::text(ui::i18n::Message::remove_from_setlist), ui::i18n::text(ui::i18n::Message::move), ui::i18n::text(ui::i18n::Message::rename_setlist), ui::i18n::text(ui::i18n::Message::undo_edit), ui::i18n::text(ui::i18n::Message::restart_setlist), ui::i18n::text(ui::i18n::Message::done)};
+        const char *edits[] = {ui::i18n::text(ui::i18n::Message::add_next), ui::i18n::text(ui::i18n::Message::add_to_end), ui::i18n::text(ui::i18n::Message::remove_from_setlist), ui::i18n::text(ui::i18n::Message::move), ui::i18n::text(ui::i18n::Message::rename_setlist), ui::i18n::text(ui::i18n::Message::undo_edit), ui::i18n::text(ui::i18n::Message::restart_setlist), ui::i18n::text(ui::i18n::Message::startup_set), ui::i18n::text(ui::i18n::Message::done)};
         text(1, 0, mode_ == root ? ui::i18n::text(ui::i18n::Message::songs_and_setlists) : mode_ == naming ? ui::i18n::text(ui::i18n::Message::rename) : set ? set->name : ui::i18n::text(ui::i18n::Message::songs));
         if (mode_ == root) text(1, 1, roots[cursor_]);
         else if (mode_ == sets) { Setlist selected; text(1, 1, songs_.set_at(cursor_, selected) ? selected.name : ui::i18n::text(ui::i18n::Message::new_setlist)); }
-        else if (mode_ == editing) text(1, 1, edits[cursor_]);
+        else if (mode_ == editing) {
+            text(1, 1, edits[cursor_]);
+            if (cursor_ == 7 && documents_) text(1, 2, documents_->startup_set());
+        }
         else if (mode_ == naming) { text(1, 1, name_); ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::character_number, character_ + 1); }
-        else if (mode_ == song_actions) { const char *actions[] = {ui::i18n::text(ui::i18n::Message::rename_song), ui::i18n::text(ui::i18n::Message::use_selected_patch), ui::i18n::text(ui::i18n::Message::edit_patches)}; text(1, 1, actions[cursor_]); }
+        else if (mode_ == song_actions) { const char *actions[] = {ui::i18n::text(ui::i18n::Message::rename_song), ui::i18n::text(ui::i18n::Message::use_selected_patch), ui::i18n::text(ui::i18n::Message::edit_patches), ui::i18n::text(ui::i18n::Message::perform_song)}; text(1, 1, actions[cursor_]); }
         else if (mode_ == patches) {
             SongSelection selected;
             if (songs_.patch_at(song_name_, cursor_, selected)) {
@@ -248,8 +257,12 @@ private:
                 const auto *found = songs_.song(picker_); if (!found) return; const Song s = *found;
                 style(1, &s);
                 text(1, 1, s.name);
-                ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::patches_count, (unsigned long)(s.count + s.add_last_step));
+                ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::patches_count, (unsigned long)s.count);
             }
+        } else if (mode_ == performance && !set && songs_.performing()) {
+            style(1, songs_.song(songs_.performance_name()));
+            text(1, 0, ui::i18n::text(ui::i18n::Message::perform_song));
+            text(1, 1, songs_.performance_name());
         } else if (set && set->count) {
             cursor_ %= set->count; SongEntry selected;
             const auto *item = songs_.entry(set->name, cursor_, selected) ? songs_.song(selected.song) : nullptr;
@@ -264,6 +277,7 @@ private:
         prompt.clear().add(mode_ == performance ? Role::back : Role::confirm, mode_ == performance ? ui::i18n::text(ui::i18n::Message::next_action) : mode_ == adding ? ui::i18n::text(ui::i18n::Message::add_action) : ui::i18n::text(ui::i18n::Message::ok));
         if (mode_ == performance) {
             std::snprintf(panes[2].lines[2].text, 64, "%s+%s %s", hardware_.control_label(Role::confirm), hardware_.control_label(Role::back), ui::i18n::text(ui::i18n::Message::back));
+            ui::i18n::format(panes[1].lines[3].text, 64, ui::i18n::Message::hold_menu, hardware_.control_label(Role::confirm));
         } else prompt.add(Role::back, mode_ == adding ? ui::i18n::text(ui::i18n::Message::done_action) : ui::i18n::text(ui::i18n::Message::back));
         text(2, 3, prompt.text());
         if (feedback_[0]) { text(0, 2, feedback_); panes[0].lines[2].graphics.font = ui::localized_face; }

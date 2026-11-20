@@ -41,7 +41,7 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     bool shift_switch_editor(bool backwards) override { return switches.shift(backwards); }
     bool state(unsigned operation, uint32_t value) override { return app->state(operation, value, *this); }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
-    bool song_last_step() const override { return app && app->song_last_step(); }
+    bool song_boundary() const override { return app && app->song_boundary(); }
     cntrl::midi::Bridge::Delivery prepare_leave(cntrl::PatchExecutor &invocation) override { return switches.prepare_leave(invocation); }
     cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &d, unsigned node, cntrl::PatchExecutor &invocation) override { return switches.bind_controls(d, node, invocation); }
     bool activate(const cntrl::SongSelection &selection, const cntrl::SongContinuation &, bool) override {
@@ -90,7 +90,7 @@ struct Services {
 };
 
 int main(int argc, char **argv) {
-    assert(argc == 3); cntrl::memory_budget = 2 * 1024 * 1024;
+    assert(argc == 3 || argc == 4); cntrl::memory_budget = 2 * 1024 * 1024;
     Board board; TestStorage setup_storage, song_storage;
     cntrl::Controller primary(board, board, board); board.controller = &primary;
     cntrl::Documents documents(setup_storage, board, primary, board);
@@ -125,9 +125,38 @@ int main(int argc, char **argv) {
     auto next = [&]() { press(5); release(5); };
     auto previous = [&](bool modifier_first) { press(modifier_first ? 2 : 5); press(modifier_first ? 5 : 2); release(5); release(2); };
     songs.choose("Set"); app.song_ui.perform(); sample(0);
+    if (argc == 4) {
+        assert(songs.boundary() && board.sent.empty());
+        next(); assert(board.sent == (std::vector<std::pair<unsigned, unsigned>>{{21, 11}, {20, 1}}));
+        next(); assert(board.sent.back().second == 2);
+        previous(false); assert(board.sent.back().second == 1);
+        previous(false); assert(songs.boundary() && board.sent.back() == std::make_pair(21u, 12u));
+        const auto before = board.sent.size();
+        next(); assert(board.sent.size() == before + 2 && board.sent.back().second == 1);
+        next(); next(); next(); assert(songs.boundary() && songs.next_position() == 1 && board.sent.back().second == 12);
+        const auto gap_count = board.sent.size();
+        next(); assert(board.sent.size() == gap_count + 2 && board.sent[gap_count].second == 21 && board.sent.back().second == 4);
+        previous(false); assert(songs.boundary() && board.sent.back().second == 22);
+        previous(false); assert(!std::strcmp(songs.current_name(), "One") && board.sent.back().second == 3);
+        previous(false); previous(false); previous(false); assert(songs.boundary() && board.sent.back().second == 12);
+        const auto solo_count = board.sent.size();
+        songs.choose_song("Two"); app.song_ui.perform(); sample(0);
+        assert(songs.boundary() && board.sent.size() == solo_count);
+        next(); assert(board.sent[solo_count].second == 21 && board.sent.back().second == 4);
+        next(); next(); assert(songs.boundary() && board.sent.back().second == 22);
+        const auto end_count = board.sent.size(); next(); assert(songs.boundary() && board.sent.size() == end_count);
+        previous(false); assert(!std::strcmp(songs.current_name(), "Two") && board.sent.back().second == 5);
+        songs.choose_song("Two"); app.song_ui.perform(); sample(0);
+        assert(songs.rename_song("Two", "Renamed")); while (songs.busy()) songs.tick();
+        assert(songs.success() && songs.boundary() && !std::strcmp(songs.performance_name(), "Renamed"));
+        assert(songs.undo()); while (songs.busy()) songs.tick();
+        assert(songs.success() && songs.boundary() && !std::strcmp(songs.performance_name(), "Two"));
+        next(); assert(!std::strcmp(songs.current_name(), "Two") && board.sent.back().second == 4);
+        return 0;
+    }
     next(); assert(songs.continuation().patch == 0 && board.sent.back().second == 1);
     assert(!std::strcmp(board.panes[2].lines[0].text, "F next"));
-    assert(!std::strcmp(board.panes[2].lines[2].text, "C+F back"));
+    assert(!std::strcmp(board.panes[2].lines[2].text, "C+F back; Hold C: menu"));
     assert(board.entry.start(board.document, unsigned(board.document.named_patch("forward")))); sample(0);
     assert(songs.continuation().patch == 1 && board.sent.back().second == 2);
     assert(board.entry.start(board.document, unsigned(board.document.named_patch("backward")))); sample(0);
@@ -136,23 +165,27 @@ int main(int argc, char **argv) {
     next(); next(); assert(songs.continuation().patch == 2 && board.sent.back().second == 3);
     previous(false); assert(songs.continuation().patch == 1 && board.sent.back().second == 2);
     previous(true); assert(songs.continuation().patch == 0 && board.sent.back().second == 1);
-    count = board.sent.size(); previous(true); assert(board.sent.size() == count && !board.last_error.empty());
+    count = board.sent.size(); previous(true); assert(songs.boundary() && board.sent.size() == count);
+    previous(true); assert(songs.boundary() && board.sent.size() == count && !board.last_error.empty());
+    next(); assert(board.sent.back().second == 1);
     next(); next(); press(0); assert(board.sent.back() == std::make_pair(64u, 127u));
     count = board.sent.size(); next();
-    assert(songs.last_step() && board.sent.size() == count);
-    assert(!std::strcmp(board.panes[0].lines[2].text, "Last step") && !std::strcmp(board.panes[2].lines[1].text, "Two"));
+    assert(songs.boundary() && board.sent.size() == count);
+    assert(!std::strcmp(board.panes[0].lines[2].text, "Empty position") && !std::strcmp(board.panes[2].lines[1].text, "Two"));
     press(1); release(1); assert(board.sent.size() == count); // Hidden map cannot trigger an action.
     release(0); assert(board.sent.back() == std::make_pair(64u, 0u));
     next(); assert(!std::strcmp(songs.current_name(), "Two") && board.sent.back().second == 4);
-    count = board.sent.size(); previous(false); assert(songs.last_step() && board.sent.size() == count);
+    count = board.sent.size(); previous(false); assert(songs.boundary() && board.sent.size() == count);
     previous(true); assert(songs.continuation().patch == 2 && board.sent.back().second == 3);
     next(); next(); next(); assert(board.sent.back().second == 5);
+    next(); assert(songs.boundary() && songs.continuation().entry == 2);
     next(); assert(songs.continuation().entry == 2 && songs.continuation().patch == 0 && board.sent.back().second == 1);
-    previous(true); assert(!songs.last_step() && !std::strcmp(songs.current_name(), "Two") && board.sent.back().second == 5);
-    next(); next(); next(); next(); assert(songs.last_step());
-    count = board.sent.size(); next(); assert(songs.last_step() && board.sent.size() == count);
+    previous(true); assert(songs.boundary());
+    previous(true); assert(!songs.boundary() && !std::strcmp(songs.current_name(), "Two") && board.sent.back().second == 5);
+    next(); next(); next(); next(); next(); assert(songs.boundary());
+    count = board.sent.size(); next(); assert(songs.boundary() && board.sent.size() == count);
     assert(songs.rename_song("Two", "Renamed")); while (songs.busy()) songs.tick();
-    assert(songs.success() && !songs.song("Renamed")->add_last_step);
+    assert(songs.success() && songs.song("Renamed")->count == 2);
     assert(songs.undo()); while (songs.busy()) songs.tick();
-    assert(songs.success() && !songs.song("Two")->add_last_step);
+    assert(songs.success() && songs.song("Two")->count == 2);
 }
