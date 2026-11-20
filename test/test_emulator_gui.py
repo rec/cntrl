@@ -2,6 +2,7 @@
 
 import gc
 import os
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -11,6 +12,7 @@ pytest.importorskip('PySide6')
 pytest.importorskip('middy')
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from cntrl.emulator import gui
 from cntrl.emulator.backend import OutputEvent, Session
 from cntrl.emulator.gui import ControllerCanvas, EmulatorWindow, display_rectangle
 from cntrl.emulator.layout import EmulatorLayout, Placement
@@ -123,6 +125,27 @@ def application() -> Iterator[QtWidgets.QApplication]:
     if existing is None:
         app.shutdown()
         assert QtWidgets.QApplication.instance() is None
+
+
+def test_unhandled_callback_reports_once_and_exits(
+    application: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reported: list[BaseException] = []
+
+    def report(kind: type[BaseException], error: BaseException, trace: object) -> None:
+        reported.append(error)
+
+    def fail() -> None:
+        raise RuntimeError('unexpected callback failure')
+
+    monkeypatch.setattr(sys, 'excepthook', report)
+    QtCore.QTimer.singleShot(0, fail)
+    with pytest.raises(SystemExit) as stopped:
+        gui.run_window(CapturedSession())
+    assert stopped.value.code == 1
+    assert len(reported) == 1
+    assert str(reported[0]) == 'unexpected callback failure'
+    assert sys.excepthook is report
 
 
 def click(

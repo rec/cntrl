@@ -4,6 +4,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from time import monotonic_ns
+from types import TracebackType
 
 import tomlkit
 from middy import midi
@@ -806,6 +807,22 @@ def port_description(
 
 def run_window(session: Session) -> None:
     application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    window = EmulatorWindow(session)
-    window.show()
-    application.exec()
+    previous_hook = sys.excepthook
+
+    def unhandled(
+        kind: type[BaseException], error: BaseException, trace: TracebackType | None
+    ) -> None:
+        try:
+            previous_hook(kind, error, trace)
+        finally:
+            application.exit(1)
+
+    sys.excepthook = unhandled
+    try:
+        window = EmulatorWindow(session)
+        window.show()
+        result = application.exec()
+    finally:
+        sys.excepthook = previous_hook
+    if result:
+        sys.exit(result)
