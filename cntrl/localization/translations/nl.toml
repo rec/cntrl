@@ -4,7 +4,8 @@ name = 'Nederlands'
 [messages]
 patch_chooser = { text = 'Patchkiezer' }
 time = { text = 'Tijd' }
-time_controls = { text = '{send:s} zenden/{source:s} bron' }
+time_toggle_send = { text = '{send:s} schakelt zenden' }
+time_cycle_source = { text = '{source:s} wisselt bron' }
 panic = { text = 'Paniek' }
 language_scroll = { text = '{up:s} en {down:s} om te bladeren' }
 language_select = { text = '{button:s} om te kiezen' }

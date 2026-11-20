@@ -4,7 +4,8 @@ name = 'Magyar'
 [messages]
 patch_chooser = { text = 'Hangszínválasztó' }
 time = { text = 'Idő' }
-time_controls = { text = '{send:s} küldés/{source:s} forrás' }
+time_toggle_send = { text = '{send:s} küldést kapcsol' }
+time_cycle_source = { text = '{source:s} forrást vált' }
 panic = { text = 'Pánik' }
 language_scroll = { text = '{up:s} és {down:s}: görgetés' }
 language_select = { text = '{button:s}: kiválasztás' }

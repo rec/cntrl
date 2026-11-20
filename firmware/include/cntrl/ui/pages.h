@@ -429,25 +429,30 @@ private:
         using R = cntrl::PageSettings;
         page_heading(pane, i18n::text(i18n::Message::time));
         char help[96];
-        i18n::format(help, sizeof(help), i18n::Message::time_controls, label(controls_.next), label(controls_.next_section));
-        line(pane, 1, help, vertical(24), vertical(12), localized_face, true, nullptr, 0, 0, 12);
+        i18n::format(help, sizeof(help), i18n::Message::time_toggle_send, label(controls_.next));
+        line(pane, 1, help, vertical(99), vertical(14), localized_face, true, nullptr, 0, 0, 14);
+        i18n::format(help, sizeof(help), i18n::Message::time_cycle_source, label(controls_.next_section));
+        line(pane, 5, help, vertical(114), vertical(14), localized_face, true, nullptr, 0, 0, 14);
         const char *names[] = {"Tap", "DIN", "TRS"};
         for (unsigned i = 0; i < 3; ++i) {
             char number[24], text[64];
             number_text(number, sizeof(number), source_period(i), true, true);
             std::snprintf(text, sizeof(text), "%s: %s", names[i], number + std::strspn(number, " "));
-            unsigned y = vertical(43 + 21 * i), height = vertical(18);
+            unsigned y = vertical(27 + 18 * i), height = vertical(16);
             line(pane, 2 + i, text, y, height, settings_[R::status_font], true);
             if (i == selected_clock_) {
-                int x = settings_[R::padding], top = int(y) - 2;
-                unsigned width = viewport_.width - 2 * x, box_height = height + 4;
+                const auto &text_line = pane.lines[2 + i];
+                const auto bounds = fonts_.bounds(text_line.graphics.font, text_line.graphics.size, 0, text_line.text);
+                const int padding = (int(height) - bounds.height) / 2 + int(vertical(2));
+                int x = text_line.x + bounds.left - padding, top = text_line.y + bounds.top - padding;
+                unsigned width = unsigned(bounds.width + 2 * padding), box_height = unsigned(bounds.height + 2 * padding);
                 pane.rectangles[0] = {int16_t(x), int16_t(top), uint16_t(width), 1, 0x07e0, false};
                 pane.rectangles[1] = {int16_t(x), int16_t(top + box_height - 1), uint16_t(width), 1, 0x07e0, false};
                 pane.rectangles[2] = {int16_t(x), int16_t(top), 1, uint16_t(box_height), 0x07e0, false};
                 pane.rectangles[3] = {int16_t(x + width - 1), int16_t(top), 1, uint16_t(box_height), 0x07e0, false};
             }
         }
-        pane.toggle = {uint16_t(viewport_.width / 2), uint16_t(vertical(116)), true, sending_clock_, false};
+        pane.toggle = {uint16_t(viewport_.width / 2), uint16_t(vertical(84)), true, sending_clock_, false};
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pong_view)

@@ -4,7 +4,8 @@ name = 'Svenska'
 [messages]
 patch_chooser = { text = 'Ljudväljare' }
 time = { text = 'Tid' }
-time_controls = { text = '{send:s} sändning/{source:s} källa' }
+time_toggle_send = { text = '{send:s} växlar sändning' }
+time_cycle_source = { text = '{source:s} byter källa' }
 panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} och {down:s} för att bläddra' }
 language_select = { text = '{button:s} för att välja' }
