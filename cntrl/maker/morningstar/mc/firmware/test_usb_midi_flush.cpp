@@ -1,6 +1,6 @@
 #include <usb_dev.h>
 #include <usb_midi.h>
-#include "patch_switcher/usb_forward_device.h"
+#include "patch_chooser/usb_forward_device.h"
 #include <cassert>
 #include <cstdio>
 

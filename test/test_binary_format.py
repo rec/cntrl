@@ -6,7 +6,7 @@ from zlib import crc32
 
 import pytest
 
-from cntrl.patch_switcher import binary_format, compiler, models, resolved
+from cntrl.patch_chooser import binary_format, compiler, models, resolved
 from scripts import native_tests
 
 

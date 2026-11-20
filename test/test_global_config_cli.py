@@ -7,7 +7,7 @@ import pytest
 import tomlkit
 
 from cntrl.animation import asset
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     cli,
     data_files,
     global_config,

@@ -7,9 +7,9 @@ from typing import Annotated
 import tyro
 from pydantic import BaseModel
 
-from ..patch_switcher.compiler import read_document
-from ..patch_switcher.models import Target
-from ..patch_switcher.transport import SerialConnection, SetupClient
+from ..patch_chooser.compiler import read_document
+from ..patch_chooser.models import Target
+from ..patch_chooser.transport import SerialConnection, SetupClient
 from .asset import inspect_asset, prepare_movie
 
 

@@ -10,7 +10,7 @@ from native_peer import NativePeer
 
 from cntrl.fonts import assets
 from cntrl.fonts.outline import Outline
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,

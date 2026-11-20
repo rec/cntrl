@@ -16,15 +16,15 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.emulator.replay import Scenario
 from cntrl.fonts import assets, catalogue, ui
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     compiler,
     device_globals,
     languages,
     models,
     setup_bundle,
 )
-from cntrl.patch_switcher.cli import compile_to_file
-from cntrl.patch_switcher.global_overlay import Overlay
+from cntrl.patch_chooser.cli import compile_to_file
+from cntrl.patch_chooser.global_overlay import Overlay
 
 
 class BackendFiles(BaseModel, frozen=True):
@@ -100,7 +100,7 @@ def control_setup(value: int) -> dict[str, object]:
             }
         },
         'patch_cycles': {'main': ['control']},
-        'pages': {'performance': {'type': 'patch-switcher'}},
+        'pages': {'performance': {'type': 'patch-chooser'}},
     }
 
 

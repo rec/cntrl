@@ -2,7 +2,7 @@
 
 import pytest
 
-from cntrl.patch_switcher import device_globals, global_overlay
+from cntrl.patch_chooser import device_globals, global_overlay
 
 
 def test_old_overlay_defaults_to_english_and_current_overlay_preserves_language() -> (

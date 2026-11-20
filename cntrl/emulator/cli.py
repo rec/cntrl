@@ -12,9 +12,9 @@ from PIL import Image
 from pydantic import BaseModel, Field, model_validator
 
 from ..localization import catalogue
-from ..patch_switcher import data_files, device_globals, languages
-from ..patch_switcher.models import Target
-from ..patch_switcher.setup_bundle import SetupBundle
+from ..patch_chooser import data_files, device_globals, languages
+from ..patch_chooser.models import Target
+from ..patch_chooser.setup_bundle import SetupBundle
 from .backend import Session, bind_target, build
 from .layout import EmulatorLayout
 from .mirror import download

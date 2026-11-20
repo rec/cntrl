@@ -9,7 +9,7 @@ import tomlkit
 from PIL import Image
 
 from cntrl.animation import asset
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,

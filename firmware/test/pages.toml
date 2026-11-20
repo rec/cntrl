@@ -20,11 +20,11 @@ type = 'time'
 min_windows = 0
 
 [pages.lead]
-type = 'patch-switcher'
+type = 'patch-chooser'
 min_windows = 1
 
 [pages.rhythm]
-type = 'patch-switcher'
+type = 'patch-chooser'
 min_windows = 1
 give_up_windows = ['left', 'right', 'center']
 

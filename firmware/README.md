@@ -1,4 +1,4 @@
-# Patch switcher
+# Patch chooser
 
 The portable C++ implementation is under `include/cntrl/`. It contains no
 Arduino headers or target pin numbers. `Hardware` accepts complete MIDI message
@@ -77,15 +77,15 @@ Install the Python distribution with `uv tool install cntrl-VERSION.whl`, or use
 currently supports POSIX systems, including macOS and Linux.
 
 ```bash
-cntrl compile examples/patch-switcher/patches.toml \
-  --definitions examples/patch-switcher/definitions.toml \
-  --table examples/patch-switcher/table.toml \
-  --table examples/patch-switcher/tags.toml \
+cntrl compile examples/patch-chooser/patches.toml \
+  --definitions examples/patch-chooser/definitions.toml \
+  --table examples/patch-chooser/table.toml \
+  --table examples/patch-chooser/tags.toml \
   --target TARGET.json --output patches.bin
 
-cntrl setup copy Evening=examples/patch-switcher/patches.toml \
-  --definitions examples/patch-switcher/definitions.toml \
-  --table examples/patch-switcher/table.toml \
+cntrl setup copy Evening=examples/patch-chooser/patches.toml \
+  --definitions examples/patch-chooser/definitions.toml \
+  --table examples/patch-chooser/table.toml \
   --target TARGET.json --port /dev/YOUR_SERIAL_PORT
 cntrl setup list --port /dev/YOUR_SERIAL_PORT
 cntrl setup set Evening --port /dev/YOUR_SERIAL_PORT
@@ -558,7 +558,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
-| Page layout, after optional expression, clock, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 window count and one u8 surrender-order entry per display. At most four patch-switchers and 36 pages. Page types follow `layout.PAGE_TYPES`; ID 9 is unassigned |
+| Page layout, after optional expression, clock, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 window count and one u8 surrender-order entry per display. At most four patch-choosers and 36 pages. Page types follow `layout.PAGE_TYPES`; ID 9 is unassigned |
 | Movie lists, after page layout | `CMOV`, u16 startup count, u16 idle count, then startup and idle CRC32 asset keys as u32 values |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
 | Display header, 16 bytes | `CDSP`, u16 style count, page count, text count, page-data byte count; u32 source-metadata byte count |

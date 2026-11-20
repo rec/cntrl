@@ -11,7 +11,7 @@
 namespace cntrl::midi {
 struct StreamFileProvider;
 struct BeatPosition;
-// The wire section is shared with patch_switcher/midi_processing.py.
+// The wire section is shared with patch_chooser/midi_processing.py.
 // All retained traffic has an explicit owner and a bounded storage allowance.
 template<class ProcessingPolicy> class Routing : public ParameterObserver {
     friend ProcessingPolicy;

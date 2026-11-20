@@ -2,7 +2,7 @@
 
 For normal installations, follow [packaged firmware installation](../firmware-distribution.md).
 
-The patch-switcher application has repeatedly booted and communicated over USB
+The patch-chooser application has repeatedly booted and communicated over USB
 after uploads through this helper. Firmware and compiled setup data are separate;
 verify both the application boot and the selected setup after an upload.
 Direct HalfKay uploads remain blocked by the

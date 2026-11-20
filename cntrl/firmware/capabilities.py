@@ -3,7 +3,7 @@
 import json
 from typing import get_args
 
-from ..patch_switcher.models import Target, TrsMode
+from ..patch_chooser.models import Target, TrsMode
 
 
 def header(target: Target) -> str:

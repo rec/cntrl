@@ -112,7 +112,7 @@ the raw SHA-256 is
 
 This section records the pre-upload investigation. Subsequent custom images
 booted and communicated over USB; PROGRAM and software-entry uploads have now
-been demonstrated. See the [current deployment](patch-switcher.md#current-deployment-2026-10-25).
+been demonstrated. See the [current deployment](patch-chooser.md#current-deployment-2026-10-25).
 The original FCB analysis below is not a claim of arbitrary-crash or interrupted
 flash recovery.
 

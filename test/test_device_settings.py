@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     compiler,
     data_files,

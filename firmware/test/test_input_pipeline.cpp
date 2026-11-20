@@ -153,12 +153,12 @@ static void controller_storage_preserves_active_pages_on_failure() {
         cntrl::ui::Application application(hardware, documents, primary, hardware, hardware, songs, hardware, true);
         uint8_t records[12 + 5 * 34] = {};
         records[4] = 1;
-        records[12 + 32] = cntrl::PageLayout::patch_switcher;
+        records[12 + 32] = cntrl::PageLayout::patch_chooser;
         assert(application.prepare_layout({records})); application.finish_pages(true);
         const unsigned single = initial + unsigned(cntrl::memory_charge(4 * sizeof(const char *)) + cntrl::memory_charge(96) + cntrl::memory_charge(sizeof(cntrl::ui::Pages::ViewState)));
         assert(cntrl::memory_used == single);
         records[4] = 4;
-        for (unsigned i = 1; i < 4; ++i) records[12 + i * 34 + 32] = cntrl::PageLayout::patch_switcher;
+        for (unsigned i = 1; i < 4; ++i) records[12 + i * 34 + 32] = cntrl::PageLayout::patch_chooser;
         cntrl::memory_budget = cntrl::memory_used;
         assert(!application.prepare_layout({records})); application.finish_pages(false);
         assert(&application.at(0) == &primary && cntrl::memory_used == single);
@@ -171,7 +171,7 @@ static void controller_storage_preserves_active_pages_on_failure() {
         records[4] = 2; cntrl::memory_budget = cntrl::memory_used;
         assert(!application.prepare_layout({records})); application.finish_pages(false);
         assert(&application.at(3) == fourth);
-        records[4] = 5; records[12 + 4 * 34 + 32] = cntrl::PageLayout::patch_switcher;
+        records[4] = 5; records[12 + 4 * 34 + 32] = cntrl::PageLayout::patch_chooser;
         cntrl::memory_budget = initial + 16384;
         assert(application.prepare_layout({records})); application.finish_pages(true);
         assert(&application.at(4) != &primary);

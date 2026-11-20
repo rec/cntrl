@@ -9,13 +9,13 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.backend import bind_target
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator.profiles import adapt, export
-from cntrl.patch_switcher import compiler, data_files, models, setup_bundle
-from cntrl.patch_switcher.cli import compile_to_file
+from cntrl.patch_chooser import compiler, data_files, models, setup_bundle
+from cntrl.patch_chooser.cli import compile_to_file
 
 
 @pytest.fixture
 def base() -> models.Target:
-    target = Path(__file__).parents[1] / 'patch-switcher-target.json'
+    target = Path(__file__).parents[1] / 'patch-chooser-target.json'
     errors: list[str] = []
     data = data_files.load_target(
         data_files.DataFile(name='target', paths=[target]), True, errors
@@ -72,7 +72,7 @@ def test_virtual_geometry_does_not_rewrite_catalogue_facts(base: models.Target) 
 
 
 def test_exported_profile_keeps_font_paths_relocatable(tmp_path: Path) -> None:
-    source = Path(__file__).parents[1] / 'patch-switcher-target.json'
+    source = Path(__file__).parents[1] / 'patch-chooser-target.json'
     path = export(source, 'mc8_pro', tmp_path / 'profile')
     path.parent.rename(tmp_path / 'moved-profile')
     path = tmp_path / 'moved-profile' / path.name
@@ -166,7 +166,7 @@ def test_real_setup_preparation_is_quiet(
     assert captured.out == captured.err == ''
 
 
-def test_real_setup_patch_switcher_remains_operable_beside_tools(
+def test_real_setup_patch_chooser_remains_operable_beside_tools(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).parents[5]
@@ -206,13 +206,13 @@ def test_exported_profiles_build_without_the_physical_sdk(
     tmp_path: Path, controller: str
 ) -> None:
     root = Path(__file__).parents[5]
-    source = Path(__file__).parents[1] / 'patch-switcher-target.json'
+    source = Path(__file__).parents[1] / 'patch-chooser-target.json'
     path = export(source, controller, tmp_path / 'profile')
     target = cli.load_target(path)
     executable = backend.build(target, tmp_path / 'native', root)
     show = {
         'fill_in_styles': False,
-        'pages': {'performance': {'type': 'patch-switcher'}},
+        'pages': {'performance': {'type': 'patch-chooser'}},
         'patches': {
             'control': {
                 'patches': [
@@ -278,7 +278,7 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
     target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
     source = {
         'pages': {
-            'performance': {'type': 'patch-switcher', 'min_windows': 0},
+            'performance': {'type': 'patch-chooser', 'min_windows': 0},
             'status': {'type': 'status'},
             'panic': {'type': 'panic'},
         },
@@ -346,7 +346,7 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
     source = {
         'fill_in_styles': False,
         'pages': {
-            'performance': {'type': 'patch-switcher', 'min_windows': 0},
+            'performance': {'type': 'patch-chooser', 'min_windows': 0},
             'status': {'type': 'status'},
             'menu': {'type': 'menu'},
         },

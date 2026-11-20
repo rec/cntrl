@@ -8,7 +8,7 @@ import pytest
 import tomlkit
 from pydantic import ValidationError
 
-from cntrl.patch_switcher import binary_format, compiler, models, resolved, setup_bundle
+from cntrl.patch_chooser import binary_format, compiler, models, resolved, setup_bundle
 
 
 @pytest.mark.parametrize('frame_buffers', [0, 1, 2])

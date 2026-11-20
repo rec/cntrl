@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from .....emulator.backend import bind_target
 from .....emulator.layout import EmulatorLayout
 from .....fonts.catalogue import UI_FONTS
-from .....patch_switcher import data_files, models
+from .....patch_chooser import data_files, models
 from ..export_fonts import embedded_font
 
 
@@ -93,7 +93,7 @@ def export(
     target: Path | None, controller: str, output: Path, mirror: bool = False
 ) -> Path:
     if target is None:
-        target = Path(__file__).parents[1] / 'patch-switcher-target.json'
+        target = Path(__file__).parents[1] / 'patch-chooser-target.json'
     errors: list[str] = []
     data = data_files.load_target(
         data_files.DataFile(name=target.stem, paths=[target]), True, errors
@@ -119,7 +119,7 @@ def export(
             source = (
                 Path(__file__).parents[1]
                 / 'firmware'
-                / 'patch_switcher'
+                / 'patch_chooser'
                 / f'font_{n}.cpp'
             )
             destination.write_bytes(embedded_font(source, n, UI_FONTS[n]))

@@ -1,7 +1,7 @@
 #include <cntrl/ui/pages.h>
 #include <cntrl/ui/renderer.h>
-#include "patch_switcher/embedded_fonts.h"
-#include "patch_switcher/target_capabilities.h"
+#include "patch_chooser/embedded_fonts.h"
+#include "patch_chooser/target_capabilities.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>

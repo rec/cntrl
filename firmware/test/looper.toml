@@ -12,7 +12,7 @@ type = 'status'
 type = 'midi-looper'
 
 [pages.patches]
-type = 'patch-switcher'
+type = 'patch-chooser'
 
 [page_settings.looper]
 inputs = ['din']

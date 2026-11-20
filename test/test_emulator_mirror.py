@@ -9,7 +9,7 @@ import tyro
 
 from cntrl.emulator import mirror
 from cntrl.emulator.cli import Emulate
-from cntrl.patch_switcher import storage_info, transport
+from cntrl.patch_chooser import storage_info, transport
 
 
 class CapturedPedal(transport.SetupClient):

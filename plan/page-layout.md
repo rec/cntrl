@@ -6,7 +6,7 @@ remains to be performed.
 
 Allow any page type to occupy either side of the pedal. A per-setup allocation
 strategy determines which side receives spare windows first. Status can occupy
-a single window beside a Patch Switcher that expands into the remaining space.
+a single window beside a Patch Chooser that expands into the remaining space.
 
 ## Agreed allocation rules
 
@@ -18,7 +18,7 @@ a single window beside a Patch Switcher that expands into the remaining space.
   allows a page to receive spare windows up to its type's maximum.
 - Page-type code exposes the maximum useful window count. This capability
   describes the renderer and is independent of authored setup preferences.
-  Status has a maximum of one. Patch Switcher can use every available target
+  Status has a maximum of one. Patch Chooser can use every available target
   window. MIDI Monitor can use up to three.
 - The other utility pages remain expandable up to the target window count.
 - Use per-setup `layout.left_wins: bool = False` to distribute spare windows.
@@ -52,12 +52,12 @@ pages = ['live', 'alternate']
 pages = ['status', 'monitor']
 
 [pages.live]
-type = 'patch-switcher'
+type = 'patch-chooser'
 min_windows = 1
 give_up_windows = ['right', 'center', 'left']
 
 [pages.alternate]
-type = 'patch-switcher'
+type = 'patch-chooser'
 min_windows = 1
 
 [pages.status]
@@ -77,7 +77,7 @@ initially. Region and page names use the existing printable-name conventions.
 When focus is omitted, use the first physical region. When order is omitted or
 empty, use region declaration order. Omitted or empty regions default to performance and tools
 on multi-display targets, omitting empty groups, or one main region on a
-single-display target. Performance contains Patch Switchers; tools contains
+single-display target. Performance contains Patch Choosers; tools contains
 the remaining catalogue.
 
 With three displays, the example starts with Live across the left two displays
@@ -94,7 +94,7 @@ selected pages and lets the user choose focus or select a page in a region.
 Selecting a page through that menu also focuses its region.
 The existing page-cycle and reverse-page controls cycle only the focused
 region. Cycling one region preserves all other regions' current selections.
-Selecting a Patch Switcher page affects only its containing region.
+Selecting a Patch Chooser page affects only its containing region.
 
 Page-specific switch handling goes to the focused region's selected page.
 Selecting focus updates its visible indication without reallocating windows.
@@ -103,7 +103,7 @@ zero-window allocation, so the menu must still expose its name and focus.
 Complete or cancel held input gestures in the old view when changing focus,
 so their release cannot trigger an action in the newly focused page.
 
-Each Patch Switcher instance retains its own navigation, sent state and Undo
+Each Patch Chooser instance retains its own navigation, sent state and Undo
 history. Background patch execution and shared MIDI services continue across
 focus and page changes. Multiple views of a shared service, such as the looper,
 continue to observe that service's existing shared session.
@@ -120,7 +120,7 @@ spare windows. Once those counts are settled, place their contiguous spans
 in the authored physical order.
 Windows within a span follow the target's declared display order.
 
-For a three-display target with Status and Patch Switcher each requesting
+For a three-display target with Status and Patch Chooser each requesting
 one window, the resulting counts are one and two. Status cannot absorb a
 spare window even when it has first priority. With two flexible pages, the
 higher-priority page receives the spare window. Any windows beyond all page
@@ -136,15 +136,15 @@ the same constraints before admitting a compiled layout.
 
 Pass each visible page its first physical window and allocated window count.
 The renderer uses local window indices within that span. Remove assumptions
-that utility pages start at the right edge or that Patch Switcher occupies
+that utility pages start at the right edge or that Patch Chooser occupies
 the leftmost available displays.
 
-Keep logical Patch Switcher content selection separate from physical placement.
+Keep logical Patch Chooser content selection separate from physical placement.
 Its existing `give_up_windows` ordering determines which logical content to
 drop as its allocation shrinks. The surviving content keeps its logical order
 and maps into the allocated physical span. Maintain selected patches, sent
 state and Undo history independently of that span's physical position.
-Names in `give_up_windows` identify logical Patch Switcher content slots.
+Names in `give_up_windows` identify logical Patch Chooser content slots.
 They do not anchor those slots to physical left or right displays.
 
 A page type exposes its maximum through the shared page-type implementation
@@ -184,10 +184,10 @@ views. Keep these capability decisions beside the page-type implementation.
    unknown or repeated page references and
    a layout where an initially valid selection has a later impossible pairing.
 6. Exercise independent page cycles and focus changes through the normal UI
-   path. Check Patch Switcher logical content selection, preserved history,
+   path. Check Patch Chooser logical content selection, preserved history,
    background execution, held-control release and shared-service views. Verify
    compile/export round-trips and firmware rejection of malformed records.
-7. On hardware, select a tool beside a Patch Switcher in both physical orders.
+7. On hardware, select a tool beside a Patch Chooser in both physical orders.
    Confirm display placement, focus indication and switch actions against the
    authored configuration.
 

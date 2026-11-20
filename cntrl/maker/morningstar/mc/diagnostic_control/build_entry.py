@@ -62,8 +62,8 @@ def run(command: Build) -> None:
     target = source / 'cntrl/maker/morningstar/mc'
     firmware = target / 'firmware'
     shutil.copyfile(
-        root / 'firmware/patch_switcher/midi_trace.h',
-        firmware / 'patch_switcher/midi_trace.h',
+        root / 'firmware/patch_chooser/midi_trace.h',
+        firmware / 'patch_chooser/midi_trace.h',
     )
     shutil.copyfile(
         root / 'firmware/serial-rx-diagnostics.patch',
@@ -75,15 +75,15 @@ def run(command: Build) -> None:
     identity.update(''.join(revisions).encode())
     identity.update(Path(__file__).with_name('trace.patch').read_bytes())
     for path in (
-        firmware / 'patch_switcher/target.cpp',
-        firmware / 'patch_switcher/midi_trace.h',
+        firmware / 'patch_chooser/target.cpp',
+        firmware / 'patch_chooser/midi_trace.h',
         firmware / 'serial-rx-diagnostics.patch',
         source / 'firmware/include/cntrl/midi_bridge.h',
     ):
         identity.update(path.relative_to(source).as_posix().encode() + b'\0')
         identity.update(path.read_bytes())
     trace_id = identity.hexdigest()[:16]
-    (firmware / 'patch_switcher/midi_trace_build.h').write_text(
+    (firmware / 'patch_chooser/midi_trace_build.h').write_text(
         f'#define CNTRL_MIDI_TRACE_BUILD "{trace_id}"\n'
     )
     # Copy the provisioned SDK, never mutate the SDK retained with the rollback.
@@ -115,23 +115,23 @@ def run(command: Build) -> None:
 BASELINE = 'd6c6d06'
 OVERLAYS = {
     '017ec53': [
-        'cntrl/patch_switcher/layout.py',
-        'cntrl/patch_switcher/models.py',
+        'cntrl/patch_chooser/layout.py',
+        'cntrl/patch_chooser/models.py',
         'firmware/include/cntrl/document.h',
         'firmware/include/cntrl/page_layout.h',
     ],
     '8e71150': [
-        'cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp',
-        'cntrl/patch_switcher/layout.py',
+        'cntrl/maker/morningstar/mc/firmware/patch_chooser/target.cpp',
+        'cntrl/patch_chooser/layout.py',
     ],
     '39245d3': [
         'firmware/include/cntrl/ui/page_host.h',
         'firmware/include/cntrl/ui/pages.h',
     ],
     'f498944': [
-        'cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp',
-        'cntrl/maker/morningstar/mc/firmware/patch_switcher/usb_forward_device.cpp',
-        'cntrl/maker/morningstar/mc/firmware/patch_switcher/usb_forward_device.h',
+        'cntrl/maker/morningstar/mc/firmware/patch_chooser/target.cpp',
+        'cntrl/maker/morningstar/mc/firmware/patch_chooser/usb_forward_device.cpp',
+        'cntrl/maker/morningstar/mc/firmware/patch_chooser/usb_forward_device.h',
     ],
 }
 

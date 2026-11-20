@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_switcher import binary_format, compiler, models, resolved, songs
+from cntrl.patch_chooser import binary_format, compiler, models, resolved, songs
 
 
 @pytest.fixture

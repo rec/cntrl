@@ -10,7 +10,7 @@ from ....fonts.raster import raster_data
 
 
 class Options(BaseModel, frozen=True):
-    output: Path = Path(__file__).parent / 'firmware/patch_switcher'
+    output: Path = Path(__file__).parent / 'firmware/patch_chooser'
 
 
 class Bits:

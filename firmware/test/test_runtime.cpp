@@ -110,5 +110,5 @@ int main() {
     actions.view = Actions::performance; actions.locked = false; actions.monitoring = true; actions.actions.clear(); events[1] = 1;
     router.route(actions, events, 2, 0); assert(actions.actions == std::vector<unsigned>{91});
     actions.actions.clear(); events[1] = 2;
-    router.route(actions, events, 0, 0); assert(actions.actions == std::vector<unsigned>{92}); // Monitor controls never reach the patch-switcher.
+    router.route(actions, events, 0, 0); assert(actions.actions == std::vector<unsigned>{92}); // Monitor controls never reach the patch-chooser.
 }

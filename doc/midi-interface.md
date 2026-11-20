@@ -45,4 +45,4 @@ runtime setting when stopped or left. The setup is not edited by the tester.
 
 The bridge owns forwarding and connection recovery. Target-specific qualification
 is recorded in the [hardware investigation](../cntrl/maker/morningstar/mc/usb-midi-interface-plan.md)
-and [target guide](../cntrl/maker/morningstar/mc/firmware/patch-switcher.md).
+and [target guide](../cntrl/maker/morningstar/mc/firmware/patch-chooser.md).

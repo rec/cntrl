@@ -8,8 +8,8 @@ import tyro
 from pydantic import BaseModel
 
 from ....firmware.capabilities import header
-from ....patch_switcher.compiler import read_document
-from ....patch_switcher.models import Target
+from ....patch_chooser.compiler import read_document
+from ....patch_chooser.models import Target
 from . import boot_switch, export_fonts, release, toolchain
 
 
@@ -30,7 +30,7 @@ def run(command: Build) -> None:
     root = Path(__file__).parent
     toolchain.ensure(root / 'firmware')
     command.output.mkdir(parents=True, exist_ok=True)
-    data = read_document(root / 'patch-switcher-target.json')
+    data = read_document(root / 'patch-chooser-target.json')
     if not isinstance(data, dict):
         raise ValueError('target description must be a table')
     target = Target.model_validate(data)
@@ -48,7 +48,7 @@ def run(command: Build) -> None:
     ]
     target = Target.model_validate(data)
     capabilities = header(target)
-    (root / 'firmware/patch_switcher/target_capabilities.h').write_text(capabilities)
+    (root / 'firmware/patch_chooser/target_capabilities.h').write_text(capabilities)
     (command.output / 'target_capabilities.h').write_text(capabilities)
     (command.output / 'target.toml').write_text(
         tomlkit.dumps(target.model_dump(mode='json', exclude_none=True))
@@ -58,7 +58,7 @@ def run(command: Build) -> None:
         source_root=command.source_root,
     )
     shutil.copyfile(
-        root / 'firmware/build/boot-switch/cntrl/patch_switcher.ino.elf',
+        root / 'firmware/build/boot-switch/cntrl/patch_chooser.ino.elf',
         command.output / 'firmware.elf',
     )
     shutil.copyfile(

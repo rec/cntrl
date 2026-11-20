@@ -15,7 +15,7 @@ from test_firmware import hex_record
 
 from cntrl.firmware.intel_hex import read_hex
 from cntrl.maker.morningstar.mc import upload_helper
-from cntrl.patch_switcher.devices import Device
+from cntrl.patch_chooser.devices import Device
 from cntrl.upload import Bootloader, Serve, Upload
 
 

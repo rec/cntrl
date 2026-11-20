@@ -9,7 +9,7 @@ MIMXRT1062 processor. These findings apply to this firmware, not automatically
 to every hardware revision. The original analysis was performed without device
 I/O. Later custom-firmware tests confirmed all six button mappings and three
 displays, SD access, software bootloader entry and DIN MIDI output. See the
-[current deployment](firmware/patch-switcher.md#current-deployment-2026-10-25)
+[current deployment](firmware/patch-chooser.md#current-deployment-2026-10-25)
 for the verified scope and remaining physical checks. No electrical probing
 has been performed.
 
@@ -496,7 +496,7 @@ register data to draw `CNTRL` and a numbered display label at startup. Stock
 rotation 1 resolves to MADCTL `0xa8`, with exchanged offsets x=1, y=2. All panel
 CS lines are HIGH and clock LOW before button scanning begins. Reset and
 sleep-out waits are conservative. The diagnostic greeting now uses PWM 192
-after drawing; the patch-switcher uses the configured brightness, keeping the
+after drawing; the patch-chooser uses the configured brightness, keeping the
 backlight off until its first complete frame. Live tests established physical
 left/centre/right as CS 15/24/27, each with a 160x128 drawing area. This does not
 identify the exact display-controller revision or backlight circuitry.

@@ -358,7 +358,7 @@ gates. Do not describe these checked collections alone as a bounded allocator.
 
 Allocate storage for the setup, features and work actually in use. Remove
 arbitrary item ceilings and reservations for hypothetical instances. In
-particular, one patch switcher should require one controller and its navigation
+particular, one patch chooser should require one controller and its navigation
 state, rather than storage for four controllers and every possible invocation
 owner.
 
@@ -408,7 +408,7 @@ copies. Numeric fields in serialized records are distinguished from capacities.
 
 | ID | Location and present reservation or limit | Planned treatment |
 | --- | --- | --- |
-| F1 | `page_layout.h`: 4 controllers, 36 pages; `ui/application.h`: page-name slots for 3 tools plus 36 pages. Host layout validation rejects more than 4 patch switchers; setup models cap pages at 36. | Allocate controller objects and page metadata from the actual layout. Replace owner arithmetic and dependent snapshots with F3. Remove corresponding host caps when the representation and resource admission support it. |
+| F1 | `page_layout.h`: 4 controllers, 36 pages; `ui/application.h`: page-name slots for 3 tools plus 36 pages. Host layout validation rejects more than 4 patch choosers; setup models cap pages at 36. | Allocate controller objects and page metadata from the actual layout. Replace owner arithmetic and dependent snapshots with F3. Remove corresponding host caps when the representation and resource admission support it. |
 | F2 | `hardware.h`, `controller.h`: 32 instruments, 128 patch cycles, 128 history entries. Each controller contains cursor and preview arrays, current/last-sent arrays and history. `NavigationState` repeats substantial storage; `navigation()` also produces value copies. | Size instrument/cycle state from the document. Store actual history entries with a deliberate retention policy and checked growth. Capture only necessary navigation state, transactionally; include temporary snapshots in the peak budget. |
 | F3 | `midi_bridge.h`: 12 invocation owners; `midi_file.h`: 12 delivery slots per player. Controller/switch owner numbering and return navigation depend on this ceiling. `ui/firmware_visit.h`: two complete navigation snapshots per visit. | Register actual live owners with stable identities, and allocate snapshots/delivery state for actual invocations. Preserve identity until all releases and deferred work retire. Replace persisted visit serialization, which currently embeds value state, with explicit counted data; never write pointers to disk. |
 | F4 | `switches.h`: 8 `State` objects/executors; per-state queue of 16 and event array of 16. Two on/off gesture layers per state are distinct roles. | Allocate configured switch states and queued work as admitted. Retain the paired gesture semantics. Reserve release work before accepting press work. |
@@ -429,7 +429,7 @@ copies. Numeric fields in serialized records are distinguished from capacities.
 | F19 | `usb_config.h`, `usb_session.h`: default 4096-byte blocks, 1024-byte text limit, multiple block/frame/reply arrays. Animation receiver/router have block/text/header scratch; player uses a 320-byte pixel stream buffer. Transfer handlers also use block-sized workspaces. | Share or acquire transfer workspaces according to real simultaneous lifetimes, while respecting in-flight USB buffers. Keep framing fields and bounded streaming. Movies remain on storage; allocating a whole movie is not the objective. |
 | F20 | `startup_counter.h`: 512-byte records and two persisted records; packet fields, channel/value domains, CRC/LFO lookup tables, compiled bitmap fonts. | Retain journal redundancy, wire formats and immutable ROM tables. They are not reservations for unused feature instances. Document them as justified fixed storage rather than claiming every constant must disappear. |
 
-Host-side limits must change alongside these consumers. In `cntrl/patch_switcher/`,
+Host-side limits must change alongside these consumers. In `cntrl/patch_chooser/`,
 audit `models.py`, `layout.py`, `compiler.py`, `midi_processing.py`, `looper.py`,
 `arpeggiator.py` and `setup_bundle.py`. These include page/instrument/cycle/button/
 endpoint counts, route `via` lists capped at 16, LFO destinations capped at 128,
@@ -716,17 +716,17 @@ at arm with the published take and undo intact.
 Each step should be independently reviewable and preserve existing behavior
 except for the intended removal of limits and documented failure responses.
 
-1. **Deliver the one-switcher saving.** Measure a one-switcher setup on the
+1. **Deliver the one-chooser saving.** Measure a one-chooser setup on the
    baseline. Stage exactly the configured controllers with checked allocation,
    keeping owner numbers, four-controller validation and visit serialization
-   for this milestone. Test one and four switchers, navigation and a failed
+   for this milestone. Test one and four choosers, navigation and a failed
    replacement. Report before/after RAM1 and RAM2 totals, including heap use
-   and the replacement peak. Require a net steady-state saving for one switcher.
+   and the replacement peak. Require a net steady-state saving for one chooser.
    This milestone can ship independently of stream cleanup and allocator redesign.
 2. **Remove invocation reservations.** Replace the twelve snapshots with actual
    invocation state, migrate owner references and persisted navigation, then lift
    the controller ceiling together with host validation and budgeting. Exercise
-   save/return and more than four switchers before removing the old mapping.
+   save/return and more than four choosers before removing the old mapping.
 3. **Measure and establish failure tests.** Instrument the linked allocator,
    aligned allocations and stack/region measurements. Record boot, one-controller
    setup, maximum practical setup, file playback, loop/overdub/reverse, arpeggiator,

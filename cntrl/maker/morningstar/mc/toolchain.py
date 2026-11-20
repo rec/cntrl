@@ -171,7 +171,7 @@ def compile_command(
         'recipe.hooks.postbuild.1.pattern': '',
         'recipe.hooks.objcopy.postobjcopy.1.pattern': '',
     }
-    if (root / 'patch_switcher/heap_trace.cpp').is_file():
+    if (root / 'patch_chooser/heap_trace.cpp').is_file():
         properties['build.flags.ld'] += (
             ' -Wl,--wrap=_malloc_r,--wrap=_calloc_r,--wrap=_realloc_r,'
             '--wrap=_free_r,--wrap=_memalign_r,--wrap=_malloc_usable_size_r'
@@ -189,7 +189,7 @@ def compile_command(
     ]
     for name, value in properties.items():
         command.extend(['--build-property', f'{name}={value}'])
-    return [*command, str(root / 'patch_switcher')]
+    return [*command, str(root / 'patch_chooser')]
 
 
 def build(
@@ -214,14 +214,14 @@ def build(
         check=True,
         timeout=900,
     )
-    shutil.copyfile(work / 'cntrl/patch_switcher.ino.hex', work / 'cntrl.hex')
+    shutil.copyfile(work / 'cntrl/patch_chooser.ino.hex', work / 'cntrl.hex')
     binary, decoded = work / 'image.bin', work / 'from-hex.bin'
     subprocess.run(
         [
             str(arm_tool(root, 'objcopy')),
             '-O',
             'binary',
-            str(work / 'cntrl/patch_switcher.ino.elf'),
+            str(work / 'cntrl/patch_chooser.ino.elf'),
             str(binary),
         ],
         check=True,
@@ -243,7 +243,7 @@ def build(
     if binary.read_bytes() != decoded.read_bytes():
         raise ValueError('ELF and HEX image bytes differ')
     report = subprocess.check_output(
-        [str(arm_tool(root, 'size')), '-A', str(work / 'cntrl/patch_switcher.ino.elf')],
+        [str(arm_tool(root, 'size')), '-A', str(work / 'cntrl/patch_chooser.ino.elf')],
         text=True,
         timeout=60,
     )

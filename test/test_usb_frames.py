@@ -6,8 +6,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from cntrl.patch_switcher.transport import SerialConnection, UsbProtocolError
-from cntrl.patch_switcher.usb_frames import MAGIC, Frame, Kind
+from cntrl.patch_chooser.transport import SerialConnection, UsbProtocolError
+from cntrl.patch_chooser.usb_frames import MAGIC, Frame, Kind
 
 
 @pytest.mark.parametrize('failure_during_connect', [False, True])

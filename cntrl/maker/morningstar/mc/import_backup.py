@@ -13,7 +13,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel
 
-from ....patch_switcher import models
+from ....patch_chooser import models
 
 
 class ImportBackup(BaseModel, frozen=True):
@@ -249,7 +249,7 @@ def convert(document: dict, bank: int) -> models.Setup:
     return models.Setup.model_validate(
         {
             'pages': {
-                'performance': {'type': 'patch-switcher', 'min_windows': 3},
+                'performance': {'type': 'patch-chooser', 'min_windows': 3},
                 'banked': {'type': 'banked', 'patch': 'Banked'},
             },
             'patch_cycles': {'Imported': ['Banked']},

@@ -10,7 +10,7 @@ import pytest
 
 from cntrl.emulator import backend
 from cntrl.fonts import catalogue, ui
-from cntrl.patch_switcher import compiler, models
+from cntrl.patch_chooser import compiler, models
 
 
 class BuildFiles:

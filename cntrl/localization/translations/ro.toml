@@ -2,6 +2,7 @@ language = 'ro'
 name = 'Română'
 
 [messages]
+patch_chooser = { text = 'Selector de sunete' }
 time = { text = 'Timp' }
 time_controls = { text = '{send:s} trimitere/{source:s} sursă' }
 panic = { text = 'Panică' }

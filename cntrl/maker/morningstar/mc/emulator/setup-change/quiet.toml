@@ -1,7 +1,7 @@
 fill_in_styles = false
 
 [pages.performance]
-type = 'patch-switcher'
+type = 'patch-chooser'
 
 [patches.proof]
 type = 'control-change'

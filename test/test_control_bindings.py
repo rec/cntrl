@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import compiler, models, resolved, songs
+from cntrl.patch_chooser import compiler, models, resolved, songs
 from scripts import native_tests
 
 

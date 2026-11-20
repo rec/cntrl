@@ -47,14 +47,14 @@ def test_manifest_paths_and_hashes_match_committed_payload() -> None:
 
 
 def test_starter_has_no_musical_actions() -> None:
-    from cntrl.patch_switcher import compiler, data_files, models
+    from cntrl.patch_chooser import compiler, data_files, models
 
     root = Path(release.__file__).parent
     errors: list[str] = []
     target = models.Target.model_validate(
         data_files.load_target(
             data_files.DataFile(
-                name='target', paths=[root / 'patch-switcher-target.json']
+                name='target', paths=[root / 'patch-chooser-target.json']
             ),
             True,
             errors,

@@ -19,7 +19,7 @@ from serial.tools.list_ports import comports
 
 from ....firmware.distribution import cache_directory
 from ....firmware.intel_hex import FirmwareImage, read_hex
-from ....patch_switcher.devices import connected
+from ....patch_chooser.devices import connected
 from ....upload import Bootloader, Provision, Serve, Upload
 from . import updater_provision
 
@@ -156,7 +156,7 @@ def upload_image(request: Upload) -> UploadResult:
         )
     CACHE_DIRECTORY.mkdir(mode=0o700, parents=True, exist_ok=True)
     with TemporaryDirectory(prefix='upload-', dir=CACHE_DIRECTORY) as directory:
-        snapshot = Path(directory) / 'patch-switcher.hex'
+        snapshot = Path(directory) / 'patch-chooser.hex'
         snapshot.write_bytes(source.read_bytes())
         image = read_hex(snapshot)
         if image.sha256 != request.sha256:

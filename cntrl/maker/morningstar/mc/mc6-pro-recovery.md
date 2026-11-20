@@ -8,7 +8,7 @@ repeatable upload/reboot over USB. An application that cannot service USB may
 still require opening the enclosure to press PROGRAM.**
 
 For the current deployed application and verified upload sequence, see the
-[patch-switcher deployment record](firmware/patch-switcher.md#current-deployment-2026-10-25)
+[patch-chooser deployment record](firmware/patch-chooser.md#current-deployment-2026-10-25)
 and [upload helper](firmware/upload-helper.md). These results do not establish
 automatic rollback, recovery after every possible crash or interrupted flash,
 or an independent SD rescue loader. No deliberately broken image or fuse change

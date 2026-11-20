@@ -1123,7 +1123,7 @@ class Scrolling(BaseModel, frozen=True):
 
 class Page(BaseModel, frozen=True):
     type: Literal[
-        'patch-switcher',
+        'patch-chooser',
         'time',
         'status',
         'cable-test',
@@ -1136,7 +1136,7 @@ class Page(BaseModel, frozen=True):
         'language',
         'menu',
         'None',
-    ] = 'patch-switcher'
+    ] = 'patch-chooser'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
     min_windows: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
     give_up_windows: list[str] = Field(default_factory=list, max_length=255)
@@ -1154,7 +1154,7 @@ class Page(BaseModel, frozen=True):
             object.__setattr__(self, 'min_windows', 3)
         elif self.type in ('language', 'time'):
             object.__setattr__(self, 'min_windows', 2)
-        elif self.type != 'patch-switcher':
+        elif self.type != 'patch-chooser':
             object.__setattr__(self, 'min_windows', 1)
         return self
 
@@ -1163,7 +1163,7 @@ class Page(BaseModel, frozen=True):
             return 0
         return (
             available
-            if self.type == 'patch-switcher'
+            if self.type == 'patch-chooser'
             else min(
                 3
                 if self.type in ('banked', 'pong')
@@ -1281,7 +1281,7 @@ class Setup(BindingScope, frozen=True):
                     'None',
                 )
             },
-            'patch-switcher': Page(min_windows=0),
+            'patch-chooser': Page(min_windows=0),
         },
         max_length=255,
     )

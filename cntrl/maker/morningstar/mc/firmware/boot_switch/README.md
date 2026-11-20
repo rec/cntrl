@@ -31,7 +31,7 @@ The builder rejects a different input hash or unexpected bytes at a patch site.
 The original stock HEX is a local input and is not committed.
 
 Upload through the running [upload helper](../upload-helper.md), placing the
-combined image at its fixed `../build/patch-switcher.hex` path after preserving
+combined image at its fixed `../build/patch-chooser.hex` path after preserving
 the previous performance image. Request the exact combined image digest, then
 check the pedal's USB identity. Stock reports `Morningstar MC6 Pro`; cntrl
 reports `cntrl experimental` and responds to the normal `CNTRL STATUS` query.

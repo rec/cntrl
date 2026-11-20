@@ -14,7 +14,7 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
 from cntrl.maker.morningstar.mc.import_backup import ImportBackup, convert, run
-from cntrl.patch_switcher import compiler, models, resolved, setup_bundle
+from cntrl.patch_chooser import compiler, models, resolved, setup_bundle
 
 
 def test_saved_vl70_bank_converts_to_editable_toml(
@@ -66,7 +66,7 @@ def test_sparse_slots_preserve_customisation_and_page_limits(tmp_path: Path) -> 
     assert imported.initial_bank == 3
     target = cli.load_target(
         profiles.export(
-            BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+            BASE / 'patch-chooser-target.json', 'mc6_pro', tmp_path / 'profile'
         )
     )
     raw = compiler.compile_show(setup.model_dump(exclude_none=True), {}, [], target)
@@ -82,7 +82,7 @@ def test_completely_empty_banked_patch_round_trips(tmp_path: Path) -> None:
     setup.patches['Banked'] = patch.model_dump(exclude_none=True)
     target = cli.load_target(
         profiles.export(
-            BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+            BASE / 'patch-chooser-target.json', 'mc6_pro', tmp_path / 'profile'
         )
     )
     raw = compiler.compile_show(setup.model_dump(exclude_none=True), {}, [], target)
@@ -100,7 +100,7 @@ def test_selected_importer_creates_the_requested_initial_bank(tmp_path: Path) ->
         [
             sys.executable,
             '-m',
-            'cntrl.patch_switcher.cli',
+            'cntrl.patch_chooser.cli',
             'import',
             '--target-dir',
             str(BASE),
@@ -123,7 +123,7 @@ def test_selected_importer_creates_the_requested_initial_bank(tmp_path: Path) ->
 def test_latched_switch_cannot_enter_a_banked_patch(tmp_path: Path) -> None:
     target = cli.load_target(
         profiles.export(
-            BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+            BASE / 'patch-chooser-target.json', 'mc6_pro', tmp_path / 'profile'
         )
     )
     show = convert(json.loads(BACKUP.read_bytes()), 0).model_dump(exclude_none=True)
@@ -143,7 +143,7 @@ def test_imported_bank_runs_counters_and_bank_transitions(
     tmp_path: Path, file_regression: FileRegressionFixture
 ) -> None:
     target_path = profiles.export(
-        BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+        BASE / 'patch-chooser-target.json', 'mc6_pro', tmp_path / 'profile'
     )
     target = cli.load_target(target_path)
     show = convert(json.loads(BACKUP.read_bytes()), 0).model_dump(exclude_none=True)
@@ -335,7 +335,7 @@ def test_banked_page_keeps_selection_and_runs_actions_while_hidden(
 ) -> None:
     target = cli.load_target(
         profiles.export(
-            BASE / 'patch-switcher-target.json', 'mc6_pro', tmp_path / 'profile'
+            BASE / 'patch-chooser-target.json', 'mc6_pro', tmp_path / 'profile'
         )
     )
     show = convert(json.loads(BACKUP.read_bytes()), 0).model_dump(exclude_none=True)

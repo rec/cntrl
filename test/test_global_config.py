@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import cli, compiler, data_files, global_config, resolved
+from cntrl.patch_chooser import cli, compiler, data_files, global_config, resolved
 
 
 def test_defaults_merge_named_fields_and_replace_lists_without_mutation() -> None:

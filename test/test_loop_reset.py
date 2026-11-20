@@ -6,7 +6,7 @@ import pytest
 import tomlkit
 from pydantic import ValidationError
 
-from cntrl.patch_switcher import compiler, models, resolved
+from cntrl.patch_chooser import compiler, models, resolved
 
 
 def test_loop_reset_policy_round_trips_all_neutral_parameter_types() -> None:

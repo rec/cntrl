@@ -9,8 +9,8 @@ from cntrl.maker.morningstar.mc.legacy_usb import (
     decode_reply,
     encode_request,
 )
-from cntrl.patch_switcher.transport import UsbProtocolError
-from cntrl.patch_switcher.usb_frames import Frame, Kind, Status
+from cntrl.patch_chooser.transport import UsbProtocolError
+from cntrl.patch_chooser.usb_frames import Frame, Kind, Status
 
 
 def test_backup_command_uses_the_original_text_envelope() -> None:

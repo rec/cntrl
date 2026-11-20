@@ -31,7 +31,7 @@ class NativePeer:
         self.reader.start()
         self.watchdog = Timer(180, self.process.kill)
         self.watchdog.start()
-        self.backend = patch('cntrl.patch_switcher.transport.Serial', self.open)
+        self.backend = patch('cntrl.patch_chooser.transport.Serial', self.open)
         self.backend.start()
         return 'cntrl-test-peer'
 

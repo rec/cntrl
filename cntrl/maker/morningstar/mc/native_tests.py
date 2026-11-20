@@ -51,10 +51,10 @@ TESTS = [
     ('midi-trace', ['test_midi_trace.cpp'], []),
     (
         'usb-midi-flush',
-        ['test_usb_midi_flush.cpp', 'patch_switcher/usb_forward_device.cpp'],
+        ['test_usb_midi_flush.cpp', 'patch_chooser/usb_forward_device.cpp'],
         [],
     ),
-    ('bounded-heap', ['test_bounded_heap.cpp', 'patch_switcher/bounded_heap.cpp'], []),
+    ('bounded-heap', ['test_bounded_heap.cpp', 'patch_chooser/bounded_heap.cpp'], []),
     ('switch-gesture', ['test_switch_gesture.cpp'], []),
     ('boot-selection', ['test_boot_selection.cpp'], []),
     ('pair-timing', ['test_pair_timing.cpp'], []),
@@ -62,7 +62,7 @@ TESTS = [
     ('displays', ['test_displays.cpp', 'usb_probe/displays.cpp'], []),
     (
         'panorama',
-        ['test_displays.cpp', 'patch_switcher/displays.cpp'],
+        ['test_displays.cpp', 'patch_chooser/displays.cpp'],
         ['-DCNTRL_PANORAMA'],
     ),
     (

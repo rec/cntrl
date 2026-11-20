@@ -118,7 +118,7 @@ An experimental copy of `imxrt1062_t41.ld` changed only the FLASH region from
 `ORIGIN = 0x60000000, LENGTH = 7936K` to
 `ORIGIN = 0x60100000, LENGTH = 6912K`. The existing application was compiled with
 that linker script through Arduino CLI's `build.flags.ld` property. The other
-compile flags matched the normal patch-switcher build.
+compile flags matched the normal patch-chooser build.
 
 The relocated IVT points to `0x601015e5`, and its own metadata and flash load
 addresses are linked in the higher region. The core's `BootData[0]` still

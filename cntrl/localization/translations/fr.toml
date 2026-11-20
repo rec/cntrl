@@ -13,6 +13,9 @@ text = '{button:s} pour choisir'
 [messages.language_next_page]
 text = '{button:s} pour la page suivante'
 
+[messages.patch_chooser]
+text = 'Sélecteur de sons'
+
 [messages.pages_and_tools]
 text = 'Pages et outils'
 

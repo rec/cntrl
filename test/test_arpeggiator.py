@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import arpeggiator, compiler, models, resolved
+from cntrl.patch_chooser import arpeggiator, compiler, models, resolved
 from scripts import native_tests
 
 

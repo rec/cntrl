@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tyro
 
-from cntrl.patch_switcher import cli, compiler
+from cntrl.patch_chooser import cli, compiler
 
 
 @pytest.mark.parametrize(

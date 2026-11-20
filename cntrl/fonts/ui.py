@@ -7,7 +7,7 @@ from zlib import crc32
 import tyro
 from pydantic import BaseModel, Field
 
-from ..patch_switcher.models import FontMetrics
+from ..patch_chooser.models import FontMetrics
 from .assets import decode, pack
 from .catalogue import FONT_IDS, UI_FONTS, bundled_sources
 from .characters import printable_characters

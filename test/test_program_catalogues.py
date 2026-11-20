@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import compiler, data_files, models, resolved
+from cntrl.patch_chooser import compiler, data_files, models, resolved
 
 
 @pytest.fixture
@@ -157,7 +157,7 @@ def test_preset_and_internal_catalogues_merge_by_bank() -> None:
 
 
 def test_flat_example_compiles(target: models.Target) -> None:
-    show = compiler.read_document(Path('examples/patch-switcher/program-changes.toml'))
+    show = compiler.read_document(Path('examples/patch-chooser/program-changes.toml'))
     compiler.compile_show(show, {}, [], target)
 
 

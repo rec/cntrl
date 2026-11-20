@@ -7,7 +7,7 @@ from zlib import crc32
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     compiler,
     display,
     midi_processing,

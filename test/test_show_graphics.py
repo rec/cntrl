@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_switcher import compiler, graphics, models
+from cntrl.patch_chooser import compiler, graphics, models
 
 
 @pytest.fixture

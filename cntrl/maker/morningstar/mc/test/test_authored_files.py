@@ -4,28 +4,28 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_switcher import compiler, models, resolved, songs
-from cntrl.patch_switcher.cli import save_asset
+from cntrl.patch_chooser import compiler, models, resolved, songs
+from cntrl.patch_chooser.cli import save_asset
 
 
 @pytest.mark.parametrize(
     ('path', 'definitions', 'tables'),
     [
         (
-            'examples/patch-switcher/patches.toml',
-            'examples/patch-switcher/definitions.toml',
+            'examples/patch-chooser/patches.toml',
+            'examples/patch-chooser/definitions.toml',
             [
-                'examples/patch-switcher/table.toml',
-                'examples/patch-switcher/tags.toml',
+                'examples/patch-chooser/table.toml',
+                'examples/patch-chooser/tags.toml',
             ],
         ),
         (
-            'examples/patch-switcher/pman.toml',
+            'examples/patch-chooser/pman.toml',
             'instruments/definitions.toml',
             ['instruments/patchman.toml', 'instruments/tags.toml'],
         ),
         (
-            'examples/patch-switcher/dual-internal.toml',
+            'examples/patch-chooser/dual-internal.toml',
             None,
             ['instruments/tags.toml'],
         ),
@@ -104,4 +104,4 @@ def test_instrument_catalogues_match_declared_profiles(instrument: str) -> None:
         assert patch.bank is None or patch.bank in profile.banks
 
 
-TARGET = Path('cntrl/maker/morningstar/mc/patch-switcher-target.json')
+TARGET = Path('cntrl/maker/morningstar/mc/patch-chooser-target.json')

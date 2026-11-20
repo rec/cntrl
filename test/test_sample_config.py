@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from cntrl.patch_switcher import models
+from cntrl.patch_chooser import models
 
 if TYPE_CHECKING:
     from reccy.pytest_plugin import SampleConfigRegression
@@ -20,9 +20,9 @@ class ExamplePageSettings(models.PageSettings, frozen=True):
 class ExampleSetup(models.Setup, frozen=True):
     page_settings: models.PageSettings = ExamplePageSettings()
     regions: dict[str, models.PageRegion] = {
-        'performance': models.PageRegion(pages=['patch-switcher']),
+        'performance': models.PageRegion(pages=['patch-chooser']),
         'tools': models.PageRegion(
-            pages=[n for n in models.Setup().pages if n != 'patch-switcher']
+            pages=[n for n in models.Setup().pages if n != 'patch-chooser']
         ),
     }
     layout: models.PageLayout | None = models.PageLayout(

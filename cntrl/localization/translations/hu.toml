@@ -2,6 +2,7 @@ language = 'hu'
 name = 'Magyar'
 
 [messages]
+patch_chooser = { text = 'Hangszínválasztó' }
 time = { text = 'Idő' }
 time_controls = { text = '{send:s} küldés/{source:s} forrás' }
 panic = { text = 'Pánik' }

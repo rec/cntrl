@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import compiler, display, models, resolved
+from cntrl.patch_chooser import compiler, display, models, resolved
 
 
 @pytest.fixture

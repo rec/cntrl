@@ -45,7 +45,7 @@ Regenerate the shared assets and target metadata from the repository root:
 
 ```sh
 uv run --no-sync python -m cntrl.maker.morningstar.mc.export_fonts --output cntrl/maker/morningstar/mc/font_sources
-uv run --no-sync python -m cntrl.maker.morningstar.mc.build_font_metrics --output cntrl/maker/morningstar/mc/patch-switcher-target.json
+uv run --no-sync python -m cntrl.maker.morningstar.mc.build_font_metrics --output cntrl/maker/morningstar/mc/patch-chooser-target.json
 uv run --no-sync python -m cntrl.fonts.status
 uv run --no-sync python -m cntrl.localization.build
 ```
@@ -214,7 +214,7 @@ uv run --frozen -m cntrl.maker.morningstar.mc.build_bitmap_fonts
 uv run --frozen -m cntrl.maker.morningstar.mc.build_font_metrics
 ```
 
-The first command writes `firmware/patch_switcher/font_*.cpp` and
+The first command writes `firmware/patch_chooser/font_*.cpp` and
 `bitmap_fonts.h`. It uses monochrome FreeType rendering without kerning and
 encodes the existing ST7735 version 1 font format. The second command exports
 glyph advances, bearings and line heights into the existing target description.
@@ -240,7 +240,7 @@ Compile and copy it as a separate named setup:
 
 ```bash
 uv run --frozen cntrl setup copy cntrl/maker/morningstar/mc/font-demo.toml \
-  --target cntrl/maker/morningstar/mc/patch-switcher-target.json \
+  --target cntrl/maker/morningstar/mc/patch-chooser-target.json \
   --port /dev/cu.usbmodem144682801
 uv run --frozen cntrl setup set font-demo --port /dev/cu.usbmodem144682801
 ```

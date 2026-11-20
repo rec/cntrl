@@ -20,9 +20,9 @@ from reccy.configuration.tyro import unit_spec
 from reccy.configuration.units import Seconds
 from serial.tools.list_ports import comports
 
-from ....patch_switcher import devices
-from ....patch_switcher.core_midi import Midi, exchange
-from ....patch_switcher.transport import SerialConnection, SetupClient
+from ....patch_chooser import devices
+from ....patch_chooser.core_midi import Midi, exchange
+from ....patch_chooser.transport import SerialConnection, SetupClient
 from . import transport_trace, upload_helper
 
 

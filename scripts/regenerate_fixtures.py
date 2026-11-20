@@ -9,7 +9,7 @@ from pathlib import Path
 import tyro
 from pydantic import BaseModel
 
-from cntrl.patch_switcher import compiler, models, setup_bundle, songs
+from cntrl.patch_chooser import compiler, models, setup_bundle, songs
 
 
 class RegenerateFixtures(BaseModel, frozen=True):

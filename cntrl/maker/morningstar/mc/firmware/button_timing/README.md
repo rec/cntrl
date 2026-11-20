@@ -11,7 +11,7 @@ make -C cntrl/maker/morningstar/mc/firmware button-timing
 ```
 
 The image is `../build/button-timing/button_timing.ino.hex`. Use the established
-upload-helper workflow, backing up `../build/patch-switcher.hex` before placing
+upload-helper workflow, backing up `../build/patch-chooser.hex` before placing
 the diagnostic at that fixed upload path. Restore the saved performance image
 through the same workflow after measuring. Do not run the performance build
 while that fixed upload path is being used for the diagnostic.

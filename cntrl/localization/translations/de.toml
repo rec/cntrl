@@ -2,6 +2,7 @@ language = 'de'
 name = 'Deutsch'
 
 [messages]
+patch_chooser = { text = 'Patch-Auswahl' }
 time = { text = 'Zeit' }
 time_controls = { text = '{send:s} Senden/{source:s} Quelle' }
 panic = { text = 'Panik' }

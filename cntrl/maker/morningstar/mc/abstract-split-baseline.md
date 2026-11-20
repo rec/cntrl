@@ -34,7 +34,7 @@ indices. The board's poll loop samples each millisecond, passes raw transitions
 to the portable controller, and dispatches the recognized binding through the
 patch executor. MIDI messages enter the bridge's output queues and state tracker
 before the device transports accept them. Pin identities, scan time and output
-route mapping currently meet in `patch_switcher/target.cpp`.
+route mapping currently meet in `patch_chooser/target.cpp`.
 
 Status starts with the board's status snapshot and `pages.h`, which constructs
 text and graphical lines for the right-hand viewport. `renderer.h` measures the

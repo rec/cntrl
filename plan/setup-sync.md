@@ -14,17 +14,17 @@ TOML loader, compiler, USB transfer, backup and exporter through `cntrl setup sy
 
 ## Existing foundation
 
-- [Backups](../cntrl/patch_switcher/backups.py) save compiled setups, editable
+- [Backups](../cntrl/patch_chooser/backups.py) save compiled setups, editable
   exports, history and associated assets. A backup and a source synchronization
   have different completion criteria: a readable snapshot does not establish
   that it has been merged into the user's authoring files.
-- The [exporter](../cntrl/patch_switcher/resolved.py) reconstructs editable values
+- The [exporter](../cntrl/patch_chooser/resolved.py) reconstructs editable values
   from the current compiled document. Derived volume and pan edits can remain
   overrides; program/bank changes or clearing an inherited setting can require
   a complete program selection. See [Patch authoring](../doc/patches.md).
-- [History comparison](../cntrl/patch_switcher/history.py) compares exported
+- [History comparison](../cntrl/patch_chooser/history.py) compares exported
   configuration values. It does not merge changes into their original files.
-- The [data-file loader](../cntrl/patch_switcher/data_files.py) composes authoring
+- The [data-file loader](../cntrl/patch_chooser/data_files.py) composes authoring
   files. Its current merge-origin information is not a complete, retained source
   map for reconstructing those files from a downloaded setup.
 

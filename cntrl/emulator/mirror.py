@@ -6,8 +6,8 @@ from uuid import uuid4
 
 import tomlkit
 
-from ..patch_switcher import binary_format, storage_info, transport
-from ..patch_switcher.backups import persistent_prefix
+from ..patch_chooser import binary_format, storage_info, transport
+from ..patch_chooser.backups import persistent_prefix
 
 
 def download(

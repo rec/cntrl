@@ -14,7 +14,7 @@ tool output, including while the tool is Off. Native tests cover a blocked
 termination and eventual completion without duplicates. The target submits into
 the same ordered transmitter FIFO, placing tool bytes after the terminator.
 
-**Evidence:** `firmware/patch_switcher/target.cpp:57` (`enter_panic`),
+**Evidence:** `firmware/patch_chooser/target.cpp:57` (`enter_panic`),
 `:76` (`enter_cable_test`), `:103` (`output_idle`), and `Board::poll`;
 generic `firmware/include/cntrl/midi_bridge.h:88`, `reset_route()` and `service()`.
 
@@ -37,7 +37,7 @@ This is a gap against the interrupted-SysEx and exclusive ownership contracts.
 Disconnect discards remaining host pedal batches and records the drops; reconnect
 cannot replay them. Native tests cover disconnect before and during submission.
 
-**Evidence:** `firmware/patch_switcher/target.cpp:119` (`send`), `:134`
+**Evidence:** `firmware/patch_chooser/target.cpp:119` (`send`), `:134`
 (`submit`), `:191` (`poll`), and the output-idle guards in `poll_target`;
 `firmware/usb-midi-interface.patch:156` makes `try_write_packed()` return false
 when the host transmitter has no `txpipe`.
@@ -62,7 +62,7 @@ has drained. History steps emit WAIT only while still busy, so a completion cann
 overwrite a progress reply from the same step. MIDI, buttons and drawing keep
 running under serial backpressure; no extra reply queue is allocated.
 
-**Evidence:** `firmware/patch_switcher/target.cpp:182` (`reply`) and the partial
+**Evidence:** `firmware/patch_chooser/target.cpp:182` (`reply`) and the partial
 serial write at the end of `Board::poll`; generic Documents history progress
 replies in `history_tick()`.
 
@@ -82,7 +82,7 @@ ready-state is sufficient. Test a serial sink accepting one byte at a time.
 **Resolved:** failed commands close the writer, and the target polls a ten-second
 inactivity timeout. Native font-peer assertions cover timeout and malformed DATA.
 
-**Evidence:** `firmware/patch_switcher/font_storage.h:23`–`:57`.
+**Evidence:** `firmware/patch_chooser/font_storage.h:23`–`:57`.
 
 The generic error lambda only replies. Invalid DATA, an unknown font command or
 a client disappearing after BEGIN leaves `writer_` open. Unlike document uploads,
@@ -101,8 +101,8 @@ hides a second protocol owner (`target.cpp:539`, `splash/router.h`).
 per transaction. Unchanged active faces are borrowed during preparation, acquire
 ownership on commit and remain owned by the active cache on rollback.
 
-**Evidence:** `firmware/patch_switcher/font_storage.h:15` (`stage`),
-`:106` (`verify`), `firmware/patch_switcher/font_asset.h` (`Cache`).
+**Evidence:** `firmware/patch_chooser/font_storage.h:15` (`stage`),
+`:106` (`verify`), `firmware/patch_chooser/font_asset.h` (`Cache`).
 
 Each distinct size from one asset verifies the entire file again, synchronously.
 The cache only deduplicates pending faces; selecting another setup with the same
@@ -123,7 +123,7 @@ choosing a larger memory-management change.
 
 ## Deployment-status references
 
-`firmware/patch-switcher.md` records the Panic combined-image upload and its
+`firmware/patch-chooser.md` records the Panic combined-image upload and its
 post-boot setup verification. Installation does not establish physical MIDI qualification.
 
 ## Additional work beyond the prompt

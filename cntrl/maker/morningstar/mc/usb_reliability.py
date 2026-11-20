@@ -24,10 +24,10 @@ from tomlkit.exceptions import ParseError
 
 from .... import build
 from ....firmware.intel_hex import read_hex
-from ....patch_switcher import backups, cli, data_files, models
-from ....patch_switcher.core_midi import Midi
-from ....patch_switcher.transport import SerialConnection, SetupClient, UsbProtocolError
-from ....patch_switcher.usb_frames import Frame
+from ....patch_chooser import backups, cli, data_files, models
+from ....patch_chooser.core_midi import Midi
+from ....patch_chooser.transport import SerialConnection, SetupClient, UsbProtocolError
+from ....patch_chooser.usb_frames import Frame
 from . import flash_target, qualify_usb_midi, release, upload_helper
 
 

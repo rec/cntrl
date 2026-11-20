@@ -2,7 +2,7 @@
 
 Current implementation: the active setup selects the role of each Omniport
 in the setup's `[trs_ports]` table. USB cables 2 through 5 forward only to jacks
-configured for MIDI output. See the [target guide](firmware/patch-switcher.md#trs-port-configuration).
+configured for MIDI output. See the [target guide](firmware/patch-chooser.md#trs-port-configuration).
 The dated plan below records the original implementation.
 
 Status, 2026-10-25: implemented, built, tested and flashed. macOS now exposes
@@ -10,7 +10,7 @@ the intended two inputs and six outputs; both the user and native port listing
 confirmed the layout. USB-to-DIN output passed byte-for-byte qualification
 through a CME U6MIDI Pro, including default-off behavior. The two physical input
 paths, TRS output and four configurable outputs still need individual physical
-loopback qualification. See the [current deployment](firmware/patch-switcher.md#current-deployment-2026-10-25).
+loopback qualification. See the [current deployment](firmware/patch-chooser.md#current-deployment-2026-10-25).
 
 The earlier single-port macOS enumeration was transient. A saved MIDI
 configuration contained only cable 0 for this serial number, but the exact step
@@ -247,7 +247,7 @@ version 8 with byte-for-byte read-back verification. The backup and test outputs
 are local ignored artifacts, not committed personal setup data.
 
 Portable implementation: `firmware/include/cntrl/midi_bridge.h`. MC pin and USB
-adaptation: `firmware/patch_switcher/target.cpp` in this directory. The target
+adaptation: `firmware/patch_chooser/target.cpp` in this directory. The target
 build applies `firmware/usb-midi-interface.patch` to pinned Teensy 1.62.0. Both
 USB speeds declare two computer inputs and six outputs with jack names. CDC is
 retained. The USB device revision is increased to 0x0282 for the changed layout;

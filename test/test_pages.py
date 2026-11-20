@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import compiler, layout, models, resolved
+from cntrl.patch_chooser import compiler, layout, models, resolved
 from scripts import native_tests
 
 
@@ -80,7 +80,7 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     pages = exported['pages']
     assert exported['layout']['focus'] == ('tools' if count >= 2 else 'main')
     assert not {'menu', 'trs-ports', 'expression'} & pages.keys()
-    assert pages['patch-switcher']['min_windows'] == 0
+    assert pages['patch-chooser']['min_windows'] == 0
     if count == 3:
         assert exported['regions']['tools']['pages'][-3:] == [
             'pong',
@@ -157,7 +157,7 @@ def test_migrated_legacy_setup_keeps_live_patch_state_while_cycling_tools(
     legacy = models.Setup.model_validate(
         layout.unpack(original, original.index(b'CPAG'))
     )
-    assert sum(p.type == 'patch-switcher' for p in legacy.pages.values()) == 1
+    assert sum(p.type == 'patch-chooser' for p in legacy.pages.values()) == 1
     migrated = tmp_path / 'legacy.golden'
     migrated.write_text(resolved.upgrade(original).hex())
     program = native_programs.build('test/test_application.cpp')
@@ -211,7 +211,7 @@ def test_window_priority_requires_every_declared_id() -> None:
 
 
 @pytest.mark.parametrize('count', [5, 40, 255])
-def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
+def test_patch_chooser_instances_follow_encoded_page_count(count: int) -> None:
     data = layout.pack(
         models.Setup(pages={str(i): models.Page() for i in range(count)}), ['screen']
     )
@@ -224,7 +224,7 @@ def test_patch_switcher_instances_follow_encoded_page_count(count: int) -> None:
         t
         for t in layout.PAGE_TYPES
         if t
-        and t not in ('None', 'patch-switcher', 'banked', 'pong', 'language', 'time')
+        and t not in ('None', 'patch-chooser', 'banked', 'pong', 'language', 'time')
     ],
 )
 @pytest.mark.parametrize('count', [0, 1, 3])

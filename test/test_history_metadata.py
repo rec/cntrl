@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_switcher import compiler, history, models, transport
+from cntrl.patch_chooser import compiler, history, models, transport
 from scripts import native_tests
 
 

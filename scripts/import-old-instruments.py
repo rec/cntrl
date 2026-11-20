@@ -16,7 +16,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, TypeAdapter
 
-from cntrl.patch_switcher import models
+from cntrl.patch_chooser import models
 
 
 class ImportOldInstruments(BaseModel, frozen=True):

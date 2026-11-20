@@ -1,4 +1,4 @@
-#include "patch_switcher/midi_binding.h"
+#include "patch_chooser/midi_binding.h"
 #include <cntrl/usb_midi_forward.h>
 #include <cassert>
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from cntrl.patch_switcher.storage_info import read_storage_report
+from cntrl.patch_chooser.storage_info import read_storage_report
 from scripts import native_tests
 
 

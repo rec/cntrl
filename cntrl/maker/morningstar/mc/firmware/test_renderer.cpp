@@ -1,4 +1,4 @@
-#include "patch_switcher/renderer.h"
+#include "patch_chooser/renderer.h"
 #include "usb_probe/buttons.h"
 #include <cassert>
 #include <cstring>

@@ -19,14 +19,14 @@ Compile a setup from the repository root, for example:
 ```bash
 mkdir -p build/converted-setups
 uv run cntrl compile cntrl/maker/morningstar/mc/setups/pman.toml \
-  --target cntrl/maker/morningstar/mc/patch-switcher-target.json \
+  --target cntrl/maker/morningstar/mc/patch-chooser-target.json \
   --output build/converted-setups/pman.bin
 ```
 
 Use the same command with `font-demo` or `sd-font-demo` to compile either font
 setup. Font assets are written beside the compiled setup in `fonts/`.
 
-The generic examples remain under `examples/patch-switcher/`; their pman example
+The generic examples remain under `examples/patch-chooser/`; their pman example
 uses `instruments/definitions.toml`, `instruments/patchman.toml`, and
 `instruments/tags.toml`. Instrument
 catalogues use numbered bank tables containing ordered program names and metadata.
@@ -35,12 +35,12 @@ The documented program catalogues contain fixed voice information; personal tag
 assignments live separately in `instruments/tags.toml`.
 
 The shared channel-1 Internal-bank setup is in
-`examples/patch-switcher/dual-internal.toml`. It sends one Program Change per
+`examples/patch-chooser/dual-internal.toml`. It sends one Program Change per
 activation and shows both instruments' sound names. Both units must already be
 set to Internal. From the repository root:
 
 ```sh
-uv run --frozen cntrl compile examples/patch-switcher/dual-internal.toml \
-  --target cntrl/maker/morningstar/mc/patch-switcher-target.json \
+uv run --frozen cntrl compile examples/patch-chooser/dual-internal.toml \
+  --target cntrl/maker/morningstar/mc/patch-chooser-target.json \
   --table instruments/tags.toml --output /tmp/dual-internal.bin
 ```

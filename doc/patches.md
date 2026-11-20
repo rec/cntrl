@@ -166,7 +166,7 @@ When files are combined with `+`, different bank keys merge without changing
 program numbers. Equal program arrays are retained once; conflicting arrays are
 errors even with conflict avoidance enabled. Flat and bank-keyed catalogues for
 the same instrument cannot be mixed. Existing explicit configurations and
-examples remain supported. See `examples/patch-switcher/program-changes.toml`
+examples remain supported. See `examples/patch-chooser/program-changes.toml`
 for a complete flat-list example.
 
 The documented VL70-m and Patchman catalogues keep their fixed program information
@@ -230,7 +230,7 @@ Unselected sounds in those source instruments are ignored when only the shared
 catalogue is loaded. This allows differently tagged sounds to share one action
 without changing the classifications of either sound.
 
-`examples/patch-switcher/dual-internal.toml` represents all 64 paired Internal
+`examples/patch-chooser/dual-internal.toml` represents all 64 paired Internal
 slots for the stock VL70-m and Patchman units on channel 1.
 
 ## Explicit patches
@@ -281,7 +281,7 @@ Use a reference table when adding fields, such as
 `{patch = 'lead', display_name = 'Solo'}` or
 `{document = 'other-setup', patch = 'lead'}`. Editable exports normalize
 references to tables, and those tables remain accepted by the shared parser.
-See [string-references.toml](../examples/patch-switcher/string-references.toml)
+See [string-references.toml](../examples/patch-chooser/string-references.toml)
 for a complete setup.
 
 ## Derived patches in songs

@@ -8,7 +8,7 @@ from PIL import Image
 from cntrl.maker.morningstar.mc import build_font_metrics
 from cntrl.maker.morningstar.mc.export_fonts import EmbeddedRaster
 from cntrl.maker.morningstar.mc.native_raster import NativeRaster
-from cntrl.patch_switcher import compiler, display, graphics, models
+from cntrl.patch_chooser import compiler, display, graphics, models
 from scripts import native_tests
 
 
@@ -41,7 +41,7 @@ def test_utility_pages_render_with_the_embedded_fonts(tmp_path: Path) -> None:
 
 def test_page_lines_select_different_native_font_families() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
+        compiler.read_document(Path(__file__).parents[1] / 'patch-chooser-target.json')
     )
     show = models.Setup.model_validate(
         {
@@ -93,7 +93,7 @@ def test_page_lines_select_different_native_font_families() -> None:
 )
 def test_native_autoscale_uses_largest_fitting_size_per_label(name: str) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
+        compiler.read_document(Path(__file__).parents[1] / 'patch-chooser-target.json')
     )
     face = next(f for f in target.fonts if f.name == name)
     texts = ['I', 'Wide patch name']
@@ -116,7 +116,7 @@ def test_native_autoscale_uses_largest_fitting_size_per_label(name: str) -> None
 
 def test_native_metrics_are_proportional_and_fit_selected_sizes() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
+        compiler.read_document(Path(__file__).parents[1] / 'patch-chooser-target.json')
     )
     for name in ('Arimo', 'AtkinsonNextSemiBold'):
         face = next(f for f in target.fonts if f.name == name)
@@ -137,7 +137,7 @@ def test_native_metrics_are_proportional_and_fit_selected_sizes() -> None:
 
 def test_ui_and_performance_catalogues_exclude_retired_fonts() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
+        compiler.read_document(Path(__file__).parents[1] / 'patch-chooser-target.json')
     )
     assert {'Arial', 'classic'}.isdisjoint(f.name for f in target.fonts)
     assert set(target.ui_fonts) == {
@@ -158,7 +158,7 @@ def test_bit_reader_crosses_bytes_and_decodes_signed_offsets() -> None:
 
 def test_unknown_font_is_rejected() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'patch-switcher-target.json')
+        compiler.read_document(Path(__file__).parents[1] / 'patch-chooser-target.json')
     )
     with pytest.raises(ValueError, match='unknown font'):
         graphics.font_choice(

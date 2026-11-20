@@ -7,7 +7,7 @@ namespace cntrl {
 // Named page records belong to the active document. Display IDs are in physical order.
 struct PageLayout {
     // The layout header stores page counts in one byte.
-    static constexpr unsigned max_pages = UINT8_MAX, max_controllers = max_pages, patch_switcher = 11, midi_monitor = 12, midi_looper = 13, arpeggiator = 14, banked = 15, pong = 16, language = 17, menu = 18, time = 19;
+    static constexpr unsigned max_pages = UINT8_MAX, max_controllers = max_pages, patch_chooser = 11, midi_monitor = 12, midi_looper = 13, arpeggiator = 14, banked = 15, pong = 16, language = 17, menu = 18, time = 19;
     const uint8_t *records = nullptr;
     unsigned pages() const { return records ? records[4] : 0; }
     unsigned windows() const { return records ? records[5] : 0; }
@@ -21,16 +21,16 @@ struct PageLayout {
     const uint8_t *page(unsigned index) const { return record(index) + 32; }
     unsigned controllers() const {
         unsigned count = 0;
-        for (unsigned i = 0; i < pages(); ++i) count += page(i)[0] == patch_switcher;
+        for (unsigned i = 0; i < pages(); ++i) count += page(i)[0] == patch_chooser;
         return count;
     }
     unsigned controller_page(unsigned slot) const {
-        for (unsigned i = 0; i < pages(); ++i) if (page(i)[0] == patch_switcher && !slot--) return i;
+        for (unsigned i = 0; i < pages(); ++i) if (page(i)[0] == patch_chooser && !slot--) return i;
         return pages();
     }
     unsigned controller_slot(unsigned index) const {
         unsigned slot = 0;
-        for (unsigned i = 0; i < index; ++i) slot += page(i)[0] == patch_switcher;
+        for (unsigned i = 0; i < index; ++i) slot += page(i)[0] == patch_chooser;
         return slot;
     }
     const uint8_t *region(unsigned index) const { return records + 12 + windows() * 32 + pages() * (34 + windows()) + index * 34; }
@@ -43,12 +43,12 @@ struct PageLayout {
         return regions();
     }
     static unsigned maximum_windows(unsigned type,unsigned available) {
-        return type == 10 ? 0 : type == patch_switcher ? available : type == banked || type == pong ? std::min(3u, available) : std::min(type == language || type == time ? 2u : 1u,available);
+        return type == 10 ? 0 : type == patch_chooser ? available : type == banked || type == pong ? std::min(3u, available) : std::min(type == language || type == time ? 2u : 1u,available);
     }
     unsigned minimum_windows(unsigned index) const {
         const auto *p = page(index);
         // Preserve stored records while overriding old tool-page window claims.
-        return p[0] == 10 ? 0 : p[0] == language || p[0] == time ? 2 : p[0] == patch_switcher || p[0] == banked || p[0] == pong ? p[1] : 1;
+        return p[0] == 10 ? 0 : p[0] == language || p[0] == time ? 2 : p[0] == patch_chooser || p[0] == banked || p[0] == pong ? p[1] : 1;
     }
     static bool valid_name(const uint8_t *name) {
         if (!name[0]) return false;

@@ -2,6 +2,7 @@ language = 'da'
 name = 'Dansk'
 
 [messages]
+patch_chooser = { text = 'Lydvælger' }
 time = { text = 'Tid' }
 time_controls = { text = '{send:s} sending/{source:s} kilde' }
 panic = { text = 'Panik' }

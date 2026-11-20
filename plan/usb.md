@@ -19,7 +19,7 @@ outputs.
 
 The investigation inspected the following paths.
 
-- `cntrl/maker/morningstar/mc/firmware/patch_switcher/target.cpp` creates one
+- `cntrl/maker/morningstar/mc/firmware/patch_chooser/target.cpp` creates one
   `USBHost` and one hosted MIDI driver. It creates no `USBHub` drivers. Availability,
   packet submission and disconnect handling use that one MIDI driver.
 - The target endpoint registry exposes one `usb-host` destination. Shared

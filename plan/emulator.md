@@ -27,7 +27,7 @@ emulation or a reproduction of a manufacturer's original firmware.
 - `cntrl/catalogue.py:load_catalogue` loads TOML into those records. The current
   catalogue shorthand constructs buttons from `buttons`; it does not yet expose
   every control kind that the Python model can represent.
-- `cntrl/patch_switcher/models.py:Target` describes a cntrl execution target:
+- `cntrl/patch_chooser/models.py:Target` describes a cntrl execution target:
   logical inputs, action bindings, graphical viewports, endpoints, fonts,
   resource limits and supported functions. It is not interchangeable with the
   hardware catalogue's `Controller`.

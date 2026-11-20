@@ -5,7 +5,7 @@ from pathlib import Path
 from zlib import crc32
 
 from .. import source_files
-from ..patch_switcher import models
+from ..patch_chooser import models
 from .bitmap import BitmapRaster
 from .catalogue import SIZES, bundled_sources
 from .outline import CHARACTER, GLYPH, POSITION, RUN, MissingGlyphs, Outline, Raster

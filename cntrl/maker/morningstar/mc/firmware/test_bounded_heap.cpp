@@ -1,4 +1,4 @@
-#include "patch_switcher/bounded_heap.h"
+#include "patch_chooser/bounded_heap.h"
 #include <cntrl/memory.h>
 #include <array>
 #include <cassert>

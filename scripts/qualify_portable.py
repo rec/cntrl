@@ -13,8 +13,8 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field
 
-from cntrl.patch_switcher import data_files, models, setup_bundle
-from cntrl.patch_switcher.compiler import read_document
+from cntrl.patch_chooser import data_files, models, setup_bundle
+from cntrl.patch_chooser.compiler import read_document
 
 
 class Qualification(BaseModel, frozen=True):
@@ -111,7 +111,7 @@ def qualify(options: Qualification) -> None:
                 [
                     sys.executable,
                     '-m',
-                    'cntrl.patch_switcher.cli',
+                    'cntrl.patch_chooser.cli',
                     'compile',
                     str(fixture),
                     '--target',

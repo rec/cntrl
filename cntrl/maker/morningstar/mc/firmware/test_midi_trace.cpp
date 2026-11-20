@@ -1,4 +1,4 @@
-#include "patch_switcher/midi_trace.h"
+#include "patch_chooser/midi_trace.h"
 #include <cassert>
 #include <cstring>
 #include <limits>
