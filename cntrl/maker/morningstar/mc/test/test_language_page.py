@@ -10,7 +10,7 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.localization import catalogue
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_switcher import compiler, languages, models, setup_bundle
+from cntrl.patch_chooser import compiler, languages, models, setup_bundle
 
 
 @pytest.mark.parametrize(
@@ -46,7 +46,7 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
     language_position = [
         p.type
         for p in models.Setup.model_validate(source).pages.values()
-        if p.type != 'patch-switcher'
+        if p.type != 'patch-chooser'
     ].index('language')
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'

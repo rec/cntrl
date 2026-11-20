@@ -1,3 +1,7 @@
+[messages.patch_chooser]
+en = 'Patch Chooser'
+context = 'Default patch chooser page name in the Pages and tools menu'
+
 [messages.pages_and_tools]
 en = 'Pages and tools'
 context = 'Main tools menu heading'

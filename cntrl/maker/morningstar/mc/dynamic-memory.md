@@ -95,8 +95,8 @@ fallback policy. No memory is taken from the separately reserved stack region.
 Reproduce the two builds from the repository root:
 
 ```sh
-uv run --no-sync python -m cntrl.patch_switcher.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output /private/tmp/cntrl-compact-release-normal
-uv run --no-sync python -m cntrl.patch_switcher.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output /private/tmp/cntrl-compact-release-diagnostic --diagnostics
+uv run --no-sync python -m cntrl.patch_chooser.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output /private/tmp/cntrl-compact-release-normal
+uv run --no-sync python -m cntrl.patch_chooser.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output /private/tmp/cntrl-compact-release-diagnostic --diagnostics
 ```
 
 Both exports contain `firmware.elf` and `memory.txt`. The most recent build's
@@ -516,10 +516,10 @@ transport failures remain unresolved qualification limits.
 Run from the repository root with the declared dependencies and pinned toolchain:
 
 ```sh
-uv run --no-sync python -m cntrl.patch_switcher.cli build \
+uv run --no-sync python -m cntrl.patch_chooser.cli build \
   --target-dir cntrl/maker/morningstar/mc --source-root . \
   --output /private/tmp/cntrl-memory-refresh-current-normal
-uv run --no-sync python -m cntrl.patch_switcher.cli build \
+uv run --no-sync python -m cntrl.patch_chooser.cli build \
   --target-dir cntrl/maker/morningstar/mc --source-root . \
   --output /private/tmp/cntrl-memory-refresh-current-diagnostic --diagnostics
 ```
@@ -645,7 +645,7 @@ allocation until a complete replacement is admitted. Native tests and host
 estimates use the documented alignment/header model, independently of the native
 operating system's allocator. SDK bootstrap use is subtracted from the available
 budget; later SDK growth is reported separately. The tracked
-`firmware/patch_switcher/heap_trace.cpp` tracks checked ownership in each chunk,
+`firmware/patch_chooser/heap_trace.cpp` tracks checked ownership in each chunk,
 including reallocations and frees from a different execution context. Its totals
 and validity must be checked on the physical target.
 
@@ -1151,7 +1151,7 @@ The rerun [manual workflow 43616199242](https://github.com/rec/cntrl/actions/run
 at `6f06f48` reports 1,617 passed and one skipped on each of Windows, Linux and
 Intel macOS. Diagnostic ARM builds, lint, typing and installed-wheel checks pass
 on all three. The overall workflow still fails at the pre-existing adapter-free
-dependency check: `cntrl/patch_switcher/cli.py:18` imports the Morningstar importer,
+dependency check: `cntrl/patch_chooser/cli.py:18` imports the Morningstar importer,
 and the include fragments in `scripts/split_midi_routing.py` are rejected by that
 checker. The same violations were reproduced locally. They were not changed or
 suppressed as part of the MIDI fix. CI artifacts are retained locally under
@@ -1462,14 +1462,14 @@ repeated with only the original two entries to relink their setup-table indices.
 The final comparison passed with `simple-setup` selected and
 `CNTRL READY 41 25405 7ee6114a starts=83 starts_status=ready`.
 The startup count stayed at 83 during restoration and verification. The user
-then cycled from TRS Ports back to Patch Switcher and confirmed it was displayed.
+then cycled from TRS Ports back to Patch Chooser and confirmed it was displayed.
 MIDI stress testing stopped; the communication failure is not considered fixed.
 
 The user then found that the region migration had changed the working page layout
 and controls. The normal image was rebuilt with the one-window tool policy in
 `b857268` and the legacy layout/control repair in `63f43ca`. The retained region
-architecture now keeps Patch Switcher on the left, tools on the right, and the
-old full-width Patch Switcher position in the F cycle. The user confirmed the
+architecture now keeps Patch Chooser on the left, tools on the right, and the
+old full-width Patch Chooser position in the F cycle. The user confirmed the
 layout and F cycle physically. The new image's HEX SHA-256 is
 `9d3a942d775a56a948c3ab73551fd4b39761862d3a170a36f37ef323e433d927`;
 the pedal returned with startup count 86. The first upload failed on a USB write;
@@ -1507,7 +1507,7 @@ project; the local recovery used a generated `build/reccy` symlink to it. Run
 `setup verify` commands from that export, using the normal image's `target.toml`.
 For the final page repair, overlay the `b857268` versions of
 `firmware/include/cntrl/page_layout.h`, `firmware/include/cntrl/document.h`,
-`cntrl/patch_switcher/models.py` and `cntrl/patch_switcher/layout.py`, then apply
+`cntrl/patch_chooser/models.py` and `cntrl/patch_chooser/layout.py`, then apply
 the `63f43ca` changes and, for the Expression update, the production changes in
 `ca33347`. Keep the remaining production sources at `8e1f07f` and use
 an SDK containing only that revision's declared patches, preserving newlib and
@@ -1555,17 +1555,17 @@ do not grow on player actions. Shared presentation no longer allocates per frame
 
 | Location | Present storage or constraint | Required treatment |
 | --- | --- | --- |
-| `firmware/patch_switcher/target.cpp` | Primary controller plus `DMAMEM extra_controllers[max_controllers - 1][sizeof(Controller)]`; placement constructs all three extras. | Allocate only the configured controller count. Placement `new` here does not allocate storage; removing only the constructor loop would leave the reservation in place. |
-| `firmware/patch_switcher/target.cpp` | `DMAMEM invocation_navigation[Bridge::owners]`: twelve complete navigation snapshots. Owner numbering reserves eight switch owners followed by controller owners. | Allocate actual active invocation snapshots using the shared stable-owner design. Update switch/controller delivery and return logic together. |
-| `firmware/patch_switcher/target.cpp` | Firmware visit record embeds two navigation states and fixed setup/song references; document/song/transfer objects also have static storage. | Stage dynamic return state before leaving a setup. Persist explicit values and counts, with no raw dynamic object serialization. Review optional module state by lifetime. |
-| `firmware/patch_switcher/target.cpp` | `RenderPixels` has current and previous full-display caches in RAM1: 61,440 pixels each, two bytes per pixel, 245,760 bytes together. `DMAMEM render_work` holds the largest display: 20,480 pixels, 40,960 bytes. | These sizes derive from the three physical 160-by-128 displays. Measure the need and lifetime of each copy, especially previous pixels for transitions. Any lazy buffer must be prepared before use; do not remove rendering buffers without preserving fades and transfer timing. |
-| `firmware/patch_switcher/displays.cpp` and `firmware/usb_probe/displays.h` | Two `DMAMEM DisplayBand` objects support display transfer and preparation. | Keep simultaneous producer/DMA lifetimes and required alignment/cache maintenance. A dynamic buffer must remain at a stable address until completion. No allocation or freeing in the completion interrupt. |
-| `firmware/patch_switcher/target.cpp` | Global USB session and splash receiver/router embed the shared 4096-byte transfer and text/frame workspaces. | Establish which transfers can coexist and acquire only the required workspaces. Preserve any in-flight serial/USB data before reusing or freeing storage. |
-| `firmware/patch_switcher/target.cpp` | Four `song_readers` and a four-pointer handle array are supplied to `SlotStorage`. | Map actual simultaneous reader roles, then allocate handles when needed. Do not replace a concurrency requirement with one shared mutable reader. File open/close may allocate inside the storage library. |
-| `firmware/patch_switcher/target.cpp` | Stream identities are indexed by the shared sixteen-route ceiling. Physical button/port arrays and four expression assignments follow the actual hardware. | Replace route-indexed state with actual endpoint counts. Keep geometry/capability-sized physical input state unless the target configuration makes a device optional. |
-| `firmware/patch_switcher/target.cpp` | SD identity formatting uses nine fixed text values; names, paths and replies use small bounded scratch. | Keep justified bounded formatting and allocation-free diagnostics. Do not heap-allocate every temporary string during an error report. |
-| `firmware/patch_switcher/usb_forward_device.cpp` | High/full-speed descriptor scratch is 512 bytes each; product scratch is 128 bytes. USB identity code also contains immutable descriptors. | Separate descriptor format/endpoint constraints from optional scratch. If made dynamic, construct before enumeration and keep storage alive for the USB driver's full access period. |
-| `firmware/patch_switcher/target_capabilities.h` and host target data | RAM capacity is 524,288 bytes and the host runtime allowance is 294,912 bytes. Target capabilities specify six buttons, four ports, three displays, ten endpoints and switch-count restrictions. | Keep physical capabilities separate from configurable collection limits. Replace the coarse runtime allowance with evidence-based fixed/core, configured and transient costs as the shared plan removes reservations. |
+| `firmware/patch_chooser/target.cpp` | Primary controller plus `DMAMEM extra_controllers[max_controllers - 1][sizeof(Controller)]`; placement constructs all three extras. | Allocate only the configured controller count. Placement `new` here does not allocate storage; removing only the constructor loop would leave the reservation in place. |
+| `firmware/patch_chooser/target.cpp` | `DMAMEM invocation_navigation[Bridge::owners]`: twelve complete navigation snapshots. Owner numbering reserves eight switch owners followed by controller owners. | Allocate actual active invocation snapshots using the shared stable-owner design. Update switch/controller delivery and return logic together. |
+| `firmware/patch_chooser/target.cpp` | Firmware visit record embeds two navigation states and fixed setup/song references; document/song/transfer objects also have static storage. | Stage dynamic return state before leaving a setup. Persist explicit values and counts, with no raw dynamic object serialization. Review optional module state by lifetime. |
+| `firmware/patch_chooser/target.cpp` | `RenderPixels` has current and previous full-display caches in RAM1: 61,440 pixels each, two bytes per pixel, 245,760 bytes together. `DMAMEM render_work` holds the largest display: 20,480 pixels, 40,960 bytes. | These sizes derive from the three physical 160-by-128 displays. Measure the need and lifetime of each copy, especially previous pixels for transitions. Any lazy buffer must be prepared before use; do not remove rendering buffers without preserving fades and transfer timing. |
+| `firmware/patch_chooser/displays.cpp` and `firmware/usb_probe/displays.h` | Two `DMAMEM DisplayBand` objects support display transfer and preparation. | Keep simultaneous producer/DMA lifetimes and required alignment/cache maintenance. A dynamic buffer must remain at a stable address until completion. No allocation or freeing in the completion interrupt. |
+| `firmware/patch_chooser/target.cpp` | Global USB session and splash receiver/router embed the shared 4096-byte transfer and text/frame workspaces. | Establish which transfers can coexist and acquire only the required workspaces. Preserve any in-flight serial/USB data before reusing or freeing storage. |
+| `firmware/patch_chooser/target.cpp` | Four `song_readers` and a four-pointer handle array are supplied to `SlotStorage`. | Map actual simultaneous reader roles, then allocate handles when needed. Do not replace a concurrency requirement with one shared mutable reader. File open/close may allocate inside the storage library. |
+| `firmware/patch_chooser/target.cpp` | Stream identities are indexed by the shared sixteen-route ceiling. Physical button/port arrays and four expression assignments follow the actual hardware. | Replace route-indexed state with actual endpoint counts. Keep geometry/capability-sized physical input state unless the target configuration makes a device optional. |
+| `firmware/patch_chooser/target.cpp` | SD identity formatting uses nine fixed text values; names, paths and replies use small bounded scratch. | Keep justified bounded formatting and allocation-free diagnostics. Do not heap-allocate every temporary string during an error report. |
+| `firmware/patch_chooser/usb_forward_device.cpp` | High/full-speed descriptor scratch is 512 bytes each; product scratch is 128 bytes. USB identity code also contains immutable descriptors. | Separate descriptor format/endpoint constraints from optional scratch. If made dynamic, construct before enumeration and keep storage alive for the USB driver's full access period. |
+| `firmware/patch_chooser/target_capabilities.h` and host target data | RAM capacity is 524,288 bytes and the host runtime allowance is 294,912 bytes. Target capabilities specify six buttons, four ports, three displays, ten endpoints and switch-count restrictions. | Keep physical capabilities separate from configurable collection limits. Replace the coarse runtime allowance with evidence-based fixed/core, configured and transient costs as the shared plan removes reservations. |
 
 ## Runtime allocation and dependency boundaries
 

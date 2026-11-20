@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import compiler, models, resolved, songs
+from cntrl.patch_chooser import compiler, models, resolved, songs
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def test_strings_in_every_patch_position_compile_and_round_trip(
     target: models.Target,
 ) -> None:
     source = compiler.read_document(
-        Path('examples/patch-switcher/string-references.toml')
+        Path('examples/patch-chooser/string-references.toml')
     )
     assert isinstance(source, dict)
     data = compiler.compile_show(source, {}, [], target)

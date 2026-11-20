@@ -48,7 +48,7 @@ restrictions, presets, calibration, or live device state are represented.
 
 ## Current application and qualification, 2026-10-25
 
-The independent patch-switcher is running on the photographed MC6 Pro, not just
+The independent patch-chooser is running on the photographed MC6 Pro, not just
 on host test hardware. Latest deployed source: `48b2693`, with version 9 data.
 The selected `pman` setup contains 256 patches in 15 categories, routed on
 channel 1 to DIN. It was backed up, recompiled and restored after the firmware
@@ -62,14 +62,14 @@ short-message and large-SysEx capture through a CME U6MIDI Pro. The two physical
 inputs and the other five outputs still need individual loopback qualification.
 Physical SD power-loss recovery and complete release qualification are not proven.
 
-See [deployment details](firmware/patch-switcher.md),
+See [deployment details](firmware/patch-chooser.md),
 [USB MIDI qualification](usb-midi-interface-plan.md), and
 [splash behavior](splash/README.md).
 
 ## Build and historical analysis
 
 See the [firmware build and inspection instructions](firmware/README.md),
-[patch-switcher build](firmware/patch-switcher.md),
+[patch-chooser build](firmware/patch-chooser.md),
 [upload-only helper](firmware/upload-helper.md),
 [firmware analysis](firmware-analysis.md) and
 [pin/peripheral map](mc6-pro-pin-map.md).

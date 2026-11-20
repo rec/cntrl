@@ -305,7 +305,7 @@ static std::vector<uint8_t> read_fixture(const char *path) {
     for (unsigned i = 0; i < hex.size(); i += 2) bytes.push_back(uint8_t(std::stoul(hex.substr(i, 2), nullptr, 16)));
     return bytes;
 }
-static void legacy_single_patch_switcher_preserves_performance_while_cycling_tools(const char *path) {
+static void legacy_single_patch_chooser_preserves_performance_while_cycling_tools(const char *path) {
     struct InputHardware : Hardware {
         cntrl::ui::PageHost<PagePlatform> *presentation = nullptr;
         unsigned sent = 0, taps = 0;
@@ -464,6 +464,10 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
     struct Context : Hardware {
         cntrl::ui::Application *application = nullptr;
         unsigned sends = 0;
+        std::string menu_name;
+        void show(unsigned window, const cntrl::Pane &pane) override {
+            if (window == 1) menu_name = pane.lines[1].text;
+        }
         bool send(const char *, const uint8_t *, unsigned) override { ++sends; return true; }
         bool state(unsigned operation, uint32_t value) override { return application->state(operation, value, *this); }
         void validation(bool active) override { application->controller().validation(active); }
@@ -473,6 +477,10 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
     } hardware;
     auto bytes = read_fixture(path);
     cntrl::Document document; assert(document.load(bytes.data(), unsigned(bytes.size()), hardware));
+    auto *name = bytes.data() + (document.page_layout().page(5) - bytes.data()) - 32;
+    std::memset(name, 0, 32); std::strcpy(reinterpret_cast<char *>(name), "patch-chooser");
+    cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size() - 28)));
+    assert(document.load(bytes.data(), unsigned(bytes.size()), hardware));
     const unsigned monitor_page = unsigned(document.page_layout().page(1) - bytes.data());
     for (unsigned count : {0u,1u,2u,3u,4u}) {
         auto monitored = bytes; monitored[monitor_page] = cntrl::PageLayout::midi_monitor; monitored[monitor_page + 1] = uint8_t(count);
@@ -492,6 +500,17 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         assert(app.prepare_pages(document)); app.finish_pages(true);
         cntrl::memory_budget = budget;
         primary.activate(document); app.configure(document, hardware);
+        app.menu.enter(); app.menu.poll(0);
+        app.menu.button(1, true); app.menu.button(1, true);
+        assert(hardware.menu_name.find("Patch Chooser") != std::string::npos);
+        cntrl::ui::i18n::lookup = [](cntrl::ui::i18n::Message message, bool) -> const char * {
+            return message == cntrl::ui::i18n::Message::patch_chooser ? "Sélecteur de sons" : nullptr;
+        };
+        app.language_changed();
+        assert(hardware.menu_name.find("Sélecteur de sons") != std::string::npos);
+        for (unsigned i = 0; i < 8; ++i) app.menu.button(1, true);
+        assert(hardware.menu_name.find("rhythm") != std::string::npos);
+        cntrl::ui::i18n::lookup = nullptr; app.language_changed(); app.menu.leave();
         PagePlatform platform; PageFonts fonts; PageDisplay display;
         display.windows = 3;
         uint16_t work[4096] = {};
@@ -584,7 +603,7 @@ static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware 
 }
 int main(int argc, char **argv) {
     assert(argc == 2 || argc == 3); selecting_pages_preserves_state_and_background_work(argv[1]);
-    if (argc == 3) legacy_single_patch_switcher_preserves_performance_while_cycling_tools(argv[2]);
+    if (argc == 3) legacy_single_patch_chooser_preserves_performance_while_cycling_tools(argv[2]);
     Hardware hardware; TestStorage setup_storage, song_storage;
     cntrl::Controller primary(hardware, hardware, hardware);
     cntrl::Documents documents(setup_storage, hardware, primary, hardware);
@@ -620,7 +639,7 @@ int main(int argc, char **argv) {
         hardware.transfer_busy = false; cntrl::Document empty; app.configure(empty, hardware); assert(hardware.blanks == 1);
         assert(&app.controller() == &primary);
         uint8_t pages[12 + 2 * 34] = {};
-        pages[4] = 2; pages[12 + 32] = pages[12 + 34 + 32] = cntrl::PageLayout::patch_switcher;
+        pages[4] = 2; pages[12 + 32] = pages[12 + 34 + 32] = cntrl::PageLayout::patch_chooser;
         assert(app.prepare_layout({pages})); app.finish_pages(true); app.layout = {pages};
         app.processing_index = 1; assert(&app.controller() == &app.at(1)); app.tick(0); assert(app.processing_index == cntrl::PageLayout::max_controllers);
     }

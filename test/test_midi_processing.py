@@ -5,8 +5,8 @@ import struct
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from cntrl.patch_switcher import midi_processing
-from cntrl.patch_switcher.models import MidiEndpoint
+from cntrl.patch_chooser import midi_processing
+from cntrl.patch_chooser.models import MidiEndpoint
 
 
 def endpoints() -> list[MidiEndpoint]:

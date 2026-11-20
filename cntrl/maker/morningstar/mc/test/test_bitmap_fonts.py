@@ -11,7 +11,7 @@ from cntrl.fonts.outline import Outline
 from cntrl.maker.morningstar.mc import build_bitmap_fonts
 from cntrl.maker.morningstar.mc.build_font_metrics import read_bits
 from cntrl.maker.morningstar.mc.export_fonts import FontExport, export, faces
-from cntrl.patch_switcher import compiler, models
+from cntrl.patch_chooser import compiler, models
 
 
 @pytest.mark.parametrize(
@@ -123,10 +123,10 @@ def test_generated_fonts_and_exported_metrics_are_current(tmp_path: Path) -> Non
     root = Path(__file__).parents[1]
     sources = export(FontExport(output=tmp_path / 'fonts', generated=tmp_path))
     target = models.Target.model_validate(
-        compiler.read_document(root / 'patch-switcher-target.json')
+        compiler.read_document(root / 'patch-chooser-target.json')
     )
     assert (tmp_path / 'embedded_fonts.h').read_bytes() == (
-        root / 'firmware/patch_switcher/embedded_fonts.h'
+        root / 'firmware/patch_chooser/embedded_fonts.h'
     ).read_bytes()
     assert faces(tmp_path / 'fonts', sources) == target.fonts
 

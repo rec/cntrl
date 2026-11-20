@@ -263,7 +263,7 @@ static void menu_page_shows_its_physical_confirm_label() {
     settings.words[cntrl::PageSettings::title_font] = 16;
     settings.words[cntrl::PageSettings::status_font] = 16;
     pages.configure(settings);
-    auto layout = page_fixture(3, {cntrl::PageLayout::patch_switcher, cntrl::PageLayout::menu}, {{0},{1}});
+    auto layout = page_fixture(3, {cntrl::PageLayout::patch_chooser, cntrl::PageLayout::menu}, {{0},{1}});
     cntrl::PageAllocation allocation;
     assert(allocation.prepare({layout.data()})); allocation.finish(true); allocation.configure({layout.data()});
     assert(allocation.region(1).first == 2 && allocation.region(1).count == 1);

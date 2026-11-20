@@ -7,7 +7,7 @@ import tomlkit
 from pydantic import ValidationError
 from pytest_regressions.file_regression import FileRegressionFixture
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     compiler,
     lfos,
     midi_messages,
@@ -15,7 +15,7 @@ from cntrl.patch_switcher import (
     models,
     resolved,
 )
-from cntrl.patch_switcher.models import MidiEndpoint
+from cntrl.patch_chooser.models import MidiEndpoint
 from scripts import native_tests
 
 

@@ -3,7 +3,7 @@
 The importer puts all 128 MC6 Pro banks into one named `Banked` patch,
 inside an editable setup. The patch owns its bank collection, preset-page
 definitions, initial bank and navigation chords. A Banked Page displays the
-running patch; the ordinary patch switcher selects and sends it alongside
+running patch; the ordinary patch chooser selects and sends it alongside
 other patches.
 The three populated bank slots and all empty slots retain their original order,
 including duplicate names. Each bank contains its enabled preset pages, up to

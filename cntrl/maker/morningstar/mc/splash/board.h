@@ -1,7 +1,7 @@
 #pragma once
 #include <cntrl/animation/animation.h>
 #include <cntrl/asset_storage.h>
-#include "../firmware/patch_switcher/filesystem.h"
+#include "../firmware/patch_chooser/filesystem.h"
 #include <SD.h>
 #include "displays.h"
 

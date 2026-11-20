@@ -10,7 +10,7 @@ from zlib import crc32
 import pytest
 from native_peer import NativePeer
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     compiler,
     data_files,
@@ -511,7 +511,7 @@ def test_empty_song_library_downloads() -> None:
 def test_downloaded_song_source_preserves_unicode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cntrl.patch_switcher import cli
+    from cntrl.patch_chooser import cli
 
     monkeypatch.setattr(
         io, 'text_encoding', lambda encoding, *args: encoding or 'cp1252'

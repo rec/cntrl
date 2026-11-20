@@ -68,7 +68,7 @@ it is offered!
   down to first MIDI byte
 
 * Many pages to choose from in your setup, add one, several or all:
-  * Patch switcher (with undo)
+  * Patch chooser (with undo)
   * MIDI recorder/playback
   * MIDI looper
   * Tap tempo

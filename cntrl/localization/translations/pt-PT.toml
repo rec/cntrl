@@ -2,6 +2,7 @@ language = 'pt-PT'
 name = 'Português'
 
 [messages]
+patch_chooser = { text = 'Seletor de sons' }
 time = { text = 'Tempo' }
 time_controls = { text = '{send:s} envio/{source:s} fonte' }
 panic = { text = 'Pânico' }

@@ -9,7 +9,7 @@ from pytest_regressions.file_regression import FileRegressionFixture
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_switcher import compiler, models, setup_bundle
+from cntrl.patch_chooser import compiler, models, setup_bundle
 
 
 @pytest.mark.parametrize('default_catalogue', [False, True])
@@ -26,7 +26,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
     utility_pages = [
         p.type
         for p in models.Setup.model_validate(source).pages.values()
-        if p.type != 'patch-switcher'
+        if p.type != 'patch-chooser'
     ]
     source['page_settings'] = {'status_font': 'TamzenBold7x13'}
     raw = compiler.compile_show(source, {}, [], target)

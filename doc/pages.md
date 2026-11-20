@@ -2,7 +2,7 @@
 
 A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
-`patch-switcher`, `status`, `time`, `cable-test`, `panic`,
+`patch-chooser`, `status`, `time`, `cable-test`, `panic`,
 `midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`, `menu`, and `None`.
 Select a region or a page in the Pages and tools menu. F and the existing
 reverse-page control cycle only the focused region. Page and region names
@@ -17,8 +17,8 @@ Setups using the default pages and automatically generated regions start with
 the tools region focused, so F browses this utility cycle. Explicit layout focus
 settings take precedence.
 
-Each patch-switcher page keeps its own navigation, sent-state and undo history.
-All configured patch-switchers continue executing queued patches and delays while
+Each patch-chooser page keeps its own navigation, sent-state and undo history.
+All configured patch-choosers continue executing queued patches and delays while
 hidden. They share the setup's patch library, cycles and display templates.
 Shared hardware services, including the MIDI clock, remain shared across pages.
 
@@ -64,16 +64,16 @@ menu marks its region with `*`. Changing focus preserves all page selections.
 Selecting a page also focuses its region. Held gestures are cancelled when
 focus changes. Management and emergency controls remain global.
 
-When regions are omitted or empty, multi-display targets put Patch Switchers and Banked pages in a
+When regions are omitted or empty, multi-display targets put Patch Choosers and Banked pages in a
 `performance` region and other pages in a `tools` region, omitting empty groups.
 A single-display target uses one `main` region containing the entire catalogue.
 Omitting `pages` uses the built-in catalogue. These defaults focus the first
-physical region, usually the Patch Switcher on a multi-display target.
+physical region, usually the Patch Chooser on a multi-display target.
 
 The default tools cycle ends with Pong followed by None. Pong requires three
-windows; the default Patch Switcher can yield all its windows while the game
+windows; the default Patch Chooser can yield all its windows while the game
 is selected, preserving its state and background execution. Selecting None
-returns all windows to the Patch Switcher. Controllers with fewer than three
+returns all windows to the Patch Chooser. Controllers with fewer than three
 displays omit Pong from the implicit catalogue; explicitly configured Pong
 pages still require three displays.
 
@@ -131,12 +131,12 @@ type = 'midi-monitor'
 min_windows = 1
 
 [pages.live]
-type = 'patch-switcher'
+type = 'patch-chooser'
 min_windows = 1
 give_up_windows = ['right', 'center', 'left']
 
 [pages.alternate]
-type = 'patch-switcher'
+type = 'patch-chooser'
 min_windows = 1
 give_up_windows = ['left', 'right', 'center']
 ```
@@ -155,7 +155,7 @@ an existing saved setup. They do not acquire spare windows. The blank `None`
 placeholder keeps minimum and maximum zero. Banked and Pong require three
 windows.
 
-For Patch Switcher, `min_windows` replaces the former page setting `windows`
+For Patch Chooser, `min_windows` replaces the former page setting `windows`
 and defaults to one for explicitly configured pages. The default catalogue
 sets it to zero so full-width tools can occupy all displays. Zero lets it receive no windows while its
 controls and background work remain available. It can acquire spare windows up
@@ -171,9 +171,9 @@ cannot meet its minimums, or a minimum exceeds its type's maximum.
 On a three-display pedal, the example gives Live two windows and Status one.
 Selecting Monitor also gives Live two windows and Monitor one. Reverse
 `layout.order` to move tools to the left. Allocation priority affects spare
-windows only where more than one selected Patch Switcher can use them.
+windows only where more than one selected Patch Chooser can use them.
 
-Patch Switcher's `give_up_windows` lists logical content slots to surrender
+Patch Chooser's `give_up_windows` lists logical content slots to surrender
 first, defaulting to the reverse target display order. Surviving slots keep
 their logical order and map into the region's physical span. These names do
 not anchor content to a physical side.
@@ -198,10 +198,10 @@ page records with minimums, ordered region cycles, allocation direction and
 initial focus. Recompile authored setups after changing page `windows` to
 `min_windows`. Editable export preserves the compiled region layout.
 
-Upgrading an older layout with one Patch Switcher and multiple displays keeps
-Patch Switcher on the left and its original tool cycle on the right. The tools
+Upgrading an older layout with one Patch Chooser and multiple displays keeps
+Patch Chooser on the left and its original tool cycle on the right. The tools
 region starts focused, so F cycles tools while unused tool buttons continue to
-control the visible Patch Switcher. The old Patch Switcher position in that
-cycle becomes a blank `full-performance` page, giving Patch Switcher every
+control the visible Patch Chooser. The old Patch Chooser position in that
+cycle becomes a blank `full-performance` page, giving Patch Chooser every
 display without replacing its navigation or undo state. Existing page names
 and order are retained. Layouts already using regions retain their saved layout.

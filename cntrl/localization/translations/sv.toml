@@ -2,6 +2,7 @@ language = 'sv'
 name = 'Svenska'
 
 [messages]
+patch_chooser = { text = 'Ljudväljare' }
 time = { text = 'Tid' }
 time_controls = { text = '{send:s} sändning/{source:s} källa' }
 panic = { text = 'Panik' }

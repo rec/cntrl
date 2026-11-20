@@ -115,7 +115,7 @@ def run(options: Experiment) -> None:
             timeout=1200,
             env=dict(toolchain.environment(root), PYTHONPATH=str(source_root)),
         )
-    elf = root / 'build/boot-switch/cntrl/patch_switcher.ino.elf'
+    elf = root / 'build/boot-switch/cntrl/patch_chooser.ino.elf'
     shutil.copyfile(elf, baseline / 'firmware.elf')
     shutil.copyfile(root / '.tools/provenance.toml', output / 'toolchain.toml')
     variants['Os'] = measure(root, baseline, baseline / 'firmware.elf', 0)
@@ -147,7 +147,7 @@ def run(options: Experiment) -> None:
                 check=False,
                 timeout=1200,
             )
-        elf = directory / 'cntrl/patch_switcher.ino.elf'
+        elf = directory / 'cntrl/patch_chooser.ino.elf'
         measurement = measure(root, directory, elf, completed.returncode)
         measurement['diagnostic_only'] = diagnostic
         measurement['usable_build'] = not diagnostic and completed.returncode == 0

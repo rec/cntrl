@@ -20,7 +20,7 @@ from ..firmware import native_cache
 from ..firmware.build_info import commit_id
 from ..firmware.capabilities import header
 from ..fonts.catalogue import FONT_IDS
-from ..patch_switcher.models import Target
+from ..patch_chooser.models import Target
 from . import font_comparison
 from .layout import EmulatorLayout
 from .replay import Event

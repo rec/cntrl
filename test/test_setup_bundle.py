@@ -8,7 +8,7 @@ from zlib import crc32
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,
@@ -53,7 +53,7 @@ def test_active_setup_accounting_does_not_sum_inactive_setups() -> None:
     bundle = setup_bundle.build(
         {'a': b'a', 'b': b'b'},
         {
-            'a': {'pages': {'x': {'type': 'patch-switcher', 'ram2_bytes': 100}}},
+            'a': {'pages': {'x': {'type': 'patch-chooser', 'ram2_bytes': 100}}},
             'b': {'pages': {'status': {'type': 'status', 'ram2_bytes': 80}}},
         },
         memory=MEMORY,

@@ -12,7 +12,7 @@ import pytest
 import tomlkit
 from native_peer import NativePeer
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,
@@ -237,7 +237,7 @@ def test_portable_globals_bootstrap_the_native_runtime_journal(
 def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
     bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cntrl.patch_switcher import global_config
+    from cntrl.patch_chooser import global_config
 
     global_file = tmp_path / 'global.toml'
     global_file.write_text('brightness=160\n')
@@ -304,7 +304,7 @@ def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
 def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
     bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, locale: str
 ) -> None:
-    from cntrl.patch_switcher import global_config
+    from cntrl.patch_chooser import global_config
 
     defaults = tmp_path / 'global.toml'
     monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
@@ -377,7 +377,7 @@ def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
 def test_sync_preserves_mask_only_local_settings_edits_and_restored_inheritance(
     bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cntrl.patch_switcher import global_config
+    from cntrl.patch_chooser import global_config
 
     defaults = tmp_path / 'global.toml'
     defaults.write_text('brightness=192\n')
@@ -614,7 +614,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
 def test_source_sync_keeps_inherited_edits_local_and_checks_shared_defaults(
     bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
 ) -> None:
-    from cntrl.patch_switcher import global_config
+    from cntrl.patch_chooser import global_config
 
     defaults = tmp_path / 'global.toml'
     original_defaults = (
@@ -699,7 +699,7 @@ def test_source_sync_keeps_inherited_edits_local_and_checks_shared_defaults(
 def test_song_authoring_recovers_its_global_rig_and_original_sources(
     bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cntrl.patch_switcher import global_config, songs, source_archive
+    from cntrl.patch_chooser import global_config, songs, source_archive
 
     defaults = tmp_path / 'global.toml'
     original_defaults = (
@@ -1355,7 +1355,7 @@ def test_history_import_preserves_metadata_and_refuses_conflicting_retries(
     bundle_peer: Path,
     enveloped: bool,
 ) -> None:
-    from cntrl.patch_switcher import history
+    from cntrl.patch_chooser import history
 
     target = models.Target.model_validate(
         compiler.read_document(ROOT / 'firmware/test/target.json')

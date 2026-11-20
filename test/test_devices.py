@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from serial.tools.list_ports_common import ListPortInfo
 
-from cntrl.patch_switcher import devices
-from cntrl.patch_switcher.data_files import validate_name
+from cntrl.patch_chooser import devices
+from cntrl.patch_chooser.data_files import validate_name
 
 
 @pytest.mark.parametrize('endpoint', ['COM10', '/dev/ttyACM0', '/dev/cu.usbmodem2'])

@@ -10,7 +10,7 @@
 #include "scroll_probe/io.h"
 #endif
 #ifdef CNTRL_PANORAMA
-#include "patch_switcher/panorama.h"
+#include "patch_chooser/panorama.h"
 #endif
 
 struct Transfer {

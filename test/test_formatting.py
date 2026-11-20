@@ -9,7 +9,7 @@ import tomlkit
 from pydantic import ValidationError
 from test_display_format import lines
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     compiler,
     display,
     formatting,

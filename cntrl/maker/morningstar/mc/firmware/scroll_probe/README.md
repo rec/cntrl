@@ -1,7 +1,7 @@
 # Standalone controller scrolling diagnostic
 
 This directory contains the older standalone experimental firmware. It is
-separate from the patch-switcher `CNTRL DISPLAY EDGE` diagnostic.
+separate from the patch-chooser `CNTRL DISPLAY EDGE` diagnostic.
 
 All analysis, historical controls, timings, qualification results and uploaded
 image records are in the [standalone diagnostic archive](../../scrolling-scan-timing.md#standalone-diagnostic-archive).

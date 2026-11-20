@@ -9,7 +9,7 @@ def test_exhaustive_interrupted_write_recovery(
     root = native_programs.source_root
     native_tests.run_native(
         [
-            str(native_programs.build('test/test_switcher.cpp')),
+            str(native_programs.build('test/test_chooser.cpp')),
             str(root / 'firmware/test/show.golden'),
             str(root / 'firmware/test/display.golden'),
             '--exhaustive',

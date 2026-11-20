@@ -5,7 +5,7 @@ import struct
 
 import pytest
 
-from cntrl.patch_switcher.core_midi import Midi, exchange
+from cntrl.patch_chooser.core_midi import Midi, exchange
 
 
 class Echo(Midi):

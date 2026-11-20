@@ -12,8 +12,8 @@ import pytest
 import tomlkit
 
 from cntrl.maker.morningstar.mc import qualify_usb_midi, usb_reliability
-from cntrl.patch_switcher.core_midi import Midi
-from cntrl.patch_switcher.transport import SetupClient
+from cntrl.patch_chooser.core_midi import Midi
+from cntrl.patch_chooser.transport import SetupClient
 
 
 @pytest.fixture
@@ -353,7 +353,7 @@ def test_frozen_export_keeps_fonts_and_does_not_copy_old_device_backups(
 
 
 def test_qualification_resolves_fonts_from_the_frozen_export(tmp_path: Path) -> None:
-    source = Path(usb_reliability.__file__).parent / 'patch-switcher-target.json'
+    source = Path(usb_reliability.__file__).parent / 'patch-chooser-target.json'
     data = json.loads(source.read_text())
     data['font_sources'] = {'Arimo': 'fonts/Arimo.cfont'}
     (tmp_path / 'target.toml').write_text(tomlkit.dumps(data))

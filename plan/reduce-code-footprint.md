@@ -186,7 +186,7 @@ Build the parent and this change with the same normal command, selecting a
 different output directory for each:
 
 ```sh
-uv run python -m cntrl.patch_switcher.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output build/no-double-comparison
+uv run python -m cntrl.patch_chooser.cli build --target-dir cntrl/maker/morningstar/mc --source-root . --output build/no-double-comparison
 ```
 
 Compare `.text.code + .text.itcm + .fini` in their `memory.txt` reports. The

@@ -6,14 +6,14 @@ Show the slowest pytest phases with:
 uv run --no-sync pytest -q --durations=25
 ```
 
-`test_switcher.cpp` also accepts `--profile` after its two fixture arguments.
+`test_chooser.cpp` also accepts `--profile` after its two fixture arguments.
 This prints elapsed wall time for its major sections without changing the
 assertions, failure points, compiler options or sanitizer settings. For example,
 from the checkout root:
 
 ```bash
-uv run --no-sync pytest -q test/test_shared_native.py -k test_switcher --basetemp build/switcher-profile
-build/switcher-profile/native-programs0/test/test_switcher firmware/test/show.golden firmware/test/display.golden --profile
+uv run --no-sync pytest -q test/test_shared_native.py -k test_chooser --basetemp build/chooser-profile
+build/chooser-profile/native-programs0/test/test_chooser firmware/test/show.golden firmware/test/display.golden --profile
 ```
 
 On Windows, append `.exe` to the executable name.

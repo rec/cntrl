@@ -10,8 +10,8 @@ import tomlkit
 from ....firmware import distribution
 from ....firmware.intel_hex import AddressRange, FirmwareImage, encode_hex, read_hex
 from ....localization import catalogue
-from ....patch_switcher import data_files, models, resolved, setup_bundle, songs
-from ....patch_switcher.cli import compile_to_file
+from ....patch_chooser import data_files, models, resolved, setup_bundle, songs
+from ....patch_chooser.cli import compile_to_file
 from . import boot_switch, upload_helper
 
 
@@ -29,7 +29,7 @@ def input_names(source_root: Path) -> list[str]:
                 'cntrl/firmware',
                 'cntrl/fonts',
                 'cntrl/localization',
-                'cntrl/patch_switcher',
+                'cntrl/patch_chooser',
                 'cntrl/maker/morningstar/mc',
             ],
             capture_output=True,

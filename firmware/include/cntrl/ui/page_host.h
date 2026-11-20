@@ -493,7 +493,7 @@ public:
         if (!splash_visible_ && !application_.feature_open(platform_) && documents_.document().valid()) {
           for (unsigned r = 0; r < application_.layout.regions(); ++r) {
             const auto &region = application_.allocation.region(r);
-            if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_switcher || application_.layout.page(region.selected)[0] == PageLayout::banked) continue;
+            if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_chooser || application_.layout.page(region.selected)[0] == PageLayout::banked) continue;
             load_view(region.selected);
             if (!pages_.due(now)) { save_view(); continue; }
             if (pages_.page() == Pages::Page::midi_looper && looper_files_) refresh_looper_prompt();
@@ -596,7 +596,7 @@ private:
         std::snprintf(pages_.looper_prompt,sizeof(pages_.looper_prompt),"%s",text);
     }
     void focus_controller() {
-        if (pages_.page() != Pages::Page::patch_switcher) return;
+        if (pages_.page() != Pages::Page::patch_chooser) return;
         application_.controller().cancel_gesture();
         application_.visible_index = application_.layout.controller_slot(pages_.index());
     }

@@ -65,7 +65,7 @@ The implementation performs its own compilation and exports:
 | --- | --- |
 | `build.toml` | Relative `image` and `target` paths |
 | Image named by `image` | Complete image for the implementation's uploader |
-| `target.toml` | Valid `cntrl.patch_switcher.models.Target` description |
+| `target.toml` | Valid `cntrl.patch_chooser.models.Target` description |
 | `fonts/` | Portable font sources referenced by that description |
 | `target_capabilities.h` | C++ capability data generated from the same target model |
 
@@ -395,7 +395,7 @@ The current setup format is 35. Important portable sections are:
 
 Existing protocol limits are sixteen MIDI routes, eight physical input IDs,
 five configured switch slots and four configurable-port/expression slots. Layout
-supports at most four patch-switchers, 36 named pages and 255 declared windows; setup/resource
+supports at most four patch-choosers, 36 named pages and 255 declared windows; setup/resource
 limits are declared separately by `Target`. These are format/product limits,
 not processor pins or implied transport positions.
 
@@ -466,7 +466,7 @@ delivery, command/storage work and the next display phase.
 
 Physical indices and application actions are separate. `Controls.bindings[i]`
 maps a declared input to its label and logical application action. The six
-patch-switcher actions are a software protocol, not six required switches or a
+patch-chooser actions are a software protocol, not six required switches or a
 physical label convention. Menu and page roles also come from `Controls`;
 unused roles have the `Controls::absent` index. Do not infer navigation, back,
 confirmation or application actions from a label or numeric input position.

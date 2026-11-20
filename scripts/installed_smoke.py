@@ -10,7 +10,7 @@ import cntrl
 from cntrl.animation import asset
 from cntrl.fonts import assets
 from cntrl.fonts.outline import Outline
-from cntrl.patch_switcher import binary_format, compiler, models, resolved, setup_bundle
+from cntrl.patch_chooser import binary_format, compiler, models, resolved, setup_bundle
 
 
 class Smoke(BaseModel, frozen=True):

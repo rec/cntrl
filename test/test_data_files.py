@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_switcher import compiler, data_files
+from cntrl.patch_chooser import compiler, data_files
 
 
 @pytest.mark.parametrize('prefix', ['Evening=', 'A==B=', r'A\=B='])

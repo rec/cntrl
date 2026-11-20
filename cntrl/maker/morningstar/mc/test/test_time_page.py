@@ -9,7 +9,7 @@ from pytest_regressions.file_regression import FileRegressionFixture
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_switcher import compiler, setup_bundle
+from cntrl.patch_chooser import compiler, setup_bundle
 
 
 @pytest.mark.parametrize('autoselect', [False, True])

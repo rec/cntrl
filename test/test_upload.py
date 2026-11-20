@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from cntrl import upload
-from cntrl.patch_switcher import cli
+from cntrl.patch_chooser import cli
 
 
 @pytest.mark.parametrize(

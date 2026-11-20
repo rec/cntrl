@@ -20,13 +20,13 @@ class Setup(BaseModel, frozen=True):
 def run(command: Setup) -> None:
     directory = command.directory.resolve()
     source = directory.with_name(directory.name + '-source').resolve(strict=True)
-    (source / 'cntrl/patch_switcher/cli.py').resolve(strict=True)
+    (source / 'cntrl/patch_chooser/cli.py').resolve(strict=True)
     subprocess.run(
         [
             sys.executable,
             '-P',
             '-m',
-            'cntrl.patch_switcher.cli',
+            'cntrl.patch_chooser.cli',
             'setup',
             *command.arguments,
         ],

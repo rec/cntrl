@@ -19,15 +19,15 @@ superseded firmware, not alternative current modes.
 - [Video comparisons, speed sweeps and conclusions](#later-optical-comparisons-and-speed-sweeps-2026-11-01)
 - [Historical diagnostic protocols](#historical-diagnostic-protocols)
 - [Standalone diagnostic archive](#standalone-diagnostic-archive)
-- [Original patch-switcher transition history](#original-patch-switcher-transition-history)
+- [Original patch-chooser transition history](#original-patch-chooser-transition-history)
 
 ## User-selected directional fallback
 
 ### Compile-time debug gate
 
 Temporary scrolling probes are compiled only with `CNTRL_DIAGNOSTICS` defined.
-Normal patch-switcher builds leave it undefined. To build them deliberately,
-use `make -C cntrl/maker/morningstar/mc/firmware DIAGNOSTICS=1 inspect-patch-switcher`.
+Normal patch-chooser builds leave it undefined. To build them deliberately,
+use `make -C cntrl/maker/morningstar/mc/firmware DIAGNOSTICS=1 inspect-patch-chooser`.
 Without that flag, the probe class/state, display/button
 hooks and `CNTRL DISPLAY EDGE` / `END` command routing are excluded. The commands
 are rejected as invalid rather than silently stopping the splash or consuming C/F.
@@ -35,7 +35,7 @@ are rejected as invalid rather than silently stopping the splash or consuming C/
 This gate does not disable the user-facing Cable Test module, storage inspection
 or MIDI status/reset commands. Their existing product behaviour and feature
 flags are retained. Standalone bench sketches are separate, explicitly selected
-build targets, not linked into the patch-switcher image. Native renderer and
+build targets, not linked into the patch-chooser image. Native renderer and
 router checks cover both modes; built ELF inspection verifies the scrolling
 debug command strings are absent normally and present in the opt-in image.
 
@@ -204,7 +204,7 @@ The exact controller revision remains unconfirmed.
 
 ## What the hardware-scroll baseline assumes
 
-`firmware/patch_switcher/renderer.h`, in `animate()`, increments `ring_`, stages
+`firmware/patch_chooser/renderer.h`, in `animate()`, increments `ring_`, stages
 three incoming columns, and sends the new pointer. The original comment claiming
 this never overwrote an outgoing edge has been qualified: hidden-column safety
 is relative to the preceding **requested** pointer, not necessarily the pointer
@@ -324,7 +324,7 @@ acceptable physical smoothness. Commit `31a0458` is reverted, restoring the
 previous hardware-scrolling implementation and its tests. The underlying
 scrolling issue remains unresolved.
 
-Candidate image: `firmware/build/patch-switcher.hex`, SHA-256
+Candidate image: `firmware/build/patch-chooser.hex`, SHA-256
 `19d9f3b80f5910c9b74904fc8fdbee4e446368cb65f5453db239948faeff4c32`.
 The build reports 21,984 bytes of RAM1 free for local variables and 292,064
 bytes of RAM2 free for allocation. Test and build logs from this session are
@@ -789,10 +789,10 @@ rejected as visible interruptions, not offered as remedies. The user does not
 want to open the unit; TE readback/input results do not require disassembly as
 a next step. No specific smooth, safe update schedule has been verified.
 
-- Current diagnostic: [scroll_timing.h](firmware/patch_switcher/scroll_timing.h).
-- Normal animation and MCU source buffers: [renderer.h](firmware/patch_switcher/renderer.h), `animate()` and `moving_pixel()`.
-- Normal progress and ring geometry: [panorama.h](firmware/patch_switcher/panorama.h). Current pixel-source selection is in `renderer.h`; the cross-panel sampler preserves continuous card travel in the mirrored layout.
-- Native column writes and SSA command 37h: [displays.cpp](firmware/patch_switcher/displays.cpp).
+- Current diagnostic: [scroll_timing.h](firmware/patch_chooser/scroll_timing.h).
+- Normal animation and MCU source buffers: [renderer.h](firmware/patch_chooser/renderer.h), `animate()` and `moving_pixel()`.
+- Normal progress and ring geometry: [panorama.h](firmware/patch_chooser/panorama.h). Current pixel-source selection is in `renderer.h`; the cross-panel sampler preserves continuous card travel in the mirrored layout.
+- Native column writes and SSA command 37h: [displays.cpp](firmware/patch_chooser/displays.cpp).
 - Actual-payload audits and hypothetical scan replays: [test_renderer.cpp](firmware/test_renderer.cpp).
 
 In the diagnostic, stage 2 is idle awaiting C; `start()` leaves that state, so
@@ -1369,7 +1369,7 @@ has been superseded by the later comparisons above.
 
 The following records the separate `firmware/scroll_probe` experiments from
 2026-10-24 and the subsequent edge-staging change. That standalone image is
-not the currently installed patch-switcher diagnostic. Runtime control changes
+not the currently installed patch-chooser diagnostic. Runtime control changes
 below are a historical sequence; later entries supersede earlier controls.
 Build instructions remain in [its README](firmware/scroll_probe/README.md).
 
@@ -1452,13 +1452,13 @@ with ELF bytes and checks the stock flash-configuration digest. No build target
 uploads anything.
 
 The image is `../build/scroll-probe.hex`. To use the existing fixed-image upload
-helper, it is copied to `../build/patch-switcher.hex` only after inspection. This
+helper, it is copied to `../build/patch-chooser.hex` only after inspection. This
 does not change the normal application sources or the helper's target restriction.
 The normal build was preserved as `../build/application-before-scroll.hex` before
 staging the diagnostic. That saved build has SHA-256
 `60ebbcc450560197396faecdc9e6c96827fb078737ec73d82585ec9fb27353cd`.
 Restore it through the same software bootloader/helper workflow, or build and
-inspect the current patch-switcher target before restoration. Neither restoration
+inspect the current patch-chooser target before restoration. Neither restoration
 path needs to modify saved card files.
 
 ### Original upload record, 2026-10-24
@@ -1632,14 +1632,14 @@ target by 53 microseconds, not a full update interval. This is not a correlation
 with a visibly observed jump. The effect of changing rates awaits physical
 comparison. Saved card data remains untouched.
 
-### Patch-switcher edge staging, 2026-10-31
+### Patch-chooser edge staging, 2026-10-31
 
-The production patch switcher previously replaced outgoing, still-visible RAM
+The production patch chooser previously replaced outgoing, still-visible RAM
 columns with incoming pixels, then advanced the scroll register after a batch.
 This exposed a wrong-image strip on the left during sends and on the right
 during undo. Black empty windows made the contrast more apparent.
 
-The patch switcher now scrolls across all 162 controller rows, retaining the
+The patch chooser now scrolls across all 162 controller rows, retaining the
 160-column visible window and staging each incoming column in hidden RAM. It
 writes all three panels before advancing the offset by one column. Native mode
 uses scroll area `0,162,0`, with zero as its neutral start; writes retain the
@@ -1658,7 +1658,7 @@ That was the pending qualification at this historical stage. Later experiments
 above show that the edge artifact remains unresolved; native hidden-column
 checks did not establish physical scanout safety.
 
-## Original patch-switcher transition history
+## Original patch-chooser transition history
 
 This archive preserves the original application transition deployments and
 default-duration changes. Current behaviour and unresolved qualification are
@@ -1738,18 +1738,18 @@ unchanged. SHA-256: `b2c97ed563419a8a308193f7c104ad0150ea6af69ecfd1e3fadf423c42f
 ```bash
 make -C firmware test
 uv run --frozen pytest
-make -C cntrl/maker/morningstar/mc/firmware test inspect-patch-switcher
+make -C cntrl/maker/morningstar/mc/firmware test inspect-patch-chooser
 ```
 
-The build creates `build/patch-switcher.hex` in this directory, plus the ELF and
-raw image under `build/patch-switcher/`. The inspect target compares HEX and ELF
+The build creates `build/patch-chooser.hex` in this directory, plus the ELF and
+raw image under `build/patch-chooser/`. The inspect target compares HEX and ELF
 bytes and checks the complete stock flash configuration. Neither target invokes
 an updater. The diagnostic `usb_probe` build remains available for hardware
 investigation; it shares button scanning and display transactions with the new
-adapter, not the patch-switcher application logic.
+adapter, not the patch-chooser application logic.
 
 Use the generic [host instructions](../../../../firmware/README.md) with
-`--target cntrl/maker/morningstar/mc/patch-switcher-target.json`. The Python CLI
+`--target cntrl/maker/morningstar/mc/patch-chooser-target.json`. The Python CLI
 and compiled show format are independent of the controller. Install firmware
 separately using the established recovery/upload workflow only when authorized.
 

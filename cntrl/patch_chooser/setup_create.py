@@ -123,7 +123,7 @@ def run(command: Create) -> None:
     generated[Path('doc/instrument-definitions.md')] = (
         guide.read_bytes()
         if guide.is_file()
-        else files('cntrl.patch_switcher')
+        else files('cntrl.patch_chooser')
         .joinpath('instrument-definitions.md')
         .read_bytes()
     )

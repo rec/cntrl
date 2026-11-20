@@ -4,7 +4,7 @@ from pathlib import Path
 
 import tomlkit
 
-from cntrl.patch_switcher import compiler, history, models, resolved
+from cntrl.patch_chooser import compiler, history, models, resolved
 
 
 def test_reserved_revisions_follow_the_selected_storage_root(tmp_path: Path) -> None:

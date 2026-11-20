@@ -11,7 +11,7 @@ import tyro
 from pydantic import BaseModel
 
 from cntrl.maker.morningstar.mc.export_fonts import FontExport, export, faces
-from cntrl.patch_switcher.models import Target
+from cntrl.patch_chooser.models import Target
 
 
 class PreparePerformanceFonts(BaseModel, frozen=True):
@@ -21,7 +21,7 @@ class PreparePerformanceFonts(BaseModel, frozen=True):
 def main() -> None:
     tyro.cli(PreparePerformanceFonts)
     root = Path(__file__).resolve().parent
-    target = root / 'patch-switcher-target.json'
+    target = root / 'patch-chooser-target.json'
     data = json.loads(target.read_text())
     output = root / 'font_sources'
     sources = export(

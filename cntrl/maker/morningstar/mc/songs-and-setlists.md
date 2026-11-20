@@ -128,7 +128,7 @@ the previous positions. There are no song, step or setlist-entry IDs.
 
 ```bash
 uv run --frozen cntrl songs copy songs.toml \
-  --target cntrl/maker/morningstar/mc/patch-switcher-target.json \
+  --target cntrl/maker/morningstar/mc/patch-chooser-target.json \
   --port /dev/cu.usbmodem144682801
 uv run --frozen cntrl songs download ./downloaded --port /dev/cu.usbmodem144682801
 ```

@@ -6,7 +6,7 @@ from zlib import crc32
 import pytest
 from native_peer import NativePeer
 
-from cntrl.patch_switcher import transport
+from cntrl.patch_chooser import transport
 from scripts import native_tests
 
 

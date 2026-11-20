@@ -17,7 +17,7 @@ from cntrl.emulator.layout import EmulatorLayout, Placement
 from cntrl.emulator.localization import dialog_messages, messages
 from cntrl.localization import catalogue
 from cntrl.models import Button, Controller
-from cntrl.patch_switcher.models import MidiEndpoint, Target, TargetDisplay
+from cntrl.patch_chooser.models import MidiEndpoint, Target, TargetDisplay
 
 
 class CapturedSession(Session):

@@ -11,12 +11,10 @@ def pack(show: models.Setup, windows: list[str]) -> bytes:
             regions = {'main': models.PageRegion(pages=list(pages))}
         else:
             performance = [
-                n for n, p in pages.items() if p.type in ('patch-switcher', 'banked')
+                n for n, p in pages.items() if p.type in ('patch-chooser', 'banked')
             ]
             tools = [
-                n
-                for n, p in pages.items()
-                if p.type not in ('patch-switcher', 'banked')
+                n for n, p in pages.items() if p.type not in ('patch-chooser', 'banked')
             ]
             regions = {
                 n: models.PageRegion(pages=p)
@@ -120,7 +118,7 @@ def section_end(data: bytes, offset: int) -> int:
 
 
 def upgrade(data: bytes, offset: int) -> bytes:
-    """Keep the legacy single-switcher view beside its independently cycling tools."""
+    """Keep the legacy single-chooser view beside its independently cycling tools."""
     end = section_end(data, offset)
     if data[offset + 6] == 2:
         return data[offset:end]
@@ -136,30 +134,30 @@ def upgrade(data: bytes, offset: int) -> bytes:
         )
     )
     settings = models.Setup.model_validate(unpack(converted, 0))
-    switchers = [n for n, p in settings.pages.items() if p.type == 'patch-switcher']
-    if len(switchers) == 1 and windows >= 2:
+    choosers = [n for n, p in settings.pages.items() if p.type == 'patch-chooser']
+    if len(choosers) == 1 and windows >= 2:
         if count == 255:
             raise ValueError(
                 'legacy page layout has no room for the full-performance page'
             )
-        switcher = switchers[0]
+        chooser = choosers[0]
         pages = dict(settings.pages)
-        pages[switcher] = pages[switcher].model_copy(
-            update={'min_windows': min(pages[switcher].min_windows, 1)}
+        pages[chooser] = pages[chooser].model_copy(
+            update={'min_windows': min(pages[chooser].min_windows, 1)}
         )
         placeholder, suffix = 'full-performance', 2
         while placeholder in pages:
             placeholder = f'full-performance-{suffix}'
             suffix += 1
         pages[placeholder] = models.Page(
-            type='None', give_up_windows=pages[switcher].give_up_windows
+            type='None', give_up_windows=pages[chooser].give_up_windows
         )
-        tools = [placeholder if n == switcher else n for n in settings.pages]
+        tools = [placeholder if n == chooser else n for n in settings.pages]
         settings = settings.model_copy(
             update={
                 'pages': pages,
                 'regions': {
-                    'performance': models.PageRegion(pages=[switcher]),
+                    'performance': models.PageRegion(pages=[chooser]),
                     'tools': models.PageRegion(pages=tools),
                 },
                 'layout': models.PageLayout(
@@ -189,7 +187,7 @@ def estimate_ram(
     def charge(size: int) -> int:
         return (size + 7) // 8 * 8 + 8 if size else 0
 
-    controllers = max(1, sum(p.type == 'patch-switcher' for p in pages.values()))
+    controllers = max(1, sum(p.type == 'patch-chooser' for p in pages.values()))
     labels = len(pages) + regions
     return (
         controllers * charge(instruments * 8 + cycles * 4)
@@ -245,7 +243,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         }
         if pages[name]['type'] not in (
             'None',
-            'patch-switcher',
+            'patch-chooser',
             'banked',
             'pong',
             'language',
@@ -302,7 +300,7 @@ PAGE_TYPES = (
     '',
     '',  # Unassigned page ID. Existing page IDs remain stable.
     'None',
-    'patch-switcher',
+    'patch-chooser',
     'midi-monitor',
     'midi-looper',
     'arpeggiator',

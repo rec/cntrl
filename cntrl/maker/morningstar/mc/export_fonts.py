@@ -12,7 +12,7 @@ from ....fonts.bitmap import BitmapRaster
 from ....fonts.catalogue import FONT_IDS, SIZES, UI_FONTS, bundled_sources
 from ....fonts.outline import Glyph, Outline
 from ....fonts.ui import embedded_header
-from ....patch_switcher import models
+from ....patch_chooser import models
 from .build_font_metrics import Options, native_face
 from .native_raster import NativeRaster
 
@@ -21,7 +21,7 @@ class FontExport(BaseModel, frozen=True):
     output: Path
     ui_fonts: list[str] = Field(default_factory=lambda: list(UI_FONTS))
     source: Path = Options().source
-    generated: Path = Path(__file__).parent / 'firmware/patch_switcher'
+    generated: Path = Path(__file__).parent / 'firmware/patch_chooser'
     display_height: int = 128
 
 

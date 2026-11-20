@@ -7,8 +7,8 @@ from unittest.mock import Mock
 import pytest
 from serial import SerialTimeoutException
 
-from cntrl.patch_switcher import transport
-from cntrl.patch_switcher.usb_frames import Frame, Kind
+from cntrl.patch_chooser import transport
+from cntrl.patch_chooser.usb_frames import Frame, Kind
 
 
 def test_serial_endpoint_and_line_coding_are_passed_without_path_resolution(

@@ -13,7 +13,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from cntrl.emulator.backend import Session
 from cntrl.emulator.gui import ControllerCanvas
 from cntrl.emulator.layout import Canvas, EmulatorLayout
-from cntrl.patch_switcher.models import Target, TargetDisplay
+from cntrl.patch_chooser.models import Target, TargetDisplay
 
 
 class FaceplateSession(Session):

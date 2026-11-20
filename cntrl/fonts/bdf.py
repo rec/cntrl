@@ -1,6 +1,6 @@
 """Preserve native BDF pixels and advances in portable UI assets."""
 
-from ..patch_switcher.models import FontMetrics
+from ..patch_chooser.models import FontMetrics
 from .assets import pack
 from .outline import Glyph, Run
 

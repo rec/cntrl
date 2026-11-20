@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import cli, data_files, midi_assets
+from cntrl.patch_chooser import cli, data_files, midi_assets
 
 
 def test_referenced_files_use_the_declaring_document_not_the_working_directory(

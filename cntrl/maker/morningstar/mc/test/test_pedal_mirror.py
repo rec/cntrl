@@ -7,7 +7,7 @@ import pytest
 from cntrl.emulator import backend, cli, mirror
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     compiler,
     languages,
@@ -49,7 +49,7 @@ def test_mirrored_native_session_keeps_selection_language_and_installed_packs(
     )
     # The pedal compiles physical switch and display IDs. Compiling against the
     # virtual target here would hide mismatches in the mirror adapter.
-    physical_target = cli.load_target(BASE / 'patch-switcher-target.json')
+    physical_target = cli.load_target(BASE / 'patch-chooser-target.json')
     sources: dict[str, object] = {
         'first': {
             'patches': {'menu': {'operation': 'menu'}},

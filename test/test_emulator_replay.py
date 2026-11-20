@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from cntrl.emulator.backend import Session
 from cntrl.emulator.replay import Event, Scenario
-from cntrl.patch_switcher.models import Target
+from cntrl.patch_chooser.models import Target
 
 
 class RecordedSession(Session):

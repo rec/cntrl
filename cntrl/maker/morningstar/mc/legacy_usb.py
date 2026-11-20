@@ -2,8 +2,8 @@
 
 import time
 
-from ....patch_switcher.transport import SerialConnection, UsbProtocolError
-from ....patch_switcher.usb_frames import Frame, Kind, Status
+from ....patch_chooser.transport import SerialConnection, UsbProtocolError
+from ....patch_chooser.usb_frames import Frame, Kind, Status
 
 
 class Connection(SerialConnection):

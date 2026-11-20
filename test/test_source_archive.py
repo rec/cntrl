@@ -7,7 +7,7 @@ from zlib import crc32
 import pytest
 from native_peer import NativePeer
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     data_files,
     global_config,

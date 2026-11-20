@@ -73,7 +73,7 @@ def run(options: QualificationRun) -> None:
             [
                 sys.executable,
                 '-m',
-                'cntrl.patch_switcher.cli',
+                'cntrl.patch_chooser.cli',
                 'build',
                 '--target-dir',
                 str(options.target_dir.resolve()),
@@ -228,7 +228,7 @@ def wheel_smoke(root: Path, output: Path) -> None:
         environment = dict(os.environ)
         environment.pop('PYTHONPATH', None)
         execute(
-            [str(python), '-m', 'cntrl.patch_switcher.cli', '--help'],
+            [str(python), '-m', 'cntrl.patch_chooser.cli', '--help'],
             output / 'installed-help.log',
             directory,
             environment,

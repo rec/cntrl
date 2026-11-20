@@ -2,6 +2,7 @@ language = 'sk'
 name = 'Slovenčina'
 
 [messages]
+patch_chooser = { text = 'Výber zvukov' }
 time = { text = 'Čas' }
 time_controls = { text = '{send:s} odosielanie/{source:s} zdroj' }
 panic = { text = 'Panika' }

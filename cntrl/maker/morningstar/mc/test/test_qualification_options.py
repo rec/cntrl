@@ -13,7 +13,7 @@ from cntrl.maker.morningstar.mc.qualify_usb_midi import (
     save_report,
     watchdog_evidence,
 )
-from cntrl.patch_switcher.core_midi import Midi
+from cntrl.patch_chooser.core_midi import Midi
 
 
 @pytest.mark.parametrize('value', ['0.5', '500 ms'])

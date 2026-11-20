@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from cntrl.firmware.capabilities import header
-from cntrl.patch_switcher import compiler, models
+from cntrl.patch_chooser import compiler, models
 from scripts import native_tests
 
 

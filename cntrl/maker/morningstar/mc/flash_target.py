@@ -15,7 +15,7 @@ import tyro
 from pydantic import BaseModel, Field
 
 from ....firmware.intel_hex import read_hex
-from ....patch_switcher import (
+from ....patch_chooser import (
     backups,
     data_files,
     devices,
@@ -24,7 +24,7 @@ from ....patch_switcher import (
     storage_info,
     transport,
 )
-from ....patch_switcher.setup_sync import write_record
+from ....patch_chooser.setup_sync import write_record
 from ....upload import Upload
 from . import legacy_usb, release, upload_helper
 

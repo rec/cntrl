@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     compiler,
     display,
     layout,

@@ -3,7 +3,7 @@
 import subprocess
 from pathlib import Path
 
-from cntrl.patch_switcher import compiler, models, setup_bundle
+from cntrl.patch_chooser import compiler, models, setup_bundle
 from scripts import native_tests
 
 

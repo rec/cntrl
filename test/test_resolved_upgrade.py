@@ -7,7 +7,7 @@ from zlib import crc32
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import compiler, layout, models, resolved
+from cntrl.patch_chooser import compiler, layout, models, resolved
 
 
 @pytest.fixture
@@ -68,10 +68,14 @@ def test_historical_setup_preserves_graph_assets_and_page_order(
     assert original[resolved.graph_offset(original) :][:4] == b'CPAT'
 
 
-def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position(
+def test_legacy_single_chooser_keeps_its_tool_cycle_and_full_width_position(
     legacy_setups: dict[int, bytes],
 ) -> None:
     original = legacy_setups[36]
+    offset = original.index(b'CPAG')
+    count, windows = original[offset + 4 : offset + 6]
+    record = offset + 8 + windows * 32 + (count - 1) * (34 + windows)
+    chooser = original[record : record + 32].split(b'\0')[0].decode()
     source = tomlkit.parse(resolved.export(resolved.upgrade(original))).unwrap()
     tools = [
         'status',
@@ -87,7 +91,7 @@ def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position(
         'full-performance',
     ]
     assert source['regions'] == {
-        'performance': {'pages': ['patch-switcher']},
+        'performance': {'pages': [chooser]},
         'tools': {'pages': tools},
     }
     assert source['layout'] == {
@@ -95,9 +99,9 @@ def test_legacy_single_switcher_keeps_its_tool_cycle_and_full_width_position(
         'left_wins': False,
         'focus': 'tools',
     }
-    assert list(source['pages']) == tools[:-1] + ['patch-switcher', 'full-performance']
-    assert source['pages']['patch-switcher']['min_windows'] == 1
-    assert source['pages']['patch-switcher']['give_up_windows'] == [
+    assert list(source['pages']) == tools[:-1] + [chooser, 'full-performance']
+    assert source['pages'][chooser]['min_windows'] == 1
+    assert source['pages'][chooser]['give_up_windows'] == [
         'right',
         'center',
         'left',
@@ -118,8 +122,9 @@ def test_legacy_full_width_position_and_page_names_are_preserved(
         bytearray(section[start + i * size : start + (i + 1) * size])
         for i in range(count)
     ]
+    chooser = records[-1][:32].split(b'\0')[0].decode()
     records[0][:32] = layout.encoded_name('full-performance')
-    # A legacy setup may start at its full-width switcher position rather than Status.
+    # A legacy setup may start at its full-width chooser position rather than Status.
     section[start:] = b''.join(records[-1:] + records[:-1])
     source = layout.unpack(layout.upgrade(bytes(section), 0), 0)
     settings = models.Setup.model_validate(source)
@@ -129,7 +134,7 @@ def test_legacy_full_width_position_and_page_names_are_preserved(
     ]
     assert settings.pages['full-performance'].type == 'status'
     assert settings.pages['full-performance-2'].type == 'None'
-    assert settings.regions['performance'].pages == ['patch-switcher']
+    assert settings.regions['performance'].pages == [chooser]
 
 
 def test_current_setup_is_returned_unchanged(current_setup: bytes) -> None:

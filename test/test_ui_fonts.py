@@ -15,7 +15,7 @@ from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.catalogue import bundled_sources
 from cntrl.fonts.characters import printable_characters
 from cntrl.fonts.outline import Glyph, Outline
-from cntrl.patch_switcher import compiler, data_files, models, page_settings
+from cntrl.patch_chooser import compiler, data_files, models, page_settings
 from scripts import native_tests
 
 

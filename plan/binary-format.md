@@ -50,7 +50,7 @@ remain transient. Uncommitted uploads are not active documents. Preserve any
 recoverable partial recording separately and do not mark it completed. This
 work does not add persistence to currently transient state.
 
-Inventory evidence is in `cntrl/patch_switcher/` (`compiler.py`, `setup_bundle.py`,
+Inventory evidence is in `cntrl/patch_chooser/` (`compiler.py`, `setup_bundle.py`,
 `songs.py`, `backups.py`, `setup_sync.py`), `cntrl/animation/asset.py` and
 `firmware/include/cntrl/` (`setup_files.h`, `bundled_storage.h`, `revisions.h`,
 `songs.h`, `startup_counter.h`, `asset_storage.h`, `midi_files.h`,

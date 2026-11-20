@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 
 from cntrl.fonts import ui
-from cntrl.patch_switcher import compiler, models, songs
+from cntrl.patch_chooser import compiler, models, songs
 from scripts.native_tests import NativePrograms
 
 

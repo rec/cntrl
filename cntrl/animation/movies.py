@@ -5,7 +5,7 @@ from pathlib import Path
 from zlib import crc32
 
 from .. import source_files
-from ..patch_switcher.models import Setup
+from ..patch_chooser.models import Setup
 from .asset import Geometry, inspect_asset, prepare_movie
 
 

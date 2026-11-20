@@ -9,7 +9,7 @@ import pytest
 from cntrl.fonts import assets
 from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.outline import Outline, text_runs
-from cntrl.patch_switcher import compiler, display, models
+from cntrl.patch_chooser import compiler, display, models
 
 
 @pytest.fixture(scope='module')

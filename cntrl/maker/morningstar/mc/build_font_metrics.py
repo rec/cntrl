@@ -9,7 +9,7 @@ import tyro
 from pydantic import BaseModel
 
 from ....fonts.catalogue import FONT_IDS, UI_FONTS
-from ....patch_switcher import models
+from ....patch_chooser import models
 
 
 class Options(BaseModel, frozen=True):
@@ -18,7 +18,7 @@ class Options(BaseModel, frozen=True):
         / 'firmware/.tools/data/packages/teensy/hardware/avr/1.62.0'
         / 'libraries/ST7735_t3/src'
     )
-    output: Path = Path(__file__).parent / 'patch-switcher-target.json'
+    output: Path = Path(__file__).parent / 'patch-chooser-target.json'
 
 
 def read_bits(data: bytes, offset: int, count: int, signed: bool = False) -> int:

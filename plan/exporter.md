@@ -148,10 +148,10 @@ the decoding report. We must not silently discard potentially meaningful data.
 
 ## Conversion into the existing cntrl format
 
-Use [existing models](../cntrl/patch_switcher/models.py),
-[authoring loader](../cntrl/patch_switcher/data_files.py),
-[compiler](../cntrl/patch_switcher/compiler.py) and
-[editable exporter](../cntrl/patch_switcher/resolved.py).
+Use [existing models](../cntrl/patch_chooser/models.py),
+[authoring loader](../cntrl/patch_chooser/data_files.py),
+[compiler](../cntrl/patch_chooser/compiler.py) and
+[editable exporter](../cntrl/patch_chooser/resolved.py).
 Manufacturer-specific decoding belongs under `cntrl/maker/morningstar/mc/`.
 Do not create a second configuration language, compiler or firmware interpreter.
 

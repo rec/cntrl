@@ -68,7 +68,7 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { status = 1, cable = 3, panic, none = 10, patch_switcher, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu, time };
+    enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu, time };
     struct ViewState {
         unsigned index = 0, language = 0;
         Page page = Page::none;

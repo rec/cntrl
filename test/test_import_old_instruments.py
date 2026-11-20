@@ -6,7 +6,7 @@ from types import ModuleType
 
 import pytest
 
-from cntrl.patch_switcher import compiler, models
+from cntrl.patch_chooser import compiler, models
 
 
 @pytest.fixture

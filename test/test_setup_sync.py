@@ -7,7 +7,7 @@ import pytest
 import tomlkit
 import tyro
 
-from cntrl.patch_switcher import binary_format, data_files, global_config, setup_sync
+from cntrl.patch_chooser import binary_format, data_files, global_config, setup_sync
 
 
 @pytest.mark.parametrize('interrupted', [False, True])

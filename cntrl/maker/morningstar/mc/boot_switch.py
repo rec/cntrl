@@ -11,7 +11,7 @@ from pydantic import AfterValidator, BaseModel, Field
 from reccy.configuration import units
 
 from ....firmware.intel_hex import FirmwareImage, read_hex
-from ....patch_switcher.models import millisecond_resolution
+from ....patch_chooser.models import millisecond_resolution
 from . import toolchain
 
 

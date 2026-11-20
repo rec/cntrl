@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import cli, compiler, data_files, global_config, setup_create
+from cntrl.patch_chooser import cli, compiler, data_files, global_config, setup_create
 
 
 def answer(monkeypatch: pytest.MonkeyPatch, values: list[str]) -> list[str]:

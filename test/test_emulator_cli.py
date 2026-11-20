@@ -6,7 +6,7 @@ import pytest
 import tyro
 
 from cntrl.emulator.cli import Emulate, prepare
-from cntrl.patch_switcher.cli import compile_to_file
+from cntrl.patch_chooser.cli import compile_to_file
 
 
 def test_short_invocation_parses_the_setup_as_a_positional_argument() -> None:

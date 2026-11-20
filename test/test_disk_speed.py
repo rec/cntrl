@@ -10,7 +10,7 @@ import pytest
 import tyro
 from native_peer import NativePeer
 
-from cntrl.patch_switcher import cli, devices, disk_speed, transport
+from cntrl.patch_chooser import cli, devices, disk_speed, transport
 from scripts import native_tests
 
 if TYPE_CHECKING:

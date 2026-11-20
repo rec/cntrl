@@ -3,6 +3,7 @@
 #include "message_format.h"
 namespace cntrl::ui::i18n {
 enum class Message : uint16_t {
+    patch_chooser,
     pages_and_tools,
     browse,
     ok,
@@ -355,10 +356,12 @@ enum class Message : uint16_t {
     panic,
     last_step,
 };
-inline constexpr unsigned message_count = 351;
-inline constexpr uint32_t catalogue_schema = 0x6555da4au;
+inline constexpr unsigned message_count = 352;
+inline constexpr uint32_t catalogue_schema = 0x808819beu;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
+inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
+inline const char patch_chooser_short[] CNTRL_I18N_STORAGE = "";
 inline const char pages_and_tools_text[] CNTRL_I18N_STORAGE = "Pages and tools";
 inline const char pages_and_tools_short[] CNTRL_I18N_STORAGE = "";
 inline const char browse_text[] CNTRL_I18N_STORAGE = "browse";
@@ -1468,6 +1471,7 @@ inline const char panic_short[] CNTRL_I18N_STORAGE = "";
 inline const char last_step_text[] CNTRL_I18N_STORAGE = "Last step";
 inline const char last_step_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
+    {patch_chooser_text, patch_chooser_short, nullptr, 0},
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
     {browse_text, browse_short, nullptr, 0},
     {ok_text, ok_short, nullptr, 0},

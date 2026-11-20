@@ -10,7 +10,7 @@ import tomlkit
 import tyro
 
 from cntrl.animation import asset
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     backups,
     binary_format,
     cli,
@@ -394,7 +394,7 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
 
     import tomlkit
 
-    from cntrl.patch_switcher import songs, transport
+    from cntrl.patch_chooser import songs, transport
 
     old = bytearray(116)
     old[:4] = b'CSW1'
@@ -542,7 +542,7 @@ def test_restore_uploads_saved_data_before_restoring_selection(
 ) -> None:
     from contextlib import nullcontext
 
-    from cntrl.patch_switcher import global_overlay, models, songs, transport
+    from cntrl.patch_chooser import global_overlay, models, songs, transport
 
     target = models.Target.model_validate(
         compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
@@ -751,7 +751,7 @@ def test_installing_a_converted_collection_retains_an_unreadable_active_root(
     converted: bool,
     journal_ready: bool,
 ) -> None:
-    from cntrl.patch_switcher.setup_sync import write_record
+    from cntrl.patch_chooser.setup_sync import write_record
 
     original = tmp_path / 'original'
     (original / 'setups').mkdir(parents=True)

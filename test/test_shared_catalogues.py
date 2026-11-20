@@ -7,7 +7,7 @@ import pytest
 import tomlkit
 from test_display_format import lines
 
-from cntrl.patch_switcher import compiler, display, models, resolved
+from cntrl.patch_chooser import compiler, display, models, resolved
 from scripts import native_tests
 
 
@@ -22,9 +22,7 @@ def test_dual_internal_setup_has_one_program_action_and_both_names(
     target: models.Target,
     tmp_path: Path,
 ) -> None:
-    document = compiler.read_document(
-        Path('examples/patch-switcher/dual-internal.toml')
-    )
+    document = compiler.read_document(Path('examples/patch-chooser/dual-internal.toml'))
     tags = compiler.read_document(Path('instruments/tags.toml'))
     data = compiler.compile_show(document, {}, [tags], target)
     header = compiler.HEADER.unpack_from(data)

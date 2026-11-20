@@ -108,7 +108,7 @@ public:
     unsigned rendering() const { return processing_index < PageLayout::max_controllers ? processing_index : visible_index; }
     Controller &controller() { return at(rendering()); }
     bool visible() const { return allocation.controller_visible(rendering()); }
-    bool focused_controller() const { return allocation.selected() < layout.pages() && layout.page(allocation.selected())[0] == PageLayout::patch_switcher; }
+    bool focused_controller() const { return allocation.selected() < layout.pages() && layout.page(allocation.selected())[0] == PageLayout::patch_chooser; }
     bool busy() {
         for (unsigned i = 0; i < layout.controllers(); ++i) if (at(i).busy()) return true;
         return primary_.busy();
@@ -181,12 +181,17 @@ public:
     CNTRL_FLASH_ROUTINE(application_update_menu)
 #endif
     void update_menu() {
+        const auto page_name = [&](unsigned index) {
+            const char *name = layout.name(index);
+            return layout.page(index)[0] == PageLayout::patch_chooser && !std::strcmp(name, "patch-chooser")
+                ? i18n::text(i18n::Message::patch_chooser) : name;
+        };
         for (unsigned r = 0; r < layout.regions(); ++r) {
-            std::snprintf(labels_[r].data(),labels_[r].size(),"%s%s: %s",r == allocation.focus() ? "* " : "",layout.region_name(r),layout.name(allocation.region(r).selected));
+            std::snprintf(labels_[r].data(),labels_[r].size(),"%s%s: %s",r == allocation.focus() ? "* " : "",layout.region_name(r),page_name(allocation.region(r).selected));
         }
         for (unsigned p = 0; p < layout.pages(); ++p) {
             unsigned r = layout.page_region(p);
-            std::snprintf(labels_[layout.regions() + p].data(),labels_[0].size(),"%s / %s",layout.region_name(r),layout.name(p));
+            std::snprintf(labels_[layout.regions() + p].data(),labels_[0].size(),"%s / %s",layout.region_name(r),page_name(p));
         }
         menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(), page_offset() + layout.regions() + layout.pages());
     }

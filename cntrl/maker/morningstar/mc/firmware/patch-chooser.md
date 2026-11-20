@@ -1,4 +1,4 @@
-# MC6 Pro patch-switcher build
+# MC6 Pro patch-chooser build
 
 The application is built and running on the pedal. It is not a fully
 hardware-qualified release. Dated sections below retain earlier image hashes,
@@ -107,7 +107,7 @@ storage inspection and MIDI status commands retain their existing behaviour.
 
 ## Historical deployment, 2026-10-25
 
-- Deployed source: `48b2693` (`Add display_name overrides to patch_switcher`),
+- Deployed source: `48b2693` (`Add display_name overrides to patch_chooser`),
   including the latest independent centre/outer splash colour and speed walks.
 - HEX SHA-256:
   `39f4c72d434e57791e1436a8ab53180228dba945a02ed872eb7087c1acaf2a1d`.
@@ -164,7 +164,7 @@ Pages keep their existing controls and displayed instructions.
 Animation does not delay MIDI/history actions.
 For scrolling behaviour, evidence, deployment hashes and limitations, see the
 [scrolling investigation](../scrolling-scan-timing.md) and its
-[original transition history](../scrolling-scan-timing.md#original-patch-switcher-transition-history).
+[original transition history](../scrolling-scan-timing.md#original-patch-chooser-transition-history).
 
 ## Read-only storage information
 
@@ -379,8 +379,8 @@ software-clocked driver had an observed update time around 1,500 ms.
 
 Named-setup document and transfer bytes are allocated from RAM2's heap, leaving RAM1 for
 code, display buffers and stack. Exact link measurements are printed by
-`inspect-patch-switcher`. No external RAM is allocated. Final link
-measurements are printed by `inspect-patch-switcher` and may vary as code changes.
+`inspect-patch-chooser`. No external RAM is allocated. Final link
+measurements are printed by `inspect-patch-chooser` and may vary as code changes.
 
 Setups and fonts share one allocation budget. The linker derives it as
 `_heap_end - _heap_start`, the RAM2 heap remaining after this firmware's static
@@ -445,7 +445,7 @@ error; that path is covered with fake storage but not yet physically tested.
   81 KiB image. The official uploader returned exit status 1 after sending reset
   and reporting that the board disappeared. USB serial nevertheless returned
   `CNTRL READY 1 0 00000000`, confirming the new application booted.
-- Uploaded the compiled `examples/patch-switcher/pman.toml` show: 256 patches,
+- Uploaded the compiled `examples/patch-chooser/pman.toml` show: 256 patches,
   15 categories, pman channel 1, `din` output. The receiver completed its durable
   commit/readback path and returned `CNTRL READY 1 20568 bb8baa89`.
 - Captured DIN output through CME U6MIDI Pro input 1 while the user performed
@@ -477,7 +477,7 @@ error; that path is covered with fake storage but not yet physically tested.
 
 ## Library graphics and fonts: 2026-10-23
 
-`patch_switcher/graphics.h` wraps the pinned ST7735_t3 class as a 160x128 RAM-only
+`patch_chooser/graphics.h` wraps the pinned ST7735_t3 class as a 160x128 RAM-only
 canvas. It supplies its own RGB565 buffer, enables framebuffer mode and uses the
 library's `setFont`, `setTextSize`, `setCursor`, `write` and `fillScreen` APIs.
 The library now owns glyph decoding and rasterization. The old portable
@@ -534,7 +534,7 @@ library's nominal size names. The compiler selects among these available bitmap 
 Automatic sizing picks the largest supported size fitting each line. The selected size is resolved once on the Mac, never searched on the pedal.
 
 `build_font_metrics.py` exports advances, left bearings, widths and vertical
-extents from the pinned library into `patch-switcher-target.json`:
+extents from the pinned library into `patch-chooser-target.json`:
 
 ```bash
 uv run --frozen -m cntrl.maker.morningstar.mc.build_font_metrics
@@ -693,7 +693,7 @@ color of its latest matching test stream.
 The other two displays remain in place. DIN is Serial1 and the dedicated 3.5 mm
 TRS port is Serial2; the cable tester exercises only these two routes.
 
-The tester is included by default. Build `patch-switcher` with `CABLE_TEST=0` to
+The tester is included by default. Build `patch-chooser` with `CABLE_TEST=0` to
 exclude it and its page. See the generic
 [cable-test behavior](../../../../../doc/midi-cable-test.md). Native tests and
 included/excluded builds pass. The combined image was flashed through the running

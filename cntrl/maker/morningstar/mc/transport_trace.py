@@ -7,7 +7,7 @@ import tomlkit
 from pydantic import BaseModel, Field
 
 from ....build import read_artifacts
-from ....patch_switcher.transport import SerialConnection, SetupClient
+from ....patch_chooser.transport import SerialConnection, SetupClient
 
 
 class TraceBuild(BaseModel, frozen=True):

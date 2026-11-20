@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_switcher import (
+from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,
@@ -923,7 +923,7 @@ def test_cli_does_not_write_binary_when_patches_have_errors(
 def test_cli_preserves_repeated_table_inputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = FIXTURES.parents[1] / 'examples/patch-switcher'
+    root = FIXTURES.parents[1] / 'examples/patch-chooser'
     output = tmp_path / 'show.bin'
     monkeypatch.setattr(
         sys,

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_switcher import global_config
+from cntrl.patch_chooser import global_config
 
 
 @pytest.fixture(autouse=True)

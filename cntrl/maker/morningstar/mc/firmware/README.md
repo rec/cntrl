@@ -2,7 +2,7 @@
 
 This page describes the standalone diagnostic sketch and its dated bring-up
 results. The deployed functional controller is the
-[patch-switcher target](patch-switcher.md), which adds MIDI, named setups,
+[patch-chooser target](patch-chooser.md), which adds MIDI, named setups,
 runtime drawing and software bootloader entry. Restrictions below apply to the
 diagnostic sketch unless explicitly stated otherwise.
 
@@ -54,7 +54,7 @@ outputs are under this directory's `build/`:
 
 Each sketch has its own build directory, so Arduino CLI can clean or rebuild
 one without removing the other. The diagnostic HEX is a separate artifact;
-the current upload helper selects `patch-switcher.hex`.
+the current upload helper selects `patch-chooser.hex`.
 
 ## Application and startup boundary
 
@@ -109,7 +109,7 @@ reset and sleep-out waits are lengthened to 150 and 500 ms, matching the public
 [Adafruit ST7735 driver](https://github.com/adafruit/Adafruit-ST7735-Library/blob/master/Adafruit_ST7735.cpp).
 Rotation 1 uses MADCTL `0xa8`, 160x128 pixels and x/y offsets 1/2.
 Pin 6 PWM stays at 0 throughout reset and initialization. The diagnostic greeting
-enables brightness 192 only after drawing all three displays. The patch-switcher
+enables brightness 192 only after drawing all three displays. The patch-chooser
 keeps the backlight off until its first complete animation frame or UI repaint,
 then applies the show's `brightness` (0..255, default 192). Cancelling startup
 before the image is complete does not reveal partially drawn display memory.
@@ -117,7 +117,7 @@ This does not write a vendor setting to storage.
 
 Drawing happens only in setup and takes several seconds. Button scanning starts
 afterward. The displays are deselected and clock LOW on return, so later button
-scans cannot send display data. The separate patch-switcher target implements
+scans cannot send display data. The separate patch-chooser target implements
 runtime redraws interleaved with scanning; their speed and button responsiveness
 have been confirmed on the pedal.
 
@@ -141,7 +141,7 @@ switch-reader, display and backlight pins listed above.
 The linked USB ISR retains the CDC baud-134 request and timer leading to
 `_reboot_Teensyduino_()`. That routine reads security state and uses the normal
 breakpoint or secure-ROM entry path; it does not program fuses. The original
-inspection was static; later patch-switcher tests successfully exercised the
+inspection was static; later patch-chooser tests successfully exercised the
 software-entry path on this board. PROGRAM remains the physical recovery method.
 
 ## Button image inspection, 2026-10-21
@@ -227,7 +227,7 @@ Both button and display tests pass. No Python-consumed files changed.
 At this inspection the image had not yet been uploaded. Subsequent live
 bring-up confirmed display text, orientation and physical slot order, with USB
 and buttons working. Current application qualification is recorded separately
-in [patch-switcher.md](patch-switcher.md).
+in [patch-chooser.md](patch-chooser.md).
 
 ## Original USB-only image inspection, 2026-10-21
 
