@@ -76,6 +76,13 @@ forced automatic hinting, but the small Status text was still unsatisfactory.
 
 ## Other sources
 
+Comic Relief Regular comes from
+[Google Fonts revision 0ed65319a02d76e729fbf45ff65349915a26b15e](https://github.com/google/fonts/tree/0ed65319a02d76e729fbf45ff65349915a26b15e/ofl/comicrelief).
+The [source outline](comic-relief/ComicRelief-Regular.ttf) and the generated
+`ComicRelief` bitmap use the [SIL OFL 1.1](comic-relief/OFL.txt).
+The unmodified outline's SHA-256 is
+`9ef4958ab06385d91f635f83a15569786b243f9d010cfb3f9a5cdda593c7bc22`.
+
 These unmodified regular-weight TrueType files were downloaded on
 2026-11-02 from [Google Fonts at revision 6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec](https://github.com/google/fonts/tree/6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec).
 Only the generated bitmap versions use the selectable names below.

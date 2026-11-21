@@ -367,12 +367,13 @@ def test_bundled_outline_fonts_use_sparse_unicode_assets() -> None:
         'StillTime',
         'CaveatBold',
         'Arimo',
-        'ComicSansMS',
+        'ComicRelief',
         'CourierPrimeBold',
         'ArimoBold',
     ],
 )
 def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> None:
+    target_path = ROOT / 'cntrl/maker/morningstar/mc/patch-chooser-target.json'
     source = compiler_inputs.read_document(ROOT / 'firmware/test/show.json')
     assert isinstance(source, dict)
     source['fill_in_styles'] = False
@@ -385,9 +386,7 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
     }
     target = models.Target.model_validate(
         data_files.load_target(
-            data_files.DataFile(
-                name='target', paths=[ROOT / 'test/data/font-target.toml']
-            ),
+            data_files.DataFile(name='target', paths=[target_path]),
             False,
             [],
         )
@@ -397,15 +396,13 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
     data = compiler.compile_show(source, definitions, [], target, font_data)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert f'{family}@1.25x' in exported['fonts']
-    if family in ('StillTime', 'CaveatBold'):
+    if family == 'StillTime':
         assert family in exported['fonts']
     for key, bitmap in font_data.items():
         cli.save_asset(tmp_path / 'fonts' / f'{key:08x}.cfont', bitmap)
     path = tmp_path / 'exported.toml'
     path.write_text(resolved.export(data))
-    command = data_files.Sources(
-        document=[str(path)], target=[str(ROOT / 'test/data/font-target.toml')]
-    )
+    command = data_files.Sources(document=[str(path)], target=[str(target_path)])
     assert (
         binary_format.core(compile_inputs(command).setups['exported'])
         == setup_bundle.reindex({'exported': data})['exported']

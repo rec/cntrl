@@ -56,11 +56,9 @@ tests. A session-scoped builder compiles each shared source once with the same
 strict compiler flags; core LFO, pickup and application scenarios are not rerun
 for every compiled configuration. There is no separate shared native test runner.
 
-Plain pytest works without the Morningstar Teensy SDK. The two font checks that
-compare against the pinned display library report a skip when its sources are
-absent. Full qualification of the in-tree Morningstar MC target provisions
-the SDK and enables `--require-morningstar-sdk`, which makes a missing SDK an
-error. See the [Morningstar build instructions](../cntrl/maker/morningstar/mc/cross-platform.md).
+Plain pytest works without the Morningstar Teensy SDK. Full qualification of
+the in-tree Morningstar MC target provisions the SDK for the firmware build.
+See the [Morningstar build instructions](../cntrl/maker/morningstar/mc/cross-platform.md).
 
 Type checking can target another host without that operating system installed,
 for example `uv run --no-sync ty check --python-platform win32 cntrl`. This checks

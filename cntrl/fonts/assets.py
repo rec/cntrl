@@ -362,16 +362,6 @@ class Preparation:
                     else Outline(path, scale, source_snapshots=source_snapshots)
                 )
                 self.outlines[name] = outline
-                valid = []
-                for t in sorted(set(texts)):
-                    try:
-                        outline.shape(SIZES[0], t)
-                        valid.append(t)
-                    except ValueError as error:
-                        errors.append(
-                            f'{name}: {error} ({", ".join(locations[name, t])})'
-                        )
-                sizes = {}
                 available_sizes = (
                     outline.tables
                     if isinstance(outline, BitmapRaster)
@@ -379,6 +369,17 @@ class Preparation:
                     if source is None and resource is not None and family in faces
                     else SIZES
                 )
+                valid = []
+                validation_size = next(iter(available_sizes))
+                for t in sorted(set(texts)):
+                    try:
+                        outline.shape(validation_size, t)
+                        valid.append(t)
+                    except ValueError as error:
+                        errors.append(
+                            f'{name}: {error} ({", ".join(locations[name, t])})'
+                        )
+                sizes = {}
                 for s in available_sizes:
                     runs = {t: outline.shape(s, t) for t in valid}
                     top = min((r.top for r in runs.values()), default=0)

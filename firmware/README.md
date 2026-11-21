@@ -339,7 +339,7 @@ view = 'patch'
 # [windows.next.style]
 # background_color = '0x002040'
 # [patch_views.patch.line_styles.display_name]
-# font_name = 'ComicSansMS'
+# font_name = 'ComicRelief'
 ```
 
 Field names share one namespace. Built-in patch attributes are `patch_cycle.name`, `tags`,
