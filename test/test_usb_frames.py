@@ -6,8 +6,73 @@ from unittest.mock import Mock
 
 import pytest
 
+from cntrl.patch_chooser import transport
 from cntrl.patch_chooser.transport import SerialConnection, UsbProtocolError
 from cntrl.patch_chooser.usb_frames import MAGIC, Frame, Kind
+
+
+def test_unattended_connection_stops_retrying_at_its_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(transport.sys.stdin, 'isatty', lambda: False)
+    clock = Mock()
+    seconds = 0.0
+
+    def sleep(duration: float) -> None:
+        nonlocal seconds
+        seconds += duration
+
+    clock.monotonic.side_effect = lambda: seconds
+    clock.sleep.side_effect = sleep
+    monkeypatch.setattr(transport, 'time', clock)
+    unplugged = Mock(side_effect=FileNotFoundError('USB unplugged'))
+    monkeypatch.setattr(SerialConnection, 'connect', unplugged)
+
+    with pytest.raises(transport.UsbCommandTimeout) as caught:
+        with SerialConnection(Path('unused'), timeout=1.5):
+            pytest.fail('A disconnected device cannot open a USB session')
+    assert type(caught.value) is transport.UsbCommandTimeout
+    assert seconds == 1.5
+    assert unplugged.call_count == 4
+
+
+@pytest.mark.parametrize('reply', ['line', 'data'])
+@pytest.mark.parametrize('payload', [b'', b'CNTRL WAIT\n'])
+def test_waiting_for_a_reply_shares_the_command_write_deadline(
+    reply: str, payload: bytes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = Mock()
+    seconds = 0.0
+
+    def sleep(duration: float) -> None:
+        nonlocal seconds
+        seconds += duration
+
+    clock.monotonic.side_effect = lambda: seconds
+    clock.sleep.side_effect = sleep
+    monkeypatch.setattr(transport, 'time', clock)
+    connection = SerialConnection(Path('unused'), timeout=1, retry=False)
+    connection.serial = Mock()
+
+    def write(raw: bytes) -> None:
+        frame = Frame.decode(raw)
+        sleep(0.75 if frame.kind == Kind.command else 0.125)
+
+    def read() -> Frame:
+        return Frame(
+            kind=Kind.text,
+            session=connection.session,
+            sequence=connection.sequence,
+            acknowledged=connection.acknowledged + 1,
+            payload=payload,
+        )
+
+    monkeypatch.setattr(connection, 'write_frame', write)
+    monkeypatch.setattr(connection, 'read_frame', read)
+    connection.write(b'CNTRL SETUP FORWARD\n')
+    with pytest.raises(transport.UsbCommandOutcomeUnknown, match='may have reached'):
+        getattr(connection, reply)()
+    assert 1 <= seconds < 1.125
 
 
 @pytest.mark.parametrize('failure_during_connect', [False, True])

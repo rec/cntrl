@@ -20,6 +20,14 @@ class UsbProtocolError(ValueError):
     """The device replied, but this host cannot interpret its USB protocol."""
 
 
+class UsbCommandTimeout(TimeoutError):
+    """The USB operation exceeded its deadline."""
+
+
+class UsbCommandOutcomeUnknown(UsbCommandTimeout):
+    """The operation timed out after command bytes may have reached the device."""
+
+
 class SerialConnection:
     """A resumable, acknowledged byte stream over a replaceable serial port."""
 
@@ -35,11 +43,14 @@ class SerialConnection:
         self.acknowledged = 0
         self.received: list[Frame] = []
         self.frame_received = bytearray()
+        self.bounded = not retry or not sys.stdin.isatty()
+        self.deadline: float | None = None
+        self.command_sent = False
 
     def __enter__(self) -> 'SerialConnection':
         try:
             self.exchange(b'', Kind.open)
-        except (KeyboardInterrupt, UsbProtocolError):
+        except (KeyboardInterrupt, OSError, UsbProtocolError):
             self.release()
             self.close()
             raise
@@ -49,6 +60,10 @@ class SerialConnection:
         try:
             if args and args[0] in (KeyboardInterrupt, UsbProtocolError):
                 self.release()
+            elif len(args) > 1 and isinstance(args[1], UsbCommandTimeout):
+                if self.serial is not None:
+                    self.serial.write_timeout = 0
+                    self.release()
             elif args and args[0] is not None:
                 if self.serial is not None:
                     try:
@@ -94,6 +109,17 @@ class SerialConnection:
     def exchange(
         self, data: bytes, kind: Kind = Kind.command, *, retry: bool = True
     ) -> None:
+        if self.deadline is not None or not self.bounded:
+            self._exchange(data, kind, retry)
+            return
+        self.deadline = time.monotonic() + self.timeout
+        try:
+            self._exchange(data, kind, retry)
+        finally:
+            self.deadline = None
+            self.command_sent = False
+
+    def _exchange(self, data: bytes, kind: Kind, retry: bool) -> None:
         frame = Frame(
             kind=kind,
             session=self.session,
@@ -106,14 +132,19 @@ class SerialConnection:
         lost_reported = False
         while True:
             try:
+                self._check_deadline()
                 if self.serial is None:
                     if not retry or (not self.retry and self.connection_attempted):
                         raise OSError('USB connection is closed')
                     self.connection_attempted = True
                     self.connect()
+                self._check_deadline()
+                self.command_sent |= bool(data)
                 self.write_frame(frame)
                 while True:
+                    self._check_deadline()
                     response = self.read_frame()
+                    self._check_deadline()
                     raw_response = response.encode()
                     if (
                         response.session != self.session
@@ -160,7 +191,10 @@ class SerialConnection:
                     self.usb_block_size = response.block_size
                     self.sequence += 1
                     return
+            except UsbCommandTimeout:
+                raise
             except OSError as error:
+                self._check_deadline()
                 self.close()
                 if not retry or not self.retry:
                     raise
@@ -175,8 +209,23 @@ class SerialConnection:
                     # Short sleeps remain interruptible even with a very large
                     # accumulated backoff, without overflowing platform time_t.
                     for _ in range(delay):
-                        time.sleep(1)
+                        self._pause(1)
                     delay *= 2
+
+    def _check_deadline(self) -> None:
+        if self.deadline is not None and time.monotonic() >= self.deadline:
+            if self.command_sent:
+                raise UsbCommandOutcomeUnknown(
+                    'USB operation timed out after the command may have reached '
+                    'the device. Check its state before retrying.'
+                )
+            raise UsbCommandTimeout('USB operation timed out')
+
+    def _pause(self, seconds: float) -> None:
+        self._check_deadline()
+        if self.deadline is not None:
+            seconds = min(seconds, max(0, self.deadline - time.monotonic()))
+        time.sleep(seconds)
 
     def protocol_error(self, reason: str, response: bytes) -> UsbProtocolError:
         return UsbProtocolError(
@@ -193,7 +242,11 @@ class SerialConnection:
 
     def write_frame(self, data: bytes) -> None:
         assert self.serial is not None
-        deadline = time.monotonic() + self.timeout
+        deadline = (
+            self.deadline
+            if self.deadline is not None
+            else time.monotonic() + self.timeout
+        )
         pending = memoryview(data)
         while pending:
             remaining = deadline - time.monotonic()
@@ -210,7 +263,11 @@ class SerialConnection:
 
     def read_frame(self) -> Frame:
         assert self.serial is not None
-        deadline = time.monotonic() + self.timeout
+        deadline = (
+            self.deadline
+            if self.deadline is not None
+            else time.monotonic() + self.timeout
+        )
         discarded = bytearray()
         failure = (
             'expected a binary CNTRL frame; install matching binary-protocol firmware'
@@ -258,7 +315,7 @@ class SerialConnection:
                         raise self.protocol_error(str(error), raw) from error
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                if discarded or self.sequence == 1:
+                if discarded or (self.sequence == 1 and self.deadline is None):
                     raise self.protocol_error(
                         failure, bytes(discarded + self.frame_received)
                     )
@@ -269,7 +326,7 @@ class SerialConnection:
             count = min(max(1, available), max(1, limit - len(self.frame_received)))
             value = self.serial.read(count)
             if not value:
-                if discarded or self.sequence == 1:
+                if discarded or (self.sequence == 1 and self.deadline is None):
                     raise self.protocol_error(
                         failure, bytes(discarded + self.frame_received)
                     )
@@ -277,15 +334,19 @@ class SerialConnection:
             self.frame_received.extend(value)
 
     def write(self, data: bytes, kind: Kind = Kind.command) -> None:
+        if self.bounded and self.deadline is None:
+            self.deadline = time.monotonic() + self.timeout
         for i in range(0, len(data), self.usb_block_size):
             self.exchange(data[i : i + self.usb_block_size], kind)
 
     def line(self, limit: int | None = None) -> str:
         if limit is None:
             limit = 1024
-        while True:
-            if self.received:
-                frame = self.received.pop(0)
+        if self.bounded and self.deadline is None:
+            self.deadline = time.monotonic() + self.timeout
+        try:
+            while True:
+                frame = self._reply()
                 if frame.kind != Kind.text:
                     raise self.protocol_error(
                         'expected text reply, received binary data', frame.encode()
@@ -296,22 +357,33 @@ class SerialConnection:
                 response = line.decode('ascii').rstrip('\r')
                 if response != 'CNTRL WAIT':
                     return response
-            else:
-                self.exchange(b'', Kind.poll)
-                if not self.received:
-                    time.sleep(0.01)
+        finally:
+            self.deadline = None
+            self.command_sent = False
 
     def data(self) -> bytes:
-        while True:
-            if self.received:
-                frame = self.received.pop(0)
+        if self.bounded and self.deadline is None:
+            self.deadline = time.monotonic() + self.timeout
+        try:
+            while True:
+                frame = self._reply()
                 if frame.kind == Kind.data:
                     return frame.payload
                 text = frame.payload.decode('ascii').rstrip('\r\n')
                 if text != 'CNTRL WAIT':
                     raise ValueError(text)
-            else:
-                self.exchange(b'', Kind.poll)
+        finally:
+            self.deadline = None
+            self.command_sent = False
+
+    def _reply(self) -> Frame:
+        while True:
+            self._check_deadline()
+            if self.received:
+                return self.received.pop(0)
+            self.exchange(b'', Kind.poll)
+            if not self.received:
+                self._pause(0.01)
 
 
 class SetupEntry(BaseModel, frozen=True):
