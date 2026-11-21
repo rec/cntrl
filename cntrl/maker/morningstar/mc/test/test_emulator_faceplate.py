@@ -36,7 +36,7 @@ class FaceplateSession(Session):
                 strict=True,
             )
         }
-        self.failed = False
+        self.editing_name = False
         self.inputs: list[tuple[str, bool]] = []
 
     def button(self, control_id: str, pressed: bool) -> None:
@@ -51,7 +51,7 @@ def test_mc6_faceplate_keeps_display_and_switch_positions(
     assert existing is None or isinstance(existing, QtWidgets.QApplication)
     application = existing or QtWidgets.QApplication([])
     session = FaceplateSession()
-    canvas = ControllerCanvas(session, lambda message: None)
+    canvas = ControllerCanvas(session, lambda operation: operation())
     canvas.resize(1200, 640)
     try:
         image = canvas.grab().toImage()
