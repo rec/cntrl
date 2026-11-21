@@ -7,6 +7,7 @@ from random import Random
 
 import tomlkit
 from pydantic import BaseModel, Field
+from tomlkit.exceptions import ParseError
 
 from . import formatting, graphics, models
 
@@ -438,24 +439,29 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
         offset -= binary_format.core_offset(data)
         data = binary_format.core(data)
     if data[offset : offset + 4] != b'CPAT' or offset + 16 > len(data):
-        raise ValueError('missing patch graph')
+        raise binary_format.DocumentFormatError('missing patch graph')
     offset += struct.unpack_from('<I', data, offset + 4)[0]
     if offset + HEADER.size > len(data):
-        raise ValueError('truncated display metadata')
+        raise binary_format.DocumentFormatError('truncated display metadata')
     magic, styles, pages, texts, page_size, source_size = HEADER.unpack_from(
         data, offset
     )
     if magic != b'CDSP' or not pages:
-        raise ValueError('invalid display metadata')
+        raise binary_format.DocumentFormatError('invalid display metadata')
     offset += HEADER.size + styles * graphics.SCREEN.size + page_size
     for _ in range(texts):
         if offset + 2 > len(data):
-            raise ValueError('truncated display text')
+            raise binary_format.DocumentFormatError('truncated display text')
         size = struct.unpack_from('<H', data, offset)[0]
         offset += 2 + size
     if offset + source_size != len(data):
-        raise ValueError('invalid display source size')
-    return tomlkit.parse(data[offset:].decode('utf-8')).unwrap()
+        raise binary_format.DocumentFormatError('invalid display source size')
+    try:
+        return tomlkit.parse(data[offset:].decode('utf-8')).unwrap()
+    except (UnicodeDecodeError, ParseError) as error:
+        raise binary_format.DocumentFormatError(
+            f'invalid display source: {error}'
+        ) from error
 
 
 MAX_LINES = 16

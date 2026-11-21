@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import tomlkit
 import tyro
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from tomlkit.exceptions import ParseError
 
 from . import (
@@ -462,23 +462,41 @@ def backup_assets(
     movies: set[int],
 ) -> None:
     from .cli import save_asset
+    from .setup_sync_store import sync_files
 
-    settings = models.Setup.model_validate(
-        tomlkit.parse(resolved.export(data)).unwrap()
-    )
+    source = tomlkit.parse(resolved.export(data)).unwrap()
+    try:
+        settings = models.Setup.model_validate(source)
+    except ValidationError as error:
+        raise binary_format.DocumentFormatError(
+            f'invalid compiled setup asset references: {error}'
+        ) from error
     for value in settings.fonts.values():
-        key = int(Path(value).stem, 16)
+        try:
+            key = int(Path(value).stem, 16)
+        except ValueError as error:
+            raise binary_format.DocumentFormatError(
+                f'invalid font reference: {value}'
+            ) from error
         if key not in fonts:
             save_asset(folder / 'fonts' / f'{key:08x}.cfont', client.download_font(key))
             fonts.add(key)
     for value in settings.splash_movie + settings.idle_movie:
-        key = int(Path(value).stem, 16)
+        try:
+            key = int(Path(value).stem, 16)
+        except ValueError as error:
+            raise binary_format.DocumentFormatError(
+                f'invalid movie reference: {value}'
+            ) from error
         if key not in movies:
             save_asset(folder / value, client.download_movie(key))
             movies.add(key)
-    for name in midi_assets.referenced({'setup': data}):
-        if not (folder / 'midi' / name).exists():
-            save_asset(folder / 'midi' / name, client.download_midi(name))
+    for name in midi_assets.filenames(source):
+        destination = folder / 'midi' / name
+        with sync_files():
+            present = destination.exists()
+        if not present:
+            save_asset(destination, client.download_midi(name))
 
 
 def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None:

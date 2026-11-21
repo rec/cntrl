@@ -60,7 +60,9 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> b
         )
     graph = graph_offset(data)
     if struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
-        raise ValueError('upgrade setup before refreshing its memory estimate')
+        raise binary_format.DocumentFormatError(
+            'upgrade setup before refreshing its memory estimate'
+        )
     _, _, _, _, instruments, cycles, patches, *_ = HEADER.unpack_from(data)
     metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
     page = _page_offsets(data)[0]
@@ -120,7 +122,7 @@ def prepare_restore(
     upgraded = _replace_removed_ui_fonts(upgrade(data))
     if preserve_memory_estimates:
         if upgraded != data:
-            raise ValueError(
+            raise binary_format.DocumentFormatError(
                 'preserving memory estimates requires current-format setups'
             )
         return data
@@ -160,7 +162,9 @@ def upgrade(data: bytes) -> bytes:
             version == 44
             and data[layout.section_end(data, _page_offsets(data)[0]) :][:4] == b'CBPG'
         ):
-            raise ValueError('re-import the backup to replace its legacy Banked Page')
+            raise binary_format.DocumentFormatError(
+                're-import the backup to replace its legacy Banked Page'
+            )
         # New node and presentation options preserve existing records.
         converted = bytearray(data)
         converted[presentation_settings:presentation_settings] = bytes([1, 1])
@@ -272,7 +276,7 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
             None if shifted is None else shifted + offset,
         )
     if len(data) < 76:
-        raise ValueError('truncated setup')
+        raise binary_format.DocumentFormatError('truncated setup')
     magic, version, _, length, ni, nc, np, flags, crc, _ = HEADER.unpack_from(data)
     if (
         magic != b'CSW1'
@@ -287,10 +291,10 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
         or length != len(data)
         or crc32(data[28:]) != crc
     ):
-        raise ValueError('invalid setup header/checksum')
+        raise binary_format.DocumentFormatError('invalid setup header/checksum')
     meta = 76 + ni * 68 + nc * 68 + np * 82
     if data[meta : meta + 4] != b'CMTA':
-        raise ValueError('missing setup metadata')
+        raise binary_format.DocumentFormatError('missing setup metadata')
     nb = struct.unpack_from('<H', data, meta + 4)[0]
     cursor = (
         meta + METADATA.size - (2 if version < 46 else 0) + ni * 64 + nb * 8 + np * 4
@@ -300,7 +304,9 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
     if flags & page_settings.CLOCK_FLAG:
         cursor += page_settings.CLOCK.size
     if data[cursor : cursor + 4] == b'CKBD':
-        raise ValueError('Keyboard page has been removed; recompile this setup')
+        raise binary_format.DocumentFormatError(
+            'Keyboard page has been removed; recompile this setup'
+        )
     gestures = None
     shifted = None
     if flags & GESTURES_FLAG:
@@ -312,7 +318,7 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
         shifted = cursor + 4
         cursor += 4 + 5 * (_gesture_size(version) + 4)
     if cursor + 8 > len(data) or data[cursor + 6] != (1 if version < 39 else 2):
-        raise ValueError('invalid page layout version')
+        raise binary_format.DocumentFormatError('invalid page layout version')
     return cursor, gestures, shifted
 
 
@@ -327,7 +333,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     cursor = layout.section_end(data, cursor)
     cursor = banked.section_end(data, cursor)
     if cursor + 8 > len(data) or data[cursor : cursor + 4] != b'CMOV':
-        raise ValueError('missing movie metadata')
+        raise binary_format.DocumentFormatError('missing movie metadata')
     startup, idle = struct.unpack_from('<HH', data, cursor + 4)
     cursor += 8 + 4 * (startup + idle)
     endpoint_offset = cursor
@@ -344,15 +350,15 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     cursor = looper.section_end(data, cursor)
     cursor = arpeggiator.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
-        raise ValueError('missing name metadata')
+        raise binary_format.DocumentFormatError('missing name metadata')
     cursor += 4
     for _ in range(np * 3):
         if cursor + 2 > len(data):
-            raise ValueError('truncated name metadata')
+            raise binary_format.DocumentFormatError('truncated name metadata')
         size = struct.unpack_from('<H', data, cursor)[0]
         cursor += 2 + (0 if size == 65535 else size)
     if cursor + GRAPH.size > len(data) or data[cursor : cursor + 4] != b'CPAT':
-        raise ValueError('missing Patch graph')
+        raise binary_format.DocumentFormatError('missing Patch graph')
     return cursor, endpoint_offset, input_offset
 
 
@@ -362,7 +368,7 @@ def _gesture_size(version: int) -> int:
 
 def _extend_gestures(record: bytes, prefix: int = 0) -> bytes:
     if len(record) not in (prefix + 20, prefix + 24):
-        raise ValueError('truncated legacy gestures')
+        raise binary_format.DocumentFormatError('truncated legacy gestures')
     events = (len(record) - prefix - 8) // 2
     return record[:-8] + b'\xff\xff' * (len(GESTURE_EVENTS) - events) + record[-8:]
 
@@ -375,24 +381,26 @@ def _upgrade_graph(data: bytes, offset: int, gesture_size: int) -> bytes:
     cursor = prefix
     result = bytearray(data[offset : offset + prefix])
     if magic != b'CPAT' or prefix > size or offset + size > len(data):
-        raise ValueError('invalid legacy Patch graph')
+        raise binary_format.DocumentFormatError('invalid legacy Patch graph')
     for index in range(nodes):
         if (
             struct.unpack_from('<I', data, offset + GRAPH.size + index * 4)[0] != cursor
             or cursor + 4 > size
         ):
-            raise ValueError('invalid legacy Patch node offset')
+            raise binary_format.DocumentFormatError('invalid legacy Patch node offset')
         kind, flags, length = struct.unpack_from('<BBH', data, offset + cursor)
         payload = data[offset + cursor + 4 : offset + cursor + 4 + length]
         if cursor + 4 + length > size:
-            raise ValueError('truncated legacy Patch node')
+            raise binary_format.DocumentFormatError('truncated legacy Patch node')
         cursor += 4 + length
         if kind == 10:
             hooks = SWITCH.size + gesture_size
             shifted = hooks + SWITCH_HOOKS.size
             record_size = shifted + gesture_size + 4
             if length < 220 or length != 220 + payload[66] * record_size:
-                raise ValueError('invalid legacy control bindings')
+                raise binary_format.DocumentFormatError(
+                    'invalid legacy control bindings'
+                )
             records = []
             for position in range(220, length, record_size):
                 record = payload[position : position + record_size]
@@ -406,7 +414,7 @@ def _upgrade_graph(data: bytes, offset: int, gesture_size: int) -> bytes:
         struct.pack_into('<I', result, GRAPH.size + index * 4, len(result))
         result.extend(struct.pack('<BBH', kind, flags, len(payload)) + payload)
     if cursor != size:
-        raise ValueError('invalid legacy Patch graph length')
+        raise binary_format.DocumentFormatError('invalid legacy Patch graph length')
     struct.pack_into('<I', result, 4, len(result))
     return bytes(result)
 
@@ -488,10 +496,12 @@ def binding_map(data: bytes, root: int) -> dict[str, object]:
     data = binary_format.core(data)
     graph = graph_offset(data)
     if root >= GRAPH.unpack_from(data, graph)[2]:
-        raise ValueError('missing binding-map node')
+        raise binary_format.DocumentFormatError('missing binding-map node')
     address = graph + struct.unpack_from('<I', data, graph + GRAPH.size + root * 4)[0]
     if data[address] != 10:
-        raise ValueError('scope must reference a binding-map node')
+        raise binary_format.DocumentFormatError(
+            'scope must reference a binding-map node'
+        )
     return cast(dict[str, object], patch(data, root)['bindings'])
 
 
@@ -600,7 +610,7 @@ def export(data: bytes) -> str:
                 source.pop(key, None)
     modes = data[meta + METADATA.size - 20 : meta + METADATA.size - 16]
     if any(m >= len(TRS_MODES) for m in modes):
-        raise ValueError('invalid TRS port role')
+        raise binary_format.DocumentFormatError('invalid TRS port role')
     if any(modes):
         result['trs_ports'] = {
             j: TRS_MODES[m] for j, m in zip(jacks, modes, strict=True) if m
@@ -801,7 +811,7 @@ def export(data: bytes) -> str:
             programs.append(entry)
     result['definitions'] = {'profiles': profiles, 'programs': programs}
     if offset + size > len(data):
-        raise ValueError('truncated Patch graph')
+        raise binary_format.DocumentFormatError('truncated Patch graph')
     return tomlkit.dumps(result)
 
 
@@ -815,14 +825,14 @@ def _patch(
 ) -> dict[str, object]:
     _, section_size, count, _, _, _ = GRAPH.unpack_from(data, offset)
     if index >= count or index in ancestors:
-        raise ValueError('invalid or cyclic Patch graph')
+        raise binary_format.DocumentFormatError('invalid or cyclic Patch graph')
     address = (
         offset + struct.unpack_from('<I', data, offset + GRAPH.size + index * 4)[0]
     )
     kind, flags, size = struct.unpack_from('<BBH', data, address)
     cursor = address + 4
     if cursor + size > offset + section_size:
-        raise ValueError('truncated Patch node')
+        raise binary_format.DocumentFormatError('truncated Patch node')
     properties = cast(dict[str, object], metadata.get(str(index), {}))
     if isinstance(authored := properties.get('_derived'), dict):
         program_cursor, program_kind = cursor, kind
@@ -830,7 +840,7 @@ def _patch(
         while program_kind in (10, 12):
             child = struct.unpack_from('<H', data, program_cursor)[0]
             if child >= count or child in program_seen:
-                raise ValueError('invalid or cyclic Patch graph')
+                raise binary_format.DocumentFormatError('invalid or cyclic Patch graph')
             program_seen.add(child)
             child_address = (
                 offset
@@ -858,7 +868,7 @@ def _patch(
     value = {k: v for k, v in properties.items() if not k.startswith('_')}
     if kind == 20:
         if flags or size != 8 or data[cursor] > 1:
-            raise ValueError('invalid keyboard action')
+            raise binary_format.DocumentFormatError('invalid keyboard action')
         value.update(
             operation='keyboard',
             action='press' if data[cursor] else 'release',
@@ -867,10 +877,10 @@ def _patch(
         )
     elif kind == 18:
         if flags or size != 6:
-            raise ValueError('invalid global setting action')
+            raise binary_format.DocumentFormatError('invalid global setting action')
         field, clear, encoded = struct.unpack_from('<BBI', data, cursor)
         if clear > 1 or clear and encoded:
-            raise ValueError('invalid global setting action')
+            raise binary_format.DocumentFormatError('invalid global setting action')
         setting = device_settings.definition(field)
         value.update(operation='global-setting', setting=setting.name)
         if not clear:
@@ -1190,7 +1200,7 @@ def _patch(
         if document := properties.get('_document'):
             value['document'] = document
     else:
-        raise ValueError('unknown Patch type')
+        raise binary_format.DocumentFormatError('unknown Patch type')
     return value
 
 

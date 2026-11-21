@@ -45,6 +45,7 @@ from .setup_sync_store import (
     Review,
     Source,
     SyncError,
+    SyncFileError,
     Value,
     base_record,
     baseline,
@@ -165,7 +166,8 @@ def store(command: data_files.Sources) -> Path:
     expressions = data_files.expressions(command.document)
     if not expressions:
         raise SyncError('a root setup document is required')
-    return expressions[0].paths[0].resolve().parent / 'setup-sync'
+    with sync_files():
+        return expressions[0].paths[0].resolve().parent / 'setup-sync'
 
 
 def recipe(
@@ -253,7 +255,7 @@ def save_setup(folder: Path, name: str, data: bytes) -> None:
         (folder / f'{name}.bin').write_bytes(data)
     try:
         text = resolved.export(data)
-    except ValueError as error:
+    except binary_format.DocumentFormatError as error:
         with sync_files():
             (folder / f'{name}.decode-error.txt').write_bytes(str(error).encode())
     else:
@@ -264,12 +266,20 @@ def save_setup(folder: Path, name: str, data: bytes) -> None:
 def capture_assets(
     client: transport.SetupClient, setups: dict[str, bytes], folder: Path
 ) -> None:
+    from .cli import CompileOutputError
+
     fonts: set[int] = set()
     movies: set[int] = set()
     for data in setups.values():
         try:
             backups.backup_assets(client, data, folder, fonts, movies)
-        except (OSError, ValueError) as error:
+        except (
+            *transport.USB_ERRORS,
+            transport.UsbTransferInputError,
+            binary_format.DocumentFormatError,
+            CompileOutputError,
+            SyncFileError,
+        ) as error:
             raise SyncError(
                 f'incomplete snapshot retained at {folder}: {error}'
             ) from error
@@ -350,14 +360,16 @@ def preview_locked(
     live_globals = device_globals.capture(client)
     global_checksum: str | None = None
     overlay = root.parent / 'device-globals.toml'
-    overlay_present = overlay.exists()
+    with sync_files():
+        overlay_present = overlay.exists()
     if live_globals is not None:
         captured = device_globals.dump(live_globals)
-        (folder / 'device-globals.toml').write_bytes(captured)
+        with sync_files():
+            (folder / 'device-globals.toml').write_bytes(captured)
         global_checksum = digest(captured)
-        overlay_bytes = overlay.read_bytes() if overlay_present else b''
+        overlay_bytes = read_sync_file(overlay) if overlay_present else b''
         host_globals = (
-            device_globals.load(overlay_bytes)
+            device_globals.load_saved(overlay, overlay_bytes)
             if overlay_present
             else global_overlay.Overlay()
         )
@@ -440,14 +452,16 @@ def preview_locked(
                 )
             )
         trace.files[overlay] = overlay_bytes
+    with sync_files():
+        sources = [
+            Source(file=p, before=digest(v), present=p.exists())
+            for p, v in trace.files.items()
+        ]
     review = Review(
         root=root,
         recipe=recipe(inputs, trace),
         baseline=digest(base_record(root)),
-        sources=[
-            Source(file=p, before=digest(v), present=p.exists())
-            for p, v in trace.files.items()
-        ],
+        sources=sources,
         host={n: digest(v) for n, v in host_bundle.setups.items()},
         pedal={n: digest(v) for n, v in saved.items()},
         changes=changes,
@@ -457,7 +471,8 @@ def preview_locked(
     write_record(report, review.model_dump(mode='json', exclude_none=True))
     # A sealed copy fixes the compared values and destinations. Only choice is
     # editable in the review; Apply rechecks it against this captured proposal.
-    (folder / 'proposal.toml').write_bytes(report.read_bytes())
+    with sync_files():
+        (folder / 'proposal.toml').write_bytes(report.read_bytes())
     documents: dict[Path, MutableMapping[str, object]] = {}
     for c in changes:
         if c.destination is None:
@@ -476,7 +491,8 @@ def preview_locked(
             tofile=str(f),
         )
     )
-    (folder / 'pedal-choices.diff').write_bytes(diff.encode())
+    with sync_files():
+        (folder / 'pedal-choices.diff').write_bytes(diff.encode())
     print(f'{len(changes)} changes; review {report}')
     for c in changes:
         print(f'{c.setup}: {c.path}: {c.choice}; {c.destination}; {c.note}')
@@ -535,7 +551,7 @@ def setting_changes(
             continue
         try:
             path: list[str | int] = list(device_settings.field_path(field, target))
-        except ValueError:
+        except device_settings.DeviceSettingError:
             continue
         b, h, p = (lookup(v, path) for v in values)
         if not p.present:

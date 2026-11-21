@@ -2,7 +2,9 @@
 
 import sys
 from collections.abc import Mapping
+from contextlib import nullcontext
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import tomlkit
@@ -10,6 +12,7 @@ import tyro
 
 from cntrl.file_lock import writer_lock
 from cntrl.patch_chooser import (
+    backups,
     binary_format,
     cli,
     data_files,
@@ -17,6 +20,7 @@ from cntrl.patch_chooser import (
     setup_sync,
     setup_sync_sources,
     setup_sync_store,
+    transport,
 )
 
 
@@ -259,7 +263,44 @@ def test_snapshot_retains_unsupported_bytes_without_claiming_completion(
     )
     assert (folder / 'Old.bin').read_bytes() == b'unsupported binary'
     assert (folder / 'Old.decode-error.txt').read_text()
+    with pytest.raises(
+        setup_sync_store.SyncError, match='incomplete snapshot retained'
+    ):
+        setup_sync.capture_assets(
+            Mock(spec=transport.SetupClient), {'Old': b'unsupported binary'}, folder
+        )
     assert not (folder / 'complete.toml').exists()
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_sync_preview_preserves_unexpected_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected preview failure')
+    monkeypatch.setattr(transport, 'SerialConnection', Mock(return_value=nullcontext()))
+    monkeypatch.setattr(setup_sync, 'preview', Mock(side_effect=failure))
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        ['cntrl', 'setup', 'sync', str(tmp_path / 'show.toml'), '--port', '/unused'],
+    )
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_snapshot_capture_preserves_unexpected_host_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected asset capture failure')
+    monkeypatch.setattr(backups, 'backup_assets', Mock(side_effect=failure))
+    with pytest.raises(error_type) as caught:
+        setup_sync.capture_assets(
+            Mock(spec=transport.SetupClient), {'Show': b'saved'}, tmp_path
+        )
+    assert caught.value is failure
+    assert not (tmp_path / 'complete.toml').exists()
 
 
 @pytest.mark.parametrize('pedal', [[1, 3], []])

@@ -141,13 +141,21 @@ def capture(client: transport.SetupClient) -> global_overlay.Overlay | None:
     )
 
 
+def load_saved(path: Path, data: bytes) -> global_overlay.Overlay:
+    try:
+        return load(data)
+    except (UnicodeDecodeError, ParseError, ValidationError) as error:
+        raise GlobalRestoreError(f'{path}: {error}') from error
+
+
 def run(command: List | Set | Clear | Restore) -> None:
     restore = None
     if isinstance(command, Restore):
         try:
-            restore = load(command.file.read_bytes())
-        except (OSError, UnicodeDecodeError, ParseError, ValidationError) as error:
+            data = command.file.read_bytes()
+        except OSError as error:
             raise GlobalRestoreError(f'{command.file}: {error}') from error
+        restore = load_saved(command.file, data)
     port = devices.select_port(command.port)
     with transport.SerialConnection(port) as connection:
         client = transport.SetupClient(connection)

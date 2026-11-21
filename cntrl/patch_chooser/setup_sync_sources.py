@@ -7,20 +7,31 @@ from pathlib import Path
 import tomlkit
 
 from . import data_files
-from .setup_sync_store import Change, Choice, SyncError, Value, base_record
+from .setup_sync_store import (
+    Change,
+    Choice,
+    SyncError,
+    Value,
+    base_record,
+    parse_record,
+    read_sync_file,
+    sync_files,
+)
 
 
 def known_consumers(root: Path, trace: data_files.Trace) -> None:
     """Include source consumers retained with other known setup baselines."""
-    if not base_record(root):
+    baseline = base_record(root)
+    if not baseline:
         return
-    entries = tomlkit.parse(base_record(root).decode())['setups']
+    entries = parse_record(root / 'base.toml', baseline)['setups']
     for entry in entries.values():
         folder = (root / entry['file']).parent
         manifest = folder / 'snapshot.toml'
-        if not manifest.exists():
-            manifest = folder.parent / 'snapshot.toml'
-        for source in tomlkit.parse(manifest.read_bytes().decode())['sources']:
+        with sync_files():
+            if not manifest.exists():
+                manifest = folder.parent / 'snapshot.toml'
+        for source in parse_record(manifest, read_sync_file(manifest))['sources']:
             if (p := Path(source['file'])) in trace.files:
                 consumers = trace.consumers.setdefault(p, [])
                 consumers.extend(n for n in source['consumers'] if n not in consumers)

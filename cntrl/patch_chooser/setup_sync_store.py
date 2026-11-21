@@ -177,14 +177,21 @@ def baseline(root: Path) -> dict[str, bytes]:
 def global_baseline(root: Path) -> global_overlay.Overlay | None:
     record = base_record(root)
     if record:
-        entry = tomlkit.parse(record.decode()).unwrap().get('device_globals')
+        entry = parse_record(root / 'base.toml', record).unwrap().get('device_globals')
         if isinstance(entry, dict):
-            data = (root / entry['file']).read_bytes()
+            path = root / entry['file']
+            data = read_sync_file(path)
             if digest(data) != entry['checksum']:
                 raise SyncError('damaged device-global synchronization baseline')
-            return device_globals.load(data)
+            return device_globals.load_saved(path, data)
     recovered = root.parent / 'pedal/device-globals.toml'
-    return device_globals.load(recovered.read_bytes()) if recovered.exists() else None
+    with sync_files():
+        present = recovered.exists()
+    return (
+        device_globals.load_saved(recovered, read_sync_file(recovered))
+        if present
+        else None
+    )
 
 
 def migrate_baselines(root: Path) -> None:
