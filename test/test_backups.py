@@ -1,8 +1,10 @@
 """Backup binaries stay authoritative and must match the current format."""
 
 import struct
+import sys
 from contextlib import nullcontext
 from pathlib import Path
+from unittest.mock import Mock
 from zlib import crc32
 
 import pytest
@@ -208,6 +210,41 @@ def test_backup_refuses_to_overwrite_an_existing_directory(tmp_path: Path) -> No
         backups.backup_pedal(tmp_path, Path('/unused'))
     assert saved.read_text() == 'Evening'
     assert not (tmp_path / 'setups').exists()
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_backup_cli_preserves_unexpected_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected backup failure')
+    monkeypatch.setattr(backups, 'backup_pedal', Mock(side_effect=failure))
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        ['cntrl', 'setup', 'backup', str(tmp_path / 'backup'), '--port', '/unused'],
+    )
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+
+
+def test_backup_asset_scan_preserves_unexpected_host_file_failures(
+    tmp_path: Path,
+) -> None:
+    client = Mock(spec=transport.SetupClient)
+    client.request.side_effect = [
+        'CNTRL STORAGE 65536 65536 32768 4096',
+        'CNTRL ENTRY 1 0 D 0 636e74726c',
+        'CNTRL ENTRY 2 1 D 0 6d6f76696573',
+        'CNTRL ENTRY 3 2 F 5 64656164626565662e62696e',
+        'CNTRL STORAGE END 3',
+    ]
+    failure = FileNotFoundError('unexpected host file missing')
+    client.download_movie.side_effect = failure
+    with pytest.raises(FileNotFoundError) as caught:
+        backups.backup_stored_assets(client, tmp_path)
+    assert caught.value is failure
+    assert not (tmp_path / 'unavailable-assets.txt').exists()
 
 
 def test_restore_preparation_upgrades_setups_and_history_without_changing_backup(
@@ -457,7 +494,7 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
 
         def download_movie(self, key: int) -> bytes:
             if key == 0xDEADBEEF:
-                raise FileNotFoundError('device cannot read the stored movie')
+                raise transport.UsbFileMissing('device cannot read the stored movie')
             assert key == 0x87654321
             return b'movie'
 
@@ -517,7 +554,7 @@ def test_failed_startup_still_allows_an_incomplete_raw_recovery_backup(
 
         def request(self, command: str) -> str:
             if command == 'CNTRL STATUS':
-                raise ValueError('CNTRL ERROR incompatible-format')
+                raise transport.UsbReplyError('CNTRL ERROR incompatible-format')
             if command == 'CNTRL DEPLOY STATUS':
                 return 'CNTRL DEPLOY 0 0 0'
             assert command.startswith('CNTRL STORAGE')
@@ -1036,7 +1073,7 @@ def test_unreadable_movies_block_backup_only_when_referenced(
 
     def download_movie(key: int) -> bytes:
         assert key == crc32(movie)
-        raise FileNotFoundError('device cannot read the stored movie')
+        raise transport.UsbFileMissing('device cannot read the stored movie')
 
     monkeypatch.setattr(saved_pedal, 'request', request)
     monkeypatch.setattr(saved_pedal, 'download_movie', download_movie)

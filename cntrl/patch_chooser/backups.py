@@ -16,6 +16,7 @@ import tyro
 from pydantic import BaseModel, Field, ValidationError
 from tomlkit.exceptions import ParseError
 
+from ..localization import catalogue
 from . import (
     binary_format,
     compiler_wire,
@@ -31,6 +32,15 @@ from . import (
     storage_info,
     transport,
 )
+from .setup_sync_store import SyncFileError, read_sync_file, sync_files, write_record
+
+
+class BackupError(ValueError):
+    """A backup operation could not proceed with the available data."""
+
+
+class BackupDirectoryExists(FileExistsError):
+    """A new backup could not be started because its directory already exists."""
 
 
 class Backup(BaseModel, frozen=True):
@@ -191,12 +201,18 @@ def artifact_format(path: Path) -> str:
 def backup_pedal(
     directory: Path, port: Path, connection: transport.SerialConnection | None = None
 ) -> None:
-    from .setup_sync_store import write_record
-
-    directory.mkdir(parents=True)
+    try:
+        directory.mkdir(parents=True)
+    except FileExistsError as error:
+        raise BackupDirectoryExists(
+            error.errno, error.strerror, error.filename
+        ) from error
+    except OSError as error:
+        raise SyncFileError(str(error)) from error
     write_record(directory / 'backup-pending.toml', {'complete': False})
     setups = directory / 'setups'
-    setups.mkdir()
+    with sync_files():
+        setups.mkdir()
     print(f'Backup: {directory}', flush=True)
     with (
         nullcontext(connection)
@@ -206,7 +222,7 @@ def backup_pedal(
         client = transport.SetupClient(connection)
         try:
             status = client.request('CNTRL STATUS')
-        except ValueError as error:
+        except transport.UsbReplyError as error:
             status = str(error)
             if not status.startswith('CNTRL ERROR '):
                 raise
@@ -214,17 +230,23 @@ def backup_pedal(
         if recovery_only:
             deployment = client.request('CNTRL DEPLOY STATUS').split()
             if len(deployment) != 5 or deployment[:2] != ['CNTRL', 'DEPLOY']:
-                raise ValueError(f'{status}; raw recovery protocol is unavailable')
-            status += f' persistent_format=unknown persistent_root={int(deployment[2])}'
-        (directory / 'status.txt').write_bytes(status.encode())
+                raise transport.UsbReplyError(
+                    f'{status}; raw recovery protocol is unavailable'
+                )
+            try:
+                root = int(deployment[2])
+            except ValueError as error:
+                raise transport.UsbReplyError(
+                    'invalid persistent root in deployment status'
+                ) from error
+            status += f' persistent_format=unknown persistent_root={root}'
+        _write_file(directory / 'status.txt', status.encode())
         if ' starts=' in status:
-            (directory / 'starts.toml').write_bytes(client.download_starts())
+            _write_file(directory / 'starts.toml', client.download_starts())
         backup_stored_assets(client, directory)
         languages_valid = True
         if 'language=1' in status.split():
-            report = storage_info.StorageInfo.model_validate(
-                tomlkit.parse((directory / 'storage.toml').read_text()).unwrap()
-            )
+            report = _read_model(directory / 'storage.toml', storage_info.StorageInfo)
             language_root = (persistent_prefix(status) or '/cntrl/') + 'languages'
             for entry in report.entries:
                 stored = Path(entry.path)
@@ -237,13 +259,14 @@ def backup_pedal(
                 tag = stored.stem
                 try:
                     pack = client.download_language(tag)
-                except (OSError, ValueError) as error:
+                except (*transport.USB_ERRORS, catalogue.CatalogueError) as error:
                     languages_valid = False
                     print(f'Retained raw language pack {tag}: {error}', file=sys.stderr)
                     continue
                 path = directory / 'raw/cntrl/languages' / f'{tag}.bin'
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(pack)
+                with sync_files():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                _write_file(path, pack)
         raw_state = backup_state(client, directory, status)
         if recovery_only:
             write_backup_manifest(directory, complete=False, raw_state=raw_state)
@@ -252,17 +275,20 @@ def backup_pedal(
             )
             return
         if device_globals.supported(status):
-            (directory / 'device-globals.toml').write_bytes(
-                device_globals.dump(client.global_settings())
+            _write_file(
+                directory / 'device-globals.toml',
+                device_globals.dump(client.global_settings()),
             )
         selected = client.current()
         entries = client.catalogue()
-        (directory / 'selected.txt').write_bytes(selected.encode())
-        (directory / 'catalogue.txt').write_bytes(
-            '\n'.join(f'{e.name} {e.valid}' for e in entries).encode()
+        _write_file(directory / 'selected.txt', selected.encode())
+        _write_file(
+            directory / 'catalogue.txt',
+            '\n'.join(f'{e.name} {e.valid}' for e in entries).encode(),
         )
-        fonts = {int(p.stem, 16) for p in (setups / 'fonts').glob('*.cfont')}
-        movies = {int(p.stem, 16) for p in (setups / 'movies').glob('*.cnsa')}
+        with sync_files():
+            fonts = {int(p.stem, 16) for p in (setups / 'fonts').glob('*.cfont')}
+            movies = {int(p.stem, 16) for p in (setups / 'movies').glob('*.cnsa')}
         healthy = languages_valid and all(e.valid for e in entries)
         snapshots: list[dict[str, object]] = []
         source_snapshots: set[str] = set()
@@ -274,13 +300,17 @@ def backup_pedal(
                 data = client.download(name)
                 if (source := source_archive.identifier(data)) is not None:
                     source_snapshots.add(source)
-                (setups / f'{name}.bin').write_bytes(data)
+                _write_file(setups / f'{name}.bin', data)
                 try:
                     readable = resolved.upgrade(data)
                     text = resolved.export(readable)
-                    (setups / f'{name}.toml').write_bytes(text.encode())
+                    _write_file(setups / f'{name}.toml', text.encode())
                     backup_assets(client, readable, setups, fonts, movies)
-                except ValueError as error:
+                except (
+                    binary_format.DocumentFormatError,
+                    transport.UsbReplyError,
+                    transport.UsbTransferInputError,
+                ) as error:
                     healthy = False
                     print(f'{name}: retained raw setup: {error}', file=sys.stderr)
                 print(f'Saved {name}: {len(data)} bytes', flush=True)
@@ -291,19 +321,20 @@ def backup_pedal(
                 if (source := source_archive.identifier(data)) is not None:
                     source_snapshots.add(source)
                 if len(data) != revision.length:
-                    raise ValueError(
+                    raise transport.UsbReplyError(
                         f'{name}/{revision.number}: history length differs'
                     )
                 folder = directory / 'history' / name
-                folder.mkdir(parents=True, exist_ok=True)
-                (folder / f'{revision.number}.bin').write_bytes(data)
+                with sync_files():
+                    folder.mkdir(parents=True, exist_ok=True)
+                _write_file(folder / f'{revision.number}.bin', data)
                 try:
                     version = struct.unpack_from(
                         '<H',
                         binary_format.core(data),
                         4,
                     )[0]
-                except ValueError:
+                except binary_format.DocumentFormatError:
                     version = struct.unpack_from('<H', data, 4)[0]
                     healthy = False
                 snapshots.append(
@@ -314,67 +345,74 @@ def backup_pedal(
                         'version': version,
                     }
                 )
-                (directory / 'history.toml').write_bytes(
-                    tomlkit.dumps({'revisions': snapshots}).encode()
+                _write_file(
+                    directory / 'history.toml',
+                    tomlkit.dumps({'revisions': snapshots}).encode(),
                 )
                 if version in binary_format.SETUP_VERSIONS:
                     readable = resolved.upgrade(data)
-                    (folder / f'{revision.number}.toml').write_bytes(
-                        resolved.export(readable).encode()
+                    _write_file(
+                        folder / f'{revision.number}.toml',
+                        resolved.export(readable).encode(),
                     )
                     backup_assets(client, readable, setups, fonts, movies)
                 print(
                     f'Saved {name} revision {revision.number}: {len(data)} bytes',
                     flush=True,
                 )
-        (directory / 'history.toml').write_bytes(
-            tomlkit.dumps({'revisions': snapshots}).encode()
+        _write_file(
+            directory / 'history.toml', tomlkit.dumps({'revisions': snapshots}).encode()
         )
         library = songs.download(client)
         undo = songs.download(client, undo=True) if raw_state else b''
-        (directory / 'songs.bin').write_bytes(library)
+        _write_file(directory / 'songs.bin', library)
         if undo:
-            (directory / 'songs-undo.bin').write_bytes(undo)
+            _write_file(directory / 'songs-undo.bin', undo)
         for saved_library in (library, undo):
             if not saved_library:
                 continue
             try:
                 source_snapshots.update(songs.source_snapshots(saved_library))
-            except ValueError as error:
+            except (binary_format.DocumentFormatError, songs.SongLibraryError) as error:
                 healthy = False
                 print(f'Retained raw song library: {error}', file=sys.stderr)
         for source in sorted(source_snapshots):
             path = directory / 'raw/cntrl/source' / f'{source}.bin'
-            if not path.exists():
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(client.download_source(source))
-            if sha256(path.read_bytes()).hexdigest() != source:
-                raise ValueError(f'{source}: source archive checksum mismatch')
-            source_archive.read(path.read_bytes())
+            with sync_files():
+                present = path.exists()
+                if not present:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+            if not present:
+                _write_file(path, client.download_source(source))
+            content = read_sync_file(path)
+            if sha256(content).hexdigest() != source:
+                raise BackupError(f'{source}: source archive checksum mismatch')
+            source_archive.read(content)
         if raw_state and (bundle := client.download_bundle()):
-            (directory / 'bundle.bin').write_bytes(bundle)
+            _write_file(directory / 'bundle.bin', bundle)
         write_backup_manifest(directory, complete=healthy, raw_state=raw_state)
     result = 'complete' if healthy else 'incomplete; raw recovery data retained'
     print(f'Selected: {selected}\n{status}\nBackup {result}.', flush=True)
 
 
 def write_backup_manifest(directory: Path, *, complete: bool, raw_state: bool) -> None:
-    from .setup_sync_store import write_record
-
+    with sync_files():
+        files = [p for p in sorted(directory.rglob('*')) if p.is_file()]
     manifest = BackupManifest(
         complete=complete,
         raw_state=raw_state,
         files=[
             SavedFile(
                 path=p.relative_to(directory).as_posix(),
-                sha256=sha256(p.read_bytes()).hexdigest(),
+                sha256=sha256(read_sync_file(p)).hexdigest(),
             )
-            for p in sorted(directory.rglob('*'))
-            if p.is_file() and p.name not in ('backup-pending.toml', 'backup.toml')
+            for p in files
+            if p.name not in ('backup-pending.toml', 'backup.toml')
         ],
     )
     write_record(directory / 'backup.toml', manifest.model_dump())
-    (directory / 'backup-pending.toml').unlink()
+    with sync_files():
+        (directory / 'backup-pending.toml').unlink()
 
 
 def persistent_prefix(status: str) -> str:
@@ -398,9 +436,7 @@ def backup_state(client: transport.SetupClient, directory: Path, status: str) ->
     """Preserve active journals and adapter files without interpreting their bytes."""
     if ' persistent_format=' not in status:
         return False
-    report = storage_info.StorageInfo.model_validate(
-        tomlkit.parse((directory / 'storage.toml').read_text()).unwrap()
-    )
+    report = _read_model(directory / 'storage.toml', storage_info.StorageInfo)
     prefix = persistent_prefix(status)
     for entry in report.entries:
         if entry.directory or not entry.path.startswith('/cntrl/'):
@@ -428,29 +464,30 @@ def backup_state(client: transport.SetupClient, directory: Path, status: str) ->
         ):
             continue
         asset = Path(logical)
-        if (
-            asset.parent.as_posix() == '/cntrl/languages'
-            and (directory / 'raw/cntrl/languages' / asset.name).exists()
-        ):
-            continue
-        if (
-            asset.parent.as_posix() == '/cntrl/fonts'
-            and (directory / 'setups/fonts' / asset.name).exists()
-        ):
-            continue
-        if (
-            asset.parent.as_posix() == '/cntrl/movies'
-            and (directory / 'setups/movies' / f'{asset.stem}.cnsa').exists()
-        ):
-            continue
-        if (
-            asset.parent.as_posix() == '/cntrl/midi'
-            and (directory / 'setups/midi' / asset.name).exists()
-        ):
-            continue
-        path = directory / 'raw' / entry.path.lstrip('/')
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(client.download_state(entry.path))
+        with sync_files():
+            if (
+                asset.parent.as_posix() == '/cntrl/languages'
+                and (directory / 'raw/cntrl/languages' / asset.name).exists()
+            ):
+                continue
+            if (
+                asset.parent.as_posix() == '/cntrl/fonts'
+                and (directory / 'setups/fonts' / asset.name).exists()
+            ):
+                continue
+            if (
+                asset.parent.as_posix() == '/cntrl/movies'
+                and (directory / 'setups/movies' / f'{asset.stem}.cnsa').exists()
+            ):
+                continue
+            if (
+                asset.parent.as_posix() == '/cntrl/midi'
+                and (directory / 'setups/midi' / asset.name).exists()
+            ):
+                continue
+            path = directory / 'raw' / entry.path.lstrip('/')
+            path.parent.mkdir(parents=True, exist_ok=True)
+        _write_file(path, client.download_state(entry.path))
     return True
 
 
@@ -462,7 +499,6 @@ def backup_assets(
     movies: set[int],
 ) -> None:
     from .cli import save_asset
-    from .setup_sync_store import sync_files
 
     source = tomlkit.parse(resolved.export(data)).unwrap()
     try:
@@ -512,8 +548,9 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
         return client.request(command)
 
     report = storage_info.read_storage_report(next_line)
-    (directory / 'storage.toml').write_bytes(
-        tomlkit.dumps(report.model_dump(exclude_none=True)).encode()
+    _write_file(
+        directory / 'storage.toml',
+        tomlkit.dumps(report.model_dump(exclude_none=True)).encode(),
     )
     unavailable: list[str] = []
     for entry in report.entries:
@@ -525,7 +562,7 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
         ):
             try:
                 data = client.download_midi(path.name)
-            except (OSError, ValueError) as error:
+            except (*transport.USB_ERRORS, transport.UsbTransferInputError) as error:
                 unavailable.append(entry.path)
                 print(f'Not backed up: {entry.path}: {error}', file=sys.stderr)
                 continue
@@ -544,7 +581,7 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
         ):
             try:
                 data = client.download_font(key)
-            except (OSError, ValueError) as error:
+            except transport.USB_ERRORS as error:
                 unavailable.append(entry.path)
                 print(f'Not backed up: {entry.path}: {error}', file=sys.stderr)
                 continue
@@ -555,7 +592,7 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
         ):
             try:
                 data = client.download_movie(key)
-            except (OSError, ValueError) as error:
+            except transport.USB_ERRORS as error:
                 unavailable.append(entry.path)
                 print(f'Not backed up: {entry.path}: {error}', file=sys.stderr)
                 continue
@@ -564,9 +601,23 @@ def backup_stored_assets(client: transport.SetupClient, directory: Path) -> None
                 data,
             )
     if unavailable:
-        (directory / 'unavailable-assets.txt').write_bytes(
-            ('\n'.join(unavailable) + '\n').encode()
+        _write_file(
+            directory / 'unavailable-assets.txt',
+            ('\n'.join(unavailable) + '\n').encode(),
         )
+
+
+def _write_file(path: Path, data: bytes) -> None:
+    with sync_files():
+        path.write_bytes(data)
+
+
+def _read_model[Document: BaseModel](path: Path, model: type[Document]) -> Document:
+    data = read_sync_file(path)
+    try:
+        return model.model_validate(tomlkit.parse(data.decode()).unwrap())
+    except (UnicodeDecodeError, ParseError, ValidationError) as error:
+        raise BackupError(f'{path}: {error}') from error
 
 
 def restore_setups(
@@ -1041,8 +1092,6 @@ def check_deployment_space(
 
 def prepare_restore(directory: Path, destination: Path, target: models.Target) -> Path:
     """Validate a backup and prepare current-format copies, retaining originals."""
-    from .setup_sync_store import write_record
-
     check_conversion(directory)
     recording_high_water(directory)
     if destination.resolve().is_relative_to(directory.resolve()):

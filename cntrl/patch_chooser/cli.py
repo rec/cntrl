@@ -684,6 +684,8 @@ def main() -> None:
     except KeyboardInterrupt:
         sys.exit(130)
     except (
+        backups.BackupDirectoryExists,
+        backups.BackupError,
         binary_format.DocumentFormatError,
         catalogue.CatalogueError,
         compiler_errors.CompilationError,
@@ -720,6 +722,7 @@ def main() -> None:
                 (
                     history.History,
                     setup_sync.Sync,
+                    backups.Backup,
                     backups.Recover,
                     SetupSet,
                     SetupRotate,

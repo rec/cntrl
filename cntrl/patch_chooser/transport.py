@@ -783,9 +783,12 @@ class SetupClient:
         self._copy_asset('LANGUAGE', Kind.language, tag + '.bin', data, True)
 
     def download_language(self, tag: str) -> bytes:
-        from ..localization.catalogue import inspect
+        from ..localization.catalogue import CatalogueError, inspect
 
-        global_overlay.Overlay.model_validate({'language': tag})
+        try:
+            global_overlay.Overlay.model_validate({'language': tag})
+        except ValidationError as error:
+            raise CatalogueError(str(error)) from error
         data = self._download_asset('LANGUAGE', tag + '.bin')
         if inspect(data).language != tag:
             raise UsbReplyError('downloaded language pack tag differs')
