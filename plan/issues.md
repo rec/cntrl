@@ -19,11 +19,11 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
    Use capacity-aware UTF-8 copies and exercise long, multibyte messages.
 
 2. **Crash report drafts can contain private data (remaining risk).**
-   [The reporter](../cntrl/crashes.py#L37) now opens a prefilled GitHub form
-   for review and manual submission. The draft URL still contains exception
-   messages and local paths. GitHub receives those details when the form
-   loads, and the URL may be retained in browser history. Decide whether
-   users should be able to review the report locally before opening GitHub.
+   [The reporter](../cntrl/crashes.py#L37) now shows the report locally and
+   opens a prefilled GitHub form only if the user chooses to report it.
+   GitHub receives the draft text when the form loads, and the URL may be
+   retained in browser history. The local review explains this before the
+   user decides whether to open the form.
 
 3. **Concurrent setup sync operations can overwrite each other's recovery
    records (code finding).** [Apply](../cntrl/patch_chooser/setup_sync.py#L975)

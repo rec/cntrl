@@ -15,15 +15,17 @@ with a controller layout, virtual MIDI and local session storage without a pedal
 
 ## Crash reporting
 
-Unhandled Python exceptions in `cntrl` and `cntrl emulate` open a prefilled
-issue form in your default browser. Review or edit the report before clicking
-**Create** on GitHub, or close the tab to discard it.
+Unhandled Python exceptions in `cntrl` and `cntrl emulate` show the report
+locally first. In the emulator window, choose **Report Issue** to open a
+prefilled GitHub form. At an interactive terminal, answer **yes** to the prompt.
+Review or edit the draft on GitHub and click **Create** to publish it.
 
 The report includes the build gitref, Python and operating system details, and
 the complete traceback as the final appendix. Local paths and exception
-messages may be present in the draft URL that GitHub receives when the form
-opens. The traceback is also printed to stderr. Normal command errors and
-cancellation do not open the form.
+messages may be present in the draft URL that GitHub receives if you choose
+to open the form. The traceback is also printed to stderr. Without a dialog
+or interactive terminal, the report stays in stderr. Normal command errors
+and cancellation do not prompt for a report.
 
 ## What is `cntrl`?
 
