@@ -7,7 +7,7 @@
 // Electrical bias, pin mode and ADC access belong to this board.
 class ExpressionPedals {
 public:
-    ExpressionPedals() : pedals_(cntrl::target::port_count, calibrations_, cntrl::ExpressionPedals::calibration_filename,
+    ExpressionPedals() : pedals_(cntrl::target::port_count, filesystem_,
         cntrl::target::controls.confirm < cntrl::target::button_count ? cntrl::target::button_labels[cntrl::target::controls.confirm] : "", 8, 2) {}
     cntrl::ExpressionPedals &controls() { return pedals_; }
     template<class TipPin, class Available, class Send>
@@ -22,6 +22,6 @@ public:
             }, available, send);
     }
 private:
-    cntrl::device::SdFile calibrations_;
+    cntrl::device::SdFileSystem filesystem_;
     cntrl::ExpressionPedals pedals_;
 };

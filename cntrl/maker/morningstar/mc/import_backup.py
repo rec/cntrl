@@ -3,11 +3,9 @@
 import hashlib
 import json
 import re
-import struct
 from collections import Counter
 from pathlib import Path
 from typing import Annotated
-from zlib import crc32
 
 import tomlkit
 import tyro
@@ -330,14 +328,11 @@ def run(command: ImportBackup) -> None:
     }
     (command.output / 'import.toml').write_text(tomlkit.dumps(report))
     # Virtual ADC inputs span 0..1023; these are not physical pedal calibration.
-    calibration = struct.pack('<IHH', 1, 0, 1023)
     session = command.output / 'session' / 'cntrl'
     session.mkdir(parents=True)
-    for jack in setup.trs_ports:
-        index = int(jack.rsplit('-', 1)[1])
-        (session / f'expression-{index}.cal').write_bytes(
-            calibration + struct.pack('<I', crc32(calibration))
-        )
+    (session / 'calibration.toml').write_text(
+        tomlkit.dumps({j: {'heel': 0, 'toe': 1023} for j in setup.trs_ports})
+    )
     (command.output / 'start.toml').write_text(
         tomlkit.dumps(
             {

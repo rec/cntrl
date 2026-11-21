@@ -1134,6 +1134,7 @@ class Page(BaseModel, frozen=True):
         'banked',
         'pong',
         'language',
+        'calibrate',
         'menu',
         'None',
     ] = 'patch-chooser'

@@ -309,4 +309,5 @@ PAGE_TYPES = (
     'language',
     'menu',
     'time',
+    'calibrate',
 )

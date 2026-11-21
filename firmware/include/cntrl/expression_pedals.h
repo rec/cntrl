@@ -1,6 +1,6 @@
 #pragma once
 #include <cntrl/document.h>
-#include <cntrl/filesystem.h>
+#include <cntrl/calibration_file.h>
 #include <cntrl/ui/messages.h>
 #include <vector>
 #include <array>
@@ -10,27 +10,30 @@ namespace cntrl {
 // The adapter supplies biased measurements; settling never blocks the runtime.
 class ExpressionPedals {
 public:
-    static void calibration_filename(unsigned input, char *path, unsigned capacity) {
-        std::snprintf(path, capacity, "/cntrl/expression-%u.cal", input + 1);
-    }
-    ExpressionPedals(unsigned count, files::File &calibrations,
-                     void (*filename)(unsigned, char *, unsigned), const char *confirm,
+    ExpressionPedals(unsigned count, files::FileSystem &filesystem, const char *confirm,
                      uint32_t rest_ms, uint32_t bias_ms)
-        : inputs_(count), assignments_(count), mirrors_(count), delivered_(count), saved_(count), low_(count),
-          calibrations_(calibrations), filename_(filename), confirm_(confirm),
+        : inputs_(count), assignments_(count), mirrors_(count), delivered_(count), low_(count),
+          filesystem_(filesystem), calibrations_(filesystem, count), confirm_(confirm),
           rest_ms_(rest_ms), bias_ms_(bias_ms) {}
-    void load_calibrations() {
+    bool load_calibrations() {
+        calibration_ready_ = calibrations_.load();
+        if (!calibration_ready_ || filesystem_.exists(CalibrationFile::path)) return calibration_ready_;
+        auto file = filesystem_.file();
+        if (!file) return false;
         for (unsigned i = 0; i < inputs_.size(); ++i) {
-            char path[40]; filename_(i, path, sizeof(path));
-            if (!calibrations_.open(path, files::Mode::read)) continue;
+            char path[40]; std::snprintf(path, sizeof(path), "/cntrl/expression-%u.cal", i + 1);
+            if (!file->open(path, files::Mode::read)) continue;
+            LegacyRecord latest;
             for (unsigned slot = 0; slot < 2; ++slot) {
                 uint8_t bytes[12];
-                if (!calibrations_.read(slot * sizeof(bytes), bytes, sizeof(bytes))) continue;
-                Record record = Record::decode(bytes);
-                if (record.valid() && record.generation > saved_[i].generation) saved_[i] = record;
+                if (!file->read(slot * sizeof(bytes), bytes, sizeof(bytes))) continue;
+                auto record = LegacyRecord::decode(bytes);
+                if (record.generation > latest.generation) latest = record;
             }
-            calibrations_.close();
+            file->close();
+            if (latest.generation) calibrations_.import(i, latest.cal);
         }
+        return true;
     }
     void configure(const cntrl::ExpressionAssignment *assignments, midi::Outputs outputs = {}) {
         for (unsigned i = 0; i < inputs_.size(); ++i) {
@@ -67,7 +70,7 @@ public:
         }
         cntrl::ExpressionCalibration cal{uint16_t(heel_), uint16_t(reading)};
         if (!cal.valid()) { message_ = ui::i18n::Message::travel_too_short; return; }
-        if (!save(selected_, cal)) { message_ = ui::i18n::Message::save_failed; return; }
+        if (!calibration_ready_ || !calibrations_.save(selected_, cal)) { message_ = ui::i18n::Message::save_failed; return; }
         cancel(); inputs_[selected_].reset();
     }
 
@@ -86,7 +89,7 @@ public:
             }
             if (phase_ == 0) { sample(i, phase_); continue; }
             if (phase_ == 1) { low_[i] = sample(i, phase_); continue; }
-            inputs_[i].sample(low_[i], sample(i, phase_), saved_[i].cal);
+            inputs_[i].sample(low_[i], sample(i, phase_), calibrations_.calibration(i));
             if (inputs_[i].position() < 0) delivered_[i] = {-1, -1};
             if (stage_ != Capture::idle && i == selected_) {
                 if (inputs_[i].reading() < 0 && stage_ == Capture::toe) {
@@ -111,6 +114,7 @@ public:
         if (!phase_) first_ = (first_ + 1) % inputs_.size();
     }
     unsigned selected() const { return selected_; }
+    unsigned count() const { return inputs_.size(); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(expression_status)
 #endif
@@ -122,7 +126,7 @@ public:
         const auto &input = inputs_[selected_];
         if (!enabled) ui::utf8::copy(position, sizeof(position), ui::i18n::text(Message::select_expression_role));
         else if (input.reading() < 0) ui::utf8::copy(position, sizeof(position), ui::i18n::text(Message::no_pedal));
-        else if (!saved_[selected_].cal.valid()) ui::i18n::format(position, sizeof(position), Message::raw_uncalibrated, input.reading());
+        else if (!calibrations_.calibration(selected_).valid()) ui::i18n::format(position, sizeof(position), Message::raw_uncalibrated, input.reading());
         else ui::i18n::format(position, sizeof(position), Message::calibrated_position, (input.position() * 100 + 511) / 1023);
         if (message_ != no_message) ui::utf8::copy(prompt, sizeof(prompt), ui::i18n::text(message_));
         else if (!enabled) ui::utf8::copy(prompt, sizeof(prompt), ui::i18n::text(Message::select_expression_role));
@@ -132,47 +136,23 @@ public:
     }
 
 private:
-    struct Record {
+    struct LegacyRecord {
         uint32_t generation = 0;
         cntrl::ExpressionCalibration cal{};
-        uint32_t crc = 0;
-        void encode(uint8_t *bytes) const {
-            for (unsigned i = 0; i < 4; ++i) bytes[i] = uint8_t(generation >> (8 * i));
-            bytes[4] = uint8_t(cal.heel); bytes[5] = uint8_t(cal.heel >> 8);
-            bytes[6] = uint8_t(cal.toe); bytes[7] = uint8_t(cal.toe >> 8);
-            for (unsigned i = 0; i < 4; ++i) bytes[8 + i] = uint8_t(crc >> (8 * i));
+        static LegacyRecord decode(const uint8_t *bytes) {
+            const ExpressionCalibration calibration{u16(bytes + 4), u16(bytes + 6)};
+            if (!calibration.valid() || u32(bytes + 8) != cntrl::checksum(bytes, 8)) return {};
+            return {u32(bytes), calibration};
         }
-        static Record decode(const uint8_t *bytes) {
-            Record r;
-            for (unsigned i = 0; i < 4; ++i) { r.generation |= uint32_t(bytes[i]) << (8 * i); r.crc |= uint32_t(bytes[8 + i]) << (8 * i); }
-            r.cal = {uint16_t(bytes[4] | uint16_t(bytes[5]) << 8), uint16_t(bytes[6] | uint16_t(bytes[7]) << 8)};
-            return r;
-        }
-        uint32_t checksum() const { uint8_t bytes[12]; encode(bytes); return cntrl::checksum(bytes, 8); }
-        bool valid() const { return generation && cal.valid() && crc == checksum(); }
     };
-    bool save(unsigned jack, cntrl::ExpressionCalibration cal) {
-        char path[40]; filename_(jack, path, sizeof(path));
-        if (!calibrations_.open(path, files::Mode::create)) return false;
-        Record record{saved_[jack].generation + 1, cal};
-        record.crc = record.checksum();
-        uint8_t bytes[12], verify[12]; record.encode(bytes);
-        unsigned offset = ((record.generation - 1) & 1) * sizeof(bytes);
-        bool valid = calibrations_.write(offset, bytes, sizeof(bytes)) && calibrations_.sync()
-            && calibrations_.read(offset, verify, sizeof(verify)) && !std::memcmp(bytes, verify, sizeof(bytes));
-        calibrations_.close();
-        if (!valid) return false;
-        saved_[jack] = record;
-        return true;
-    }
     std::vector<cntrl::ExpressionInput> inputs_;
     std::vector<cntrl::ExpressionAssignment> assignments_;
     std::vector<std::array<char, 32>> mirrors_;
     std::vector<std::array<int, 2>> delivered_;
-    std::vector<Record> saved_;
     std::vector<int> low_;
-    files::File &calibrations_;
-    void (*filename_)(unsigned, char *, unsigned);
+    files::FileSystem &filesystem_;
+    CalibrationFile calibrations_;
+    bool calibration_ready_ = false;
     const char *confirm_;
     uint32_t rest_ms_, bias_ms_;
     enum class Capture { idle, heel, toe };

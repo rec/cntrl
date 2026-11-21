@@ -74,6 +74,17 @@ public:
     CNTRL_FLASH_ROUTINE(looper_button)
 #endif
     bool looper_button(unsigned input, bool pressed) {
+        if (pages_.page() == Pages::Page::calibrate) {
+            if (input != controls_.previous && input != controls_.next && input != controls_.confirm) return false;
+            auto &pedals = platform_.expression_controls();
+            if (!pressed || !pedals.count()) return true;
+            if (input == controls_.previous) pedals.select((pedals.selected() + 1) % pedals.count());
+            else if (input == controls_.next) pedals.cancel();
+            else if (!documents_.busy() && !platform_.configuration_locked())
+                pedals.calibrate(platform_.expression_available(pedals.selected()));
+            pages_.revisit();
+            return true;
+        }
         if (pages_.page() == Pages::Page::menu && input == controls_.confirm) {
             if (pressed) application_.operation_ui(Operation::menu_open, platform_);
             return true;
@@ -276,6 +287,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_leave_page)
 #endif
     void leave_page() {
+        if (pages_.page() == Pages::Page::calibrate) platform_.expression_controls().cancel();
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
         if (pages_.page() == Pages::Page::midi_looper && looper_files_) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; }
         if (pages_.page() == Pages::Page::midi_monitor && !other_selected(Pages::Page::midi_monitor)) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
@@ -503,6 +515,21 @@ public:
             for (unsigned i = 0; i < region.count; ++i) {
                 const unsigned screen = region.first + i;
                 pages_.viewport(display_.viewport(screen));
+                if (pages_.page() == Pages::Page::calibrate) {
+                    auto &pedals = platform_.expression_controls();
+                    char title[40] = {}, position[40] = {}, prompt[40] = {};
+                    if (pedals.count()) {
+                        const unsigned jack = pedals.selected();
+                        const char *label = "";
+                        for (const auto &endpoint : platform_.midi_outputs())
+                            if (endpoint.port == jack) { label = endpoint.label; break; }
+                        pedals.status(label, platform_.expression_available(jack), title, position, prompt);
+                    } else ui::utf8::copy(title, sizeof(title), i18n::text(i18n::Message::no_configurable_ports));
+                    auto content = pages_.calibration_view(now, title, position, prompt);
+                    content.focused = r == application_.allocation.focus();
+                    renderer_.show(screen, content);
+                    continue;
+                }
                 cntrl::Pane content = pages_.view(now, platform_.microseconds(), status
 #if CNTRL_CABLE_TEST
                 , platform_.cable_test.status()
@@ -566,6 +593,7 @@ private:
         return false;
     }
     void cancel_focus() {
+        if (pages_.page() == Pages::Page::calibrate) platform_.expression_controls().cancel();
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
         application_.controller().cancel_gesture();
         if (looper_files_ && pages_.page() == Pages::Page::midi_looper) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; pages_.looper_prompt[0] = 0; }
