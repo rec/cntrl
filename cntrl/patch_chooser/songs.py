@@ -2,6 +2,7 @@
 
 import struct
 from copy import deepcopy
+from json import JSONDecodeError
 from pathlib import Path
 from random import Random
 from typing import Annotated, cast
@@ -17,6 +18,7 @@ from pydantic import (
     ValidationError,
     field_validator,
 )
+from tomlkit.exceptions import ParseError
 
 from . import (
     binary_format,
@@ -40,6 +42,10 @@ from . import (
 )
 from .data_files import validate_name
 from .usb_frames import Kind
+
+
+class SongLibraryError(ValueError):
+    """A song library could not be read, validated, or written."""
 
 
 class Song(models.BindingScope, frozen=True):
@@ -82,7 +88,7 @@ class Song(models.BindingScope, frozen=True):
             fields = patch.model_dump(exclude_none=True)
             result.append(fields)
         if errors:
-            raise ValueError('\n'.join(errors))
+            raise SongLibraryError('\n'.join(errors))
         return result
 
     @field_validator('style')
@@ -91,7 +97,7 @@ class Song(models.BindingScope, frozen=True):
         if value is not None and (
             value.icon is not None or value.horizontal_scale is not None
         ):
-            raise ValueError(
+            raise SongLibraryError(
                 'song styles support foreground_color, background_color and font_name'
             )
         return value
@@ -136,7 +142,7 @@ class Download(BaseModel, frozen=True):
 
 def text(value: str, size: int) -> bytes:
     if not value or len(value) >= size or any(not 32 <= ord(c) <= 126 for c in value):
-        raise ValueError(
+        raise SongLibraryError(
             f'expected 1..{size - 1} printable ASCII characters: {value!r}'
         )
     return value.encode().ljust(size, b'\0')
@@ -149,7 +155,7 @@ def label_text(value: str) -> bytes:
         or len(encoded) >= 64
         or any(ord(c) < 32 or ord(c) == 127 for c in value)
     ):
-        raise ValueError('song Patch labels must contain 1..63 UTF-8 bytes')
+        raise SongLibraryError('song Patch labels must contain 1..63 UTF-8 bytes')
     return encoded.ljust(64, b'\0')
 
 
@@ -168,7 +174,7 @@ def encode(
     for items in (library.songs, library.setlists):
         names = [s.name for s in items]
         if len(set(names)) != len(names):
-            raise ValueError(
+            raise SongLibraryError(
                 'song and setlist names must be unique within each collection'
             )
     preferences = models.Setup(
@@ -216,7 +222,7 @@ def encode(
         or any(s.bindings for s in library.setlists)
     ):
         if target is None:
-            raise ValueError(
+            raise SongLibraryError(
                 'song patches require --target to compile their setup context'
             )
         port_modes: dict[str, models.TrsMode] = {
@@ -345,7 +351,7 @@ def encode(
             else None
         )
         if font is None:
-            raise ValueError(
+            raise SongLibraryError(
                 f'song {song.name!r}: font {style.font_name!r} '
                 'is not embedded in the controller'
             )
@@ -408,7 +414,7 @@ def encode(
         )
         payload += struct.pack('<I', len(source)) + source
     if len(payload) > 0xFFFFFFFF - 20:
-        raise ValueError('song library exceeds the SD file format size')
+        raise SongLibraryError('song library exceeds the SD file format size')
     data = binary_format.wrap(payload, binary_format.Kind.songs)
     preferences = library.model_dump(
         include={'fill_in_styles', 'seed', 'background_color'},
@@ -472,6 +478,13 @@ def upgrade(
 
 
 def decode(data: bytes) -> Library:
+    try:
+        return _decode(data)
+    except (ValidationError, UnicodeDecodeError, ParseError, struct.error) as error:
+        raise SongLibraryError(f'invalid song library: {error}') from error
+
+
+def _decode(data: bytes) -> Library:
     _, song_headers, positions, sets, sources = _parse(data)
     context: dict[str, object] = {'instruments': {}, 'patches': {}}
     authored_styles: list[object] = []
@@ -544,7 +557,7 @@ def decode(data: bytes) -> Library:
         for document, reference, label, source, node in values:
             if document[0]:
                 if source != 0xFFFFFFFF:
-                    raise ValueError('invalid external song Patch')
+                    raise SongLibraryError('invalid external song Patch')
                 value = {
                     'document': _string(document),
                     'patch': _string(reference),
@@ -553,7 +566,7 @@ def decode(data: bytes) -> Library:
                     value['display_name'] = _string(label)
             else:
                 if source >= len(sources):
-                    raise ValueError('missing song Patch source')
+                    raise SongLibraryError('missing song Patch source')
                 value = resolved.patch(sources[source], node)
                 value = _rebind(
                     value,
@@ -639,7 +652,7 @@ def reindex(data: bytes, names: list[str]) -> bytes:
 def _current_core(data: bytes) -> bytes:
     data = binary_format.core(data, binary_format.Kind.songs)
     if len(data) < 12:
-        raise ValueError('invalid song library size')
+        raise SongLibraryError('invalid song library size')
     ns, nl = struct.unpack_from('<II', data)
     for song_size, set_size, marker in (
         (SONG.size, SET.size, b'CSP9'),
@@ -699,7 +712,7 @@ def _current_core(data: bytes) -> bytes:
                 if marker == b'CSP9'
                 else bytes(prefix) + b'CSP9' + data[offset + 4 :]
             )
-    raise ValueError('invalid song records or missing song Patch sources')
+    raise SongLibraryError('invalid song records or missing song Patch sources')
 
 
 def _parse(
@@ -713,16 +726,16 @@ def _parse(
 ]:
     data = _current_core(data)
     if len(data) < 12:
-        raise ValueError('invalid song library size')
+        raise SongLibraryError('invalid song library size')
     ns, nl = struct.unpack_from('<II', data)
     if ns > (len(data) - 12) // (SONG.size + SELECTION.size):
-        raise ValueError('invalid song library counts')
+        raise SongLibraryError('invalid song library counts')
     offset = 8
     positions = []
     song_headers = []
     for _ in range(ns):
         if offset + SELECTION.size + SONG.size > len(data):
-            raise ValueError('truncated song')
+            raise SongLibraryError('truncated song')
         first = SELECTION.unpack_from(data, offset)
         offset += SELECTION.size
         (
@@ -737,7 +750,7 @@ def _parse(
         ) = SONG.unpack_from(data, offset)
         offset += SONG.size
         if count < 1 or count - 1 > (len(data) - offset) // SELECTION.size:
-            raise ValueError('invalid song patch count')
+            raise SongLibraryError('invalid song patch count')
         values = [first]
         for _ in range(count - 1):
             values.append(SELECTION.unpack_from(data, offset))
@@ -748,36 +761,36 @@ def _parse(
     set_bindings = []
     for _ in range(nl):
         if offset + SET.size > len(data):
-            raise ValueError('truncated setlist')
+            raise SongLibraryError('truncated setlist')
         name, count, binding = SET.unpack_from(data, offset)
         set_bindings.append(binding)
         offset += SET.size
         if count > (len(data) - offset) // 64:
-            raise ValueError('invalid setlist count')
+            raise SongLibraryError('invalid setlist count')
         entries = [
             _string(data[offset + j * 64 : offset + (j + 1) * 64]) for j in range(count)
         ]
         offset += count * 64
         sets.append(Setlist(name=_string(name), songs=entries))
     if data[offset : offset + 4] != b'CSP9':
-        raise ValueError('missing song Patch sources')
+        raise SongLibraryError('missing song Patch sources')
     offset += 4
     prefix = offset
     sources = []
     while offset < len(data):
         if offset + 4 > len(data):
-            raise ValueError('truncated song Patch source')
+            raise SongLibraryError('truncated song Patch source')
         length = struct.unpack_from('<I', data, offset)[0]
         offset += 4
         if length > len(data) - offset:
-            raise ValueError('truncated song Patch source')
+            raise SongLibraryError('truncated song Patch source')
         sources.append(data[offset : offset + length])
         offset += length
     if not sources and (
         any(r != 0xFFFFFFFF for _, *v in song_headers for r in v)
         or any(b != 0xFFFFFFFF for b in set_bindings)
     ):
-        raise ValueError('missing binding-map source')
+        raise SongLibraryError('missing binding-map source')
     sets = [
         Setlist.model_validate(
             dict(
@@ -915,21 +928,22 @@ def download(client: transport.SetupClient, *, undo: bool = False) -> bytes:
     response = client.request(prefix + ' SIZE').split()
     if undo and response == ['CNTRL', 'SONGS', 'UNDO', 'NONE']:
         return b''
-    if (
-        len(response) != 4
-        or response[:2] != ['CNTRL', 'SONGS']
-        or not 12 <= int(response[2]) <= 0xFFFFFFFF - 20
-    ):
-        raise ValueError('invalid song library response')
-    length = int(response[2])
+    if len(response) != 4 or response[:2] != ['CNTRL', 'SONGS']:
+        raise transport.UsbReplyError('invalid song library response')
+    try:
+        length, checksum = int(response[2]), int(response[3], 16)
+    except ValueError as error:
+        raise transport.UsbReplyError('invalid song library response') from error
+    if not 12 <= length <= 0xFFFFFFFF - 20 or not 0 <= checksum <= 0xFFFFFFFF:
+        raise transport.UsbReplyError('invalid song library response')
     result = bytearray()
     while len(result) < length:
         chunk = client.request_data(f'{prefix} READ {len(result)}')
         if not 1 <= len(chunk) <= client.connection.usb_block_size:
-            raise ValueError('invalid song library chunk')
+            raise transport.UsbReplyError('invalid song library chunk')
         result.extend(chunk)
-    if len(result) != length or crc32(result) != int(response[3], 16):
-        raise ValueError('song library checksum mismatch')
+    if len(result) != length or crc32(result) != checksum:
+        raise transport.UsbReplyError('song library checksum mismatch')
     return bytes(result)
 
 
@@ -946,7 +960,7 @@ def upload(client: transport.SetupClient, data: bytes, overwrite: bool) -> None:
         )
     client.ok('CNTRL SONGS END')
     if download(client) != data:
-        raise ValueError('song library read-back mismatch')
+        raise transport.UsbReplyError('song library read-back mismatch')
 
 
 def run(command: Copy | Download) -> None:
@@ -955,27 +969,23 @@ def run(command: Copy | Download) -> None:
 
     if isinstance(command, Copy):
         trace = data_files.Trace()
-        path = command.document.resolve()
+        try:
+            path = command.document.resolve()
+            has_session = (path.parent / 'cntrl-session.toml').exists()
+        except OSError as error:
+            raise SongLibraryError(f'{command.document}: {error}') from error
         authoring = data_files.DataFile(name='Songs', paths=[path])
         recorded = None
-        if (path.parent / 'cntrl-session.toml').exists():
+        if has_session:
             recorded = source_archive.recovered_recipe(path.parent)
             authoring = data_files.expressions(recorded.document)[0]
         bindings, relocations = source_archive.session_context(authoring)
-        library = Library.model_validate(
-            compiler_inputs.read_document(
-                path, snapshots=trace.files, relocations=relocations
-            )
-        )
+        library = _read_authoring(path, Library, trace, relocations)
         target_path = command.target
         if target_path is None and recorded is not None:
             target_path = data_files.expressions(recorded.target)[0].paths[0]
         target = (
-            models.Target.model_validate(
-                compiler_inputs.read_document(
-                    target_path, snapshots=trace.files, relocations=relocations
-                )
-            )
+            _read_authoring(target_path, models.Target, trace, relocations)
             if target_path is not None
             else None
         )
@@ -1043,20 +1053,20 @@ def run(command: Copy | Download) -> None:
         assets: dict[int, bytes] = {}
         movies: dict[int, bytes] = {}
         if companion_names and target is None:
-            raise ValueError('reference imports require --target')
+            raise SongLibraryError('reference imports require --target')
         with transport.SerialConnection(command.port) as connection:
             client = transport.SetupClient(connection)
             if not command.overwrite:
                 existing = decode(download(client))
                 if existing.songs or existing.setlists:
-                    raise ValueError('song library exists; use --overwrite')
+                    raise SongLibraryError('song library exists; use --overwrite')
             current_bundle = client.download_bundle() if companion_names else b''
             compiled = setup_bundle.unpack(current_bundle) if current_bundle else {}
             known = {n.lower() for n in compiled}
             if not command.overwrite and any(
                 n.lower() in known for n in companion_names
             ):
-                raise ValueError('companion setup exists; use --overwrite')
+                raise SongLibraryError('companion setup exists; use --overwrite')
             # The execution container and its companions use the complete deployed
             # index table, including setups unrelated to this song import.
             documents: dict[str, object] = {n: {} for n in compiled} | companions
@@ -1182,7 +1192,7 @@ def run(command: Copy | Download) -> None:
                             if resolved.export(entries[p]) == resolved.export(source)
                         ]
                         if len(matches) != 1:
-                            raise ValueError(
+                            raise SongLibraryError(
                                 'cannot identify the archived setup '
                                 'for this captured song source'
                             )
@@ -1193,11 +1203,31 @@ def run(command: Copy | Download) -> None:
                     files[Path(path)] = client.download_font(int(Path(path).stem, 16))
         text = tomlkit.dumps(library.model_dump(exclude_none=True)).encode()
         if Path('songs.toml') in files and files[Path('songs.toml')] != text:
-            raise ValueError(
+            raise SongLibraryError(
                 'songs.toml: conflicts with a downloaded setup or MIDI file'
             )
         files[Path('songs.toml')] = text
         cli.publish_download(files, command.directory)
+
+
+def _read_authoring[Document: BaseModel](
+    path: Path,
+    model: type[Document],
+    trace: data_files.Trace,
+    relocations: dict[Path, Path],
+) -> Document:
+    try:
+        data = compiler_inputs.read_document(
+            path, snapshots=trace.files, relocations=relocations
+        )
+    except (OSError, UnicodeDecodeError, JSONDecodeError, ParseError) as error:
+        raise SongLibraryError(f'{path}: {error}') from error
+    try:
+        return model.model_validate(data)
+    except ValidationError as error:
+        raise compiler_errors.CompilationError(
+            compiler_errors.validation_errors(str(path), error)
+        ) from error
 
 
 SELECTION = struct.Struct('<64s64s64sII')

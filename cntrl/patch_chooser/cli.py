@@ -682,6 +682,7 @@ def main() -> None:
         binary_format.DocumentFormatError,
         catalogue.CatalogueError,
         compiler_errors.CompilationError,
+        compiler_inputs.DocumentSourceError,
         CompileOutputError,
         data_files.InvalidSetupName,
         device_globals.GlobalRestoreError,
@@ -695,6 +696,7 @@ def main() -> None:
         setup_create.SetupCreationCancelled,
         setup_sync_store.SyncError,
         setup_sync_store.SyncFileError,
+        songs.SongLibraryError,
         source_archive.RecoveredSourceError,
         subprocess.CalledProcessError,
         target_process.TargetAdapterError,
@@ -737,6 +739,7 @@ def main() -> None:
                 importing.Import,
                 languages.LanguageCLI,
                 qualify.Qualify,
+                Songs,
                 upload.Helper,
             ),
         ):
