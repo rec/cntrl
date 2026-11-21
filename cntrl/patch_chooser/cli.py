@@ -189,7 +189,9 @@ def run_setup(
         return
     if isinstance(command, backups.Recover):
         if not 0 <= command.root <= 0xFFFFFFFF:
-            raise ValueError('root must be between 0 and 4294967295')
+            raise compiler_errors.CompilationError(
+                ['root must be between 0 and 4294967295']
+            )
         with transport.SerialConnection(command.port) as connection:
             client = transport.SetupClient(connection)
             client.ok(f'CNTRL DEPLOY RECOVER {command.root:08x}')
@@ -232,6 +234,15 @@ def setup_transfer(
     | SetupDelete,
     connection: transport.SerialConnection | None,
 ) -> None:
+    if isinstance(command, SetupDelete):
+        if not command.names:
+            raise compiler_errors.CompilationError(
+                ['at least one setup name is required']
+            )
+        if not command.yes and not sys.stdin.isatty():
+            raise compiler_errors.CompilationError(
+                ['deletion requires an interactive confirmation or --yes/-y']
+            )
     assets: dict[str, dict[int, bytes]] = {}
     movies: dict[int, bytes] = {}
     trace = data_files.Trace()
@@ -258,11 +269,15 @@ def setup_transfer(
             )
         elif isinstance(command, SetupList):
             for e in client.catalogue():
-                stamp = (
-                    datetime.fromtimestamp(e.modified).strftime('%Y-%m-%d %H:%M:%S')
-                    if e.modified
-                    else 'unknown'
-                )
+                stamp = 'unknown'
+                if e.modified:
+                    try:
+                        modified = datetime.fromtimestamp(e.modified)
+                    except (OverflowError, OSError, ValueError) as error:
+                        raise transport.UsbReplyError(
+                            f'{e.name}: invalid commit timestamp {e.modified}'
+                        ) from error
+                    stamp = modified.strftime('%Y-%m-%d %H:%M:%S')
                 print(f'{e.name}  {stamp}' + ('' if e.valid else ' (invalid setup)'))
         elif isinstance(command, SetupCopy):
             assert bundle is not None
@@ -340,7 +355,7 @@ def setup_transfer(
             for n in requested:
                 try:
                     data_files.validate_name(n)
-                except ValueError as error:
+                except data_files.InvalidSetupName as error:
                     errors.append(str(error))
                 if n.lower() not in entries:
                     errors.append(f'{n}: no such setup')
@@ -354,10 +369,6 @@ def setup_transfer(
                 raise compiler_errors.CompilationError(errors)
             if isinstance(command, SetupDelete):
                 if not command.yes:
-                    if not sys.stdin.isatty():
-                        raise ValueError(
-                            'deletion requires an interactive confirmation or --yes/-y'
-                        )
                     print('Delete: ' + ', '.join(names))
                     if input('Are you sure? [y/N] ').strip().lower() not in (
                         'y',
@@ -366,7 +377,7 @@ def setup_transfer(
                         return
                 try:
                     client.delete(names)
-                except (OSError, ValueError):
+                except transport.USB_ERRORS:
                     try:
                         remaining = {e.name.lower() for e in client.catalogue()}
                         for n in names:
@@ -375,7 +386,7 @@ def setup_transfer(
                                     f'{n}: deleted before batch failure',
                                     file=sys.stderr,
                                 )
-                    except (OSError, ValueError) as error:
+                    except transport.USB_ERRORS as error:
                         print(
                             f'Unable to verify partial deletion results: {error}',
                             file=sys.stderr,
@@ -638,12 +649,8 @@ def main() -> None:
         source_archive.RecoveredSourceError,
         subprocess.CalledProcessError,
         target_process.TargetAdapterError,
-        transport.UsbCommandTimeout,
-        transport.UsbConnectionError,
-        transport.UsbFileMissing,
-        transport.UsbProtocolError,
-        transport.UsbReplyError,
-        transport.UsbSerialTimeout,
+        *transport.USB_ERRORS,
+        transport.UsbTransferInputError,
         WriterLockError,
         WriterLockHeld,
     ) as error:
@@ -654,7 +661,17 @@ def main() -> None:
                 command.command.apply is not None or command.command.recover is not None
             ):
                 raise
-            if isinstance(command.command, history.History):
+            if isinstance(
+                command.command,
+                (
+                    history.History,
+                    backups.Recover,
+                    SetupSet,
+                    SetupRotate,
+                    SetupList,
+                    SetupDelete,
+                ),
+            ):
                 raise
         if isinstance(
             command,

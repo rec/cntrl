@@ -42,9 +42,10 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 15. **CLI error handling can hide unexpected failures (code finding).**
     `cntrl compile`, `cntrl status`, `cntrl global`, `cntrl language`,
-    `cntrl font-coverage`, `cntrl setup history`, target adapter commands
-    and applying or recovering saved setup reviews classify known failures
-    at their command boundaries. USB reconnection distinguishes serial I/O
+    `cntrl font-coverage`, setup history, selection, listing, rotation,
+    deletion and storage-root recovery, target adapter commands, and
+    applying or recovering saved setup reviews classify known failures at
+    their command boundaries. USB reconnection distinguishes serial I/O
     failures from other host errors, and the shared setup client classifies
     malformed replies, rejected transfers and missing device files. Audit
     the remaining broad catches in other commands and decoders, including
