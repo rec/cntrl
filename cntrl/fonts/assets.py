@@ -11,6 +11,10 @@ from .catalogue import SIZES, bundled_sources
 from .outline import CHARACTER, GLYPH, POSITION, RUN, MissingGlyphs, Outline, Raster
 
 
+class FontDecodeError(ValueError):
+    """A sparse bitmap font asset has invalid wire data."""
+
+
 def pack(
     outline: Raster,
     selected: dict[int, list[str]],
@@ -87,15 +91,15 @@ def pack(
 
 def entries(data: bytes) -> dict[int, tuple[list[int], bytes, bytes]]:
     if not 8 <= len(data) <= MAX_ASSET:
-        raise ValueError('font asset exceeds 2 MiB or is truncated')
+        raise FontDecodeError('font asset exceeds 2 MiB or is truncated')
     magic, count = HEADER.unpack_from(data)
     if magic != b'CFN2' or not 1 <= count <= 255:
-        raise ValueError('invalid font asset header')
+        raise FontDecodeError('invalid font asset header')
     result = {}
     offset = HEADER.size
     for _ in range(count):
         if offset + ENTRY.size > len(data):
-            raise ValueError('truncated font descriptor')
+            raise FontDecodeError('truncated font descriptor')
         fields = list(ENTRY.unpack_from(data, offset))
         size, ni, nd = fields[0], fields[-2], fields[-1]
         offset += ENTRY.size
@@ -106,7 +110,7 @@ def entries(data: bytes) -> dict[int, tuple[list[int], bytes, bytes]]:
             or not fields[13]
             or offset + ni + nd > len(data)
         ):
-            raise ValueError('invalid font descriptor')
+            raise FontDecodeError('invalid font descriptor')
         result[size] = (
             fields,
             data[offset : offset + ni],
@@ -114,7 +118,7 @@ def entries(data: bytes) -> dict[int, tuple[list[int], bytes, bytes]]:
         )
         offset += ni + nd
     if offset != len(data):
-        raise ValueError('trailing font asset data')
+        raise FontDecodeError('trailing font asset data')
     return result
 
 
@@ -131,12 +135,12 @@ def decode(data: bytes, name: str, key: int) -> models.FontFace:
                 identifier, w, h, left, _top, start = GLYPH.unpack_from(index, offset)
                 end = start + (w + 7) // 8 * h
                 if identifier <= previous or start != pixel_end or end > len(pixels):
-                    raise ValueError('invalid sparse glyph')
+                    raise FontDecodeError('invalid sparse glyph')
                 previous, pixel_end = identifier, end
                 glyphs.append((w, left))
                 offset += GLYPH.size
             if pixel_end != len(pixels):
-                raise ValueError('trailing font pixels')
+                raise FontDecodeError('trailing font pixels')
             characters = {}
             for _ in range(nc):
                 code, glyph, advance = CHARACTER.unpack_from(index, offset)
@@ -149,7 +153,7 @@ def decode(data: bytes, name: str, key: int) -> models.FontFace:
                     or chr(code) in characters
                     or advance < 0
                 ):
-                    raise ValueError('invalid runtime character')
+                    raise FontDecodeError('invalid runtime character')
                 w, left = glyphs[glyph]
                 characters[chr(code)] = [advance, left, w]
                 offset += CHARACTER.size
@@ -158,28 +162,28 @@ def decode(data: bytes, name: str, key: int) -> models.FontFace:
                 n, left, width, count = RUN.unpack_from(index, offset)
                 offset += RUN.size
                 if n > 63 or offset + n + count * POSITION.size > len(index):
-                    raise ValueError('truncated font run')
+                    raise FontDecodeError('truncated font run')
                 text = index[offset : offset + n].decode('utf-8')
                 if (
                     text in runs
                     or any(ord(c) < 32 or ord(c) == 127 for c in text)
                     or width < 0
                 ):
-                    raise ValueError('invalid font run')
+                    raise FontDecodeError('invalid font run')
                 runs[text] = [left, width]
                 offset += n
                 for _ in range(count):
                     glyph, x, y = POSITION.unpack_from(index, offset)
                     if glyph >= ng or abs(x) > 32700 or abs(y) > 32700:
-                        raise ValueError('invalid glyph position')
+                        raise FontDecodeError('invalid glyph position')
                     offset += POSITION.size
             if offset != len(index):
-                raise ValueError('trailing font index data')
+                raise FontDecodeError('trailing font index data')
             sizes[size] = models.FontMetrics(
                 line_height=f[13], top=f[14], runs=runs, characters=characters
             )
     except (struct.error, UnicodeError, OverflowError) as error:
-        raise ValueError(f'{name}: truncated or invalid sparse font') from error
+        raise FontDecodeError(f'{name}: truncated or invalid sparse font') from error
     return models.FontFace(name=name, id=255, asset=key, sizes=sizes)
 
 

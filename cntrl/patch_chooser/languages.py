@@ -27,9 +27,13 @@ class LanguageCLI(BaseModel, frozen=True):
 
 
 def pack(language: str) -> bytes:
-    data = (Path(catalogue.__file__).parent / 'packs' / f'{language}.bin').read_bytes()
+    path = Path(catalogue.__file__).parent / 'packs' / f'{language}.bin'
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise catalogue.CatalogueError(str(error)) from error
     if catalogue.inspect(data).language != language:
-        raise ValueError('language pack identity mismatch')
+        raise catalogue.CatalogueError(f'{path}: language pack identity mismatch')
     return data
 
 
@@ -38,11 +42,12 @@ def run(command: Install | build.Build) -> None:
         build.build(command.output)
         catalogue.generate(command.header)
         return
+    packs = {tag: pack(tag) for tag in dict.fromkeys(['en', command.language])}
     with transport.SerialConnection(devices.select_port(command.port)) as connection:
         client = transport.SetupClient(connection)
         # Install the matching English catalogue alongside the selected locale.
-        for tag in dict.fromkeys(['en', command.language]):
-            client.copy_language(tag, pack(tag))
+        for tag, data in packs.items():
+            client.copy_language(tag, data)
         selected = client.global_settings().language
         if selected is None:
             client.clear_language()

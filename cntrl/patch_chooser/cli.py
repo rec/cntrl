@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 from .. import build, flash, importing, qualify, target_process, upload
 from ..emulator.cli import Emulate, emulate
 from ..file_lock import WriterLockError, WriterLockHeld, writer_lock
+from ..fonts.assets import FontDecodeError
+from ..localization import catalogue
 from ..maker.morningstar.mc import font_coverage
 from . import (
     backups,
@@ -592,7 +594,7 @@ def main() -> None:
         elif isinstance(command, build.Build):
             build.run(command)
         elif isinstance(command, font_coverage.Report):
-            command.output.write_text(font_coverage.generate())
+            font_coverage.run(command)
         elif isinstance(command, Compile):
             report_bundle(compile_to_file(command, command.output))
         elif isinstance(command, Songs):
@@ -621,11 +623,14 @@ def main() -> None:
     except EOFError:
         sys.exit('Input ended; setup creation cancelled.')
     except (
+        catalogue.CatalogueError,
         compiler_errors.CompilationError,
         CompileOutputError,
         device_globals.GlobalRestoreError,
         device_settings.DeviceSettingError,
         devices.DeviceSelectionError,
+        FontDecodeError,
+        font_coverage.ReportError,
         setup_sync_store.SyncError,
         setup_sync_store.SyncFileError,
         source_archive.RecoveredSourceError,
@@ -657,7 +662,9 @@ def main() -> None:
                 build.Build,
                 device_globals.GlobalCLI,
                 flash.Flash,
+                font_coverage.Report,
                 importing.Import,
+                languages.LanguageCLI,
                 qualify.Qualify,
                 upload.Helper,
             ),
