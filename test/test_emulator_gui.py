@@ -832,6 +832,31 @@ def test_hover_uses_screen_page_button_focus_and_active_language(
     ]
 
 
+def test_replay_controls_require_recording_before_save(
+    application: QtWidgets.QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    session = CapturedSession()
+    actions: list[bool | Path] = []
+    monkeypatch.setattr(session, 'record_replay', actions.append)
+    monkeypatch.setattr(session, 'write_replay', actions.append)
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    path = tmp_path / 'replay.toml'
+    monkeypatch.setattr(window, 'save_path', lambda *_: str(path))
+    assert not window.recording.isChecked()
+    assert not window.replay.isEnabled()
+    window.recording.click()
+    wait_for(window.replay.isEnabled)
+    window.recording.click()
+    window.replay.click()
+    wait_for(lambda: window.request is None)
+    assert actions == [True, False, path]
+    window.close()
+    wait_for(lambda: window.session_closed)
+
+
 def test_save_and_host_dialogs_use_the_pedals_language(
     application: QtWidgets.QApplication,
     monkeypatch: pytest.MonkeyPatch,

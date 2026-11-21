@@ -422,9 +422,14 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         screenshot = self.caption(QtWidgets.QPushButton(), 'screenshot')
         screenshot.clicked.connect(self.screenshot)
         time_controls.addWidget(screenshot)
-        replay = self.caption(QtWidgets.QPushButton(), 'replay')
-        replay.clicked.connect(self.save_replay)
-        time_controls.addWidget(replay)
+        self.recording = self.caption(QtWidgets.QCheckBox(), 'record_replay')
+        self.recording.toggled.connect(self.record_replay)
+        self.recording.setEnabled(not self.stopped)
+        time_controls.addWidget(self.recording)
+        self.replay = self.caption(QtWidgets.QPushButton(), 'replay')
+        self.replay.clicked.connect(self.save_replay)
+        self.replay.setEnabled(False)
+        time_controls.addWidget(self.replay)
         self.clock_label = QtWidgets.QLabel()
         time_controls.addWidget(self.clock_label)
         column.addLayout(time_controls)
@@ -728,6 +733,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.timer.stop()
         self.running.setChecked(False)
         self.running.setEnabled(False)
+        self.recording.setEnabled(False)
         self.close_host_connections()
         self.release_inputs()
         self.canvas.setEnabled(False)
@@ -795,6 +801,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.timer.stop()
             self.running.setChecked(False)
             self.running.setEnabled(False)
+            self.recording.setEnabled(False)
             self.canvas.setEnabled(False)
             self.clock_label.setText(self.text('stock'))
             return
@@ -859,6 +866,12 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         path = self.save_path('screenshot_title', 'controller.png', 'png')
         if path and not self.canvas.grab().save(str(Path(path))):
             self.log.appendPlainText(self.text('screenshot_error', path=path))
+
+    def record_replay(self, enabled: bool) -> None:
+        self.submit(
+            partial(self.session.record_replay, enabled),
+            complete=lambda: self.replay.setEnabled(True),
+        )
 
     def save_replay(self) -> None:
         if self.closing:

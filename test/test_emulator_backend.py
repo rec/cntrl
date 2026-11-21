@@ -622,6 +622,7 @@ def test_replay_stops_on_native_rejection_and_session_can_continue(
     with backend.Session(
         files.layout, files.target, files.executable, tmp_path, files.setup
     ) as session:
+        session.record_replay(True)
         with pytest.raises(backend.RequestRejected, match='MIDI input is disconnected'):
             Scenario.load(scenario).run(session)
         assert session.time_us == 10000
@@ -1030,6 +1031,7 @@ def test_large_sysex_keeps_its_message_across_transport_chunks(
     with backend.Session(
         files.layout, files.target, files.executable, tmp_path, files.setup
     ) as session:
+        session.record_replay(True)
         session.midi('din', message)
         assert bytes(session.events[0].data) == message
         session.advance(10000)
@@ -1074,8 +1076,10 @@ def test_recorded_inputs_replay_the_same_midi_and_pixels(
     with backend.Session(
         files.layout, files.target, files.executable, tmp_path / 'original', files.setup
     ) as session:
+        session.record_replay(True)
         session.advance(20001)
         session.midi('din', b'\x90\x3c')
+        session.advance(20002)
         session.button('a', True)
         session.midi('trs', b'\xf8')
         session.midi('din', b'\x64')
@@ -1088,10 +1092,9 @@ def test_recorded_inputs_replay_the_same_midi_and_pixels(
         session.write_replay(path)
     scenario = Scenario.load(path)
     assert [(e.at, e.kind, e.target, bytes(e.data)) for e in scenario.events] == [
-        (0.020001, 'midi', 'din', b'\x90\x3c'),
-        (0.020001, 'button', 'a', b''),
-        (0.020001, 'midi', 'trs', b'\xf8'),
-        (0.020001, 'midi', 'din', b'\x64'),
+        (0.020002, 'midi', 'din', b'\x90\x3c\x64'),
+        (0.020002, 'midi', 'trs', b'\xf8'),
+        (0.020002, 'button', 'a', b''),
         (0.040001, 'button', 'a', b''),
     ]
     monkeypatch.setattr(backend, 'MAX_REPLAY_ADVANCE_US', segment_us)
@@ -1101,6 +1104,49 @@ def test_recorded_inputs_replay_the_same_midi_and_pixels(
         scenario.run(session)
         assert session.messages == expected_messages
         assert session.frames == expected_frames
+
+
+def test_replay_records_only_complete_midi_while_enabled(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    with backend.Session(
+        files.layout, files.target, files.executable, tmp_path, files.setup
+    ) as session:
+        session.midi('din', b'\x90\x3c\x64')
+        session.expression(0, 100)
+        assert not session.events
+        assert any(e.data == b'\x90\x3c\x64' for e in session.messages)
+        session.record_replay(True)
+        session.midi('din', b'\xb0\x03')
+        session.advance(10001)
+        session.midi('din', b'\xf8\x04\x05\x06')
+        session.midi('din', b'\xf0\x7d')
+        session.advance(20002)
+        session.midi('din', b'\xf8\xf7\xf0\xf7')
+        session.midi('din', b'\xb0\x07')
+        session.connection('din', False)
+        session.connection('din', True)
+        session.midi('din', b'\x08\xc0\x09\x0a')
+        session.record_replay(False)
+        session.advance(30003)
+        session.midi('din', b'\x08')
+        path = tmp_path / 'capture.toml'
+        session.write_replay(path)
+        capture = Scenario.load(path)
+        assert capture.until == 0.020002
+        assert [(e.at, bytes(e.data)) for e in capture.events if e.kind == 'midi'] == [
+            (0.010001, b'\xf8'),
+            (0.010001, b'\xb0\x03\x04'),
+            (0.010001, b'\xb0\x05\x06'),
+            (0.020002, b'\xf8'),
+            (0.020002, b'\xf0\x7d\xf7'),
+            (0.020002, b'\xf0\xf7'),
+            (0.020002, b'\xc0\x09'),
+            (0.020002, b'\xc0\x0a'),
+        ]
+        session.record_replay(True)
+        assert not session.events
 
 
 def test_cleanup_preserves_the_clock_and_allows_further_input(

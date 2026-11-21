@@ -6,10 +6,10 @@ import subprocess
 import sys
 import threading
 import time
-from array import array
 from collections.abc import Iterator
 from contextlib import ExitStack
 from hashlib import sha256
+from heapq import merge
 from pathlib import Path
 from queue import Empty, Full, Queue
 from threading import Thread, Timer
@@ -29,6 +29,7 @@ from . import font_comparison
 from .errors import EmulatorError, emulator_files
 from .layout import EmulatorLayout
 from .localization import TOOLTIP_PAGES
+from .midi_history import MidiHistory
 from .replay import Event, validate_name_key
 
 MAX_REPLAY_ADVANCE_US = 10_000_000
@@ -187,10 +188,9 @@ class Session:
         self.controller = bind_target(layout, target)
         self.time_us = 0
         self.random_seed = 1
-        self._midi_bytes = bytearray()
-        # Each pair is a timestamp in microseconds and a packet length/route word.
-        self._midi_index = array('Q')
-        # Anchor other inputs to the MIDI index so tied timestamps keep their order.
+        self._recording = False
+        self._recording_end_us: int | None = None
+        self._midi_history: dict[int, MidiHistory] = {}
         self._other_events: list[tuple[int, Event]] = []
         self.failed = False
         self.stock_firmware = False
@@ -528,27 +528,28 @@ class Session:
     def events(self) -> list[Event]:
         return list(self.iter_events())
 
+    def record_replay(self, enabled: bool) -> None:
+        if enabled == self._recording:
+            return
+        self._recording = enabled
+        if enabled:
+            self._midi_history = {
+                e.route: MidiHistory() for e in self.target.midi_endpoints if e.input
+            }
+            self._other_events.clear()
+            self._recording_end_us = None
+        else:
+            self._recording_end_us = self.time_us
+            for history in self._midi_history.values():
+                history.reset()
+
     def iter_events(self) -> Iterator[Event]:
-        endpoints = {e.route: e.name for e in self.target.midi_endpoints}
-        other_events = iter(self._other_events)
-        other = next(other_events, None)
-        offset = 0
-        for index in range(0, len(self._midi_index), 2):
-            while other is not None and other[0] == index:
-                yield other[1]
-                other = next(other_events, None)
-            length, route = divmod(self._midi_index[index + 1], 16)
-            end = offset + length
-            yield Event(
-                at=self._midi_index[index] / 1_000_000,
-                kind='midi',
-                target=endpoints[route],
-                data=list(self._midi_bytes[offset:end]),
-            )
-            offset = end
-        if other is not None:
-            yield other[1]
-        for _, event in other_events:
+        midi = (
+            self._midi_history[e.route].events(e.name)
+            for e in sorted(self.target.midi_endpoints, key=lambda e: e.route)
+            if e.route in self._midi_history
+        )
+        for _, event in merge(*midi, self._other_events, key=lambda item: item[0]):
             yield event
 
     def write_replay(self, path: Path) -> None:
@@ -557,7 +558,12 @@ class Session:
                 tomlkit.dumps(
                     {
                         'seed': self.random_seed,
-                        'until': self.time_us / 1_000_000,
+                        'until': (
+                            self.time_us
+                            if self._recording_end_us is None
+                            else self._recording_end_us
+                        )
+                        / 1_000_000,
                     }
                 )
             )
@@ -565,13 +571,25 @@ class Session:
                 stream.write('\n')
                 stream.write(tomlkit.dumps({'events': [event.model_dump(mode='json')]}))
 
-    def _record_event(self, event: Event) -> None:
-        self._other_events.append((len(self._midi_index), event))
+    def _record_event(
+        self, kind: str, *, target: str = '', value: int = 0, text: str = ''
+    ) -> None:
+        if self._recording:
+            event = Event.model_validate(
+                {
+                    'at': self.time_us / 1_000_000,
+                    'kind': kind,
+                    'target': target,
+                    'value': value,
+                    'text': text,
+                }
+            )
+            self._other_events.append((self.time_us, event))
 
     def key(self, key: int) -> None:
         validate_name_key(key)
         self.request(b'\x0f' + bytes([key]))
-        self._record_event(Event(at=self.time_us / 1000000, kind='key', value=key))
+        self._record_event('key', value=key)
 
     def button(self, control_id: str, pressed: bool) -> None:
         if control_id not in self.target.buttons:
@@ -589,14 +607,7 @@ class Session:
                 self.preview_font()
         else:
             self.request(bytes([2, self.target.buttons.index(control_id), pressed]))
-        self._record_event(
-            Event(
-                at=self.time_us / 1000000,
-                kind='button',
-                target=control_id,
-                value=int(pressed),
-            )
-        )
+        self._record_event('button', target=control_id, value=int(pressed))
 
     def compare_status_fonts(self) -> None:
         button = next(
@@ -632,9 +643,10 @@ class Session:
         if not data:
             raise EmulatorError('MIDI input requires message bytes')
         for offset in range(0, len(data), 65534):
-            self.request(bytes([3, connection.route]) + data[offset : offset + 65534])
-        self._midi_index.extend((self.time_us, len(data) * 16 + connection.route))
-        self._midi_bytes.extend(data)
+            chunk = data[offset : offset + 65534]
+            self.request(bytes([3, connection.route]) + chunk)
+            if self._recording:
+                self._midi_history[connection.route].record(self.time_us, chunk)
 
     def block(self, endpoint: str, blocked: bool) -> None:
         connection = next(
@@ -644,14 +656,7 @@ class Session:
         if connection is None:
             raise EmulatorError(f'unknown MIDI output: {endpoint}')
         self.request(bytes([4, connection.route, blocked]))
-        self._record_event(
-            Event(
-                at=self.time_us / 1000000,
-                kind='block',
-                target=endpoint,
-                value=int(blocked),
-            )
-        )
+        self._record_event('block', target=endpoint, value=int(blocked))
 
     def connection(self, endpoint: str, connected: bool) -> None:
         connection = next(
@@ -660,40 +665,24 @@ class Session:
         if connection is None:
             raise EmulatorError(f'unknown MIDI endpoint: {endpoint}')
         self.request(bytes([10, connection.route, connected]))
-        self._record_event(
-            Event(
-                at=self.time_us / 1000000,
-                kind='connection',
-                target=endpoint,
-                value=int(connected),
-            )
-        )
+        if self._recording and connection.input and not connected:
+            self._midi_history[connection.route].reset()
+        self._record_event('connection', target=endpoint, value=int(connected))
 
     def cleanup(self) -> None:
         self.release_all()
         self.request(b'\x09')
-        self._record_event(Event(at=self.time_us / 1000000, kind='cleanup'))
+        self._record_event('cleanup')
 
     def expression(self, port: int, value: int) -> None:
         if not 0 <= port < 4 or not 0 <= value <= 1023:
             raise EmulatorError('expression requires a port 0..3 and raw value 0..1023')
         self.request(bytes([5, port]) + struct.pack('<H', value))
-        self._record_event(
-            Event(
-                at=self.time_us / 1000000,
-                kind='expression',
-                target=str(port),
-                value=value,
-            )
-        )
+        self._record_event('expression', target=str(port), value=value)
 
     def text(self, message: str, warning: bool = False) -> None:
         self.request(bytes([6, 2 if warning else 1]) + message.encode('ascii'))
-        self._record_event(
-            Event(
-                at=self.time_us / 1000000, kind='text', text=message, value=int(warning)
-            )
-        )
+        self._record_event('text', text=message, value=int(warning))
 
     def auxiliary(self, port: int, contacts: int) -> None:
         if not 0 <= port < 4 or not 0 <= contacts <= 3:
@@ -701,14 +690,7 @@ class Session:
                 'auxiliary input requires a port 0..3 and contact mask 0..3'
             )
         self.request(bytes([11, port, contacts]))
-        self._record_event(
-            Event(
-                at=self.time_us / 1000000,
-                kind='auxiliary',
-                target=str(port),
-                value=contacts,
-            )
-        )
+        self._record_event('auxiliary', target=str(port), value=contacts)
 
     def seed(self, value: int) -> None:
         self.request(b'\x07' + struct.pack('<I', value))
