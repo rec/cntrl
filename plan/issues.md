@@ -10,13 +10,12 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 ## P2 | Reliability, correctness and recoverability
 
 11. **Live input history grows for the life of the emulator (code finding).**
-    [Session input methods](../cntrl/emulator/backend.py#L438) append replay
-    events including inbound MIDI. The [GUI bounds the visible log](../cntrl/emulator/gui.py#L333)
-    and drains output messages, but the input list lives until session exit
-    and is [used on scenario export](../cntrl/emulator/gui.py#L718).
-    This is unbounded intentional retention, rather than a lost allocation.
-    Explicit recording or streaming to disk would preserve replay fidelity
-    while bounding live memory.
+    [The session](../cntrl/emulator/backend.py) now keeps incoming MIDI as
+    raw bytes with 16 bytes of timestamp and packet metadata per packet,
+    plus buffer spare capacity. Scenario export reads the history in order
+    and writes one event at a time. History still grows with input traffic
+    until the session ends. Explicit recording or streaming the live history
+    to disk could cap memory use.
 
 14. **Verify keyboard overflow feedback on the pedal.** The name editor
     shows a localized warning after the queue drops a key, while retaining

@@ -6,6 +6,8 @@ import subprocess
 import sys
 import threading
 import time
+from array import array
+from collections.abc import Iterator
 from contextlib import ExitStack
 from hashlib import sha256
 from pathlib import Path
@@ -14,6 +16,7 @@ from threading import Thread, Timer
 from types import TracebackType
 from typing import Literal
 
+import tomlkit
 from pydantic import BaseModel
 
 from .. import crashes, models
@@ -183,7 +186,11 @@ class Session:
         self.controller = bind_target(layout, target)
         self.time_us = 0
         self.random_seed = 1
-        self.events: list[Event] = []
+        self._midi_bytes = bytearray()
+        # Each pair is a timestamp in microseconds and a packet length/route word.
+        self._midi_index = array('Q')
+        # Anchor other inputs to the MIDI index so tied timestamps keep their order.
+        self._other_events: list[tuple[int, Event]] = []
         self.failed = False
         self.stock_firmware = False
         self.editing_name = False
@@ -505,10 +512,54 @@ class Session:
         self.request(b'\x0c')
         return self.memory_usage
 
+    @property
+    def events(self) -> list[Event]:
+        return list(self.iter_events())
+
+    def iter_events(self) -> Iterator[Event]:
+        endpoints = {e.route: e.name for e in self.target.midi_endpoints}
+        other_events = iter(self._other_events)
+        other = next(other_events, None)
+        offset = 0
+        for index in range(0, len(self._midi_index), 2):
+            while other is not None and other[0] == index:
+                yield other[1]
+                other = next(other_events, None)
+            length, route = divmod(self._midi_index[index + 1], 16)
+            end = offset + length
+            yield Event(
+                at=self._midi_index[index] / 1_000_000,
+                kind='midi',
+                target=endpoints[route],
+                data=list(self._midi_bytes[offset:end]),
+            )
+            offset = end
+        if other is not None:
+            yield other[1]
+        for _, event in other_events:
+            yield event
+
+    def write_replay(self, path: Path) -> None:
+        with path.open('w', encoding='utf-8') as stream:
+            stream.write(
+                tomlkit.dumps(
+                    {
+                        'seed': self.random_seed,
+                        'until': self.time_us / 1_000_000,
+                    }
+                )
+            )
+            for event in self.iter_events():
+                stream.write('\n')
+                stream.write(tomlkit.dumps({'events': [event.model_dump(mode='json')]}))
+
+    def _record_event(self, event: Event) -> None:
+        self._other_events.append((len(self._midi_index), event))
+
     def key(self, key: int) -> None:
         validate_name_key(key)
         self.request(b'\x0f' + bytes([key]))
-        self.events.append(Event(at=self.time_us / 1000000, kind='key', value=key))
+        self._record_event(Event(at=self.time_us / 1000000, kind='key', value=key))
 
     def button(self, control_id: str, pressed: bool) -> None:
         if control_id not in self.target.buttons:
@@ -526,7 +577,7 @@ class Session:
                 self.preview_font()
         else:
             self.request(bytes([2, self.target.buttons.index(control_id), pressed]))
-        self.events.append(
+        self._record_event(
             Event(
                 at=self.time_us / 1000000,
                 kind='button',
@@ -570,11 +621,8 @@ class Session:
             raise EmulatorError('MIDI input requires message bytes')
         for offset in range(0, len(data), 65534):
             self.request(bytes([3, connection.route]) + data[offset : offset + 65534])
-        self.events.append(
-            Event(
-                at=self.time_us / 1000000, kind='midi', target=endpoint, data=list(data)
-            )
-        )
+        self._midi_index.extend((self.time_us, len(data) * 16 + connection.route))
+        self._midi_bytes.extend(data)
 
     def block(self, endpoint: str, blocked: bool) -> None:
         connection = next(
@@ -584,7 +632,7 @@ class Session:
         if connection is None:
             raise EmulatorError(f'unknown MIDI output: {endpoint}')
         self.request(bytes([4, connection.route, blocked]))
-        self.events.append(
+        self._record_event(
             Event(
                 at=self.time_us / 1000000,
                 kind='block',
@@ -600,7 +648,7 @@ class Session:
         if connection is None:
             raise EmulatorError(f'unknown MIDI endpoint: {endpoint}')
         self.request(bytes([10, connection.route, connected]))
-        self.events.append(
+        self._record_event(
             Event(
                 at=self.time_us / 1000000,
                 kind='connection',
@@ -612,13 +660,13 @@ class Session:
     def cleanup(self) -> None:
         self.release_all()
         self.request(b'\x09')
-        self.events.append(Event(at=self.time_us / 1000000, kind='cleanup'))
+        self._record_event(Event(at=self.time_us / 1000000, kind='cleanup'))
 
     def expression(self, port: int, value: int) -> None:
         if not 0 <= port < 4 or not 0 <= value <= 1023:
             raise EmulatorError('expression requires a port 0..3 and raw value 0..1023')
         self.request(bytes([5, port]) + struct.pack('<H', value))
-        self.events.append(
+        self._record_event(
             Event(
                 at=self.time_us / 1000000,
                 kind='expression',
@@ -629,7 +677,7 @@ class Session:
 
     def text(self, message: str, warning: bool = False) -> None:
         self.request(bytes([6, 2 if warning else 1]) + message.encode('ascii'))
-        self.events.append(
+        self._record_event(
             Event(
                 at=self.time_us / 1000000, kind='text', text=message, value=int(warning)
             )
@@ -641,7 +689,7 @@ class Session:
                 'auxiliary input requires a port 0..3 and contact mask 0..3'
             )
         self.request(bytes([11, port, contacts]))
-        self.events.append(
+        self._record_event(
             Event(
                 at=self.time_us / 1000000,
                 kind='auxiliary',
