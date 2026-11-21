@@ -1,11 +1,20 @@
 """A download refuses the entire batch when any destination already exists."""
 
+import sys
+from contextlib import nullcontext
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import tyro
 
-from cntrl.patch_chooser import cli, compiler_errors
+from cntrl.patch_chooser import (
+    cli,
+    compiler_errors,
+    device_globals,
+    global_overlay,
+    transport,
+)
 
 
 @pytest.mark.parametrize(
@@ -80,3 +89,56 @@ def test_download_options_default_to_all_setups_and_current_directory() -> None:
     assert command.names == ['Show']
     assert command.output == Path('destination')
     assert command.force is True
+
+
+def test_output_failure_names_destination_and_removes_temporary_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    failure = PermissionError('cannot publish download')
+    monkeypatch.setattr(Path, 'hardlink_to', Mock(side_effect=failure))
+    with pytest.raises(
+        cli.DownloadOutputError, match='Show.toml: cannot publish download'
+    ) as caught:
+        cli.publish_download({Path('Show.toml'): b'new'}, tmp_path)
+    assert caught.value.__cause__ is failure
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_download_cli_preserves_unexpected_failures(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected download failure')
+    client = Mock()
+    client.catalogue.return_value = [
+        transport.SetupEntry(name='Show', modified=0, length=116, checksum=0)
+    ]
+    monkeypatch.setattr(transport, 'SerialConnection', Mock(return_value=nullcontext()))
+    monkeypatch.setattr(transport, 'SetupClient', Mock(return_value=client))
+    monkeypatch.setattr(cli, 'download_files', Mock(side_effect=failure))
+    monkeypatch.setattr(
+        sys, 'argv', ['cntrl', 'setup', 'download', 'Show', '--port', '/unused']
+    )
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+
+
+def test_language_fallback_requires_the_pedal_to_report_a_missing_pack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = Mock()
+    client.catalogue.return_value = []
+    monkeypatch.setattr(
+        device_globals,
+        'capture',
+        Mock(return_value=global_overlay.Overlay(language='fr')),
+    )
+    client.download_language.side_effect = transport.UsbFileMissing('pack absent')
+    assert set(cli.download_files(client, [])) == {Path('device-globals.toml')}
+
+    failure = FileNotFoundError('unexpected host file missing')
+    client.download_language.side_effect = failure
+    with pytest.raises(FileNotFoundError) as caught:
+        cli.download_files(client, [])
+    assert caught.value is failure

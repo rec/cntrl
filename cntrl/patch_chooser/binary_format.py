@@ -7,6 +7,10 @@ from zlib import crc32
 from pydantic import BaseModel, Field
 
 
+class DocumentFormatError(ValueError):
+    """A persistent document uses invalid or unsupported wire records."""
+
+
 class Kind(IntEnum):
     setup = 1
     bundle = 2
@@ -29,7 +33,7 @@ class Document(BaseModel, frozen=True):
             for r in self.records
         )
         if len(payload) > MAX_PAYLOAD:
-            raise ValueError('persistent document exceeds format size limit')
+            raise DocumentFormatError('persistent document exceeds format size limit')
         header = HEADER.pack(
             MAGIC, DEVELOPMENT_FORMAT, self.kind, HEADER.size, 0, len(payload), 0
         )
@@ -42,41 +46,45 @@ class Document(BaseModel, frozen=True):
 
 def unpack(data: bytes, kind: Kind) -> Document:
     if len(data) < HEADER.size:
-        raise ValueError('truncated persistent document header')
+        raise DocumentFormatError('truncated persistent document header')
     magic, version, actual_kind, header_size, flags, length, checksum = (
         HEADER.unpack_from(data)
     )
     if magic != MAGIC:
-        raise ValueError('invalid persistent document magic')
+        raise DocumentFormatError('invalid persistent document magic')
     if version not in (0x802C, 0x802D, DEVELOPMENT_FORMAT):
-        raise ValueError(f'unsupported persistent format {format_name(version)}')
+        raise DocumentFormatError(
+            f'unsupported persistent format {format_name(version)}'
+        )
     if actual_kind != kind:
-        raise ValueError('persistent document artifact kind mismatch')
+        raise DocumentFormatError('persistent document artifact kind mismatch')
     if header_size != HEADER.size or flags:
-        raise ValueError('unsupported persistent document header')
+        raise DocumentFormatError('unsupported persistent document header')
     if length > MAX_PAYLOAD or length != len(data) - HEADER.size:
-        raise ValueError('invalid persistent document length')
+        raise DocumentFormatError('invalid persistent document length')
     if crc32(data[:16] + bytes(4) + data[20:]) != checksum:
-        raise ValueError('persistent document checksum mismatch')
+        raise DocumentFormatError('persistent document checksum mismatch')
     records: list[Record] = []
     cursor = HEADER.size
     core_found = False
     while cursor < len(data):
         if len(records) >= MAX_RECORDS:
-            raise ValueError('persistent document exceeds record count limit')
+            raise DocumentFormatError('persistent document exceeds record count limit')
         if len(data) - cursor < RECORD.size:
-            raise ValueError('truncated persistent record header')
+            raise DocumentFormatError('truncated persistent record header')
         tag, flags, size = RECORD.unpack_from(data, cursor)
         cursor += RECORD.size
         if not tag or flags & ~REQUIRED or size > len(data) - cursor:
-            raise ValueError('invalid persistent record')
+            raise DocumentFormatError('invalid persistent record')
         if tag == CORE:
             if core_found or flags != REQUIRED or records:
-                raise ValueError('core must be the first, required, singleton record')
+                raise DocumentFormatError(
+                    'core must be the first, required, singleton record'
+                )
             core_found = True
         elif tag == SOURCE and kind == Kind.setup:
             if flags or size != 32 or any(r.tag == SOURCE for r in records):
-                raise ValueError('invalid source snapshot reference')
+                raise DocumentFormatError('invalid source snapshot reference')
         elif tag == SETTING_OVERRIDES and kind == Kind.setup:
             if (
                 flags
@@ -85,18 +93,18 @@ def unpack(data: bytes, kind: Kind) -> Document:
                 or int.from_bytes(data[cursor : cursor + size], 'little') >> 34
                 or int.from_bytes(data[cursor : cursor + size], 'little') & (1 << 27)
             ):
-                raise ValueError('invalid device-global setting overrides')
+                raise DocumentFormatError('invalid device-global setting overrides')
         elif tag == SONG_FORMATTING and kind == Kind.songs:
             if flags or any(r.tag == SONG_FORMATTING for r in records):
-                raise ValueError('invalid song formatting preferences')
+                raise DocumentFormatError('invalid song formatting preferences')
         elif flags & REQUIRED:
-            raise ValueError(f'unsupported required persistent record {tag}')
+            raise DocumentFormatError(f'unsupported required persistent record {tag}')
         records.append(
             Record(tag=tag, required=bool(flags), data=data[cursor : cursor + size])
         )
         cursor += size
     if not core_found:
-        raise ValueError('missing persistent core record')
+        raise DocumentFormatError('missing persistent core record')
     return Document(kind=kind, records=records)
 
 
@@ -135,7 +143,9 @@ def replace_core(data: bytes, replacement: bytes, kind: Kind = Kind.setup) -> by
 
 def require_structural_edit(data: bytes, kind: Kind = Kind.setup) -> None:
     if has_opaque(data, kind):
-        raise ValueError('cannot remap references while opaque metadata is present')
+        raise DocumentFormatError(
+            'cannot remap references while opaque metadata is present'
+        )
 
 
 def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
