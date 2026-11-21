@@ -1,10 +1,18 @@
-"""Keep automatic user configuration outside every test's environment."""
+"""Configure repository tests and isolate automatic user configuration."""
 
 from pathlib import Path
 
 import pytest
 
 from cntrl.patch_chooser import global_config
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        '--require-morningstar-sdk',
+        action='store_true',
+        help='Fail if the pinned Teensy SDK is missing for Morningstar font checks.',
+    )
 
 
 @pytest.fixture(autouse=True)
