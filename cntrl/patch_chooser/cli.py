@@ -314,6 +314,7 @@ def setup_transfer(
             )
             client.ok(f'CNTRL TIME {int(time.time())}')
             failures: list[str] = []
+            unexpected: BaseException | None = None
             try:
                 source_archive.upload(client, archive)
                 for name in bundle.names:
@@ -326,12 +327,27 @@ def setup_transfer(
                 setup_sync.check_upload(client, upload_snapshot.parent)
                 client.copy_bundle(bundle.pack(), command.overwrite or bool(existing))
                 report_bundle(bundle)
-            except (OSError, ValueError) as error:
+            except (
+                *transport.USB_ERRORS,
+                transport.UsbTransferInputError,
+                setup_sync_store.SyncError,
+                setup_sync_store.SyncFileError,
+            ) as error:
                 failures.append(str(error))
-            try:
-                client.ok('CNTRL SETUP FINISH')
-            except (OSError, ValueError) as error:
-                failures.append(f'batch completion: {error}')
+            except BaseException as error:
+                unexpected = error
+                raise
+            finally:
+                # Cancellation uses the serial connection's release path.
+                if unexpected is None or isinstance(unexpected, Exception):
+                    try:
+                        client.ok('CNTRL SETUP FINISH')
+                    except transport.USB_ERRORS as error:
+                        message = f'batch completion: {error}'
+                        if unexpected is None:
+                            failures.append(message)
+                        else:
+                            unexpected.add_note(message)
             if failures:
                 raise compiler_errors.CompilationError(failures)
             setup_sync.capture_assets(
@@ -339,9 +355,9 @@ def setup_transfer(
             )
             live_globals = device_globals.capture(client)
             if live_globals is not None:
-                (upload_snapshot / 'device-globals.toml').write_bytes(
-                    device_globals.dump(live_globals)
-                )
+                snapshot = device_globals.dump(live_globals)
+                with setup_sync_store.sync_files():
+                    (upload_snapshot / 'device-globals.toml').write_bytes(snapshot)
             setup_sync_store.advance(
                 setup_sync.store(command), upload_snapshot, uploaded_names
             )
@@ -644,6 +660,7 @@ def main() -> None:
         FontDecodeError,
         font_coverage.ReportError,
         history.HistoryError,
+        midi_assets.MidiAssetMissingError,
         setup_sync_store.SyncError,
         setup_sync_store.SyncFileError,
         source_archive.RecoveredSourceError,
@@ -670,6 +687,7 @@ def main() -> None:
                     SetupRotate,
                     SetupList,
                     SetupDelete,
+                    SetupCopy,
                 ),
             ):
                 raise

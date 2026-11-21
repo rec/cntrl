@@ -204,12 +204,14 @@ def snapshot(
     sources: data_files.Trace,
     inputs: data_files.Sources,
 ) -> Path:
-    root.mkdir(exist_ok=True)
-    folder = Path(mkdtemp(prefix=prefix, dir=root))
+    with sync_files():
+        root.mkdir(exist_ok=True)
+        folder = Path(mkdtemp(prefix=prefix, dir=root))
     records = []
     for i, (p, data) in enumerate(sources.files.items()):
         name = f'source-{i}.original'
-        (folder / name).write_bytes(data)
+        with sync_files():
+            (folder / name).write_bytes(data)
         records.append(
             {
                 'file': str(p),
@@ -226,7 +228,7 @@ def snapshot(
             'document_version': compiler_wire.DOCUMENT_VERSION,
             'compiler_checksum': digest(
                 ''.join(
-                    digest(Path(m.__file__).read_bytes())
+                    digest(read_sync_file(Path(m.__file__)))
                     for m in (
                         compiler,
                         compiler_inputs,
@@ -247,11 +249,16 @@ def snapshot(
 
 def save_setup(folder: Path, name: str, data: bytes) -> None:
     data_files.validate_name(name)
-    (folder / f'{name}.bin').write_bytes(data)
+    with sync_files():
+        (folder / f'{name}.bin').write_bytes(data)
     try:
-        (folder / f'{name}.toml').write_bytes(resolved.export(data).encode())
+        text = resolved.export(data)
     except ValueError as error:
-        (folder / f'{name}.decode-error.txt').write_bytes(str(error).encode())
+        with sync_files():
+            (folder / f'{name}.decode-error.txt').write_bytes(str(error).encode())
+    else:
+        with sync_files():
+            (folder / f'{name}.toml').write_bytes(text.encode())
 
 
 def capture_assets(
@@ -753,7 +760,8 @@ def prepare_upload(
     existing: dict[str, bytes] = {}
     folder = snapshot(root, 'upload-', existing, trace, inputs)
     if current_bundle:
-        (folder / 'bundle.before').write_bytes(current_bundle)
+        with sync_files():
+            (folder / 'bundle.before').write_bytes(current_bundle)
     for e in client.catalogue():
         existing[e.name] = client.download(e.name)
         save_setup(folder, e.name, existing[e.name])
@@ -794,18 +802,24 @@ def prepare_upload(
         previous=current_bundle or None,
     )
     uploaded = folder / 'uploaded'
-    uploaded.mkdir()
+    with sync_files():
+        uploaded.mkdir()
     for n in bundle.names:
-        (uploaded / f'{n}.bin').write_bytes(result.setups[n])
-        (uploaded / f'{n}.toml').write_bytes(resolved.export(result.setups[n]).encode())
+        data = result.setups[n]
+        with sync_files():
+            (uploaded / f'{n}.bin').write_bytes(data)
+        text = resolved.export(data)
+        with sync_files():
+            (uploaded / f'{n}.toml').write_bytes(text.encode())
     return result, uploaded
 
 
 def check_upload(client: transport.SetupClient, folder: Path) -> None:
     """Refuse to replace a collection that changed while preparing an upload."""
-    paths = {p.stem: p for p in folder.glob('*.bin')}
+    with sync_files():
+        paths = {p.stem: p for p in folder.glob('*.bin')}
     if set(paths) != {e.name for e in client.catalogue()}:
         raise SyncError('pedal collection changed during upload preparation')
     for n, path in paths.items():
-        if client.download(n) != path.read_bytes():
+        if client.download(n) != read_sync_file(path):
             raise SyncError(f'{n}: pedal setup changed during upload preparation')
