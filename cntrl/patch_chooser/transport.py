@@ -24,6 +24,10 @@ class UsbReplyError(ValueError):
     """The pedal rejected the command or returned an unexpected result."""
 
 
+class UsbFileMissing(FileNotFoundError):
+    """The pedal reported that the requested file does not exist."""
+
+
 class UsbConnectionError(OSError):
     """The USB serial connection failed."""
 
@@ -707,18 +711,21 @@ class SetupClient:
         )
         parts = response.split()
         if len(parts) != 4 or parts[:2] != ['CNTRL', 'FILE']:
-            raise ValueError(f'invalid download response: {response}')
-        length, checksum = int(parts[2]), int(parts[3], 16)
+            raise UsbReplyError(f'invalid download response: {response}')
+        try:
+            length, checksum = int(parts[2]), int(parts[3], 16)
+        except ValueError as error:
+            raise UsbReplyError(f'invalid download response: {response}') from error
         if not 116 <= length <= 0xFFFFFFFF - 100:
-            raise ValueError('invalid download length')
+            raise UsbReplyError('invalid download length')
         result = bytearray()
         while len(result) < length:
             chunk = self.request_data('CNTRL NEXT')
             if not 1 <= len(chunk) <= self.connection.usb_block_size:
-                raise ValueError('invalid download chunk')
+                raise UsbReplyError('invalid download chunk')
             result.extend(chunk)
         if len(result) != length or crc32(result) != checksum:
-            raise ValueError('download checksum/length mismatch')
+            raise UsbReplyError('download checksum/length mismatch')
         return bytes(result)
 
     def delete(self, names: list[str]) -> None:
@@ -750,11 +757,11 @@ class SetupClient:
         self._copy_asset('SOURCE', Kind.source, snapshot + '.bin', data, False)
 
     def copy_language(self, tag: str, data: bytes) -> None:
-        from ..localization.catalogue import inspect
+        from ..localization.catalogue import CatalogueError, inspect
 
         global_overlay.Overlay.model_validate({'language': tag})
         if inspect(data).language != tag:
-            raise ValueError('language pack tag differs from its filename')
+            raise CatalogueError('language pack tag differs from its filename')
         self._copy_asset('LANGUAGE', Kind.language, tag + '.bin', data, True)
 
     def download_language(self, tag: str) -> bytes:
@@ -763,7 +770,7 @@ class SetupClient:
         global_overlay.Overlay.model_validate({'language': tag})
         data = self._download_asset('LANGUAGE', tag + '.bin')
         if inspect(data).language != tag:
-            raise ValueError('downloaded language pack tag differs')
+            raise UsbReplyError('downloaded language pack tag differs')
         return data
 
     def download_source(self, snapshot: str) -> bytes:
@@ -782,16 +789,16 @@ class SetupClient:
         )
         try:
             existing = self._download_asset(protocol, name)
-        except FileNotFoundError:
+        except UsbFileMissing:
             existing = None
         if existing == data:
             return
         if existing is not None and not overwrite:
             if protocol == 'SOURCE':
-                raise ValueError(
+                raise UsbReplyError(
                     f'{name}: immutable source snapshot has corrupt contents'
                 )
-            raise ValueError(
+            raise UsbReplyError(
                 f'{name}: {label} file exists with different contents; '
                 'use --overwrite/-o'
             )
@@ -801,7 +808,7 @@ class SetupClient:
             f'{crc32(data):08x} {int(overwrite)}'
         )
         if response != 'CNTRL SEND':
-            raise ValueError(response)
+            raise UsbReplyError(response)
         for i in range(0, len(data), self.connection.usb_block_size):
             self.send_data(kind, data[i : i + self.connection.usb_block_size])
         response = self.request(f'CNTRL {protocol} END')
@@ -811,9 +818,9 @@ class SetupClient:
                 file=sys.stderr,
             )
         elif response != 'CNTRL OK':
-            raise ValueError(f'unexpected response: {response}')
+            raise UsbReplyError(f'unexpected response: {response}')
         if self._download_asset(protocol, name) != data:
-            raise ValueError(f'{name}: {label} file read-back mismatch')
+            raise UsbReplyError(f'{name}: {label} file read-back mismatch')
 
     def download_midi(self, name: str) -> bytes:
         PlayMidiFile.basename(name)
@@ -825,13 +832,18 @@ class SetupClient:
         encoded = name.encode('ascii').hex()
         response = self.request(f'CNTRL {protocol} SIZE {encoded}')
         if response == f'CNTRL {protocol} MISSING':
-            raise FileNotFoundError(f'{name}: {protocol} file is missing on the pedal')
+            raise UsbFileMissing(f'{name}: {protocol} file is missing on the pedal')
         parts = response.split()
         if len(parts) != 3 or parts[:2] != ['CNTRL', protocol]:
-            raise ValueError(f'invalid {protocol} file response: {response}')
-        length = int(parts[2])
+            raise UsbReplyError(f'invalid {protocol} file response: {response}')
+        try:
+            length = int(parts[2])
+        except ValueError as error:
+            raise UsbReplyError(
+                f'invalid {protocol} file response: {response}'
+            ) from error
         if not 0 < length <= 0xFFFFFFFF:
-            raise ValueError(f'invalid {protocol} file length')
+            raise UsbReplyError(f'invalid {protocol} file length')
         result = bytearray()
         while len(result) < length:
             chunk = self.request_data(f'CNTRL {protocol} READ {encoded} {len(result)}')
@@ -840,7 +852,7 @@ class SetupClient:
                 < len(chunk)
                 <= min(self.connection.usb_block_size, length - len(result))
             ):
-                raise ValueError(f'invalid {protocol} file chunk')
+                raise UsbReplyError(f'invalid {protocol} file chunk')
             result.extend(chunk)
         return bytes(result)
 

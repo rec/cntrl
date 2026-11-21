@@ -626,11 +626,13 @@ def main() -> None:
         catalogue.CatalogueError,
         compiler_errors.CompilationError,
         CompileOutputError,
+        data_files.InvalidSetupName,
         device_globals.GlobalRestoreError,
         device_settings.DeviceSettingError,
         devices.DeviceSelectionError,
         FontDecodeError,
         font_coverage.ReportError,
+        history.HistoryError,
         setup_sync_store.SyncError,
         setup_sync_store.SyncFileError,
         source_archive.RecoveredSourceError,
@@ -638,6 +640,7 @@ def main() -> None:
         target_process.TargetAdapterError,
         transport.UsbCommandTimeout,
         transport.UsbConnectionError,
+        transport.UsbFileMissing,
         transport.UsbProtocolError,
         transport.UsbReplyError,
         transport.UsbSerialTimeout,
@@ -646,14 +649,13 @@ def main() -> None:
     ) as error:
         sys.exit(str(error))
     except (OSError, ValueError) as error:
-        if (
-            isinstance(command, SetupCLI)
-            and isinstance(command.command, setup_sync.Sync)
-            and (
+        if isinstance(command, SetupCLI):
+            if isinstance(command.command, setup_sync.Sync) and (
                 command.command.apply is not None or command.command.recover is not None
-            )
-        ):
-            raise
+            ):
+                raise
+            if isinstance(command.command, history.History):
+                raise
         if isinstance(
             command,
             (

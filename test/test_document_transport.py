@@ -1153,6 +1153,27 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         assert not missing.exists()
 
 
+@pytest.mark.parametrize(
+    ('method', 'name', 'reply', 'message'),
+    [
+        ('download', 'Show', 'CNTRL FILE missing bcd', 'invalid download response'),
+        (
+            'download_midi',
+            'song.mid',
+            'CNTRL MIDI_FILE missing',
+            'invalid MIDI_FILE file response',
+        ),
+    ],
+)
+def test_invalid_transfer_length_is_reported_as_a_pedal_reply_error(
+    monkeypatch: pytest.MonkeyPatch, method: str, name: str, reply: str, message: str
+) -> None:
+    client = transport.SetupClient(transport.SerialConnection(Path('/unused')))
+    monkeypatch.setattr(client, 'request', lambda command: reply)
+    with pytest.raises(transport.UsbReplyError, match=message):
+        getattr(client, method)(name)
+
+
 def test_progress_reply_is_not_returned_as_the_command_result() -> None:
     connection = transport.SerialConnection(Path('/unused'))
     connection.received.extend(

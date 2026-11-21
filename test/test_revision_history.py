@@ -1,10 +1,21 @@
 """Revision comparisons use editable configuration, not compiled layout records."""
 
+import sys
 from pathlib import Path
+from unittest.mock import Mock
 
+import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, compiler_inputs, history, models, resolved
+from cntrl.patch_chooser import (
+    cli,
+    compiler,
+    compiler_inputs,
+    history,
+    models,
+    resolved,
+    transport,
+)
 
 
 def test_reserved_revisions_follow_the_selected_storage_root(tmp_path: Path) -> None:
@@ -65,3 +76,59 @@ def test_history_command_accepts_the_documented_positional_action() -> None:
     command = tyro.cli(history.History, args=['Example', 'list', '--port', '/unused'])
     assert command.action == history.Command.list
     assert command.name == 'Example'
+
+
+@pytest.mark.parametrize(
+    ('action', 'options', 'message'),
+    [
+        ('download', ['--revision', '1'], 'download requires --output'),
+        ('restore', [], 'choose --revision'),
+        ('save', ['--label', 'bad/name'], 'invalid setup name'),
+    ],
+)
+def test_history_rejects_bad_arguments_before_usb(
+    monkeypatch: pytest.MonkeyPatch, action: str, options: list[str], message: str
+) -> None:
+    connect = Mock(side_effect=AssertionError('unexpected USB open'))
+    monkeypatch.setattr(transport, 'SerialConnection', connect)
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        ['cntrl', 'setup', 'history', 'Example', action, '--port', '/unused', *options],
+    )
+    with pytest.raises(SystemExit, match=message):
+        cli.main()
+    connect.assert_not_called()
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_history_cli_preserves_unexpected_failures(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected history failure')
+    monkeypatch.setattr(history, 'run', Mock(side_effect=failure))
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        ['cntrl', 'setup', 'history', 'Example', 'list', '--port', '/unused'],
+    )
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+
+
+@pytest.mark.parametrize(
+    'reply',
+    [
+        'CNTRL REVISION broken 1 116 -',
+        'CNTRL REVISION 1 0 0 -',
+        'CNTRL REVISION 1 1 116 ff',
+    ],
+)
+def test_invalid_revision_is_reported_as_a_pedal_reply_error(
+    monkeypatch: pytest.MonkeyPatch, reply: str
+) -> None:
+    client = transport.SetupClient(transport.SerialConnection(Path('/unused')))
+    monkeypatch.setattr(client, 'request', Mock(return_value=reply))
+    with pytest.raises(transport.UsbReplyError, match='invalid revision response'):
+        history.revisions(client, 'Example')
