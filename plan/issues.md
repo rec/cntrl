@@ -25,17 +25,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 ## P2 | Distribution and release risks to verify
 
-16. **Bitmap font provenance needs a release decision.**
-    [The font exporter](../cntrl/maker/morningstar/mc/export_fonts.py#L63)
-    derives ComicSansMS assets from a Teensy SDK source. It emits notices for
-    bundled outline fonts and Tamzen, but has no corresponding notice branch
-    for ComicSansMS. The derived resource is tracked in
-    [the distribution tree](../cntrl/maker/morningstar/mc/distribution/fonts/ComicSansMS.cfont).
-    Confirm the original glyph provenance and which terms cover redistribution
-    of the derived raster. The presence of code in an SDK does not establish
-    the rights to every bundled asset. Replace the raster if redistribution
-    terms cannot be established.
-
 17. **First-party licensing and vendor image handling lack a clear release
     boundary.** The reviewed tree has asset-specific notices but no root
     project license or license declaration in [package metadata](../pyproject.toml).
