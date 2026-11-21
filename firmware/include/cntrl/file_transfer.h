@@ -63,8 +63,8 @@ public:
                 return error("midi-file-publish");
             }
             temporary_[0] = 0; uploading_ = false;
-            if (existing && !filesystem_.remove(previous_)) return error("midi-file-cleanup");
-            replies_.reply("CNTRL OK"); return true;
+            const bool cleanup_pending = existing && !filesystem_.remove(previous_);
+            replies_.reply(cleanup_pending ? "CNTRL OK CLEANUP_PENDING" : "CNTRL OK"); return true;
         }
         char hex[191] = {}, name[96] = {}; unsigned length = 0, overwrite = 0; unsigned long crc = 0; int end = 0;
         if (std::sscanf(line, "BEGIN %190s %u %lx %u%n", hex, &length, &crc, &overwrite, &end) == 4
@@ -91,7 +91,7 @@ public:
         if (!decode(hex, name) || (space_ == Namespace::source && !source_name(name))
             || (space_ == Namespace::language && !language_name(name))) return error("midi-file-name");
         paths(name);
-        if (!filesystem_.available() || !recover()) return error("midi-file-storage");
+        if (!filesystem_.available() || !recover(false)) return error("midi-file-storage");
         if (!reader_.open(path_, files::Mode::read)) {
             if (filesystem_.exists(path_)) return error("midi-file-open");
             replies_.reply(space_ == Namespace::source ? "CNTRL SOURCE MISSING" : space_ == Namespace::language ? "CNTRL LANGUAGE MISSING" : "CNTRL MIDI_FILE MISSING"); return true;
@@ -165,9 +165,10 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_recover)
 #endif
-    bool recover() {
+    bool recover(bool require_cleanup = true) {
         if (!filesystem_.exists(previous_)) return true;
-        return filesystem_.exists(path_) ? filesystem_.remove(previous_) : filesystem_.rename(previous_, path_);
+        if (filesystem_.exists(path_)) return filesystem_.remove(previous_) || !require_cleanup;
+        return filesystem_.rename(previous_, path_);
     }
 };
 } // namespace cntrl

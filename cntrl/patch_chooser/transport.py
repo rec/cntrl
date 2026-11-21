@@ -694,7 +694,14 @@ class SetupClient:
             raise ValueError(response)
         for i in range(0, len(data), self.connection.usb_block_size):
             self.send_data(kind, data[i : i + self.connection.usb_block_size])
-        self.ok(f'CNTRL {protocol} END')
+        response = self.request(f'CNTRL {protocol} END')
+        if response == 'CNTRL OK CLEANUP_PENDING':
+            print(
+                f'{name}: {label} file committed, previous copy cleanup pending',
+                file=sys.stderr,
+            )
+        elif response != 'CNTRL OK':
+            raise ValueError(f'unexpected response: {response}')
         if self._download_asset(protocol, name) != data:
             raise ValueError(f'{name}: {label} file read-back mismatch')
 

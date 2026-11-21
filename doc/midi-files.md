@@ -21,6 +21,11 @@ and read back before the setup bundle is sent. A failed transfer does not
 establish a synchronization baseline. Setup snapshots and backups retain these
 MIDI files too; backup restore uploads them before restoring setups.
 
+If an overwrite commits but the pedal cannot delete the previous copy, CNTRL
+reports cleanup pending and verifies the new file by reading it back. A later
+access tries to remove the previous copy again. A further overwrite requires
+that cleanup to succeed first.
+
 This requires firmware with the named MIDI-file transfer handler. A CLI update
 alone cannot add that handler to an already flashed pedal. Active MIDI file
 playback, recording or stream readers must stop before transferring these files.

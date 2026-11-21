@@ -69,6 +69,33 @@ def test_failed_replacement_keeps_the_previous_file(
     assert list(folder.iterdir()) == [original]
 
 
+def test_committed_replacement_stays_readable_until_previous_copy_is_removed(
+    peer: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = tmp_path / 'cntrl/midi'
+    folder.mkdir(parents=True)
+    original = folder / 'song.mid'
+    original.write_bytes(b'original')
+    previous = folder / '.cntrl-previous-song.mid'
+    with NativePeer([str(peer), str(tmp_path), 'cleanup']) as port:
+        with transport.SerialConnection(Path(port)) as connection:
+            client = transport.SetupClient(connection)
+            client.copy_midi('song.mid', b'replacement', True)
+            assert 'committed, previous copy cleanup pending' in capsys.readouterr().err
+            assert client.download_midi('song.mid') == b'replacement'
+            assert previous.read_bytes() == b'original'
+            with pytest.raises(ValueError, match='midi-file-storage'):
+                client.copy_midi('song.mid', b'another replacement', True)
+            assert client.download_midi('song.mid') == b'replacement'
+    with NativePeer([str(peer), str(tmp_path), '']) as port:
+        with transport.SerialConnection(Path(port)) as connection:
+            assert (
+                transport.SetupClient(connection).download_midi('song.mid')
+                == b'replacement'
+            )
+    assert list(folder.iterdir()) == [original]
+
+
 @pytest.mark.parametrize('failure', ['read', 'corrupt'])
 def test_failed_readback_is_reported(peer: Path, tmp_path: Path, failure: str) -> None:
     with NativePeer([str(peer), str(tmp_path), failure]) as port:
