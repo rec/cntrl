@@ -148,30 +148,28 @@ def import_revision(
 
 def reserved_numbers(directory: Path) -> list[tuple[str, int]]:
     """Recover empty and populated revision directories recorded by the card scan."""
+    from .backups import persistent_prefix
+    from .setup_sync_store import parse_record, read_sync_file, sync_files
+
     path = directory / 'storage.toml'
-    if not path.exists():
-        return []
-    report = tomlkit.parse(path.read_bytes().decode()).unwrap()
     status = directory / 'status.txt'
-    root = (
-        next(
-            (
-                int(v.split('=', 1)[1])
-                for v in status.read_text().split()
-                if v.startswith('persistent_root=')
-            ),
-            0,
+    with sync_files():
+        if not path.exists():
+            return []
+        has_status = status.exists()
+    report = parse_record(path, read_sync_file(path)).unwrap()
+    try:
+        prefix = (
+            persistent_prefix(read_sync_file(status).decode()) if has_status else ''
         )
-        if status.exists()
-        else 0
-    )
-    prefix = f'/cntrl/generations/{root:08x}/' if root else ''
+    except UnicodeDecodeError as error:
+        raise HistoryError(f'{status}: {error}') from error
     result: set[tuple[str, int]] = set()
     for entry in report.get('entries', []):
         if not isinstance(entry, dict) or not entry.get('directory'):
             continue
         value = str(entry['path'])
-        if root:
+        if prefix:
             if not value.startswith(prefix):
                 continue
             value = '/cntrl/' + value[len(prefix) :]
