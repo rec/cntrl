@@ -1,5 +1,6 @@
 """Recover inherited rig sources and binary assets without the original machine."""
 
+import sys
 from hashlib import sha256
 from pathlib import Path
 
@@ -10,12 +11,59 @@ from cntrl.animation import asset
 from cntrl.patch_chooser import (
     cli,
     data_files,
+    device_globals,
+    devices,
     global_config,
     midi_assets,
     setup_sync,
     source_archive,
+    transport,
 )
 from cntrl.patch_chooser.setup_compiler import compile_inputs
+
+
+@pytest.mark.parametrize('content', [None, '[invalid', 'format = 12'])
+def test_global_restore_rejects_bad_files_before_opening_usb(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str | None
+) -> None:
+    path = tmp_path / 'globals.toml'
+    if content is not None:
+        path.write_text(content)
+
+    def unexpected_port(port: Path | None = None) -> Path:
+        pytest.fail('A bad restore file must be rejected before selecting a device')
+
+    monkeypatch.setattr(devices, 'select_port', unexpected_port)
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'global', 'restore', str(path)])
+    with pytest.raises(SystemExit) as caught:
+        cli.main()
+    assert str(path) in str(caught.value)
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_global_cli_preserves_unexpected_failures(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected preference failure')
+
+    def fail(command: device_globals.List) -> None:
+        raise failure
+
+    monkeypatch.setattr(device_globals, 'run', fail)
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'global', 'list'])
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+
+
+@pytest.mark.parametrize('reply', ['CNTRL GLOBAL 999=1', 'CNTRL GLOBAL startup_set=zz'])
+def test_invalid_global_settings_are_reported_as_pedal_reply_errors(
+    monkeypatch: pytest.MonkeyPatch, reply: str
+) -> None:
+    client = transport.SetupClient(transport.SerialConnection(Path('/unused')))
+    monkeypatch.setattr(client, 'request', lambda command: reply)
+    with pytest.raises(transport.UsbReplyError):
+        client.global_settings()
 
 
 class ArchivedSource:

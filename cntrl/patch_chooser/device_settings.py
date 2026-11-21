@@ -10,6 +10,10 @@ if TYPE_CHECKING:
     from . import models
 
 
+class DeviceSettingError(ValueError):
+    """An unknown setting or an invalid setting value."""
+
+
 class Setting(BaseModel, frozen=True):
     name: str
     kind: Literal['integer', 'boolean', 'milliseconds', 'choice', 'outputs']
@@ -31,7 +35,7 @@ def field_id(name: str, target: models.Target | None = None) -> int:
                 continue
             if name == '.'.join(path):
                 return i
-    raise ValueError(f'unknown device-global setting {name!r}')
+    raise DeviceSettingError(f'unknown device-global setting {name!r}')
 
 
 def field_path(field: int, target: models.Target | None = None) -> list[str]:
@@ -43,14 +47,14 @@ def field_path(field: int, target: models.Target | None = None) -> list[str]:
         jacks = ports(target.midi_endpoints)
         index = (field - 19) % 4
         if index >= len(jacks) or not jacks[index]:
-            raise ValueError(f'{setting.name}: port is unavailable on target')
+            raise DeviceSettingError(f'{setting.name}: port is unavailable on target')
         parts[1] = jacks[index]
     return parts
 
 
 def definition(field: int) -> Setting:
     if not 0 <= field < len(SETTINGS) or SETTINGS[field] is None:
-        raise ValueError(f'unknown device-global setting id {field}')
+        raise DeviceSettingError(f'unknown device-global setting id {field}')
     setting = SETTINGS[field]
     assert setting is not None
     return setting
@@ -68,15 +72,15 @@ def encode_value(field: int, value: object, target: models.Target | None = None)
         if isinstance(value, str) and value in ('true', 'false'):
             value = value == 'true'
         if not isinstance(value, bool):
-            raise ValueError(f'{setting.name}: expected a boolean')
+            raise DeviceSettingError(f'{setting.name}: expected a boolean')
         return int(value)
     if setting.kind == 'choice':
         if isinstance(value, str) and value in setting.choices:
             return setting.choices.index(value)
-        raise ValueError(f'{setting.name}: expected one of {setting.choices}')
+        raise DeviceSettingError(f'{setting.name}: expected one of {setting.choices}')
     if setting.kind == 'outputs' and isinstance(value, list):
         if target is None:
-            raise ValueError('named clock outputs require a target')
+            raise DeviceSettingError('named clock outputs require a target')
         routes = {
             e.name: e.route
             for e in target.midi_endpoints
@@ -85,9 +89,9 @@ def encode_value(field: int, value: object, target: models.Target | None = None)
             and any(m in ('midi-a', 'midi-b') for m in target.trs_ports.get(e.name, []))
         }
         if any(not isinstance(n, str) or n not in routes for n in value):
-            raise ValueError('clock outputs must name available target outputs')
+            raise DeviceSettingError('clock outputs must name available target outputs')
         if len(set(value)) != len(value):
-            raise ValueError('duplicate clock output')
+            raise DeviceSettingError('duplicate clock output')
         return sum(1 << routes[n] for n in value)
     if setting.kind == 'milliseconds':
         from . import models
@@ -106,13 +110,13 @@ def encode_value(field: int, value: object, target: models.Target | None = None)
         try:
             value = int(value)
         except ValueError as error:
-            raise ValueError(f'{setting.name}: expected an integer') from error
+            raise DeviceSettingError(f'{setting.name}: expected an integer') from error
     if (
         isinstance(value, bool)
         or not isinstance(value, int)
         or not setting.minimum <= value <= setting.maximum
     ):
-        raise ValueError(
+        raise DeviceSettingError(
             f'{setting.name}: expected {setting.minimum} through {setting.maximum}'
         )
     return value
@@ -121,7 +125,7 @@ def encode_value(field: int, value: object, target: models.Target | None = None)
 def decode_value(field: int, value: int, target: models.Target | None = None) -> object:
     setting = definition(field)
     if not setting.minimum <= value <= setting.maximum:
-        raise ValueError(f'{setting.name}: invalid stored value {value}')
+        raise DeviceSettingError(f'{setting.name}: invalid stored value {value}')
     if setting.kind == 'boolean':
         return bool(value)
     if setting.kind == 'milliseconds':

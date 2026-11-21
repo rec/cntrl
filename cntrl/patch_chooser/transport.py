@@ -7,7 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 from zlib import crc32
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from serial import Serial, SerialTimeoutException
 
 from . import binary_format, device_settings, global_overlay
@@ -442,7 +442,7 @@ class SetupClient:
     def global_settings(self) -> global_overlay.Overlay:
         fields = self.request('CNTRL GLOBAL GET').split()
         if fields[:2] != ['CNTRL', 'GLOBAL']:
-            raise ValueError('invalid device-global settings response')
+            raise UsbReplyError('invalid device-global settings response')
         result: dict[int, int] = {}
         language: str | None = None
         startup_set: str | None = None
@@ -450,12 +450,15 @@ class SetupClient:
             key, separator, value = item.partition('=')
             if key == 'startup_set' and separator:
                 if startup_set is not None:
-                    raise ValueError('duplicate startup set response')
-                startup_set = bytes.fromhex(value).decode('ascii')
+                    raise UsbReplyError('duplicate startup set response')
+                try:
+                    startup_set = bytes.fromhex(value).decode('ascii')
+                except ValueError as error:
+                    raise UsbReplyError('invalid startup set response') from error
                 continue
             if key == 'language' and separator:
                 if language is not None:
-                    raise ValueError('duplicate device-global language response')
+                    raise UsbReplyError('duplicate device-global language response')
                 language = value
                 continue
             if (
@@ -465,18 +468,25 @@ class SetupClient:
                 or not value.isascii()
                 or not value.isdecimal()
             ):
-                raise ValueError('invalid device-global settings response')
+                raise UsbReplyError('invalid device-global settings response')
             field, raw = int(key), int(value)
-            device_settings.decode_value(field, raw)
             if field in result:
-                raise ValueError('duplicate device-global settings response')
+                raise UsbReplyError('duplicate device-global settings response')
             result[field] = raw
-        return global_overlay.Overlay.model_validate(
-            {'values': result, 'language': language, 'startup_set': startup_set}
-        )
+        try:
+            return global_overlay.Overlay.model_validate(
+                {'values': result, 'language': language, 'startup_set': startup_set}
+            )
+        except ValidationError as error:
+            raise UsbReplyError(
+                f'invalid device-global settings response: {error}'
+            ) from error
 
     def set_language(self, tag: str) -> None:
-        global_overlay.Overlay.model_validate({'language': tag})
+        try:
+            global_overlay.Overlay.model_validate({'language': tag})
+        except ValidationError as error:
+            raise device_settings.DeviceSettingError(str(error)) from error
         self.ok(f'CNTRL GLOBAL SET language {tag}')
 
     def clear_language(self) -> None:

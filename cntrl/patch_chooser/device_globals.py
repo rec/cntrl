@@ -7,9 +7,21 @@ from zlib import crc32
 
 import tomlkit
 import tyro
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+from tomlkit.exceptions import ParseError
 
 from . import device_settings, devices, global_overlay, transport
+
+
+class GlobalRestoreError(ValueError):
+    """The selected device-global snapshot could not be loaded."""
 
 
 class Snapshot(BaseModel, frozen=True):
@@ -130,6 +142,12 @@ def capture(client: transport.SetupClient) -> global_overlay.Overlay | None:
 
 
 def run(command: List | Set | Clear | Restore) -> None:
+    restore = None
+    if isinstance(command, Restore):
+        try:
+            restore = load(command.file.read_bytes())
+        except (OSError, UnicodeDecodeError, ParseError, ValidationError) as error:
+            raise GlobalRestoreError(f'{command.file}: {error}') from error
     port = devices.select_port(command.port)
     with transport.SerialConnection(port) as connection:
         client = transport.SetupClient(connection)
@@ -150,7 +168,8 @@ def run(command: List | Set | Clear | Restore) -> None:
                     )
                 print(f'{setting.name} = {value}')
         elif isinstance(command, Restore):
-            client.replace_globals(load(command.file.read_bytes()))
+            assert restore is not None
+            client.replace_globals(restore)
         elif command.setting == 'language':
             if isinstance(command, Set):
                 client.set_language(command.value)
@@ -159,8 +178,10 @@ def run(command: List | Set | Clear | Restore) -> None:
         else:
             field = device_settings.field_id(command.setting)
             if isinstance(command, Set):
-                client.set_global(
-                    field, device_settings.encode_value(field, command.value)
-                )
+                try:
+                    encoded = device_settings.encode_value(field, command.value)
+                except ValidationError as error:
+                    raise device_settings.DeviceSettingError(str(error)) from error
+                client.set_global(field, encoded)
             else:
                 client.clear_global(field)
