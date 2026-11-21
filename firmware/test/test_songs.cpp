@@ -8,7 +8,7 @@
 
 struct Board : TestInputHardware, cntrl::SongResolver, cntrl::SongCapture {
     unsigned sends = 0, switches = 0; cntrl::SongContinuation saved; bool missing = false, writable = true;
-    std::string feedback, name;
+    std::string feedback, name, heading;
     bool send(const char *, const uint8_t *, unsigned) override { if (!writable) return false; ++sends; return true; }
     bool stock_firmware(uint8_t pair, const cntrl::SongContinuation *continuation = nullptr) override {
         assert(pair == 33); ++switches; if (continuation) saved = *continuation; return writable;
@@ -24,7 +24,7 @@ struct Board : TestInputHardware, cntrl::SongResolver, cntrl::SongCapture {
     }
     void show(unsigned pane, const cntrl::Pane &view) override {
         if (!pane) feedback = view.lines[2].text;
-        if (pane == 1) name = view.lines[1].text;
+        if (pane == 1) { name = view.lines[1].text; heading = view.lines[0].text; }
     }
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
@@ -96,6 +96,47 @@ void test_rename_read_failure_can_be_retried() {
     press(storage, ui, songs, 1, true); press(storage, ui, songs, 2, true); // A becomes B, then save.
     assert(songs.song_at(0, a) && !std::strcmp(a.name, "B"));
     assert(board.sends == 0);
+}
+void test_long_translated_song_messages_fit_the_display_buffers() {
+    static std::string translation;
+    for (const char *character : {"x", "e\u0301"}) {
+        translation = "X";
+        std::string expected = "X";
+        for (unsigned i = 0; i < 510 / std::strlen(character); ++i) translation += character;
+        for (unsigned i = 0; i < 62 / std::strlen(character); ++i) expected += character;
+        assert(translation.size() == 511);
+        cntrl::ui::i18n::lookup = [](cntrl::ui::i18n::Message message, bool short_form) -> const char * {
+            using Message = cntrl::ui::i18n::Message;
+            return !short_form && (message == Message::saving_wait || message == Message::saved
+                || message == Message::not_saved || message == Message::song_read_failed
+                || message == Message::songs_and_setlists) ? translation.c_str() : nullptr;
+        };
+        SongStorage storage; Board board; cntrl::Songs songs(storage, board);
+        assert(songs.boot());
+        assert(completed(storage, songs, songs.save_song("A", Board::patch())));
+        assert(completed(storage, songs, songs.save_song("Z", Board::patch())));
+        char set[64]; assert(completed(storage, songs, songs.new_setlist(set)));
+        assert(completed(storage, songs, songs.insert(set, 0, "Z"))); songs.choose(set);
+        cntrl::SongsUi ui(songs, board, board); ui.enter(); ui.poll(0);
+        assert(board.heading == expected);
+        for (unsigned i = 0; i < 3; ++i) ui.button(1, true);
+        ui.button(2, true);
+        assert(songs.busy() && board.heading == expected);
+        assert(completed(storage, songs, true)); ui.poll(0);
+        assert(board.feedback == expected && songs.song("Sound"));
+        ui.enter(); ui.poll(0);
+        for (unsigned i = 0; i < 3; ++i) ui.button(1, true);
+        ui.button(2, true); // Saving the same song again fails.
+        assert(!songs.busy() && board.feedback == expected);
+        ui.enter(); ui.poll(0);
+        ui.button(1, true); ui.button(1, true); ui.button(2, true); // Library.
+        ui.button(2, true); // A's actions; rendering Next caches Z.
+        storage.fail_reads = true; ui.button(2, true);
+        assert(board.feedback == expected && !ui.editing_name());
+        storage.fail_reads = false; ui.button(2, true);
+        assert(ui.editing_name() && board.name == "A");
+        cntrl::ui::i18n::lookup = nullptr;
+    }
 }
 void test_keyboard_edits_song_names_only_in_the_name_editor() {
     SongStorage storage; Board board; cntrl::Songs songs(storage, board);
@@ -321,6 +362,7 @@ void test_envelope_metadata_and_recovery() {
 }
 
 int main() {
+    test_long_translated_song_messages_fit_the_display_buffers();
     test_keyboard_edits_song_names_only_in_the_name_editor();
     test_keyboard_renames_setlists_and_keeps_their_entries();
     test_keyboard_name_limit_and_failed_save_can_be_retried();
