@@ -8,7 +8,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field
 
-from .transport import SerialConnection
+from .transport import SerialConnection, UsbReplyError
 
 
 class Options(BaseModel, frozen=True):
@@ -47,14 +47,17 @@ class StorageInfo(BaseModel, frozen=True):
 def parse_storage_info(response: str) -> StorageInfo:
     fields = response.split()
     if len(fields) != 6 or fields[:2] != ['CNTRL', 'STORAGE']:
-        raise ValueError(response)
+        raise UsbReplyError(response)
     capacity, usable, free, unit = fields[2:]
-    capacity, usable, unit = int(capacity), int(usable), int(unit)
-    available = None if free == '-' else int(free)
+    try:
+        capacity, usable, unit = int(capacity), int(usable), int(unit)
+        available = None if free == '-' else int(free)
+    except ValueError as error:
+        raise UsbReplyError(response) from error
     if not 0 <= usable <= capacity or unit <= 0:
-        raise ValueError('Invalid storage capacity or allocation unit')
+        raise UsbReplyError('Invalid storage capacity or allocation unit')
     if available is not None and not 0 <= available <= usable:
-        raise ValueError('Invalid free byte count')
+        raise UsbReplyError('Invalid free byte count')
     return StorageInfo(
         capacity_bytes=capacity,
         allocation_unit_bytes=unit,
@@ -77,21 +80,28 @@ def read_storage_report(read_line: Callable[[], str]) -> StorageInfo:
             break
         fields = response.split()
         if len(fields) == 4 and fields[:2] == ['CNTRL', 'DETAIL']:
-            key, value = (bytes.fromhex(x).decode('utf-8') for x in fields[2:])
+            try:
+                key, value = (bytes.fromhex(x).decode('utf-8') for x in fields[2:])
+            except ValueError as error:
+                raise UsbReplyError('Invalid storage detail') from error
             if entries or not key or key in details:
-                raise ValueError('Invalid storage detail order or duplicate key')
+                raise UsbReplyError('Invalid storage detail order or duplicate key')
             details[key] = value
             continue
         if len(fields) != 7 or fields[:2] != ['CNTRL', 'ENTRY']:
-            raise ValueError(response)
+            raise UsbReplyError(response)
         identifier, parent, kind, size, encoded = fields[2:]
-        if int(identifier) != len(entries) + 1 or int(parent) not in paths:
-            raise ValueError('Invalid directory listing order')
-        name = bytes.fromhex(encoded).decode('utf-8')
+        try:
+            index, parent_index = int(identifier), int(parent)
+            length = int(size, 16)
+            name = bytes.fromhex(encoded).decode('utf-8')
+        except ValueError as error:
+            raise UsbReplyError('Invalid directory entry') from error
+        if index != len(entries) + 1 or parent_index not in paths:
+            raise UsbReplyError('Invalid directory listing order')
         if not name or name in ('.', '..') or '/' in name or kind not in ('D', 'F'):
-            raise ValueError('Invalid directory entry')
-        path = paths[int(parent)] + '/' + name
-        length = int(size, 16)
+            raise UsbReplyError('Invalid directory entry')
+        path = paths[parent_index] + '/' + name
         allocation = ((length + unit - 1) // unit) * unit
         entries.append(
             CardEntry(
@@ -102,10 +112,10 @@ def read_storage_report(read_line: Callable[[], str]) -> StorageInfo:
             )
         )
         if kind == 'D':
-            paths[int(identifier)] = path
+            paths[index] = path
             totals[path] = [0, 0, 0]
         else:
-            directory = paths[int(parent)]
+            directory = paths[parent_index]
             while True:
                 total = totals[directory or '/']
                 total[0] += 1

@@ -9,6 +9,7 @@ import tomlkit
 
 from ..patch_chooser import binary_format, storage_info, transport
 from ..patch_chooser.backups import persistent_prefix
+from .errors import EmulatorError, emulator_files
 
 
 def download(
@@ -20,24 +21,28 @@ def download(
         fields = dict(v.split('=', 1) for v in status.split() if '=' in v)
         model = fields.get('model')
         if not model:
-            raise ValueError('pedal status does not identify its controller model')
+            raise EmulatorError('pedal status does not identify its controller model')
         if controller is not None and controller != model:
-            raise ValueError(
+            raise EmulatorError(
                 f'pedal model {model} does not match --controller {controller}'
             )
         if fields.get('persistent_format') != str(binary_format.DEVELOPMENT_FORMAT):
-            raise ValueError(
+            raise EmulatorError(
                 'pedal persistent format differs from this emulator; '
                 'update firmware first'
             )
         root = storage or Path('.cntrl-emulator') / model
-        root.mkdir(parents=True, exist_ok=True)
+        with emulator_files():
+            root.mkdir(parents=True, exist_ok=True)
+            staging = TemporaryDirectory(prefix='.mirror-', dir=root)
         directory = root / f'mirror-{uuid4().hex}'
-        with TemporaryDirectory(prefix='.mirror-', dir=root) as staging:
-            draft = Path(staging) / 'capture'
-            draft.mkdir()
+        with staging as temporary:
+            draft = Path(temporary) / 'capture'
+            with emulator_files():
+                draft.mkdir()
             setup = capture(client, draft, status)
-            draft.rename(directory)
+            with emulator_files():
+                draft.rename(directory)
     return model, directory / setup.name, directory
 
 
@@ -51,44 +56,47 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
     for physical, (logical, size) in manifest.items():
         try:
             data = client.download_state(physical)
-        except (OSError, ValueError) as error:
-            raise ValueError(
+        except transport.USB_ERRORS as error:
+            raise EmulatorError(
                 f'{physical}: cannot capture pedal file: {error}'
             ) from error
         if len(data) != size:
-            raise ValueError(f'{physical}: storage changed during mirror capture')
+            raise EmulatorError(f'{physical}: storage changed during mirror capture')
         path = directory / logical.lstrip('/')
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        with emulator_files():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
         checksums[physical] = sha256(data).hexdigest()
         files.append(dict(path=logical, sha256=checksums[physical]))
     bundle = client.download_bundle()
     if not bundle:
-        raise ValueError('pedal has no compiled setup bundle')
+        raise EmulatorError('pedal has no compiled setup bundle')
     setup = directory / 'pedal-setup.bin'
-    setup.write_bytes(bundle)
-    if not any(
-        (directory / 'cntrl/setups/bundle' / f'{i}.bin').is_file() for i in range(2)
-    ):
-        raise ValueError('pedal mirror is missing its compiled setup journals')
+    with emulator_files():
+        setup.write_bytes(bundle)
+        has_journals = any(
+            (directory / 'cntrl/setups/bundle' / f'{i}.bin').is_file() for i in range(2)
+        )
+    if not has_journals:
+        raise EmulatorError('pedal mirror is missing its compiled setup journals')
     for physical, digest in checksums.items():
         if sha256(client.download_state(physical)).hexdigest() != digest:
-            raise ValueError(f'{physical}: storage changed during mirror capture')
+            raise EmulatorError(f'{physical}: storage changed during mirror capture')
     if storage_manifest(client, prefix) != manifest:
-        raise ValueError('pedal storage listing changed during mirror capture')
+        raise EmulatorError('pedal storage listing changed during mirror capture')
     snapshot = client.request_data('CNTRL STATUS SNAPSHOT')
     if len(snapshot) != 111 or snapshot[:4] != b'CSS1':
-        raise ValueError('pedal returned an unsupported Status snapshot')
+        raise EmulatorError('pedal returned an unsupported Status snapshot')
     if client.current() != selected:
-        raise ValueError('pedal setup selection changed during mirror capture')
+        raise EmulatorError('pedal setup selection changed during mirror capture')
     if client.request('CNTRL STATUS') != status:
-        raise ValueError('pedal status changed during mirror capture')
+        raise EmulatorError('pedal status changed during mirror capture')
     # Importing a bundle would replace the copied journals and selection.
-    (directory / 'setup-source.sha256').write_text(sha256(bundle).hexdigest())
-    (directory / 'status-snapshot.bin').write_bytes(snapshot)
-    (directory / 'mirror.toml').write_text(
-        tomlkit.dumps(dict(status=status, selected=selected, files=files))
-    )
+    metadata = tomlkit.dumps(dict(status=status, selected=selected, files=files))
+    with emulator_files():
+        (directory / 'setup-source.sha256').write_text(sha256(bundle).hexdigest())
+        (directory / 'status-snapshot.bin').write_bytes(snapshot)
+        (directory / 'mirror.toml').write_text(metadata)
     return setup
 
 
@@ -117,6 +125,6 @@ def storage_manifest(
             if prefix and logical[7:].startswith(mutable):
                 continue
         if '..' in Path(logical).parts:
-            raise ValueError(f'{entry.path}: invalid mirror storage path')
+            raise EmulatorError(f'{entry.path}: invalid mirror storage path')
         manifest[entry.path] = (logical, entry.size_bytes)
     return manifest

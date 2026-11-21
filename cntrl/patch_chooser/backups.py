@@ -378,14 +378,19 @@ def write_backup_manifest(directory: Path, *, complete: bool, raw_state: bool) -
 
 
 def persistent_prefix(status: str) -> str:
-    root = next(
-        (
-            int(v.split('=', 1)[1])
-            for v in status.split()
-            if v.startswith('persistent_root=')
-        ),
-        0,
-    )
+    try:
+        root = next(
+            (
+                int(v.split('=', 1)[1])
+                for v in status.split()
+                if v.startswith('persistent_root=')
+            ),
+            0,
+        )
+    except ValueError as error:
+        raise transport.UsbReplyError(
+            'invalid persistent root in pedal status'
+        ) from error
     return f'/cntrl/generations/{root:08x}/' if root else ''
 
 
