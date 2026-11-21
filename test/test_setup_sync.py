@@ -1,5 +1,6 @@
 """Three-way semantics, source provenance and interrupted publication recovery."""
 
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import tyro
 from cntrl.file_lock import writer_lock
 from cntrl.patch_chooser import (
     binary_format,
+    cli,
     data_files,
     global_config,
     setup_sync,
@@ -192,6 +194,54 @@ def test_sync_cli_uses_one_preview_or_stored_review() -> None:
     )
     assert apply.apply == Path('setup-sync/review-one/review.toml')
     assert apply.document == [] and apply.port is None
+
+
+@pytest.mark.parametrize(
+    'option,content',
+    [('--apply', None), ('--apply', '[invalid'), ('--recover', 'sources = 17')],
+)
+def test_sync_cli_reports_invalid_saved_records_concisely(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, option: str, content: str | None
+) -> None:
+    record = tmp_path / 'record.toml'
+    if content is not None:
+        record.write_text(content)
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'setup', 'sync', option, str(record)])
+    with pytest.raises(SystemExit) as caught:
+        cli.main()
+    assert str(record.resolve()) in str(caught.value)
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_sync_apply_preserves_unexpected_compilation_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    root = tmp_path / 'setup-sync'
+    folder = root / 'review-one'
+    folder.mkdir(parents=True)
+    review = setup_sync_store.Review(
+        root=root,
+        recipe=data_files.Sources(document=[str(tmp_path / 'setup.toml')]),
+        baseline=setup_sync_store.digest(b''),
+        sources=[],
+        host={},
+        pedal={},
+        changes=[],
+    ).model_dump(mode='json', exclude_none=True)
+    path = folder / 'review.toml'
+    setup_sync_store.write_record(path, review)
+    setup_sync_store.write_record(folder / 'proposal.toml', review)
+    failure = error_type('unexpected compilation failure')
+
+    def fail(*args: object, **kwargs: object) -> None:
+        raise failure
+
+    monkeypatch.setattr(setup_sync, 'compile_inputs', fail)
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'setup', 'sync', '--apply', str(path)])
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+    assert not (root / 'pending.toml').exists()
 
 
 def test_snapshot_retains_unsupported_bytes_without_claiming_completion(

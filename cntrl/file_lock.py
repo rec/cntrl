@@ -11,11 +11,19 @@ class WriterLockHeld(ValueError):
     """Another operation holds the write lock for this directory."""
 
 
+class WriterLockError(OSError):
+    """The operating system could not open or acquire the writer lock."""
+
+
 @contextmanager
 def writer_lock(root: Path, *, operation: str) -> Generator[None]:
     """Keep the lock file in place so every writer locks the same file."""
-    root.mkdir(parents=True, exist_ok=True)
-    with (root / 'writer.lock').open('a+b') as lock:
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        lock = (root / 'writer.lock').open('a+b')
+    except OSError as error:
+        raise WriterLockError(str(error)) from error
+    with lock:
         try:
             if sys.platform == 'win32':
                 import msvcrt
@@ -31,5 +39,5 @@ def writer_lock(root: Path, *, operation: str) -> Generator[None]:
                 raise WriterLockHeld(
                     f'{root}: another {operation} is in progress'
                 ) from error
-            raise
+            raise WriterLockError(str(error)) from error
         yield
