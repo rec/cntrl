@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from . import (
     compiler,
     compiler_errors,
@@ -76,7 +78,7 @@ def compile_inputs(
     if len(target_data) == 1:
         try:
             target = models.Target.model_validate(target_data[0])
-        except ValueError as error:
+        except ValidationError as error:
             errors.append(f'target: {error}')
     if not documents:
         errors.append('at least one setup data-file expression is required')
@@ -172,7 +174,7 @@ def compile_inputs(
     try:
         assert target is not None
         return setup_bundle.build(result, sources, target.memory, command.memory_margin)
-    except ValueError as error:
+    except ValidationError as error:
         raise compiler_errors.CompilationError([str(error)]) from error
 
 

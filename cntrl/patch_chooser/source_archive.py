@@ -8,10 +8,15 @@ from typing import Literal
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile, ZipInfo
 
 import tomlkit
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from tomlkit.exceptions import ParseError
 
 from .. import source_files
 from . import binary_format, data_files, device_globals, global_overlay, transport
+
+
+class RecoveredSourceError(ValueError):
+    """The recovered session does not provide usable compilation inputs."""
 
 
 def compiler_identity() -> str:
@@ -260,7 +265,7 @@ def session_context(
     manifest = _read_manifest(directory, snapshots, overrides)
     local_files = {Path(n): _local(directory, p) for n, p in manifest.files.items()}
     if expression.paths[0].resolve() not in local_files.values():
-        raise ValueError(
+        raise RecoveredSourceError(
             f'{expression.name}: setup is not part of this recovered session'
         )
     matches = [
@@ -273,7 +278,9 @@ def session_context(
     elif len(matches) == 1:
         context_name = matches[0]
     else:
-        raise ValueError(f'{expression.name}: ambiguous recovered setup source')
+        raise RecoveredSourceError(
+            f'{expression.name}: ambiguous recovered setup source'
+        )
     relocations = {
         Path(n): local_files[Path(p)]
         for n, p in manifest.origins.get(context_name, {}).items()
@@ -284,11 +291,15 @@ def session_context(
         if not original:
             defaults[name] = None
         elif Path(original) not in local_files:
-            raise ValueError(f'{name}: recorded global defaults source is missing')
+            raise RecoveredSourceError(
+                f'{name}: recorded global defaults source is missing'
+            )
         else:
             defaults[name] = local_files[Path(original)]
     if context_name not in defaults:
-        raise ValueError(f'{context_name}: recorded global defaults binding is missing')
+        raise RecoveredSourceError(
+            f'{context_name}: recorded global defaults binding is missing'
+        )
     defaults[expression.name] = defaults[context_name]
     return defaults, relocations
 
@@ -310,7 +321,7 @@ def recovered_recipe(
             paths: list[Path] = []
             for path in expression.paths:
                 if path not in relocations:
-                    raise ValueError(f'{path}: recorded source is missing')
+                    raise RecoveredSourceError(f'{path}: recorded source is missing')
                 paths.append(relocations[path])
             result.extend(
                 expression_arguments(
@@ -383,18 +394,21 @@ def _read_manifest(
     overrides: dict[Path, bytes] | None = None,
 ) -> Manifest:
     path = (directory / 'cntrl-session.toml').resolve()
-    content = (
-        overrides[path]
-        if overrides is not None and path in overrides
-        else source_files.read(path, snapshots)
-    )
-    return Manifest.model_validate(tomlkit.parse(content.decode()).unwrap())
+    try:
+        content = (
+            overrides[path]
+            if overrides is not None and path in overrides
+            else source_files.read(path, snapshots)
+        )
+        return Manifest.model_validate(tomlkit.parse(content.decode()).unwrap())
+    except (OSError, UnicodeDecodeError, ParseError, ValidationError) as error:
+        raise RecoveredSourceError(f'{path}: {error}') from error
 
 
 def _local(directory: Path, relative: str) -> Path:
     path = (directory / relative).resolve()
     if Path(relative).is_absolute() or not path.is_relative_to(directory.resolve()):
-        raise ValueError(f'{relative}: invalid recovered source path')
+        raise RecoveredSourceError(f'{relative}: invalid recovered source path')
     if not path.is_file():
-        raise ValueError(f'{relative}: recorded source is missing')
+        raise RecoveredSourceError(f'{relative}: recorded source is missing')
     return path

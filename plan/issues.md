@@ -40,10 +40,12 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     warning. Verify on the pedal with a USB keyboard under simultaneous
     SD and display load.
 
-15. **CLI error handling can hide unexpected failures (code finding).** The CLI's
-    [broad conversion of OSError and ValueError to short messages](../cntrl/patch_chooser/cli.py#L611)
-    can hide programming errors of those types. Identify expected user and
-    transport failures at their boundaries so unexpected ones keep a trace.
+15. **CLI error handling can hide unexpected failures (code finding).**
+    `cntrl compile` reports known configuration, recovered-source and output
+    errors concisely while allowing unexpected failures to reach the crash
+    reporter. Audit the remaining command and transport boundaries, where
+    broad `OSError` and `ValueError` handling can still hide programming
+    errors.
 
 ## P2 | Distribution and release risks to verify
 
