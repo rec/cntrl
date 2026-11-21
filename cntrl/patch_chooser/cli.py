@@ -12,7 +12,7 @@ from typing import Annotated
 
 import tomlkit
 import tyro
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .. import build, flash, importing, qualify, target_process, upload
 from ..emulator.cli import Emulate, emulate
@@ -55,6 +55,10 @@ class Compile(data_files.Sources, frozen=True):
 
 class CompileOutputError(ValueError):
     """The compiled setup or an asset could not be published."""
+
+
+class DownloadOutputError(OSError):
+    """A downloaded file could not be published to its host destination."""
 
 
 class SetupCopy(data_files.Sources, frozen=True):
@@ -421,37 +425,57 @@ def download_files(
     entries = {e.name.lower(): e.name for e in client.catalogue()}
     pending = list(names)
     setups: dict[str, bytes] = {}
+    sources: dict[str, object] = {}
     files: dict[Path, bytes] = {}
     for name in pending:
         data_files.validate_name(name)
         if name.lower() not in entries:
-            raise ValueError(f'{name}: no such setup')
+            raise transport.UsbReplyError(f'{name}: no such setup')
         name = entries[name.lower()]
         if name in setups:
             continue
         data = client.download(name)
-        text = resolved.export(data)
+        try:
+            text = resolved.export(data)
+        except ValueError as error:
+            raise transport.UsbReplyError(
+                f'{name}: cannot decode setup: {error}'
+            ) from error
         source = tomlkit.parse(text).unwrap()
         setups[name] = data
+        sources[name] = source
         files[Path(f'{name}.toml')] = text.encode()
         pending.extend(document_references(source))
-    for data in setups.values():
-        settings = models.Setup.model_validate(
-            tomlkit.parse(resolved.export(data)).unwrap()
-        )
+    for name, source in sources.items():
+        try:
+            settings = models.Setup.model_validate(source)
+        except ValidationError as error:
+            raise transport.UsbReplyError(f'{name}: invalid setup: {error}') from error
         for value in settings.fonts.values():
             path = Path(value)
             if path not in files:
-                files[path] = client.download_font(int(path.stem, 16))
+                try:
+                    key = int(path.stem, 16)
+                except ValueError as error:
+                    raise transport.UsbReplyError(
+                        f'{name}: invalid font reference {value}'
+                    ) from error
+                files[path] = client.download_font(key)
         for value in settings.splash_movie + settings.idle_movie:
             path = Path(value)
             if path not in files:
-                files[path] = client.download_movie(int(path.stem, 16))
-    for name in midi_assets.referenced(setups):
+                try:
+                    key = int(path.stem, 16)
+                except ValueError as error:
+                    raise transport.UsbReplyError(
+                        f'{name}: invalid movie reference {value}'
+                    ) from error
+                files[path] = client.download_movie(key)
+    for name in sorted({n for s in sources.values() for n in midi_assets.filenames(s)}):
         path = Path(name)
         data = client.download_midi(name)
         if path in files and files[path] != data:
-            raise ValueError(
+            raise transport.UsbReplyError(
                 f'{name}: MIDI file conflicts with another downloaded file'
             )
         files[path] = data
@@ -463,7 +487,7 @@ def download_files(
                 files[Path('languages') / f'{live_globals.language}.bin'] = (
                     client.download_language(live_globals.language)
                 )
-            except FileNotFoundError:
+            except transport.UsbFileMissing:
                 pass  # Keep the saved preference; the device uses English recovery UI.
     files.update(source_archive.download(client, setups, live_globals=live_globals))
     return files
@@ -482,36 +506,42 @@ def publish_download(
             errors.append(f'{relative}: invalid downloaded asset path')
             continue
         destination = output / relative
-        if destination.is_dir():
-            errors.append(f'{destination}: is a directory')
-        elif not force and (destination.exists() or destination.is_symlink()):
-            errors.append(f'{destination}: exists; use --force/-f')
+        try:
+            if destination.is_dir():
+                errors.append(f'{destination}: is a directory')
+            elif not force and (destination.exists() or destination.is_symlink()):
+                errors.append(f'{destination}: exists; use --force/-f')
+            for parent in destination.parents:
+                if (parent.exists() or parent.is_symlink()) and not parent.is_dir():
+                    errors.append(f'{parent}: not a directory')
+        except OSError as error:
+            raise DownloadOutputError(f'{destination}: {error}') from error
         for parent in relative.parents:
             if str(parent).casefold() in paths:
                 errors.append(f'{parent}: required as both a file and a directory')
-        for parent in destination.parents:
-            if (parent.exists() or parent.is_symlink()) and not parent.is_dir():
-                errors.append(f'{parent}: not a directory')
     if errors:
         raise compiler_errors.CompilationError(errors)
     for relative, data in files.items():
         destination = output / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        stream = NamedTemporaryFile(
-            dir=destination.parent, prefix='.cntrl-', delete=False
-        )
-        temporary = Path(stream.name)
         try:
-            with stream:
-                stream.write(data)
-                stream.flush()
-                os.fsync(stream.fileno())
-            if force:
-                temporary.replace(destination)
-            else:
-                destination.hardlink_to(temporary)
-        finally:
-            temporary.unlink(missing_ok=True)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            stream = NamedTemporaryFile(
+                dir=destination.parent, prefix='.cntrl-', delete=False
+            )
+            temporary = Path(stream.name)
+            try:
+                with stream:
+                    stream.write(data)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                if force:
+                    temporary.replace(destination)
+                else:
+                    destination.hardlink_to(temporary)
+            finally:
+                temporary.unlink(missing_ok=True)
+        except OSError as error:
+            raise DownloadOutputError(f'{destination}: {error}') from error
         print(destination)
 
 
@@ -650,6 +680,7 @@ def main() -> None:
     except EOFError:
         sys.exit('Input ended; setup creation cancelled.')
     except (
+        binary_format.DocumentFormatError,
         catalogue.CatalogueError,
         compiler_errors.CompilationError,
         CompileOutputError,
@@ -657,6 +688,7 @@ def main() -> None:
         device_globals.GlobalRestoreError,
         device_settings.DeviceSettingError,
         devices.DeviceSelectionError,
+        DownloadOutputError,
         FontDecodeError,
         font_coverage.ReportError,
         history.HistoryError,
@@ -688,6 +720,7 @@ def main() -> None:
                     SetupList,
                     SetupDelete,
                     SetupCopy,
+                    SetupDownload,
                 ),
             ):
                 raise

@@ -16,7 +16,7 @@ from . import binary_format, data_files, device_globals, global_overlay, transpo
 
 
 class RecoveredSourceError(ValueError):
-    """The recovered session does not provide usable compilation inputs."""
+    """A source archive or recovered session could not be used."""
 
 
 def compiler_identity() -> str:
@@ -164,7 +164,7 @@ def read(data: bytes) -> tuple[Manifest, dict[str, bytes]]:
         with ZipFile(BytesIO(data)) as archive:
             names = archive.namelist()
             if len(names) != len(set(names)):
-                raise ValueError('duplicate source archive entries')
+                raise RecoveredSourceError('duplicate source archive entries')
             manifest = Manifest.model_validate(
                 tomlkit.parse(archive.read('manifest.toml').decode()).unwrap()
             )
@@ -172,15 +172,15 @@ def read(data: bytes) -> tuple[Manifest, dict[str, bytes]]:
                 n: archive.read(n)
                 for n in set(manifest.files.values()) | set(manifest.baselines.values())
             }
-    except (BadZipFile, KeyError, UnicodeError) as error:
-        raise ValueError(f'invalid source archive: {error}') from error
+    except (BadZipFile, KeyError, UnicodeError, ParseError, ValidationError) as error:
+        raise RecoveredSourceError(f'invalid source archive: {error}') from error
     for key in manifest.files.values():
         if key != 'files/' + sha256(entries[key]).hexdigest():
-            raise ValueError('source archive file checksum mismatch')
+            raise RecoveredSourceError('source archive file checksum mismatch')
     for name, key in manifest.baselines.items():
         data_files.validate_name(name)
         if sha256(entries[key]).hexdigest() != manifest.baseline_hashes.get(name):
-            raise ValueError(f'{name}: source baseline checksum mismatch')
+            raise RecoveredSourceError(f'{name}: source baseline checksum mismatch')
         binary_format.core(entries[key])
     return manifest, entries
 
@@ -200,13 +200,15 @@ def download(
                 live_globals.language,
                 client.download_language(live_globals.language),
             )
-        except FileNotFoundError:
+        except transport.UsbFileMissing:
             pass
     snapshots = {v for d in setups.values() if (v := identifier(d)) is not None}
     for snapshot in sorted(snapshots):
         data = client.download_source(snapshot)
         if sha256(data).hexdigest() != snapshot:
-            raise ValueError(f'{snapshot}: source archive checksum mismatch')
+            raise transport.UsbReplyError(
+                f'{snapshot}: source archive checksum mismatch'
+            )
         manifest, entries = read(data)
         base = Path('sessions') / snapshot
         files: dict[str, str] = {}
