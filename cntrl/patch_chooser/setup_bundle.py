@@ -5,7 +5,7 @@ from functools import cached_property
 from typing import cast
 from zlib import crc32
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from reccy.configuration import units
 
 from . import (
@@ -185,16 +185,22 @@ def build(
                     binary_format.require_structural_edit(
                         previous, binary_format.Kind.bundle
                     )
-    return SetupBundle(
-        setups={
-            n: binary_format.wrap(d) if binary_format.core(d).startswith(b'CSW1') else d
-            for n, d in setups.items()
-        },
-        page_ram2=page_ram2,
-        memory=memory,
-        memory_margin=memory_margin,
-        metadata=metadata,
-    )
+    packed = {
+        n: binary_format.wrap(d) if binary_format.core(d).startswith(b'CSW1') else d
+        for n, d in setups.items()
+    }
+    try:
+        return SetupBundle(
+            setups=packed,
+            page_ram2=page_ram2,
+            memory=memory,
+            memory_margin=memory_margin,
+            metadata=metadata,
+        )
+    except ValidationError as error:
+        raise binary_format.DocumentFormatError(
+            f'invalid setup bundle: {error}'
+        ) from error
 
 
 def reindex(
@@ -225,7 +231,9 @@ def reindex(
                 continue
             document = str(metadata[str(i)]['_document'])
             if document.lower() not in indices:
-                raise ValueError(f'{name}: referenced setup {document!r} is absent')
+                raise binary_format.DocumentFormatError(
+                    f'{name}: referenced setup {document!r} is absent'
+                )
             destination = indices[document.lower()]
             if struct.unpack_from('<H', data, at + 4)[0] != destination:
                 binary_format.require_structural_edit(original)
@@ -246,7 +254,7 @@ def reindex(
 def unpack(data: bytes) -> dict[str, bytes]:
     data = binary_format.core(data, binary_format.Kind.bundle)
     if len(data) < HEADER.size:
-        raise ValueError('truncated setup bundle')
+        raise binary_format.DocumentFormatError('truncated setup bundle')
     magic, version, count, length, checksum, *_ = HEADER.unpack_from(data)
     if (
         magic != b'CSTB'
@@ -255,11 +263,11 @@ def unpack(data: bytes) -> dict[str, bytes]:
         or length != len(data)
         or crc32(data[HEADER.size :]) != checksum
     ):
-        raise ValueError('invalid setup bundle')
+        raise binary_format.DocumentFormatError('invalid setup bundle')
     table = HEADER.size + count * ENTRY.size
     cursor = table + 2 + 4 * (count - 1)
     if cursor > len(data) or struct.unpack_from('<H', data, table)[0] != count:
-        raise ValueError('invalid setup bundle table')
+        raise binary_format.DocumentFormatError('invalid setup bundle table')
     start = cursor
     result: dict[str, bytes] = {}
     previous = ''
@@ -273,22 +281,29 @@ def unpack(data: bytes) -> dict[str, bytes]:
             or prefill > 1
             or any(data[record + 73 : record + 76])
         ):
-            raise ValueError('invalid setup bundle entry')
-        name = data_files.validate_name(name.decode('ascii'))
+            raise binary_format.DocumentFormatError('invalid setup bundle entry')
+        try:
+            name = data_files.validate_name(name.decode('ascii'))
+        except (UnicodeDecodeError, data_files.InvalidSetupName) as error:
+            raise binary_format.DocumentFormatError(
+                'invalid setup bundle name'
+            ) from error
         if name.lower() <= previous or size > len(data) - cursor:
-            raise ValueError('invalid setup bundle names or lengths')
+            raise binary_format.DocumentFormatError(
+                'invalid setup bundle names or lengths'
+            )
         previous = name.lower()
         if (
             i
             and struct.unpack_from('<I', data, table + 2 + (i - 1) * 4)[0]
             != cursor - start
         ):
-            raise ValueError('invalid setup bundle offsets')
+            raise binary_format.DocumentFormatError('invalid setup bundle offsets')
         if size:
             result[name] = data[cursor : cursor + size]
         cursor += size
     if cursor != len(data) or cursor - start != HEADER.unpack_from(data)[9]:
-        raise ValueError('invalid setup bundle offsets')
+        raise binary_format.DocumentFormatError('invalid setup bundle offsets')
     return result
 
 
@@ -297,9 +312,14 @@ def memory_from_bundle(data: bytes) -> models.TargetMemory:
     unpack(data)
     data = binary_format.core(data, binary_format.Kind.bundle)
     header = HEADER.unpack_from(data)
-    return models.TargetMemory(
-        capacity=header[5] + header[8] + header[10], runtime=header[6]
-    )
+    try:
+        return models.TargetMemory(
+            capacity=header[5] + header[8] + header[10], runtime=header[6]
+        )
+    except ValidationError as error:
+        raise binary_format.DocumentFormatError(
+            f'invalid bundle memory: {error}'
+        ) from error
 
 
 HEADER = struct.Struct('<4sHH8I')

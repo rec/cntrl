@@ -15,6 +15,7 @@ import tyro
 from pydantic import BaseModel, Field, ValidationError
 
 from .. import build, flash, importing, qualify, target_process, upload
+from ..animation.asset import AnimationFormatError
 from ..emulator.cli import Emulate, emulate
 from ..emulator.errors import EmulatorError, EmulatorFileError
 from ..file_lock import WriterLockError, WriterLockHeld, writer_lock
@@ -188,7 +189,7 @@ def run_setup(
         backups.prepare_restore(
             command.directory,
             command.destination,
-            models.Target.model_validate(compiler_inputs.read_document(command.target)),
+            backups.read_target(command.target),
         )
         print(f'Converted backup: {command.destination}')
         return
@@ -206,7 +207,7 @@ def run_setup(
         backups.restore_setups(
             command.directory,
             command.port,
-            models.Target.model_validate(compiler_inputs.read_document(command.target)),
+            backups.read_target(command.target),
             preserve_memory_estimates=command.preserve_memory_estimates,
         )
         return
@@ -214,7 +215,7 @@ def run_setup(
         backups.verify_after_flashing(
             command.directory,
             command.port,
-            models.Target.model_validate(compiler_inputs.read_document(command.target)),
+            backups.read_target(command.target),
             preserve_memory_estimates=command.preserve_memory_estimates,
         )
         return
@@ -684,6 +685,7 @@ def main() -> None:
     except KeyboardInterrupt:
         sys.exit(130)
     except (
+        AnimationFormatError,
         backups.BackupDirectoryExists,
         backups.BackupError,
         binary_format.DocumentFormatError,
@@ -702,6 +704,7 @@ def main() -> None:
         font_coverage.ReportError,
         history.HistoryError,
         midi_assets.MidiAssetMissingError,
+        models.MidiFilenameError,
         setup_create.SetupCreationCancelled,
         setup_sync_store.SyncError,
         setup_sync_store.SyncFileError,
@@ -714,44 +717,6 @@ def main() -> None:
         WriterLockError,
         WriterLockHeld,
     ) as error:
-        sys.exit(str(error))
-    except (OSError, ValueError) as error:
-        if isinstance(command, SetupCLI):
-            if isinstance(
-                command.command,
-                (
-                    history.History,
-                    setup_sync.Sync,
-                    backups.Backup,
-                    backups.Recover,
-                    SetupSet,
-                    SetupRotate,
-                    SetupList,
-                    SetupDelete,
-                    SetupCopy,
-                    SetupDownload,
-                    setup_create.Create,
-                ),
-            ):
-                raise
-        if isinstance(
-            command,
-            (
-                Compile,
-                Status,
-                build.Build,
-                device_globals.GlobalCLI,
-                Emulate,
-                flash.Flash,
-                font_coverage.Report,
-                importing.Import,
-                languages.LanguageCLI,
-                qualify.Qualify,
-                Songs,
-                upload.Helper,
-            ),
-        ):
-            raise
         sys.exit(str(error))
 
 

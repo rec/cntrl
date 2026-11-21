@@ -454,6 +454,10 @@ class Keyboard(Presentation, frozen=True):
     modifiers: Annotated[int, Field(strict=True, ge=0, le=255)] = 0
 
 
+class MidiFilenameError(ValueError):
+    """A MIDI file name cannot be represented on the pedal."""
+
+
 class PlayMidiFile(Presentation, frozen=True):
     operation: Literal['play-midi-file']
     filename: Annotated[str, Field(max_length=95)] = ''
@@ -475,7 +479,7 @@ class PlayMidiFile(Presentation, frozen=True):
         if value in ('.', '..') or any(
             c in '/\\' or not 32 <= ord(c) <= 126 for c in value
         ):
-            raise ValueError('filename must be an ASCII basename')
+            raise MidiFilenameError('filename must be an ASCII basename')
         return value
 
     @field_validator('outputs')

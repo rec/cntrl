@@ -247,6 +247,75 @@ def test_backup_asset_scan_preserves_unexpected_host_file_failures(
     assert not (tmp_path / 'unavailable-assets.txt').exists()
 
 
+@pytest.mark.parametrize(
+    ('action', 'operation'),
+    [
+        ('restore', 'restore_setups'),
+        ('verify', 'verify_after_flashing'),
+        ('convert', 'prepare_restore'),
+    ],
+)
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_restore_commands_preserve_unexpected_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+    operation: str,
+    error_type: type[Exception],
+) -> None:
+    failure = error_type('unexpected restore failure')
+    monkeypatch.setattr(backups, operation, Mock(side_effect=failure))
+    target_path = Path(__file__).parents[1] / 'firmware/test/target.json'
+    options = (
+        ['--destination', str(tmp_path / 'converted')]
+        if action == 'convert'
+        else ['--port', '/unused']
+    )
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'cntrl',
+            'setup',
+            action,
+            str(tmp_path),
+            '--target',
+            str(target_path),
+            *options,
+        ],
+    )
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+
+
+def test_restore_reports_a_malformed_backup_manifest_before_opening_usb(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / 'backup.toml').write_text('[invalid')
+    target_path = Path(__file__).parents[1] / 'firmware/test/target.json'
+    connect = Mock(side_effect=AssertionError('unexpected USB open'))
+    monkeypatch.setattr(transport, 'SerialConnection', connect)
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'cntrl',
+            'setup',
+            'restore',
+            str(tmp_path),
+            '--port',
+            '/unused',
+            '--target',
+            str(target_path),
+        ],
+    )
+    with pytest.raises(SystemExit, match=r'backup\.toml'):
+        cli.main()
+    connect.assert_not_called()
+
+
 def test_restore_preparation_upgrades_setups_and_history_without_changing_backup(
     tmp_path: Path,
     target: models.Target,

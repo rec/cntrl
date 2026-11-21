@@ -10,6 +10,10 @@ from pydantic import BaseModel, Field
 from .. import source_files
 
 
+class AnimationFormatError(ValueError):
+    """An animation asset contains invalid or unsupported wire data."""
+
+
 class Stream(BaseModel, frozen=True):
     mirror_x: bool = False
     mirror_y: bool = False
@@ -75,12 +79,12 @@ def encode_frames(frames: bytes, durations: list[int], geometry: Geometry) -> by
 
 def inspect_asset(data: bytes) -> AnimationInfo:
     if len(data) < HEADER.size:
-        raise ValueError('truncated animation header')
+        raise AnimationFormatError('truncated animation header')
     magic, version, width, height, streams, count, pixel_format, size = (
         HEADER.unpack_from(data)
     )
     if magic != b'CNSA' or version != 2 or pixel_format != 1:
-        raise ValueError('expected a version-2 RGB565 CNSA animation asset')
+        raise AnimationFormatError('expected a version-2 RGB565 CNSA animation asset')
     frame_bytes = 4 + width * height * streams * 2
     if (
         not width
@@ -90,13 +94,13 @@ def inspect_asset(data: bytes) -> AnimationInfo:
         or size != len(data)
         or size != HEADER.size + count * frame_bytes
     ):
-        raise ValueError('animation geometry, frame count and size disagree')
+        raise AnimationFormatError('animation geometry, frame count and size disagree')
     durations = [
         struct.unpack_from('<I', data, HEADER.size + i * frame_bytes)[0]
         for i in range(count)
     ]
     if any(not 1 <= d <= 0x7FFFFFFF for d in durations):
-        raise ValueError('invalid animation frame duration')
+        raise AnimationFormatError('invalid animation frame duration')
     return AnimationInfo(
         frames=count,
         duration_ms=sum(durations),
