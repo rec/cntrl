@@ -1,7 +1,10 @@
 """Desktop presentation of catalogue controls and native runtime framebuffers."""
 
 import sys
+from collections import deque
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from time import monotonic_ns
 from types import TracebackType
@@ -10,7 +13,7 @@ import tomlkit
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import models
-from .backend import RequestRejected, Session
+from .backend import Session
 from .host_midi import MIDI_ERRORS, HostMidi
 from .layout import Canvas, Placement
 from .localization import dialog_messages, messages
@@ -42,10 +45,14 @@ def display_rectangle(
 
 
 class ControllerCanvas(QtWidgets.QWidget):
-    def __init__(self, session: Session, report: Callable[[str], None]) -> None:
+    def __init__(
+        self, session: Session, submit: Callable[[Callable[[], None]], None]
+    ) -> None:
         super().__init__()
         self.session = session
-        self.report = report
+        self.submit = submit
+        self.frames = session.frames.copy()
+        self.editing_name = session.editing_name
         self.pointer: set[str] = set()
         self.keyboard: set[str] = set()
         self.latched: set[str] = set()
@@ -135,7 +142,7 @@ class ControllerCanvas(QtWidgets.QWidget):
         for d in self.session.target.displays:
             rectangle = self.placement_rect(self.session.layout.displays[d.id])
             painter.fillRect(rectangle, QtGui.QColor('black'))
-            if (pixels := self.session.frames.get(d.id)) and len(
+            if (pixels := self.frames.get(d.id)) and len(
                 pixels
             ) == d.width * d.height * 2:
                 # QImage RGB16 is native-endian; the protocol is RGB565 BE.
@@ -174,9 +181,8 @@ class ControllerCanvas(QtWidgets.QWidget):
 
     def synchronize(self) -> None:
         active = self.pointer | self.keyboard | self.latched
-        if not self.session.failed:
-            for n in sorted(self.active ^ active):
-                self.session.button(n, n in active)
+        for n in sorted(self.active ^ active):
+            self.submit(partial(self.session.button, n, n in active))
         self.active = active
         self.update()
 
@@ -209,7 +215,7 @@ class ControllerCanvas(QtWidgets.QWidget):
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.isAutoRepeat():
             return
-        if self.session.editing_name:
+        if self.editing_name:
             if not event.modifiers() & (
                 QtCore.Qt.KeyboardModifier.ControlModifier
                 | QtCore.Qt.KeyboardModifier.AltModifier
@@ -222,11 +228,11 @@ class ControllerCanvas(QtWidgets.QWidget):
                     QtCore.Qt.Key.Key_Backspace: 8,
                 }
                 if event.key() in keys:
-                    self.session.key(keys[event.key()])
+                    self.submit(partial(self.session.key, keys[event.key()]))
                 else:
                     for c in event.text():
                         if 32 <= ord(c) <= 126:
-                            self.session.key(ord(c))
+                            self.submit(partial(self.session.key, ord(c)))
             self.update()
             event.accept()
             return
@@ -259,18 +265,12 @@ class ControllerCanvas(QtWidgets.QWidget):
         position = control.value_range.minimum + value / 1000 * (
             control.value_range.maximum - control.value_range.minimum
         )
-        try:
-            self.session.absolute(control.id, position)
-        except ValueError as error:
-            self.report(str(error))
+        self.submit(partial(self.session.absolute, control.id, position))
 
     def relative(self, identity: str, value: int) -> None:
         previous = self.relative_positions.get(identity, 0)
         self.relative_positions[identity] = value
-        try:
-            self.session.relative(identity, value - previous)
-        except ValueError as error:
-            self.report(str(error))
+        self.submit(partial(self.session.relative, identity, value - previous))
 
 
 class AuxiliaryContact(QtWidgets.QPushButton):
@@ -318,9 +318,26 @@ class AuxiliaryContact(QtWidgets.QPushButton):
 
 
 class EmulatorWindow(QtWidgets.QMainWindow):
+    request_done = QtCore.Signal()
+
     def __init__(self, session: Session) -> None:
         super().__init__()
         self.session = session
+        self.worker = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix='cntrl-native'
+        )
+        self.requests: deque[
+            tuple[Callable[[], None], bool, Callable[[], None] | None]
+        ] = deque()
+        self.request: Future[None] | None = None
+        self.request_done.connect(
+            self.finish_request, QtCore.Qt.ConnectionType.QueuedConnection
+        )
+        self.stopped = session.failed or session.stock_firmware
+        self.closing = False
+        self.closing_session = False
+        self.session_closed = False
+        self.time_us = session.time_us
         self.language = session.language
         self.setLocale(QtCore.QLocale(self.language))
         self.translations = messages(self.language)
@@ -330,7 +347,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.document().setMaximumBlockCount(2000)
-        self.canvas = ControllerCanvas(session, self.log.appendPlainText)
+        self.canvas = ControllerCanvas(session, self.submit)
         self.auxiliary_contacts: dict[int, list[AuxiliaryContact]] = {}
         self.auxiliary_masks: dict[int, int] = {}
         central = QtWidgets.QWidget()
@@ -399,20 +416,68 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.captions.append((widget.setText, key, fields))
         return widget
 
-    def clock_mode(self, running: bool) -> None:
+    def clock_mode(self) -> None:
         self.origin = monotonic_ns()
-        self.origin_us = self.session.time_us
+        self.origin_us = self.time_us
 
     def advance(self) -> None:
-        if self.session.failed:
-            return
         self.running.setChecked(False)
-        try:
-            self.session.advance(self.session.time_us + self.step.value() * 1000)
-        except (OSError, ValueError) as error:
-            self.runtime_failed(error)
+        step_us = self.step.value() * 1000
+        self.submit(
+            lambda: self.session.advance(self.session.time_us + step_us),
+            fatal=True,
+        )
+
+    def submit(
+        self,
+        operation: Callable[[], None],
+        *,
+        fatal: bool = False,
+        complete: Callable[[], None] | None = None,
+    ) -> None:
+        if not self.stopped and not self.closing:
+            self.requests.append((operation, fatal, complete))
+            self.start_request()
+
+    def start_request(self) -> None:
+        if self.request is not None:
             return
-        self.display_updates()
+        if self.requests:
+            operation, self.request_fatal, self.request_complete = (
+                self.requests.popleft()
+            )
+        elif self.closing and not self.closing_session:
+            self.closing_session = True
+            operation = self.close_session
+            self.request_fatal = True
+            self.request_complete = None
+        else:
+            return
+        self.request = self.worker.submit(operation)
+        self.request.add_done_callback(lambda future: self.request_done.emit())
+
+    @QtCore.Slot()
+    def finish_request(self) -> None:
+        if self.request is None:
+            return
+        # The worker is idle until this callback finishes consuming session state.
+        try:
+            self.request.result()
+        except (OSError, ValueError) as error:
+            if self.request_fatal or self.session.failed:
+                self.runtime_failed(error)
+            else:
+                self.log.appendPlainText(str(error))
+        else:
+            self.display_updates()
+            if self.request_complete is not None:
+                self.request_complete()
+        self.request = None
+        if self.closing_session:
+            self.worker.shutdown(wait=False)
+            self.finish_close()
+        else:
+            self.start_request()
 
     def endpoint_controls(self) -> QtWidgets.QWidget:
         panel = QtWidgets.QWidget()
@@ -425,7 +490,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             connected = self.caption(QtWidgets.QCheckBox(), 'connected')
             connected.setChecked(True)
             connected.toggled.connect(
-                lambda state, endpoint=e.name: self.session.connection(endpoint, state)
+                lambda state, endpoint=e.name: self.submit(
+                    partial(self.session.connection, endpoint, state)
+                )
             )
             self.connected[e.name] = connected
             row.addWidget(connected)
@@ -443,7 +510,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 blocked = self.caption(QtWidgets.QCheckBox(), 'block')
                 self.blocked[e.name] = blocked
                 blocked.toggled.connect(
-                    lambda state, endpoint=e.name: self.session.block(endpoint, state)
+                    lambda state, endpoint=e.name: self.submit(
+                        partial(self.session.block, endpoint, state)
+                    )
                 )
                 row.addWidget(blocked)
             host = self.caption(QtWidgets.QPushButton(), 'host')
@@ -485,7 +554,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
                 slider.setRange(0, 1023)
                 slider.valueChanged.connect(
-                    lambda value, index=port: self.session.expression(index, value)
+                    lambda value, index=port: self.submit(
+                        partial(self.session.expression, index, value)
+                    )
                 )
                 rows.addRow(name, slider)
             if 'aux' in modes:
@@ -520,8 +591,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         mask = previous | (1 << contact) if pressed else previous & ~(1 << contact)
         if previous != mask:
             self.auxiliary_masks[port] = mask
-            if not self.session.failed:
-                self.session.auxiliary(port, mask)
+            self.submit(partial(self.session.auxiliary, port, mask))
 
     def release_inputs(self) -> None:
         self.canvas.release()
@@ -539,20 +609,23 @@ class EmulatorWindow(QtWidgets.QMainWindow):
 
     def inject(self, endpoint: str, text: str) -> None:
         try:
-            self.session.midi(endpoint, bytes.fromhex(text))
+            self.submit(partial(self.session.midi, endpoint, bytes.fromhex(text)))
         except ValueError as error:
             self.log.appendPlainText(str(error))
-        self.display_updates()
 
     def connect_host(self, endpoint: str) -> None:
-        if self.session.failed:
+        if self.stopped or self.closing:
             return
         if endpoint in self.host:
             self.release_inputs()
-            self.session.cleanup()
-            self.display_updates()
-            self.close_host(endpoint)
-            self.log.appendPlainText(self.text('host_disconnected', endpoint=endpoint))
+
+            def disconnected() -> None:
+                self.close_host(endpoint)
+                self.log.appendPlainText(
+                    self.text('host_disconnected', endpoint=endpoint)
+                )
+
+            self.submit(self.session.cleanup, fatal=True, complete=disconnected)
             return
         declaration = next(
             e for e in self.session.target.midi_endpoints if e.name == endpoint
@@ -582,10 +655,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.log.appendPlainText(str(error))
 
     def tick(self) -> None:
-        if self.session.failed:
-            self.timer.stop()
-            self.running.setChecked(False)
-            self.close_host_connections()
+        if self.request is not None or self.stopped or self.closing:
             return
         if (status := self.session.poll_exit()) is not None:
             self.session.failed = True
@@ -594,30 +664,18 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             )
             return
         if self.running.isChecked():
+            time_us = self.origin_us + (monotonic_ns() - self.origin) // 1000
+            self.submit(partial(self.session.advance, time_us, replay=True), fatal=True)
+        for n, c in list(self.host.items()):
             try:
-                self.session.advance(
-                    self.origin_us + (monotonic_ns() - self.origin) // 1000,
-                    replay=True,
-                )
-            except (OSError, ValueError) as error:
-                self.runtime_failed(error)
-                return
-        if self.host:
-            for n, c in list(self.host.items()):
-                try:
-                    for p in c.receive():
-                        try:
-                            self.session.midi(n, p)
-                        except RequestRejected as error:
-                            self.log.appendPlainText(str(error))
-                except MIDI_ERRORS as error:
-                    if self.session.failed:
-                        self.runtime_failed(error)
-                        return
-                    self.host_failed(n, error)
-        self.display_updates()
+                for p in c.receive():
+                    self.submit(partial(self.session.midi, n, p))
+            except MIDI_ERRORS as error:
+                self.host_failed(n, error)
 
     def runtime_failed(self, error: Exception) -> None:
+        self.stopped = True
+        self.requests.clear()
         self.timer.stop()
         self.running.setChecked(False)
         self.running.setEnabled(False)
@@ -630,6 +688,12 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         if self.session.failed:
             self.close_host_connections()
             return
+        self.time_us = self.session.time_us
+        # A step can finish after the user resumes the live clock.
+        elapsed_us = (monotonic_ns() - self.origin) // 1000
+        self.origin_us = max(self.origin_us, self.time_us - elapsed_us)
+        self.canvas.frames = self.session.frames.copy()
+        self.canvas.editing_name = self.session.editing_name
         if self.language != self.session.language:
             self.language = self.session.language
             self.setLocale(QtCore.QLocale(self.language))
@@ -676,6 +740,8 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 )
             )
         if self.session.stock_firmware:
+            self.stopped = True
+            self.requests.clear()
             self.timer.stop()
             self.running.setChecked(False)
             self.running.setEnabled(False)
@@ -688,7 +754,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
     def host_failed(self, endpoint: str, error: BaseException) -> None:
         self.close_host(endpoint)
         self.connected[endpoint].setChecked(False)
-        self.session.cleanup()
+        self.submit(self.session.cleanup, fatal=True)
         self.log.appendPlainText(
             self.text('host_failed', endpoint=endpoint, error=error)
         )
@@ -745,33 +811,50 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.log.appendPlainText(self.text('screenshot_error', path=path))
 
     def save_replay(self) -> None:
-        path = self.save_path('replay_title', 'replay.toml', 'toml')
-        if not path:
+        if self.closing:
             return
+        path = self.save_path('replay_title', 'replay.toml', 'toml')
+        if path:
+            if self.stopped:
+                try:
+                    self.write_replay(Path(path))
+                except OSError as error:
+                    self.log.appendPlainText(str(error))
+            else:
+                self.submit(partial(self.write_replay, Path(path)))
+
+    def write_replay(self, path: Path) -> None:
         scenario = Scenario(
             seed=self.session.random_seed,
             until=self.session.time_us / 1_000_000,
             events=self.session.events,
         )
-        try:
-            Path(path).write_text(tomlkit.dumps(scenario.model_dump(mode='json')))
-        except OSError as error:
-            self.log.appendPlainText(str(error))
+        path.write_text(tomlkit.dumps(scenario.model_dump(mode='json')))
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        if self.session_closed:
+            event.accept()
+            return
+        event.ignore()
+        if self.closing:
+            return
         self.timer.stop()
+        self.release_inputs()
+        self.closing = True
+        self.start_request()
+
+    def close_session(self) -> None:
         try:
-            self.release_inputs()
             if not self.session.failed:
                 self.session.cleanup()
-                self.display_updates()
-                self.session.release_all()
-        except (OSError, ValueError) as error:
-            self.runtime_failed(error)
+        finally:
+            self.session.close()
+
+    def finish_close(self) -> None:
+        self.session_closed = True
         self.close_host_connections()
-        self.session.close()
         QtWidgets.QApplication.removeTranslator(self.dialog_translator)
-        event.accept()
+        self.close()
 
 
 class DialogTranslator(QtCore.QTranslator):
@@ -862,5 +945,15 @@ def run_window(session: Session) -> None:
         result = application.exec()
     finally:
         sys.excepthook = previous_hook
+        if window is not None and not window.session_closed:
+            window.timer.stop()
+            window.closing = True
+            window.requests.clear()
+            window.worker.shutdown(cancel_futures=True)
+            window.request = None
+            try:
+                session.close()
+            finally:
+                window.finish_close()
     if result:
         sys.exit(result)

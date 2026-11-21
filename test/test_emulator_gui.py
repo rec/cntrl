@@ -4,8 +4,9 @@ import gc
 import os
 import struct
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -125,13 +126,35 @@ def application() -> Iterator[QtWidgets.QApplication]:
     # Closing a widget only hides it. Destroy the test widgets before PySide's
     # interpreter-exit cleanup visits wrappers whose Python state is going away.
     for widget in app.topLevelWidgets():
-        widget.close()
+        if isinstance(widget, EmulatorWindow):
+            wait_for(widget.close)
+        else:
+            widget.close()
         widget.deleteLater()
     app.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
     gc.collect()
     if existing is None:
         app.shutdown()
         assert QtWidgets.QApplication.instance() is None
+
+
+def wait_for(condition: Callable[[], bool]) -> None:
+    loop = QtCore.QEventLoop()
+    poll = QtCore.QTimer()
+
+    def check() -> None:
+        if condition():
+            loop.quit()
+
+    poll.timeout.connect(check)
+    if not condition():
+        poll.start(1)
+        deadline = QtCore.QTimer()
+        deadline.setSingleShot(True)
+        deadline.timeout.connect(loop.quit)
+        deadline.start(2000)
+        loop.exec()
+    assert condition()
 
 
 def test_unhandled_callback_reports_once_and_exits(
@@ -232,7 +255,7 @@ def test_keyboard_repeat_does_not_retrigger_or_release_a_held_switch(
     application: QtWidgets.QApplication,
 ) -> None:
     session = CapturedSession()
-    canvas = ControllerCanvas(session, lambda message: None)
+    canvas = ControllerCanvas(session, lambda operation: operation())
     key(canvas, QtCore.QEvent.Type.KeyPress)
     key(canvas, QtCore.QEvent.Type.KeyRelease, repeat=True)
     key(canvas, QtCore.QEvent.Type.KeyPress, repeat=True)
@@ -250,7 +273,7 @@ def test_keyboard_chord_tracks_keys_without_character_text(
         name='Test controller',
         controls=[Button(id='d', name='D'), Button(id='f', name='F')],
     )
-    canvas = ControllerCanvas(session, lambda message: None)
+    canvas = ControllerCanvas(session, lambda operation: operation())
     for event, code, text in [
         (QtCore.QEvent.Type.KeyPress, QtCore.Qt.Key.Key_D, ''),
         (QtCore.QEvent.Type.KeyPress, QtCore.Qt.Key.Key_F, 'f'),
@@ -281,7 +304,7 @@ def test_name_typing_takes_precedence_over_pedal_shortcuts(
 ) -> None:
     session = CapturedSession()
     session.editing_name = True
-    canvas = ControllerCanvas(session, lambda message: None)
+    canvas = ControllerCanvas(session, lambda operation: operation())
     for code, text, modifier, repeat in [
         (QtCore.Qt.Key.Key_A, 'a', QtCore.Qt.KeyboardModifier.NoModifier, False),
         (QtCore.Qt.Key.Key_B, 'B', QtCore.Qt.KeyboardModifier.ShiftModifier, False),
@@ -302,7 +325,7 @@ def test_name_typing_takes_precedence_over_pedal_shortcuts(
     key(canvas, QtCore.QEvent.Type.KeyRelease)
     assert session.keys == [ord('a'), ord('B'), 8, 10, 10, 27]
     assert not session.inputs and not canvas.active
-    session.editing_name = False
+    canvas.editing_name = False
     key(canvas, QtCore.QEvent.Type.KeyPress)
     key(canvas, QtCore.QEvent.Type.KeyRelease)
     assert session.inputs == [('a', True), ('a', False)]
@@ -313,7 +336,7 @@ def test_latched_chord_and_focus_loss_release_each_switch(
     application: QtWidgets.QApplication,
 ) -> None:
     session = CapturedSession()
-    canvas = ControllerCanvas(session, lambda message: None)
+    canvas = ControllerCanvas(session, lambda operation: operation())
     click(canvas, 'a', QtCore.Qt.MouseButton.RightButton)
     click(canvas, 'b', QtCore.Qt.MouseButton.LeftButton)
     assert session.inputs == [('a', True), ('b', True)]
@@ -328,7 +351,7 @@ def test_frame_pixels_keep_native_aspect_ratio_and_correct_rgb565_byte_order(
     application: QtWidgets.QApplication,
 ) -> None:
     session = CapturedSession()
-    canvas = ControllerCanvas(session, lambda message: None)
+    canvas = ControllerCanvas(session, lambda operation: operation())
     canvas.resize(600, 400)
     image = canvas.grab().toImage()
     rectangle = canvas.placement_rect(session.layout.displays['screen'])
@@ -364,7 +387,7 @@ def test_display_pixel_columns_have_uniform_width_at_fractional_window_sizes(
 ) -> None:
     session = CapturedSession()
     session.frames['screen'] = b'\xf8\x00\x07\xe0' * 16
-    canvas = ControllerCanvas(session, lambda message: None)
+    canvas = ControllerCanvas(session, lambda operation: operation())
     canvas.resize(603, 407)
     image = canvas.grab().toImage()
     ratio = canvas.devicePixelRatioF()
@@ -392,7 +415,7 @@ def test_faceplate_keeps_live_pixels_and_switch_feedback_aligned_when_resized(
     )
     session = CapturedSession()
     session.layout = session.layout.model_copy(update={'faceplate': artwork})
-    canvas = ControllerCanvas(session, lambda message: None)
+    canvas = ControllerCanvas(session, lambda operation: operation())
     for width, height in [(600, 400), (400, 600)]:
         canvas.resize(width, height)
         image = canvas.grab().toImage()
@@ -416,7 +439,7 @@ def test_unreadable_faceplate_reports_its_path(
     path = tmp_path / 'missing.svg'
     session.layout = session.layout.model_copy(update={'faceplate': path})
     with pytest.raises(ValueError, match='cannot load emulator faceplate'):
-        ControllerCanvas(session, lambda message: None)
+        ControllerCanvas(session, lambda operation: operation())
 
 
 def test_inspector_consumes_output_history_and_steps_the_same_clock(
@@ -429,10 +452,11 @@ def test_inspector_consumes_output_history_and_steps_the_same_clock(
         OutputEvent(kind='midi', endpoint='synth', data=b'\xf8', time_us=1000)
     )
     window.advance()
+    wait_for(lambda: window.clock_label.text() == '0.010 s')
     assert session.time_us == 10000 and not window.running.isChecked()
     assert window.log.toPlainText() == '1.000 ms synth: f8'
     assert session.messages == []
-    window.close()
+    wait_for(window.close)
 
 
 def test_running_clock_splits_a_long_gap_and_reaches_the_elapsed_time(
@@ -450,6 +474,7 @@ def test_running_clock_splits_a_long_gap_and_reaches_the_elapsed_time(
     monkeypatch.setattr(gui, 'monotonic_ns', lambda: window.origin + elapsed_us * 1000)
 
     window.tick()
+    wait_for(lambda: window.time_us == 1234 + elapsed_us)
 
     assert session.time_us == 1234 + elapsed_us
     assert requests == [
@@ -457,7 +482,48 @@ def test_running_clock_splits_a_long_gap_and_reaches_the_elapsed_time(
         struct.pack('<BQB', 1, 1234 + 2 * MAX_REPLAY_ADVANCE_US, 0),
         struct.pack('<BQ', 1, 1234 + elapsed_us),
     ]
-    window.close()
+    wait_for(window.close)
+
+
+def test_stalled_clock_keeps_qt_responsive_and_serializes_pedal_input(
+    application: QtWidgets.QApplication,
+) -> None:
+    entered = Event()
+    acknowledge = Event()
+
+    class StalledSession(CapturedSession):
+        def advance(self, time_us: int, *, replay: bool = False) -> None:
+            entered.set()
+            if not acknowledge.wait(3):
+                raise TimeoutError('test did not release stalled request')
+            super().advance(time_us, replay=replay)
+
+        def button(self, control_id: str, pressed: bool) -> None:
+            assert acknowledge.is_set()
+            super().button(control_id, pressed)
+
+    session = StalledSession()
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    try:
+        window.tick()
+        wait_for(entered.is_set)
+        rendered: list[QtGui.QPixmap] = []
+
+        def press_switch() -> None:
+            click(window.canvas, 'a', QtCore.Qt.MouseButton.RightButton)
+            rendered.append(window.canvas.grab())
+
+        QtCore.QTimer.singleShot(0, press_switch)
+        wait_for(lambda: bool(rendered))
+        assert not rendered[0].isNull()
+        assert window.canvas.active == {'a'}
+        assert session.inputs == []
+        assert window.clock_label.text() == '0.000 s'
+    finally:
+        acknowledge.set()
+        wait_for(window.close)
+    assert session.inputs == [('a', True), ('a', False)]
 
 
 def test_virtual_connection_toggle_reports_explicit_disconnect_and_reconnect(
@@ -472,8 +538,9 @@ def test_virtual_connection_toggle_reports_explicit_disconnect_and_reconnect(
     assert session.connections == []
     window.connected['synth'].setChecked(False)
     window.connected['synth'].setChecked(True)
+    wait_for(lambda: len(session.connections) == 2)
     assert session.connections == [('synth', False), ('synth', True)]
-    window.close()
+    wait_for(window.close)
     assert session.closed
 
 
@@ -494,8 +561,9 @@ def test_expression_slider_uses_declared_sparse_port_binding(
     sliders = window.findChildren(QtWidgets.QSlider)
     assert len(sliders) == 1
     sliders[0].setValue(731)
+    wait_for(lambda: bool(session.expressions))
     assert session.expressions == [(3, 731)]
-    window.close()
+    wait_for(window.close)
 
 
 def test_auxiliary_contacts_share_a_port_mask_and_release_on_focus_loss(
@@ -516,13 +584,15 @@ def test_auxiliary_contacts_share_a_port_mask_and_release_on_focus_loss(
     first.pressed.emit()
     second.pressed.emit()
     first.released.emit()
+    wait_for(lambda: len(session.auxiliary_inputs) == 3)
     assert session.auxiliary_inputs == [(2, 1), (2, 3), (2, 2)]
     QtWidgets.QApplication.sendEvent(
         window, QtCore.QEvent(QtCore.QEvent.Type.ActivationChange)
     )
+    wait_for(lambda: len(session.auxiliary_inputs) == 4)
     assert session.auxiliary_inputs[-1] == (2, 0)
     assert not any(window.auxiliary_masks.values())
-    window.close()
+    wait_for(window.close)
 
 
 @pytest.mark.parametrize('mode', ['manual', 'realtime', 'paused'])
@@ -543,6 +613,7 @@ def test_failed_runtime_stops_polling_and_closes_without_failed_requests(
 
     session = FailedSession()
     window = EmulatorWindow(session)
+    window.timer.setInterval(60_000)
     output = Output()
     connection = HostMidi(False, True)
     connection.output = output
@@ -568,6 +639,7 @@ def test_failed_runtime_stops_polling_and_closes_without_failed_requests(
     window.log.clear()
     window.canvas.keyboard.add('a')
     window.canvas.synchronize()
+    wait_for(lambda: window.request is None)
     if mode == 'manual':
         window.advance()
     else:
@@ -575,6 +647,7 @@ def test_failed_runtime_stops_polling_and_closes_without_failed_requests(
             window.running.setChecked(False)
             session.exit_code = 1
         window.tick()
+    wait_for(lambda: not window.running.isEnabled())
     window.tick()
     window.advance()
     assert session.advance_calls == (0 if mode == 'paused' else 1)
@@ -588,7 +661,7 @@ def test_failed_runtime_stops_polling_and_closes_without_failed_requests(
     assert window.canvas.active == set()
     assert output.closed
     assert output.packets == played + [b'\x80\x3c\x00', b'\xb0\x40\x00']
-    window.close()
+    wait_for(window.close)
     assert session.closed
 
 
@@ -609,7 +682,7 @@ def test_simulated_firmware_transition_is_visible_and_stops_controls(
     assert not window.timer.isActive()
     assert not window.running.isChecked() and not window.running.isEnabled()
     assert not window.canvas.isEnabled()
-    window.close()
+    wait_for(window.close)
 
 
 @pytest.mark.parametrize(
@@ -654,6 +727,7 @@ def test_desktop_follows_pedal_language_without_resetting_inputs(
     slider.setValue(731)
     window.step.setValue(27)
     click(window.canvas, 'a', QtCore.Qt.MouseButton.RightButton)
+    wait_for(lambda: window.request is None)
     session.messages.append(
         OutputEvent(kind='relay', endpoint='relay', value=1, time_us=0)
     )
@@ -673,7 +747,7 @@ def test_desktop_follows_pedal_language_without_resetting_inputs(
     window.display_updates()
     assert window.running.text() == 'Real time'
     assert window.relay_labels['relay'].text() == 'On'
-    window.close()
+    wait_for(window.close)
 
 
 def test_desktop_starts_in_the_mirrored_pedals_language(
@@ -708,7 +782,7 @@ def test_desktop_starts_in_the_mirrored_pedals_language(
     for language in catalogue.locales():
         assert messages(language).keys() == messages('en').keys()
         assert dialog_messages(language).keys() == dialog_messages('en').keys()
-    window.close()
+    wait_for(window.close)
 
 
 def test_save_and_host_dialogs_use_the_pedals_language(
@@ -746,4 +820,4 @@ def test_save_and_host_dialogs_use_the_pedals_language(
     monkeypatch.setattr(QtWidgets.QInputDialog, 'exec', host_dialog)
     assert window.save_path('screenshot_title', 'controller.png', 'png') == ''
     assert not window.host_choice('host_input', 'DIN', ['Port 1'])[1]
-    window.close()
+    wait_for(window.close)

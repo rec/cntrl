@@ -9,15 +9,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 ## P2 | Reliability, correctness and recoverability
 
-7. **Native I/O stalls block the emulator window (code finding).**
-   [The GUI timer](../cntrl/emulator/gui.py#L585) calls session operations
-   synchronously, so user input and repainting stop during a stall. Headless
-   replay and the live clock both advance long gaps in watchdog-bounded
-   requests. A three-hour replay that previously timed out completed in
-   31 seconds, and an injected live clock gap reached the exact target time.
-   Verify catch-up after actual host suspend. Keeping the window responsive
-   during a stalled request remains open.
-
 11. **Live input history grows for the life of the emulator (code finding).**
     [Session input methods](../cntrl/emulator/backend.py#L438) append replay
     events including inbound MIDI. The [GUI bounds the visible log](../cntrl/emulator/gui.py#L333)
