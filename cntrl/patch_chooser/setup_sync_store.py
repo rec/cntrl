@@ -164,10 +164,10 @@ def baseline(root: Path) -> dict[str, bytes]:
     record = base_record(root)
     if not record:
         return {}
-    files = tomlkit.parse(record.decode())['setups']
+    files = parse_record(root / 'base.toml', record)['setups']
     result: dict[str, bytes] = {}
     for n, entry in files.items():
-        data = (root / entry['file']).read_bytes()
+        data = read_sync_file(root / entry['file'])
         if digest(data) != entry['checksum']:
             raise SyncError(f'{n}: damaged synchronization baseline')
         result[n] = data
@@ -197,11 +197,12 @@ def migrate_baselines(root: Path) -> None:
     converted = {n: binary_format.wrap(resolved.upgrade(d)) for n, d in saved.items()}
     if converted == saved:
         return
-    record = tomlkit.parse(original.decode()).unwrap()
+    record = parse_record(root / 'base.toml', original).unwrap()
     entries = cast(dict[str, dict[str, str]], record['setups'])
     version = binary_format.format_name(binary_format.DEVELOPMENT_FORMAT)
-    folder = Path(mkdtemp(prefix=f'format-{version}-', dir=root))
-    replace(folder / 'base.before', original)
+    with sync_files():
+        folder = Path(mkdtemp(prefix=f'format-{version}-', dir=root))
+        replace(folder / 'base.before', original)
     write_record(
         folder / 'conversion.toml', {'format': version, 'setups': list(converted)}
     )
@@ -212,16 +213,18 @@ def migrate_baselines(root: Path) -> None:
     for name, data in converted.items():
         source = root / entries[name]['file']
         destination = source.parent / f'.converted-{version}-{digest(data)}.bin'
-        if destination.exists() and destination.read_bytes() != data:
-            raise SyncError(f'{destination}: converted baseline checksum differs')
-        replace(destination, data)
+        with sync_files():
+            if destination.exists() and destination.read_bytes() != data:
+                raise SyncError(f'{destination}: converted baseline checksum differs')
+            replace(destination, data)
         entries[name] = {
             'file': str(destination.relative_to(root)),
             'checksum': digest(data),
         }
     write_record(root / 'base.toml', record)
     write_record(folder / 'applied.toml', {'complete': True})
-    (root / 'pending.toml').unlink()
+    with sync_files():
+        (root / 'pending.toml').unlink()
 
 
 def advance(root: Path, folder: Path, names: list[str]) -> None:

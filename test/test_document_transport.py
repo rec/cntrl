@@ -30,6 +30,7 @@ from cntrl.patch_chooser import (
     resolved,
     setup_sync,
     setup_sync_store,
+    source_archive,
     transport,
 )
 from cntrl.patch_chooser.setup_compiler import compile_inputs
@@ -1077,6 +1078,67 @@ def test_setup_copy_transfers_playback_and_looper_dependencies(
             assert client.download_midi('loop.mid') == loop
         # Repeating the upload with identical assets succeeds without replacing them.
         cli.run_setup(command.model_copy(update={'overwrite': True}))
+
+
+@pytest.mark.parametrize(
+    ('failure_type', 'finish_error'),
+    [
+        (ValueError, True),
+        (OSError, False),
+        (RuntimeError, False),
+        (KeyboardInterrupt, False),
+    ],
+)
+def test_setup_copy_preserves_unexpected_upload_failures(
+    bundle_peer: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_type: type[BaseException],
+    finish_error: bool,
+) -> None:
+    source = tmp_path / 'Show.toml'
+    source.write_text('brightness = 23\n')
+    failure = failure_type('unexpected upload failure')
+    monkeypatch.setattr(source_archive, 'upload', Mock(side_effect=failure))
+    ok = transport.SetupClient.ok
+    finished = []
+
+    def observe_finish(client: transport.SetupClient, command: str) -> None:
+        if command == 'CNTRL SETUP FINISH':
+            finished.append(command)
+            if finish_error:
+                raise transport.UsbReplyError('selection failed')
+        ok(client, command)
+
+    monkeypatch.setattr(transport.SetupClient, 'ok', observe_finish)
+    with NativePeer([str(bundle_peer), str(tmp_path)]) as port:
+        monkeypatch.setattr(
+            sys,
+            'argv',
+            [
+                'cntrl',
+                'setup',
+                'copy',
+                str(source),
+                '--port',
+                port,
+                '--target',
+                str(ROOT / 'firmware/test/target.json'),
+            ],
+        )
+        if isinstance(failure, KeyboardInterrupt):
+            with pytest.raises(SystemExit) as caught:
+                cli.main()
+            assert caught.value.code == 130
+            assert not finished
+        else:
+            with pytest.raises(failure_type) as caught:
+                cli.main()
+            assert caught.value is failure
+            assert finished == ['CNTRL SETUP FINISH']
+            if finish_error:
+                assert failure.__notes__ == ['batch completion: selection failed']
+    assert not (tmp_path / 'setup-sync/base.toml').exists()
 
 
 def test_download_collects_setups_companions_and_midi_before_writing(

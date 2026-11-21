@@ -6,6 +6,11 @@ from pathlib import Path
 import tomlkit
 
 from . import compiler_inputs, models, resolved, source_archive
+from .compiler_errors import CompilationError
+
+
+class MidiAssetMissingError(FileNotFoundError):
+    """A MIDI file named by the setup sources could not be found."""
 
 
 def filenames(value: object) -> list[str]:
@@ -74,23 +79,39 @@ def collect(setups: dict[str, bytes], sources: dict[Path, bytes]) -> dict[str, b
     cases: dict[str, str] = {}
     for name in required:
         if name.lower().startswith('.cntrl-'):
-            raise ValueError(f'{name}: reserved MIDI transfer filename')
+            raise CompilationError([f'{name}: reserved MIDI transfer filename'])
         if name.lower() in cases and cases[name.lower()] != name:
-            raise ValueError(
-                f'{name}: MIDI filenames differ only in case from {cases[name.lower()]}'
+            raise CompilationError(
+                [
+                    f'{name}: MIDI filenames differ only in case '
+                    f'from {cases[name.lower()]}'
+                ]
             )
         cases[name.lower()] = name
         if not origins[name]:
-            raise ValueError(f'{name}: cannot locate the declaring source document')
+            raise CompilationError(
+                [f'{name}: cannot locate the declaring source document']
+            )
         for path in origins[name]:
-            data = path.read_bytes()
-            sources[path.resolve()] = data
+            try:
+                data = path.read_bytes()
+                sources[path.resolve()] = data
+            except FileNotFoundError as error:
+                raise MidiAssetMissingError(
+                    error.errno, error.strerror, error.filename
+                ) from error
+            except OSError as error:
+                raise CompilationError([str(error)]) from error
             if not data or len(data) > 0xFFFFFFFF:
-                raise ValueError(f'{path}: MIDI file must contain 1..4294967295 bytes')
+                raise CompilationError(
+                    [f'{path}: MIDI file must contain 1..4294967295 bytes']
+                )
             if name in result and result[name] != data:
-                raise ValueError(
-                    f'{name}: different source files use the same pedal filename: '
-                    f'{origins[name]}'
+                raise CompilationError(
+                    [
+                        f'{name}: different source files use the same pedal filename: '
+                        f'{origins[name]}'
+                    ]
                 )
             result[name] = data
     return result
