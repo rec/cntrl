@@ -1,13 +1,10 @@
 """Reviewed three-way imports into the original setup authoring documents."""
 
 import os
-import sys
-from collections.abc import Generator, Mapping, MutableMapping, MutableSequence
-from contextlib import contextmanager
+from collections.abc import Mapping, MutableMapping, MutableSequence
 from copy import deepcopy
 from difflib import unified_diff
 from enum import StrEnum, auto
-from errno import EACCES, EAGAIN
 from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile, mkdtemp
@@ -17,6 +14,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field
 
+from ..file_lock import writer_lock
 from . import (
     backups,
     binary_format,
@@ -242,30 +240,6 @@ def replace(path: Path, data: bytes) -> None:
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
-
-
-@contextmanager
-def writer_lock(root: Path) -> Generator[None]:
-    """Keep the file in place so all writers lock the same file."""
-    root.mkdir(parents=True, exist_ok=True)
-    with (root / 'writer.lock').open('a+b') as lock:
-        try:
-            if sys.platform == 'win32':
-                import msvcrt
-
-                lock.seek(0)
-                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as error:
-            if error.errno in (EACCES, EAGAIN):
-                raise ValueError(
-                    f'{root}: another setup sync operation is in progress'
-                ) from error
-            raise
-        yield
 
 
 def check_pending(root: Path) -> None:
@@ -714,7 +688,7 @@ def assign(document: object, path: list[str | int], value: Value) -> None:
 
 def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
     root = store(inputs)
-    with writer_lock(root):
+    with writer_lock(root, operation='setup sync operation'):
         return preview_locked(inputs, client, root)
 
 
@@ -1009,7 +983,7 @@ def setting_changes(
 def apply_review(path: Path) -> None:
     path = path.resolve()
     review = Review.model_validate(tomlkit.parse(path.read_bytes().decode()).unwrap())
-    with writer_lock(review.root):
+    with writer_lock(review.root, operation='setup sync operation'):
         apply_locked(path, review)
 
 
@@ -1189,7 +1163,7 @@ def apply_locked(path: Path, review: Review) -> None:
 
 def recover(path: Path) -> None:
     path = path.resolve()
-    with writer_lock(path.parent):
+    with writer_lock(path.parent, operation='setup sync operation'):
         recover_locked(path)
 
 

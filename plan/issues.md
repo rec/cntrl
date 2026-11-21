@@ -44,15 +44,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
    manifest against one generation or require a demonstrably idle device,
    and distinguish complete captures from partial ones.
 
-10. **Shared preview directories have concurrent writers (code finding).**
-    [Preparation and launch](../cntrl/emulator/cli.py#L71) can reuse a
-    controller's default storage, while [the build](../cntrl/emulator/backend.py#L117)
-    rewrites the generated capabilities header, executable and cache key in
-    the same location. Two launches can race during compilation and later
-    write the same emulated journals. Reproduce with simultaneous launches
-    using different setups. Give runtime state one writer and publish build
-    artifacts as a consistent unit.
-
 11. **Live input history grows for the life of the emulator (code finding).**
     [Session input methods](../cntrl/emulator/backend.py#L438) append replay
     events including inbound MIDI. The [GUI bounds the visible log](../cntrl/emulator/gui.py#L333)

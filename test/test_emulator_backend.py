@@ -553,6 +553,54 @@ def test_unreadable_runtime_font_reports_the_file(
         )
 
 
+def test_preview_storage_rejects_a_second_setup_until_the_session_ends(
+    backend_files: BackendFiles,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    files = backend_files
+    target_path = tmp_path / 'target.toml'
+    target_path.write_text(
+        tomlkit.dumps(files.target.model_dump(mode='json', exclude_none=True))
+    )
+    second = tmp_path / 'second.bin'
+    write_bundle({'emulator': control_setup(45)}, files.target, second)
+    scenario = tmp_path / 'scenario.toml'
+    scenario.write_text('until = 0.01\n')
+    command = cli.Emulate(
+        setup=files.setup,
+        layout=files.setup.with_name('layout.toml'),
+        target=target_path,
+        storage=tmp_path / 'shared',
+        scenario=scenario,
+    )
+    competing = command.model_copy(update={'setup': second})
+    original_build = cli.build
+    original_run = Scenario.run
+
+    def reject_competing_setup() -> None:
+        with pytest.raises(ValueError, match='another emulator session is in progress'):
+            cli.emulate(competing, compile_to_file)
+
+    def build(target: models.Target, directory: Path, source_root: Path) -> Path:
+        reject_competing_setup()
+        return original_build(target, directory, source_root)
+
+    def run(replay: Scenario, session: backend.Session) -> None:
+        reject_competing_setup()
+        original_run(replay, session)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(cli, 'build', build)
+        patch.setattr(Scenario, 'run', run)
+        cli.emulate(command, compile_to_file)
+    cli.emulate(competing, compile_to_file)
+    assert command.storage is not None
+    assert (command.storage / 'setup-source.sha256').read_text() == sha256(
+        second.read_bytes()
+    ).hexdigest()
+
+
 def test_replay_drives_real_button_actions_and_draws_pages(
     backend_files: BackendFiles, tmp_path: Path
 ) -> None:

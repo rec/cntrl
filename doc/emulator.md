@@ -193,6 +193,8 @@ Save replay exports the inputs from the current session. Replaying requires the
 same target, bundle and initial session state; use fresh session directories
 for independent reproducible runs, or preserve a copy of an existing session
 before recording changes to it.
+Each local setup preview holds its session directory until it exits. Use
+different `--storage` directories to run previews at the same time.
 Times accept the project's duration notation. Events with the same timestamp
 are applied in file order. Advancing time never rewinds the runtime.
 
