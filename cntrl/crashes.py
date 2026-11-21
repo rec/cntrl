@@ -15,8 +15,15 @@ from types import TracebackType
 from typing import Literal
 from urllib.parse import urlencode
 
+native_emulator_ref: str = ''
+ISSUE_FORM = 'https://github.com/rec/cntrl/issues/new'
+MAX_PREFILLED_URL_LENGTH = 4096
+
 
 def install(binary: Literal['cntrl', 'emulator']) -> None:
+    global native_emulator_ref
+    native_emulator_ref = ''
+
     def unhandled(
         kind: type[BaseException], error: BaseException, trace: TracebackType | None
     ) -> None:
@@ -39,16 +46,22 @@ def report(binary: str, error: BaseException, trace: TracebackType | None) -> No
     try:
         title = f'Stack trace in {binary}'
         body = issue_body(binary, error, trace)
-        if not review_report(binary, title, body):
+        url = f'{ISSUE_FORM}?{urlencode({"title": title, "body": body})}'
+        prefilled = len(url) <= MAX_PREFILLED_URL_LENGTH
+        if not review_report(binary, title, body, prefilled):
             return
-        query = urlencode({'title': title, 'body': body})
-        if not webbrowser.open(f'https://github.com/rec/cntrl/issues/new?{query}'):
+        if not prefilled:
+            url = f'{ISSUE_FORM}?{urlencode({"title": title})}'
+        if not webbrowser.open(url):
             print('Could not open the crash report in a browser.', file=sys.stderr)
     except (OSError, subprocess.CalledProcessError, webbrowser.Error) as failure:
         print(f'Could not open the crash report: {failure}', file=sys.stderr)
 
 
-def review_report(binary: str, title: str, body: str) -> bool:
+def review_report(binary: str, title: str, body: str, prefilled: bool) -> bool:
+    copy_notice = (
+        'Copy the full report before opening the form, then paste it into GitHub.'
+    )
     if binary == 'emulator' and threading.current_thread() is threading.main_thread():
         try:
             from PySide6 import QtWidgets
@@ -63,6 +76,8 @@ def review_report(binary: str, title: str, body: str) -> bool:
                 notice = QtWidgets.QLabel(
                     'Review the report below. Opening the form shares these details '
                     'with GitHub. You can edit the issue before clicking Create.'
+                    if prefilled
+                    else copy_notice
                 )
                 notice.setWordWrap(True)
                 layout.addWidget(notice)
@@ -94,7 +109,9 @@ def review_report(binary: str, title: str, body: str) -> bool:
     ):
         return False
     print(
-        'Share these details with GitHub and open the issue form? [y/N] ',
+        'Share these details with GitHub and open the issue form? [y/N] '
+        if prefilled
+        else f'{copy_notice}\nOpen the issue form? [y/N] ',
         end='',
         file=sys.stderr,
         flush=True,
@@ -126,6 +143,8 @@ def issue_body(binary: str, error: BaseException, trace: TracebackType | None) -
         'Filesystem encoding': sys.getfilesystemencoding(),
         'Thread': threading.current_thread().name,
     }
+    if binary == 'emulator':
+        details['Native emulator gitref'] = native_emulator_ref or 'unknown'
     metadata = '\n'.join(
         f'- **{k}:** {v.replace(chr(10), " ")}' for k, v in details.items()
     )
@@ -140,8 +159,14 @@ def issue_body(binary: str, error: BaseException, trace: TracebackType | None) -
 
 def build_ref() -> str:
     root = Path(__file__).resolve().parent.parent
-    if (root / '.git').exists():
-        return subprocess.check_output(
-            ['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True
-        ).strip()
-    return distribution('cntrl').locate_file('cntrl/_git_ref.txt').read_text().strip()
+    try:
+        if (root / '.git').exists():
+            return subprocess.check_output(
+                ['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True
+            ).strip()
+        return (
+            distribution('cntrl').locate_file('cntrl/_git_ref.txt').read_text().strip()
+            or 'unknown'
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return 'unknown'
