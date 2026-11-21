@@ -7,6 +7,10 @@ from errno import EACCES, EAGAIN
 from pathlib import Path
 
 
+class WriterLockHeld(ValueError):
+    """Another operation holds the write lock for this directory."""
+
+
 @contextmanager
 def writer_lock(root: Path, *, operation: str) -> Generator[None]:
     """Keep the lock file in place so every writer locks the same file."""
@@ -24,7 +28,7 @@ def writer_lock(root: Path, *, operation: str) -> Generator[None]:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as error:
             if error.errno in (EACCES, EAGAIN):
-                raise ValueError(
+                raise WriterLockHeld(
                     f'{root}: another {operation} is in progress'
                 ) from error
             raise

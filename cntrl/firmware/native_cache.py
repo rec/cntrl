@@ -1,12 +1,18 @@
 """Content-addressed executables shared across native build directories."""
 
 import os
+import re
 import subprocess
 import sys
 from hashlib import sha256
 from pathlib import Path
 from shutil import copy2, which
+from stat import S_ISREG
 from tempfile import TemporaryDirectory
+
+from ..file_lock import WriterLockHeld, writer_lock
+
+MAX_CACHE_BYTES = 2 * 1024**3
 
 
 def build_key(command: list[str], directory: Path, inputs: list[Path]) -> str:
@@ -39,16 +45,48 @@ def build_key(command: list[str], directory: Path, inputs: list[Path]) -> str:
 
 
 def restore(cache: Path, key: str, output: Path) -> bool:
-    artifact = cache / key
-    if not artifact.is_file():
+    if not cache.is_dir():
         return False
-    copy_artifact(artifact, output)
+    try:
+        with writer_lock(cache, operation='native cache operation'):
+            artifact = cache / key
+            if not artifact.is_file(follow_symlinks=False):
+                return False
+            copy_artifact(artifact, output)
+            os.utime(artifact, None)
+    except WriterLockHeld:
+        return False
     return True
 
 
 def store(cache: Path, key: str, output: Path) -> None:
-    cache.mkdir(parents=True, exist_ok=True)
-    copy_artifact(output, cache / key)
+    size = output.stat().st_size
+    if size > MAX_CACHE_BYTES:
+        return
+    try:
+        with writer_lock(cache, operation='native cache operation'):
+            make_room(cache, key, size)
+            artifact = cache / key
+            copy_artifact(output, artifact)
+            os.utime(artifact, None)
+    except WriterLockHeld:
+        return
+
+
+def make_room(cache: Path, key: str, size: int) -> None:
+    entries: list[tuple[int, Path, int]] = []
+    for path in cache.iterdir():
+        if path.name != key and re.fullmatch(r'[0-9a-f]{64}', path.name):
+            info = path.lstat()
+            if S_ISREG(info.st_mode):
+                entries.append((info.st_mtime_ns, path, info.st_size))
+    total = size + sum(n for _, _, n in entries)
+    if total > MAX_CACHE_BYTES:
+        for _, path, length in sorted(entries):
+            path.unlink()
+            total -= length
+            if total <= MAX_CACHE_BYTES:
+                break
 
 
 def copy_artifact(source: Path, destination: Path) -> None:
