@@ -366,3 +366,6 @@ text = 'Punta'
 
 [messages.press_heel_then_toe]
 text = 'Pisa talón y luego punta'
+
+[messages.keyboard_input_dropped]
+text = 'Pulsaciones perdidas'

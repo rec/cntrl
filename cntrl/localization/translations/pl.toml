@@ -366,3 +366,6 @@ text = 'Palce'
 
 [messages.press_heel_then_toe]
 text = 'Naciśnij piętę, potem palce'
+
+[messages.keyboard_input_dropped]
+text = 'Pominięte klawisze'

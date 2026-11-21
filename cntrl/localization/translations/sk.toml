@@ -366,3 +366,6 @@ text = 'Špička'
 
 [messages.press_heel_then_toe]
 text = 'Stlačte pätu, potom špičku'
+
+[messages.keyboard_input_dropped]
+text = 'Vynechané klávesy'

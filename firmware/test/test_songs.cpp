@@ -1,5 +1,6 @@
 #include "input_hardware.h"
 #include "midi_endpoints.h"
+#include <cntrl/keyboard_input.h>
 #include <cntrl/songs_ui.h>
 #include <cntrl/songs_transfer.h>
 #include "storage.h"
@@ -154,9 +155,20 @@ void test_keyboard_edits_song_names_only_in_the_name_editor() {
     ui.key('B'); ui.key('!'); assert(board.name == "B!A");
     ui.key('\b'); assert(board.name == "BA");
     ui.key(9); ui.key(0xd8); assert(board.name == "BA");
+    cntrl::KeyboardInput keyboard;
+    assert(!keyboard.press('x', 1) && !keyboard.take_overflow());
+    for (unsigned i = 0; i < cntrl::KeyboardInput::capacity - 1; ++i) assert(keyboard.press('x', 0));
+    assert(!keyboard.press('\n', 0));
+    uint8_t key;
+    while (keyboard.read(key)) ui.key(key);
+    assert(keyboard.take_overflow() && !keyboard.take_overflow());
+    ui.keyboard_overflow();
+    assert(board.name == "B" + std::string(31, 'x') + "A");
+    assert(board.feedback == "Missed keys");
+    ui.key('\b'); assert(board.feedback == "Missed keys");
     assert(snapshot(songs) == original);
     ui.key(27); assert(snapshot(songs) == original); // Cancel.
-    press(storage, ui, songs, 2, true); assert(board.name == "A");
+    press(storage, ui, songs, 2, true); assert(board.name == "A" && board.feedback.empty());
     press(storage, ui, songs, 4, true); // Cursor after A.
     ui.key('\b'); assert(board.name.empty());
     ui.key('\n'); assert(!completed(storage, songs, true)); ui.poll(0); // Empty name rejected.

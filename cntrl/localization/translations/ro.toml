@@ -366,3 +366,6 @@ text = 'Vârf'
 
 [messages.press_heel_then_toe]
 text = 'Apăsați călcâiul, apoi vârful'
+
+[messages.keyboard_input_dropped]
+text = 'Tastări pierdute'

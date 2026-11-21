@@ -366,3 +366,6 @@ text = 'Tå'
 
 [messages.press_heel_then_toe]
 text = 'Trykk hæl, så tå'
+
+[messages.keyboard_input_dropped]
+text = 'Tapte tastetrykk'

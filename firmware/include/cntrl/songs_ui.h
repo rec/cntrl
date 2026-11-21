@@ -64,6 +64,11 @@ public:
         feedback_[0] = 0;
         render();
     }
+    void keyboard_overflow() {
+        if (mode_ != naming || dropped_keys_) return;
+        dropped_keys_ = true;
+        render();
+    }
 private:
     void handle_button(unsigned button, bool down) {
         if (!down || locked_ || !open()) return;
@@ -158,7 +163,7 @@ private:
     unsigned patch_cursor_ = 0;
     unsigned cursor_ = 0, entry_ = 0, insertion_ = 0, added_ = 0, character_ = 0;
     char song_name_[64] = {}, picker_[64] = {};
-    bool locked_ = false, naming_set_ = false;
+    bool locked_ = false, naming_set_ = false, dropped_keys_ = false;
     struct Saved { Mode mode; unsigned cursor, insertion, added; char picker[64], song[64]; } saved_ = {};
     bool waiting_ = false;
     char feedback_[64] = {}, name_[64] = {};
@@ -168,6 +173,7 @@ private:
     void jump(bool backward) { ensure_picker(); songs_.browse(picker_, picker_, backward, true); }
     void begin_name(const char *name, bool set) {
         std::snprintf(name_, 64, "%s", name); naming_set_ = set;
+        dropped_keys_ = false;
         return_mode_ = mode_; mode_ = naming; character_ = 0;
     }
     void name_button(unsigned button) {
@@ -181,6 +187,7 @@ private:
             char &c = name_[character_]; c = char(32 + (c - 32 + 95 + (button == 0 ? -1 : 1)) % 95);
         }
         if (button == 2) {
+            dropped_keys_ = false;
             while (length && name_[length - 1] == ' ') name_[--length] = 0;
             bool good = naming_set_ ? songs_.rename_setlist(songs_.active_set(), name_) : songs_.rename_song(song_name_, name_);
             if (!good) fail(); else { if (!naming_set_) { std::snprintf(song_name_, 64, "%s", name_); std::snprintf(picker_, 64, "%s", name_); } ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::saved)); mode_ = return_mode_; cursor_ = 0; }
@@ -282,7 +289,9 @@ private:
             ui::i18n::format(panes[1].lines[3].text, 64, ui::i18n::Message::hold_menu, hardware_.control_label(Role::confirm));
         } else prompt.add(Role::back, mode_ == adding ? ui::i18n::text(ui::i18n::Message::done_action) : ui::i18n::text(ui::i18n::Message::back));
         text(2, 3, prompt.text());
-        if (feedback_[0]) { text(0, 2, feedback_); panes[0].lines[2].graphics.font = ui::localized_face; }
+        const char *feedback = mode_ == naming && dropped_keys_
+            ? ui::i18n::text(ui::i18n::Message::keyboard_input_dropped) : feedback_;
+        if (*feedback) { text(0, 2, feedback); panes[0].lines[2].graphics.font = ui::localized_face; }
         for (unsigned i = 0; i < 3; ++i) {
             unsigned rows = 0;
             for (const auto &line : panes[i].lines) rows += (unsigned(std::strlen(line.text)) + 11) / 12;

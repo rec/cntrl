@@ -36,12 +36,11 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     Explicit recording or streaming to disk would preserve replay fidelity
     while bounding live memory.
 
-14. **Keyboard queue overflow silently discards editing actions
-    (code finding).** [The ring](../firmware/include/cntrl/keyboard_input.h#L8)
-    holds 31 pending keys and returns false when full. [The target callback](../cntrl/maker/morningstar/mc/firmware/patch_chooser/target.cpp#L110)
-    ignores that result. A burst while the loop is busy can lose a character,
-    Enter, or Escape with no feedback. Verify under realistic SD/display
-    load and decide how the editor indicates discarded input.
+14. **Verify keyboard overflow feedback on the pedal.** The name editor
+    shows a localized warning after the queue drops a key, while retaining
+    queued edits. The native regression fills the queue and verifies the
+    warning. Verify on the pedal with a USB keyboard under simultaneous
+    SD and display load.
 
 15. **CLI error handling can hide unexpected failures (code finding).** The CLI's
     [broad conversion of OSError and ValueError to short messages](../cntrl/patch_chooser/cli.py#L611)
