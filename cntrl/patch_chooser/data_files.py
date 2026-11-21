@@ -13,6 +13,10 @@ from .compiler_errors import CompilationError
 from .compiler_inputs import read_document, source_reference
 
 
+class InvalidSetupName(ValueError):
+    """A name cannot be used for a setup file."""
+
+
 class DataFile(BaseModel, frozen=True):
     name: str
     paths: list[Path]
@@ -77,7 +81,7 @@ def validate_name(name: str) -> str:
         or name.split('.', 1)[0].rstrip(' ').upper() in WINDOWS_DEVICES
         or any(ord(c) < 32 or ord(c) > 126 or c in '<>:"/\\|?*' for c in name)
     ):
-        raise ValueError(
+        raise InvalidSetupName(
             f'{name!r}: invalid setup name (1..63 filename-safe ASCII characters)'
         )
     return name
