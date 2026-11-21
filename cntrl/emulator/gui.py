@@ -5,6 +5,7 @@ from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
+from html import escape
 from pathlib import Path
 from time import monotonic_ns
 from types import TracebackType
@@ -15,7 +16,7 @@ from .. import models
 from .backend import Session
 from .host_midi import MIDI_ERRORS, HostMidi
 from .layout import Canvas, Placement
-from .localization import dialog_messages, messages
+from .localization import dialog_messages, messages, tooltip_messages
 
 
 def display_rectangle(
@@ -51,6 +52,7 @@ class ControllerCanvas(QtWidgets.QWidget):
         self.submit = submit
         self.frames = session.frames.copy()
         self.editing_name = session.editing_name
+        self.tooltip_context = session.tooltip_context, session.language
         self.pointer: set[str] = set()
         self.keyboard: set[str] = set()
         self.latched: set[str] = set()
@@ -85,6 +87,55 @@ class ControllerCanvas(QtWidgets.QWidget):
                 )
                 self.widgets[c.id] = dial
         self.relative_positions: dict[str, int] = {}
+
+    def update_tooltip_context(self) -> None:
+        context = self.session.tooltip_context, self.session.language
+        if context != self.tooltip_context:
+            self.tooltip_context = context
+            QtWidgets.QToolTip.hideText()
+
+    def event(self, event: QtCore.QEvent) -> bool:
+        if (
+            isinstance(event, QtGui.QHelpEvent)
+            and event.type() == QtCore.QEvent.Type.ToolTip
+        ):
+            text, area = self.tooltip_at(event.pos())
+            if text:
+                body = escape(text).replace('\n', '<br>')
+                QtWidgets.QToolTip.showText(
+                    event.globalPos(), f'<p>{body}</p>', self, area
+                )
+            else:
+                QtWidgets.QToolTip.hideText()
+                event.ignore()
+            return True
+        return super().event(event)
+
+    def tooltip_at(self, position: QtCore.QPoint) -> tuple[str, QtCore.QRect]:
+        (focused, screens), language = self.tooltip_context
+        translations = tooltip_messages(language)
+        for display, (page, window) in zip(
+            self.session.target.displays, screens, strict=False
+        ):
+            area = self.placement_rect(
+                self.session.layout.displays[display.id]
+            ).toRect()
+            if area.contains(position):
+                return translations.get(page, {}).get(
+                    f'window-{window}', ''
+                ).strip(), area
+        identity = Canvas(self.session.layout, self.width(), self.height()).control(
+            position.x(), position.y()
+        )
+        if identity is not None and any(
+            c.id == identity and isinstance(c, models.Button)
+            for c in self.session.controller.controls
+        ):
+            area = self.placement_rect(self.session.layout.controls[identity]).toRect()
+            return translations.get(focused, {}).get(
+                f'button-{identity}', ''
+            ).strip(), area
+        return '', QtCore.QRect()
 
     def placement_rect(self, placement: Placement) -> QtCore.QRectF:
         canvas = Canvas(self.session.layout, self.width(), self.height())
@@ -692,6 +743,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.origin_us = max(self.origin_us, self.time_us - elapsed_us)
         self.canvas.frames = self.session.frames.copy()
         self.canvas.editing_name = self.session.editing_name
+        self.canvas.update_tooltip_context()
         if self.language != self.session.language:
             self.language = self.session.language
             self.setLocale(QtCore.QLocale(self.language))

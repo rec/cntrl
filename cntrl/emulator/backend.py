@@ -28,6 +28,7 @@ from ..patch_chooser.models import Target
 from . import font_comparison
 from .errors import EmulatorError, emulator_files
 from .layout import EmulatorLayout
+from .localization import TOOLTIP_PAGES
 from .replay import Event, validate_name_key
 
 MAX_REPLAY_ADVANCE_US = 10_000_000
@@ -195,6 +196,7 @@ class Session:
         self.stock_firmware = False
         self.editing_name = False
         self.language = 'en'
+        self.tooltip_context: tuple[str, tuple[tuple[str, int], ...]] = ('', ())
         self.held: set[str] = set()
         self.font_samples: list[font_comparison.FontSample] = []
         self.font_sample_index = 0
@@ -453,6 +455,16 @@ class Session:
                 self.language = payload[1:].decode()
             elif payload[0] == 10:
                 rejection = payload[1:].decode()
+            elif payload[0] == 11 and len(payload) == 2 + 2 * len(self.target.displays):
+                if any(p >= len(TOOLTIP_PAGES) for p in payload[1:2] + payload[2::2]):
+                    raise EmulatorError('unknown tooltip page')
+                self.tooltip_context = (
+                    TOOLTIP_PAGES[payload[1]],
+                    tuple(
+                        (TOOLTIP_PAGES[p], w)
+                        for p, w in zip(payload[2::2], payload[3::2], strict=True)
+                    ),
+                )
             else:
                 raise EmulatorError('unknown native emulator response')
 

@@ -9,6 +9,29 @@ import tomlkit
 from pydantic import TypeAdapter
 
 from ..localization import catalogue
+from ..patch_chooser.layout import PAGE_TYPES
+
+TOOLTIP_PAGES = (*PAGE_TYPES, 'main-menu', 'setups', 'songs', 'switch-editor')
+
+
+@cache
+def tooltip_messages(language: str) -> dict[str, dict[str, str]]:
+    pages = TypeAdapter(dict[str, dict[str, dict[str, str]]]).validate_python(
+        tomlkit.parse(Path(__file__).with_name('tooltips.toml').read_text()).unwrap()
+    )
+    locales = set(catalogue.locales())
+    if pages.keys() != {p for p in TOOLTIP_PAGES if p and p != 'None'}:
+        raise ValueError('tooltip configuration does not match the emulator pages')
+    translated = {}
+    for page, translations in pages.items():
+        reference = translations['en']
+        for locale, entries in translations.items():
+            if locale not in locales or entries.keys() - reference.keys():
+                raise ValueError(f'unknown tooltip language or slot: {page}/{locale}')
+        translated[page] = reference | {
+            k: v for k, v in translations.get(language, {}).items() if v.strip()
+        }
+    return translated
 
 
 @cache
