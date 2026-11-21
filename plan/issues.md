@@ -34,15 +34,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
    suspend can look like a dead child. Measure idle catch-up and stuck-peer
    behavior separately before choosing execution and cancellation bounds.
 
-8. **Startup exceptions can leave the native process and reader running
-   (code finding).** [Session construction](../cntrl/emulator/backend.py#L199)
-   starts both before limiting cleanup to `OSError` and `ValueError`.
-   Interrupts or other exceptions after spawn skip cleanup because the
-   context manager has not yet been entered. Once [close](../cntrl/emulator/backend.py#L239)
-   sets its closed flag, an error in one shutdown step can prevent the rest
-   and suppress a second cleanup attempt. Make process and pipe ownership
-   exception-safe from spawn through teardown.
-
 9. **Mirroring can capture several points in time (code finding).**
    [Capture](../cntrl/emulator/mirror.py#L40) reads Status first, scans
    storage, then downloads and rechecks mutable files already seen. A new

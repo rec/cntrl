@@ -662,6 +662,58 @@ def test_cleanup_releases_accepted_notes(
         )
 
 
+def test_interrupted_startup_reaps_the_native_session(
+    backend_files: BackendFiles,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spawned: list[backend.Session] = []
+
+    def interrupt(session: backend.Session) -> None:
+        spawned.append(session)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(backend.Session, 'receive', interrupt)
+    files = backend_files
+    with pytest.raises(KeyboardInterrupt):
+        backend.Session(
+            files.layout, files.target, files.executable, tmp_path, files.setup
+        )
+    (session,) = spawned
+    assert session.process.returncode is not None
+    assert session.process.stdin is not None and session.process.stdin.closed
+    assert session.process.stdout is not None and session.process.stdout.closed
+    assert not session.reader.is_alive()
+
+
+def test_a_pipe_close_failure_still_reaps_the_process_and_reader(
+    backend_files: BackendFiles,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    files = backend_files
+    session = backend.Session(
+        files.layout, files.target, files.executable, tmp_path, files.setup
+    )
+    pipe = session.process.stdin
+    assert pipe is not None
+
+    def fail() -> None:
+        raise OSError('injected pipe close failure')
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(pipe, 'close', fail)
+            with pytest.raises(OSError, match='injected pipe close failure'):
+                session.close()
+        assert session.process.returncode is not None
+        assert session.process.stdout is not None and session.process.stdout.closed
+        assert not session.reader.is_alive()
+    finally:
+        session.close()
+    assert pipe.closed
+
+
 @pytest.mark.parametrize('partial', [False, True])
 def test_an_unresponsive_native_request_has_a_deadline(
     backend_files: BackendFiles,
