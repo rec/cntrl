@@ -1433,3 +1433,7 @@ context = 'Expression calibration table column'
 en = 'Press heel, then toe'
 context = 'Active expression calibration instruction'
 
+[messages.keyboard_input_dropped]
+en = 'Missed keys'
+context = 'Warning that the name editor lost some typed keystrokes'
+

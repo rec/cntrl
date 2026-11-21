@@ -366,3 +366,6 @@ text = 'Spitze'
 
 [messages.press_heel_then_toe]
 text = 'Ferse, dann Spitze drücken'
+
+[messages.keyboard_input_dropped]
+text = 'Tasteneingabe fehlt'

@@ -1088,3 +1088,6 @@ text = 'Pointe'
 
 [messages.press_heel_then_toe]
 text = 'Appuyez talon, puis pointe'
+
+[messages.keyboard_input_dropped]
+text = 'Frappes perdues'

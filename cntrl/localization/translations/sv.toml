@@ -366,3 +366,6 @@ text = 'Tå'
 
 [messages.press_heel_then_toe]
 text = 'Tryck häl, sedan tå'
+
+[messages.keyboard_input_dropped]
+text = 'Missade tangenter'

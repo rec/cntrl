@@ -366,3 +366,6 @@ text = 'Orr'
 
 [messages.press_heel_then_toe]
 text = 'Nyomja le a sarkat, majd az orrot'
+
+[messages.keyboard_input_dropped]
+text = 'Kimaradt leütések'

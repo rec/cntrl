@@ -366,3 +366,6 @@ text = 'Ponta'
 
 [messages.press_heel_then_toe]
 text = 'Pressione calcanhar, depois ponta'
+
+[messages.keyboard_input_dropped]
+text = 'Teclas ignoradas'

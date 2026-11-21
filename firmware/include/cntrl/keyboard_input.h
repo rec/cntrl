@@ -12,7 +12,10 @@ public:
         if (key != '\n' && key != '\b' && key != 27 && (key < 32 || key > 126)) return false;
         const unsigned write = write_.load(std::memory_order_relaxed);
         const unsigned next = (write + 1) % capacity;
-        if (next == read_.load(std::memory_order_acquire)) return false;
+        if (next == read_.load(std::memory_order_acquire)) {
+            overflow_.store(1, std::memory_order_relaxed);
+            return false;
+        }
         keys_[write] = uint8_t(key);
         write_.store(next, std::memory_order_release);
         return true;
@@ -24,10 +27,11 @@ public:
         read_.store((read + 1) % capacity, std::memory_order_release);
         return true;
     }
+    bool take_overflow() { return overflow_.exchange(0, std::memory_order_relaxed) != 0; }
     static constexpr unsigned capacity = 32;
 private:
     static_assert(std::atomic<unsigned>::is_always_lock_free);
     uint8_t keys_[capacity] = {};
-    std::atomic<unsigned> read_{0}, write_{0};
+    std::atomic<unsigned> read_{0}, write_{0}, overflow_{0};
 };
 } // namespace cntrl

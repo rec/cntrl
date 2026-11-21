@@ -366,3 +366,6 @@ text = 'Kärki'
 
 [messages.press_heel_then_toe]
 text = 'Paina kantaa, sitten kärkeä'
+
+[messages.keyboard_input_dropped]
+text = 'Näppäilyjä ohitettu'

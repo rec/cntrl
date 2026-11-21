@@ -366,3 +366,6 @@ text = 'Uç'
 
 [messages.press_heel_then_toe]
 text = 'Önce topuğa, sonra uca basın'
+
+[messages.keyboard_input_dropped]
+text = 'Tuş girişleri eksik'

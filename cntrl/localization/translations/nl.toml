@@ -366,3 +366,6 @@ text = 'Teen'
 
 [messages.press_heel_then_toe]
 text = 'Druk hiel, dan teen'
+
+[messages.keyboard_input_dropped]
+text = 'Toetsaanslagen gemist'
