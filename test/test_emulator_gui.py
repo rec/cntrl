@@ -2,6 +2,7 @@
 
 import gc
 import os
+import struct
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -14,7 +15,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from cntrl import crashes
 from cntrl.emulator import gui
-from cntrl.emulator.backend import OutputEvent, Session
+from cntrl.emulator.backend import MAX_REPLAY_ADVANCE_US, OutputEvent, Session
 from cntrl.emulator.gui import ControllerCanvas, EmulatorWindow, display_rectangle
 from cntrl.emulator.host_midi import HostMidi
 from cntrl.emulator.layout import EmulatorLayout, Placement
@@ -74,7 +75,7 @@ class CapturedSession(Session):
     def key(self, key: int) -> None:
         self.keys.append(key)
 
-    def advance(self, time_us: int) -> None:
+    def advance(self, time_us: int, *, replay: bool = False) -> None:
         self.time_us = time_us
 
     def expression(self, port: int, value: int) -> None:
@@ -101,7 +102,7 @@ class FailedSession(CapturedSession):
         super().__init__()
         self.advance_calls = 0
 
-    def advance(self, time_us: int) -> None:
+    def advance(self, time_us: int, *, replay: bool = False) -> None:
         self.advance_calls += 1
         self.failed = True
         raise ValueError('backend timed out')
@@ -431,6 +432,31 @@ def test_inspector_consumes_output_history_and_steps_the_same_clock(
     assert session.time_us == 10000 and not window.running.isChecked()
     assert window.log.toPlainText() == '1.000 ms synth: f8'
     assert session.messages == []
+    window.close()
+
+
+def test_running_clock_splits_a_long_gap_and_reaches_the_elapsed_time(
+    application: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = CapturedSession()
+    session.time_us = 1234
+    requests: list[bytes] = []
+    monkeypatch.setattr(session, 'advance', Session.advance.__get__(session))
+    monkeypatch.setattr(session, 'request', requests.append)
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    window.running.setChecked(True)
+    elapsed_us = 2 * MAX_REPLAY_ADVANCE_US + 2153
+    monkeypatch.setattr(gui, 'monotonic_ns', lambda: window.origin + elapsed_us * 1000)
+
+    window.tick()
+
+    assert session.time_us == 1234 + elapsed_us
+    assert requests == [
+        struct.pack('<BQB', 1, 1234 + MAX_REPLAY_ADVANCE_US, 0),
+        struct.pack('<BQB', 1, 1234 + 2 * MAX_REPLAY_ADVANCE_US, 0),
+        struct.pack('<BQ', 1, 1234 + elapsed_us),
+    ]
     window.close()
 
 

@@ -596,7 +596,8 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         if self.running.isChecked():
             try:
                 self.session.advance(
-                    self.origin_us + (monotonic_ns() - self.origin) // 1000
+                    self.origin_us + (monotonic_ns() - self.origin) // 1000,
+                    replay=True,
                 )
             except (OSError, ValueError) as error:
                 self.runtime_failed(error)
