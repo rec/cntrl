@@ -41,11 +41,11 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     SD and display load.
 
 15. **CLI error handling can hide unexpected failures (code finding).**
-    `cntrl compile` and `cntrl status` report their known input, output and
-    device failures concisely while allowing unexpected exceptions to reach
-    the crash reporter. Audit the remaining command and transport boundaries,
-    where broad `OSError` and `ValueError` handling can still hide
-    programming errors.
+    `cntrl compile`, `cntrl status` and target adapter commands report known
+    input, output, device and subprocess failures concisely while allowing
+    unexpected exceptions to reach the crash reporter. Audit the remaining
+    command and transport boundaries, where broad `OSError` and `ValueError`
+    handling can still hide programming errors.
 
 ## P2 | Distribution and release risks to verify
 

@@ -10,6 +10,9 @@ from urllib.request import urlopen
 
 import tomlkit
 from pydantic import BaseModel, ConfigDict, Field
+from tomlkit.exceptions import ParseError
+
+from ..target_process import TargetAdapterError
 
 
 class Stock(BaseModel, frozen=True):
@@ -82,14 +85,19 @@ def read_manifest(directory: Path) -> Manifest:
 
 
 def controller_directory(controller: str) -> Path:
-    root = Path(__file__).resolve().parents[1]
-    matches = [
-        p.parent
-        for p in (root / 'maker').glob('**/distribution/manifest.toml')
-        if tomlkit.parse(p.read_text()).get('controller') == controller
-    ]
+    try:
+        root = Path(__file__).resolve().parents[1]
+        matches = [
+            p.parent
+            for p in (root / 'maker').glob('**/distribution/manifest.toml')
+            if tomlkit.parse(p.read_text()).get('controller') == controller
+        ]
+    except (OSError, ParseError, UnicodeDecodeError) as error:
+        raise TargetAdapterError(str(error)) from error
     if len(matches) != 1:
-        raise ValueError(f'unknown or ambiguous physical controller: {controller}')
+        raise TargetAdapterError(
+            f'unknown or ambiguous physical controller: {controller}'
+        )
     return matches[0]
 
 

@@ -1,13 +1,14 @@
 """Run the importer supplied by an explicitly selected target."""
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Annotated
 
 import tyro
 from pydantic import BaseModel, Field
+
+from . import target_process
 
 
 class Import(BaseModel, frozen=True):
@@ -18,10 +19,10 @@ class Import(BaseModel, frozen=True):
 
 
 def run(command: Import) -> None:
-    entry = command.target_dir.resolve() / 'import_entry.py'
-    if not entry.is_file():
-        raise ValueError(f'{entry}: target does not provide an import entry point')
-    result = subprocess.run(
+    entry = target_process.entry_point(
+        command.target_dir, 'import_entry.py', 'an import entry point'
+    )
+    result = target_process.run(
         [sys.executable, str(entry), *command.arguments],
         check=False,
         env=dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent.parent)),

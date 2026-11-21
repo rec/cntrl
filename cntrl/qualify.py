@@ -1,13 +1,14 @@
 """Run qualification supplied by the explicitly selected target."""
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Annotated
 
 import tyro
 from pydantic import BaseModel, Field
+
+from . import target_process
 
 
 class Qualify(BaseModel, frozen=True):
@@ -18,12 +19,10 @@ class Qualify(BaseModel, frozen=True):
 
 
 def run(command: Qualify) -> None:
-    entry = command.target_dir.resolve() / 'qualify_entry.py'
-    if not entry.is_file():
-        raise ValueError(
-            f'{entry}: target does not provide a qualification entry point'
-        )
-    result = subprocess.run(
+    entry = target_process.entry_point(
+        command.target_dir, 'qualify_entry.py', 'a qualification entry point'
+    )
+    result = target_process.run(
         [sys.executable, str(entry), *command.arguments],
         check=False,
         env=dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent.parent)),
