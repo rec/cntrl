@@ -2,6 +2,7 @@
 
 import struct
 
+from .binary_format import DocumentFormatError
 from .models import MidiEndpoint, Setup, Target
 
 
@@ -21,17 +22,17 @@ def pack(target: Target) -> bytes:
 
 def unpack(data: bytes, offset: int) -> list[MidiEndpoint]:
     if data[offset : offset + 4] != b'CEND' or offset + 6 > len(data):
-        raise ValueError('missing MIDI endpoint metadata')
+        raise DocumentFormatError('missing MIDI endpoint metadata')
     count = struct.unpack_from('<H', data, offset + 4)[0]
     if count > 16 or offset + 6 + count * RECORD.size > len(data):
-        raise ValueError('invalid MIDI endpoint count')
+        raise DocumentFormatError('invalid MIDI endpoint count')
     result: list[MidiEndpoint] = []
     for i in range(count):
         route, transport, flags, port, name, label = RECORD.unpack_from(
             data, offset + 6 + i * RECORD.size
         )
         if transport >= len(TRANSPORTS) or flags > 3 or (port > 3 and port != 255):
-            raise ValueError('invalid MIDI endpoint record')
+            raise DocumentFormatError('invalid MIDI endpoint record')
         result.append(
             MidiEndpoint(
                 name=_text(name),
@@ -47,9 +48,9 @@ def unpack(data: bytes, offset: int) -> list[MidiEndpoint]:
         len({e.name for e in result}) != count
         or len({e.route for e in result}) != count
     ):
-        raise ValueError('duplicate MIDI endpoint')
+        raise DocumentFormatError('duplicate MIDI endpoint')
     if sorted(e.route for e in result) != list(range(count)):
-        raise ValueError('MIDI routes are not a dense table')
+        raise DocumentFormatError('MIDI routes are not a dense table')
     return result
 
 
@@ -58,7 +59,7 @@ def ports(endpoints: list[MidiEndpoint]) -> list[str]:
     for e in endpoints:
         if e.port is not None:
             if result[e.port]:
-                raise ValueError('duplicate configurable port slot')
+                raise DocumentFormatError('duplicate configurable port slot')
             result[e.port] = e.name
     return result
 
@@ -74,7 +75,7 @@ def enabled(endpoint: MidiEndpoint, setup: Setup) -> bool:
 def _text(data: bytes) -> str:
     text, separator, padding = data.partition(b'\0')
     if not separator or not text or any(padding):
-        raise ValueError('invalid MIDI endpoint text')
+        raise DocumentFormatError('invalid MIDI endpoint text')
     return text.decode('ascii')
 
 

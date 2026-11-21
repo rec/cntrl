@@ -3,6 +3,7 @@
 import struct
 
 from . import inputs, models
+from .binary_format import DocumentFormatError
 
 
 def pack(show: models.Setup, named: dict[str, int], nodes: list[bytes]) -> bytes:
@@ -37,7 +38,7 @@ def section_end(data: bytes, offset: int) -> int:
         return offset
     size = struct.unpack_from('<I', data, offset + 4)[0]
     if size < 10 or offset + size > len(data):
-        raise ValueError('invalid banked page section')
+        raise DocumentFormatError('invalid banked page section')
     return offset + size
 
 
@@ -144,7 +145,7 @@ def unpack(
         return result
     count = struct.unpack_from('<H', data, offset + 8)[0]
     if end != offset + 10 + count * 4:
-        raise ValueError('invalid banked page records')
+        raise DocumentFormatError('invalid banked page records')
     for i in range(count):
         page, node = struct.unpack_from('<HH', data, offset + 10 + i * 4)
         result[page] = {'patch': names[node]}

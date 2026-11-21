@@ -3,6 +3,7 @@
 import struct
 
 from . import midi_endpoints, models
+from .binary_format import DocumentFormatError
 
 
 def pack(show: models.Setup, target: models.Target) -> bytes:
@@ -40,18 +41,18 @@ def section_end(data: bytes, offset: int) -> int:
     if data[offset : offset + 4] != b'CLRS':
         return offset
     if len(data) - offset < HEADER.size:
-        raise ValueError('truncated loop reset settings')
+        raise DocumentFormatError('truncated loop reset settings')
     _, enabled, count = HEADER.unpack_from(data, offset)
     end = offset + HEADER.size + count * RECORD.size
     if enabled > 1 or end > len(data):
-        raise ValueError('invalid loop reset settings')
+        raise DocumentFormatError('invalid loop reset settings')
     values: list[models.ControlChange | models.Nrpn | models.Rpn] = []
     for i in range(count):
         output, kind, channel, address, value = RECORD.unpack_from(
             data, offset + HEADER.size + i * RECORD.size
         )
         if output > 15 or channel > 15 or kind not in (1, 2, 6, 7, 8):
-            raise ValueError('invalid loop reset parameter')
+            raise DocumentFormatError('invalid loop reset parameter')
         if kind in (1, 2):
             values.append(
                 models.ControlChange(

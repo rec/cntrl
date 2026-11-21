@@ -3,6 +3,7 @@
 import struct
 
 from . import midi_endpoints, models
+from .binary_format import DocumentFormatError
 
 
 def pack(show: models.Setup, target: models.Target) -> bytes:
@@ -56,7 +57,7 @@ def section_end(data: bytes, offset: int) -> int:
     if data[offset : offset + 4] != b'CLOP':
         return offset
     if offset + CONFIG.size > len(data):
-        raise ValueError('truncated MIDI looper configuration')
+        raise DocumentFormatError('truncated MIDI looper configuration')
     _, version, channels, inputs, outputs, events = CONFIG.unpack_from(data, offset)
     if (
         version != 1
@@ -65,7 +66,7 @@ def section_end(data: bytes, offset: int) -> int:
         or not outputs
         or not 1 <= events <= 65535
     ):
-        raise ValueError('invalid MIDI looper configuration')
+        raise DocumentFormatError('invalid MIDI looper configuration')
     return offset + CONFIG.size
 
 

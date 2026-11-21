@@ -40,17 +40,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     warning. Verify on the pedal with a USB keyboard under simultaneous
     SD and display load.
 
-15. **CLI error handling can hide unexpected failures (code finding).**
-    `cntrl compile`, `cntrl status`, `cntrl global`, `cntrl language`,
-    `cntrl font-coverage`, setup creation, history, selection, listing, rotation,
-    deletion, copy, download and storage-root recovery, target adapter
-    commands, song library copy and download, emulator startup and replay,
-    backup, restore, verification, conversion, and setup sync preview,
-    apply and recovery classify known failures at their command boundaries.
-    The dispatcher no longer catches bare `OSError` or `ValueError`.
-    Audit the remaining broad catches around compiled setup decoding,
-    including history comparison and setup download.
-
 ## P2 | Distribution and release risks to verify
 
 16. **Bitmap font provenance needs a release decision.**

@@ -2,6 +2,7 @@
 
 import struct
 
+from .binary_format import DocumentFormatError
 from .models import Setup, Target
 
 
@@ -21,11 +22,11 @@ def section_end(data: bytes, offset: int) -> int:
     if data[offset : offset + 4] != b'CREL':
         return offset
     if offset + HEADER.size > len(data):
-        raise ValueError('truncated relay metadata')
+        raise DocumentFormatError('truncated relay metadata')
     count = HEADER.unpack_from(data, offset)[1]
     end = offset + HEADER.size + count * RECORD.size
     if not count or count > 32 or end > len(data):
-        raise ValueError('invalid relay metadata size')
+        raise DocumentFormatError('invalid relay metadata size')
     return end
 
 
@@ -36,10 +37,10 @@ def unpack(data: bytes, offset: int) -> dict[str, bool]:
         name, resting = RECORD.unpack_from(data, cursor)
         text, separator, padding = name.partition(b'\0')
         if not text or not separator or any(padding) or resting > 1:
-            raise ValueError('invalid relay contact record')
+            raise DocumentFormatError('invalid relay contact record')
         label = text.decode('ascii')
         if label in result:
-            raise ValueError('duplicate relay contact')
+            raise DocumentFormatError('duplicate relay contact')
         result[label] = bool(resting)
     return result
 

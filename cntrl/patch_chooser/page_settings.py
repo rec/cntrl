@@ -4,6 +4,7 @@ import struct
 
 from ..fonts.catalogue import UI_FONTS
 from . import graphics, midi_endpoints, models
+from .binary_format import DocumentFormatError
 
 
 def pack(show: models.Setup, target: models.Target) -> list[int]:
@@ -101,7 +102,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         number = UI_FONTS['Arimo'] if w[index] in REMOVED_UI_FONTS else w[index]
         font = next((n for n, i in UI_FONTS.items() if i == number), None)
         if font is None:
-            raise ValueError(f'unknown UI font ID {number}')
+            raise DocumentFormatError(f'unknown UI font ID {number}')
         result[name] = font
     for i, n in (
         (16, 'off_color'),
@@ -120,7 +121,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
 def unpack_clock(data: bytes, offset: int, names: dict[int, str]) -> dict[str, object]:
     mask, options, *slots = CLOCK.unpack_from(data, offset)
     if options not in (0, 2):
-        raise ValueError('clock_source has been retired; recompile this setup')
+        raise DocumentFormatError('clock_source has been retired; recompile this setup')
     return {
         'clock_outputs': [n for i, n in names.items() if mask & (1 << i)],
         'autoselect_clock': not bool(options & 2),
