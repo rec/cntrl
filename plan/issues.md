@@ -11,11 +11,11 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 7. **Native I/O stalls block the emulator window (code finding).**
    [The GUI timer](../cntrl/emulator/gui.py#L585) calls session operations
-   synchronously, with a [ten-second request watchdog](../cntrl/emulator/backend.py#L146).
-   User input and repainting stop during a stall. Also, [native advance](../firmware/emulator/main.cpp#L559)
-   steps through every elapsed millisecond, so a large replay gap or host
-   suspend can look like a dead child. Measure idle catch-up and stuck-peer
-   behavior separately before choosing execution and cancellation bounds.
+   synchronously, so user input and repainting stop during a stall. Headless
+   replay now advances long gaps in watchdog-bounded requests. A three-hour
+   replay that previously timed out completed in 31 seconds, and a stalled
+   request still hits its deadline. Live catch-up after host suspend and
+   keeping the window responsive during a stalled request remain open.
 
 9. **Mirroring needs a device-side consistency check.**
    [Capture](../cntrl/emulator/mirror.py#L44) rechecks every downloaded file,

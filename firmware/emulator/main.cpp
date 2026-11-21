@@ -555,10 +555,10 @@ public:
             display_poll(board.milliseconds());
         }
     }
-    void advance(uint64_t time) {
+    void advance(uint64_t time, bool finish) {
         if (time < board.time) throw std::runtime_error("virtual time cannot move backward");
         while (board.time < time && !board.stock_firmware) { board.time += std::min(uint64_t(1000),time - board.time); tick(); }
-        settle();
+        if (finish) settle();
     }
     void tick();
     void cleanup() {
@@ -680,7 +680,7 @@ void Session::command(const std::vector<uint8_t> &bytes) {
     const auto *p = bytes.data(); unsigned length = unsigned(bytes.size());
     if (board.stock_firmware && p[0] != 9 && p[0] != 12) return;
     if (board.stock_pending && p[0] != 1 && p[0] != 4 && p[0] != 9 && p[0] != 12) return;
-    if (p[0] == 1 && length == 9) advance(u64(p + 1));
+    if (p[0] == 1 && (length == 9 || (length == 10 && p[9] == 0))) advance(u64(p + 1),length == 9);
     else if (p[0] == 2 && length == 3 && p[1] < target::button_count && p[2] <= 1) {
         board.held = uint8_t((board.held & ~(1u << p[1])) | (unsigned(p[2]) << p[1]));
         tick(); settle();

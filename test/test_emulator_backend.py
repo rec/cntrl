@@ -819,11 +819,13 @@ def test_a_pipe_close_failure_still_reaps_the_process_and_reader(
 
 
 @pytest.mark.parametrize('partial', [False, True])
+@pytest.mark.parametrize('replay', [False, True])
 def test_an_unresponsive_native_request_has_a_deadline(
     backend_files: BackendFiles,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     partial: bool,
+    replay: bool,
 ) -> None:
     files = backend_files
     with backend.Session(
@@ -877,7 +879,7 @@ def test_an_unresponsive_native_request_has_a_deadline(
         monkeypatch.setattr(backend, 'Timer', timer)
         monkeypatch.setattr(session.output, 'get', get)
         with pytest.raises(ValueError, match='native emulator response timed out'):
-            session.advance(0xFFFFFFFFFFFFFFFF)
+            session.advance(0xFFFFFFFFFFFFFFFF, replay=replay)
         assert clock.now == pytest.approx(session.response_timeout)
         assert watchdogs[0].started and watchdogs[0].fired and watchdogs[0].cancelled
         assert session.failed
@@ -1029,16 +1031,20 @@ def test_long_preparation_finishes_before_the_request_is_acknowledged(
         )
 
 
+@pytest.mark.parametrize('segment_us', [10_000_000, 7_000])
 def test_recorded_inputs_replay_the_same_midi_and_pixels(
-    backend_files: BackendFiles, tmp_path: Path
+    backend_files: BackendFiles,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    segment_us: int,
 ) -> None:
     files = backend_files
     with backend.Session(
         files.layout, files.target, files.executable, tmp_path / 'original', files.setup
     ) as session:
-        session.advance(20000)
+        session.advance(20001)
         session.button('a', True)
-        session.advance(40000)
+        session.advance(40001)
         session.button('a', False)
         session.advance(80000)
         scenario = Scenario(
@@ -1050,6 +1056,7 @@ def test_recorded_inputs_replay_the_same_midi_and_pixels(
         expected_frames = dict(session.frames)
         path = tmp_path / 'recording.toml'
         path.write_text(tomlkit.dumps(scenario.model_dump(mode='json')))
+    monkeypatch.setattr(backend, 'MAX_REPLAY_ADVANCE_US', segment_us)
     with backend.Session(
         files.layout, files.target, files.executable, tmp_path / 'replayed', files.setup
     ) as session:

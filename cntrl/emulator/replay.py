@@ -106,7 +106,7 @@ class Scenario(BaseModel, frozen=True):
                 )
         session.seed(self.seed)
         for event in self.events:
-            session.advance(round(event.at * 1000000))
+            session.advance(round(event.at * 1000000), replay=True)
             if event.kind == 'button':
                 session.button(event.target, bool(event.value))
             elif event.kind == 'key':
@@ -125,6 +125,6 @@ class Scenario(BaseModel, frozen=True):
                 session.cleanup()
             else:
                 session.text(event.text, bool(event.value))
-        session.advance(round(self.until * 1000000))
+        session.advance(round(self.until * 1000000), replay=True)
 
     model_config = ConfigDict(extra='forbid')
