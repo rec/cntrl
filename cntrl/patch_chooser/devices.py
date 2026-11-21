@@ -7,6 +7,10 @@ from pydantic import BaseModel
 from serial.tools.list_ports import comports
 
 
+class DeviceSelectionError(ValueError):
+    """The user could not select a connected cntrl device."""
+
+
 class Device(BaseModel, frozen=True):
     port: Path
     name: str
@@ -19,7 +23,11 @@ class Device(BaseModel, frozen=True):
 
 def connected() -> list[Device]:
     result: dict[Path, Device] = {}
-    for port in comports():
+    try:
+        ports = comports()
+    except OSError as error:
+        raise DeviceSelectionError(str(error)) from error
+    for port in ports:
         name = port.product or port.description or ''
         if is_cntrl(name, port.manufacturer or ''):
             endpoint = Path(port.device)
@@ -34,7 +42,7 @@ def select_port(port: Path | None = None) -> Path:
         return port
     devices = connected()
     if not devices:
-        raise ValueError(
+        raise DeviceSelectionError(
             'No cntrl device found. Connect it by USB and make sure '
             'cntrl firmware is running.'
         )
@@ -44,7 +52,7 @@ def select_port(port: Path | None = None) -> Path:
     for i, device in enumerate(devices, 1):
         print(f'  {i}. {device.label}', file=sys.stderr)
     if not sys.stdin.isatty():
-        raise ValueError(
+        raise DeviceSelectionError(
             'Multiple cntrl devices found. Run interactively to choose a device, '
             'or connect only one.'
         )
@@ -52,9 +60,9 @@ def select_port(port: Path | None = None) -> Path:
     try:
         answer = input().strip()
     except EOFError:
-        raise ValueError('Device selection cancelled') from None
+        raise DeviceSelectionError('Device selection cancelled') from None
     if not answer.isdecimal() or not 1 <= int(answer) <= len(devices):
-        raise ValueError(f'Choose a device number from 1 to {len(devices)}')
+        raise DeviceSelectionError(f'Choose a device number from 1 to {len(devices)}')
     return devices[int(answer) - 1].port
 
 

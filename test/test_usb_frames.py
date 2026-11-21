@@ -11,6 +11,16 @@ from cntrl.patch_chooser.transport import SerialConnection, UsbProtocolError
 from cntrl.patch_chooser.usb_frames import MAGIC, Frame, Kind
 
 
+@pytest.mark.parametrize('reader', ['line', 'data'])
+def test_invalid_text_reply_reports_a_usb_protocol_error(reader: str) -> None:
+    connection = SerialConnection(Path('/unused'), retry=False)
+    connection.received.append(
+        Frame(kind=Kind.text, session=1, sequence=1, payload=b'\xff')
+    )
+    with pytest.raises(UsbProtocolError, match='USB text reply is not ASCII'):
+        getattr(connection, reader)()
+
+
 def test_unattended_connection_stops_retrying_at_its_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

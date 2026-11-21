@@ -139,3 +139,34 @@ def test_disk_speed_help_describes_the_benchmark_and_its_options(
     assert 'bytes/second' in help_text
     assert '--port' in help_text
     file_regression.check(help_text)
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_status_preserves_unexpected_failures(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected status failure')
+
+    def fail(port: Path, reset_starts: bool = False) -> str:
+        raise failure
+
+    monkeypatch.setattr(transport, 'device_status', fail)
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'status', '--port', '/unused'])
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+
+
+@pytest.mark.parametrize(
+    'error_type', [transport.UsbReplyError, transport.UsbCommandTimeout]
+)
+def test_status_reports_known_transport_failures(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    def fail(port: Path, reset_starts: bool = False) -> str:
+        raise error_type('pedal did not complete the command')
+
+    monkeypatch.setattr(transport, 'device_status', fail)
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'status', '--port', '/unused'])
+    with pytest.raises(SystemExit, match='pedal did not complete the command'):
+        cli.main()
