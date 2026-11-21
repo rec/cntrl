@@ -29,6 +29,7 @@ class RecordedSession(Session):
     'kind,target,value',
     [
         ('button', 'a', 2),
+        ('key', '', 9),
         ('block', 'din', -1),
         ('expression', 'a', 50),
         ('expression', '0', 1024),

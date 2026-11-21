@@ -217,7 +217,8 @@ Other event kinds are `midi` (`target` endpoint name and `data` byte list),
 `block` (`target` output name and `value` zero/one), `connection` (`target`
 endpoint and `value` zero/one), `expression` (`target` port slot as text and
 `value` raw 0..1023), `auxiliary` (`target` port slot and `value` contact mask
-0..3), `cleanup`, and `text` (`text` ASCII cue and optional `value = 1` for
+0..3), `key` (`value` is a printable ASCII byte, 8 for Backspace, 10 for Enter,
+or 27 for Escape), `cleanup`, and `text` (`text` ASCII cue and optional `value = 1` for
 warning). Input follows production debounce and scheduling;
 a press/release at one instant is not a debounced physical press.
 

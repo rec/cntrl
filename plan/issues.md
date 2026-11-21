@@ -71,13 +71,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     Explicit recording or streaming to disk would preserve replay fidelity
     while bounding live memory.
 
-12. **Scenario export loses keyboard name edits (code finding).**
-    [Session.key](../cntrl/emulator/backend.py#L433) sends accepted keys
-    without recording a replay event. The [scenario schema](../cntrl/emulator/replay.py#L16)
-    has no keyboard event. A recorded rename may open the editor on replay
-    without retyping the name or submitting it. Capture a rename and check
-    that replay reproduces its resulting persistent state.
-
 13. **Asset upload reports failure after committing an overwrite
     (code finding).** [FileTransfer END](../firmware/include/cntrl/file_transfer.h#L55)
     installs the replacement before deleting the previous file. A cleanup

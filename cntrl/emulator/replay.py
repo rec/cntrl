@@ -13,12 +13,18 @@ if TYPE_CHECKING:
     from .backend import Session
 
 
+def validate_name_key(key: int) -> None:
+    if key not in (8, 10, 27) and not 32 <= key <= 126:
+        raise ValueError('name input requires printable ASCII or an editing key')
+
+
 class Event(BaseModel, frozen=True):
     at: Annotated[
         float, Field(ge=0, allow_inf_nan=False), units.unit_validator('second')
     ]
     kind: Literal[
         'button',
+        'key',
         'midi',
         'block',
         'connection',
@@ -34,6 +40,8 @@ class Event(BaseModel, frozen=True):
 
     @model_validator(mode='after')
     def valid_input(self) -> Self:
+        if self.kind == 'key':
+            validate_name_key(self.value)
         if self.kind in (
             'button',
             'block',
@@ -101,6 +109,8 @@ class Scenario(BaseModel, frozen=True):
             session.advance(round(event.at * 1000000))
             if event.kind == 'button':
                 session.button(event.target, bool(event.value))
+            elif event.kind == 'key':
+                session.key(event.value)
             elif event.kind == 'midi':
                 session.midi(event.target, bytes(event.data))
             elif event.kind == 'block':
