@@ -1,0 +1,263 @@
+"""Persist setup sync reviews, baselines, and interrupted publications."""
+
+import os
+from collections.abc import Mapping
+from enum import StrEnum, auto
+from hashlib import sha256
+from pathlib import Path
+from tempfile import NamedTemporaryFile, mkdtemp
+from typing import Literal, cast
+
+import tomlkit
+from pydantic import BaseModel, Field
+
+from ..file_lock import writer_lock
+from . import binary_format, data_files, device_globals, global_overlay, resolved
+
+
+class Choice(StrEnum):
+    host = auto()
+    pedal = auto()
+    unresolved = auto()
+
+
+class Value(BaseModel, frozen=True):
+    """Represent absence separately from any TOML value."""
+
+    present: bool = False
+    value: object = ''
+
+
+class Change(BaseModel, frozen=True):
+    setup: str
+    path: list[str | int]
+    base: Value
+    host: Value
+    pedal: Value
+    choice: Choice
+    destination: data_files.Location | None = None
+    affects: list[str] = Field(default_factory=list)
+    note: str = ''
+    remove_inherited: bool = False
+    scope: Literal['setup', 'device-global'] = 'setup'
+    setting_override: Literal['none', 'set', 'inherit'] = 'none'
+    setting_field: int | None = None
+
+
+class Source(BaseModel, frozen=True):
+    file: Path
+    before: str
+    present: bool = True
+
+
+class Review(BaseModel, frozen=True):
+    root: Path
+    recipe: data_files.Sources
+    baseline: str
+    sources: list[Source]
+    host: dict[str, str]
+    pedal: dict[str, str]
+    changes: list[Change]
+    global_snapshot: str | None = None
+
+
+def digest(data: bytes) -> str:
+    return sha256(data).hexdigest()
+
+
+def write_record(path: Path, value: Mapping[str, object]) -> None:
+    replace(path, tomlkit.dumps(value).encode())
+
+
+def replace(path: Path, data: bytes) -> None:
+    """Publish one file atomically using a temporary sibling on every platform."""
+    with NamedTemporaryFile(
+        dir=path.parent, prefix=f'.{path.name}-', delete=False
+    ) as output:
+        temporary = Path(output.name)
+        try:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        except OSError:
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        if path.exists():
+            temporary.chmod(path.stat().st_mode)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def check_pending(root: Path) -> None:
+    if (root / 'pending.toml').exists():
+        raise ValueError(
+            f'interrupted apply: cntrl setup sync --recover {root / "pending.toml"}'
+        )
+
+
+def base_record(root: Path) -> bytes:
+    path = root / 'base.toml'
+    return path.read_bytes() if path.exists() else b''
+
+
+def baseline(root: Path) -> dict[str, bytes]:
+    record = base_record(root)
+    if not record:
+        return {}
+    files = tomlkit.parse(record.decode())['setups']
+    result: dict[str, bytes] = {}
+    for n, entry in files.items():
+        data = (root / entry['file']).read_bytes()
+        if digest(data) != entry['checksum']:
+            raise ValueError(f'{n}: damaged synchronization baseline')
+        result[n] = data
+    return result
+
+
+def global_baseline(root: Path) -> global_overlay.Overlay | None:
+    record = base_record(root)
+    if record:
+        entry = tomlkit.parse(record.decode()).unwrap().get('device_globals')
+        if isinstance(entry, dict):
+            data = (root / entry['file']).read_bytes()
+            if digest(data) != entry['checksum']:
+                raise ValueError('damaged device-global synchronization baseline')
+            return device_globals.load(data)
+    recovered = root.parent / 'pedal/device-globals.toml'
+    return device_globals.load(recovered.read_bytes()) if recovered.exists() else None
+
+
+def migrate_baselines(root: Path) -> None:
+    """Publish converted baselines together while retaining their source snapshots."""
+    check_pending(root)
+    original = base_record(root)
+    if not original:
+        return
+    saved = baseline(root)
+    converted = {n: binary_format.wrap(resolved.upgrade(d)) for n, d in saved.items()}
+    if converted == saved:
+        return
+    record = tomlkit.parse(original.decode()).unwrap()
+    entries = cast(dict[str, dict[str, str]], record['setups'])
+    version = binary_format.format_name(binary_format.DEVELOPMENT_FORMAT)
+    folder = Path(mkdtemp(prefix=f'format-{version}-', dir=root))
+    replace(folder / 'base.before', original)
+    write_record(
+        folder / 'conversion.toml', {'format': version, 'setups': list(converted)}
+    )
+    write_record(
+        root / 'pending.toml',
+        {'review': str(folder / 'conversion.toml'), 'sources': []},
+    )
+    for name, data in converted.items():
+        source = root / entries[name]['file']
+        destination = source.parent / f'.converted-{version}-{digest(data)}.bin'
+        if destination.exists() and destination.read_bytes() != data:
+            raise ValueError(f'{destination}: converted baseline checksum differs')
+        replace(destination, data)
+        entries[name] = {
+            'file': str(destination.relative_to(root)),
+            'checksum': digest(data),
+        }
+    write_record(root / 'base.toml', record)
+    write_record(folder / 'applied.toml', {'complete': True})
+    (root / 'pending.toml').unlink()
+
+
+def advance(root: Path, folder: Path, names: list[str]) -> None:
+    previous = (
+        tomlkit.parse(base_record(root).decode()).unwrap()
+        if base_record(root)
+        else {'setups': {}}
+    )
+    setups = cast(dict[str, object], previous['setups'])
+    for n in names:
+        path = folder / f'{n}.bin'
+        setups[n] = {
+            'file': str(path.relative_to(root)),
+            'checksum': digest(path.read_bytes()),
+        }
+    globals_path = folder / 'device-globals.toml'
+    if globals_path.exists():
+        previous['device_globals'] = {
+            'file': str(globals_path.relative_to(root)),
+            'checksum': digest(globals_path.read_bytes()),
+        }
+    write_record(root / 'base.toml', previous)
+
+
+def publish(path: Path, review: Review, candidates: dict[Path, bytes]) -> int:
+    sources = []
+    for i, (p, after) in enumerate(candidates.items()):
+        present = p.exists()
+        before = p.read_bytes() if present else b''
+        if present and before == after:
+            continue
+        (path.parent / f'apply-{i}.before').write_bytes(before)
+        (path.parent / f'apply-{i}.after').write_bytes(after)
+        sources.append(
+            {
+                'file': str(p),
+                'before': f'apply-{i}.before',
+                'after': f'apply-{i}.after',
+                'present': present,
+            }
+        )
+    journal = {'review': str(path), 'sources': sources}
+    # Check again immediately before the first replacement, after compilation.
+    for s in review.sources:
+        if (
+            s.file.exists() != s.present
+            or digest(s.file.read_bytes() if s.present else b'') != s.before
+        ):
+            raise ValueError(f'{s.file}: source changed during apply')
+    if digest(base_record(review.root)) != review.baseline:
+        raise ValueError('baseline changed during apply')
+    before_base = base_record(review.root)
+    (path.parent / 'base.before').write_bytes(before_base)
+    write_record(review.root / 'pending.toml', journal)
+    for s in sources:
+        replace(
+            Path(cast(str, s['file'])),
+            (path.parent / cast(str, s['after'])).read_bytes(),
+        )
+    advance(review.root, path.parent, list(review.host))
+    write_record(path.parent / 'applied.toml', {'complete': True})
+    (review.root / 'pending.toml').unlink()
+    return len(sources)
+
+
+def recover(path: Path) -> None:
+    path = path.resolve()
+    with writer_lock(path.parent, operation='setup sync operation'):
+        recover_locked(path)
+
+
+def recover_locked(path: Path) -> None:
+    journal = tomlkit.parse(path.read_bytes().decode()).unwrap()
+    folder = Path(journal['review']).parent
+    # Refuse to discard edits made after an interrupted publication.
+    for s in journal['sources']:
+        current = Path(s['file']).read_bytes() if Path(s['file']).exists() else None
+        if current not in (
+            (folder / s['before']).read_bytes() if s.get('present', True) else None,
+            (folder / s['after']).read_bytes(),
+        ):
+            raise ValueError(
+                f'{s["file"]}: changed after interruption; restore manually'
+            )
+    for s in journal['sources']:
+        if s.get('present', True):
+            replace(Path(s['file']), (folder / s['before']).read_bytes())
+        else:
+            Path(s['file']).unlink(missing_ok=True)
+    before = (folder / 'base.before').read_bytes()
+    if before:
+        replace(path.parent / 'base.toml', before)
+    else:
+        (path.parent / 'base.toml').unlink(missing_ok=True)
+    (folder / 'applied.toml').unlink(missing_ok=True)
+    path.unlink()
+    print('Restored original sources and baseline. Preview again before applying.')

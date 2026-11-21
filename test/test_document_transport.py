@@ -24,6 +24,7 @@ from cntrl.patch_chooser import (
     models,
     resolved,
     setup_sync,
+    setup_sync_store,
     transport,
 )
 from cntrl.patch_chooser.setup_compiler import compile_inputs
@@ -277,7 +278,7 @@ def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
                 for d in overlays
             )
             report = setup_sync.preview(inputs, client)
-            review = setup_sync.Review.model_validate(
+            review = setup_sync_store.Review.model_validate(
                 tomlkit.parse(report.read_text()).unwrap()
             )
             assert len(review.changes) == 1
@@ -342,7 +343,7 @@ def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
                 for p in recovered
             )
             report = setup_sync.preview(inputs, client)
-            review = setup_sync.Review.model_validate(
+            review = setup_sync_store.Review.model_validate(
                 tomlkit.parse(report.read_text()).unwrap()
             )
             assert len(review.changes) == 1
@@ -544,7 +545,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
             )
         )
         root = setup_sync.store(inputs)
-        assert set(setup_sync.baseline(root)) == {'Show', 'Other'}
+        assert set(setup_sync_store.baseline(root)) == {'Show', 'Other'}
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             original = binary_format.core(client.download('Show'))
@@ -583,7 +584,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
         source.write_text(source.read_text().replace('timeout=30', 'timeout=60'))
         with transport.SerialConnection(Path(port)) as connection:
             review_path = setup_sync.preview(inputs, transport.SetupClient(connection))
-        review = setup_sync.Review.model_validate(
+        review = setup_sync_store.Review.model_validate(
             tomlkit.parse(review_path.read_text()).unwrap()
         )
         assert all(c.choice == 'pedal' for c in review.changes)
@@ -594,7 +595,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
         assert authored['screensaver_timeout'] == 60
         assert authored['instruments']['piano']['channel'] == 5
         assert authored['patches']['loud'] == {'parent': 'A', 'volume': 110}
-        assert setup_sync.baseline(root)['Show'] == bytes(edited)
+        assert setup_sync_store.baseline(root)['Show'] == bytes(edited)
         # Re-importing after an intentional host revert must keep the revert.
         source.write_text(text.replace('brightness=75', 'brightness=100'))
         with transport.SerialConnection(Path(port)) as connection:
@@ -672,7 +673,7 @@ def test_source_sync_keeps_inherited_edits_local_and_checks_shared_defaults(
             client.copy('Show', bytes(edited), True)
             client.ok('CNTRL SETUP FINISH')
             report = setup_sync.preview(inputs, client)
-        review = setup_sync.Review.model_validate(
+        review = setup_sync_store.Review.model_validate(
             tomlkit.parse(report.read_text()).unwrap()
         )
         assert review.changes and all(
@@ -871,21 +872,21 @@ def test_shared_sync_requires_review_and_recovers_interrupted_apply(
         with pytest.raises(ValueError, match='source changed since review'):
             setup_sync.apply_review(report)
         first.write_text('brightness=100\n')
-        publish = setup_sync.replace
+        publish = setup_sync_store.replace
 
         def fail_second(path: Path, data: bytes) -> None:
             if path == second:
                 raise OSError('injected interruption')
             publish(path, data)
 
-        before_base = setup_sync.base_record(setup_sync.store(inputs))
+        before_base = setup_sync_store.base_record(setup_sync.store(inputs))
         with monkeypatch.context() as patch:
-            patch.setattr(setup_sync, 'replace', fail_second)
+            patch.setattr(setup_sync_store, 'replace', fail_second)
             with pytest.raises(OSError, match='injected interruption'):
                 setup_sync.apply_review(report)
         assert first.read_text() == 'brightness=75\n'
-        assert setup_sync.base_record(setup_sync.store(inputs)) == before_base
-        setup_sync.recover(setup_sync.store(inputs) / 'pending.toml')
+        assert setup_sync_store.base_record(setup_sync.store(inputs)) == before_base
+        setup_sync_store.recover(setup_sync.store(inputs) / 'pending.toml')
         assert first.read_text() == 'brightness=100\n'
         setup_sync.apply_review(report)
         compiled = compile_inputs(inputs)
@@ -893,8 +894,12 @@ def test_shared_sync_requires_review_and_recovers_interrupted_apply(
             setup_sync.canonical(v)['brightness'] == 75
             for v in compiled.setups.values()
         )
-        assert setup_sync.baseline(setup_sync.store(inputs))['One'] == bytes(edited)
-        assert setup_sync.baseline(setup_sync.store(inputs))['Two'] != bytes(edited)
+        assert setup_sync_store.baseline(setup_sync.store(inputs))['One'] == bytes(
+            edited
+        )
+        assert setup_sync_store.baseline(setup_sync.store(inputs))['Two'] != bytes(
+            edited
+        )
 
 
 def test_shared_sync_refuses_incompatible_accepted_values(
@@ -986,7 +991,7 @@ def test_sync_without_baseline_requires_explicit_two_way_choices(
             )
             client.ok('CNTRL SETUP FINISH')
             report = setup_sync.preview(inputs, client)
-        assert not setup_sync.baseline(setup_sync.store(inputs))
+        assert not setup_sync_store.baseline(setup_sync.store(inputs))
         review = tomlkit.parse(report.read_text())
         assert review['changes'][0]['choice'] == 'unresolved'
         assert review['changes'][0]['base']['present'] is False
@@ -996,7 +1001,9 @@ def test_sync_without_baseline_requires_explicit_two_way_choices(
         report.write_text(tomlkit.dumps(review))
         setup_sync.apply_review(report)
         assert source.read_text() == 'brightness=100\n'
-        assert setup_sync.baseline(setup_sync.store(inputs))['setup'] == bytes(edited)
+        assert setup_sync_store.baseline(setup_sync.store(inputs))['setup'] == bytes(
+            edited
+        )
         cli.run_setup(
             cli.SetupCopy(**inputs.model_dump(), port=Path(port), overwrite=True)
         )
