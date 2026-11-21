@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .. import build, flash, importing, qualify, target_process, upload
 from ..emulator.cli import Emulate, emulate
+from ..emulator.errors import EmulatorError, EmulatorFileError
 from ..file_lock import WriterLockError, WriterLockHeld, writer_lock
 from ..fonts.assets import FontDecodeError
 from ..localization import catalogue
@@ -689,6 +690,8 @@ def main() -> None:
         device_settings.DeviceSettingError,
         devices.DeviceSelectionError,
         DownloadOutputError,
+        EmulatorError,
+        EmulatorFileError,
         FontDecodeError,
         font_coverage.ReportError,
         history.HistoryError,
@@ -734,6 +737,7 @@ def main() -> None:
                 Status,
                 build.Build,
                 device_globals.GlobalCLI,
+                Emulate,
                 flash.Flash,
                 font_coverage.Report,
                 importing.Import,

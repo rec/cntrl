@@ -4,9 +4,11 @@ from pathlib import Path
 from typing import Self
 
 import tomlkit
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from tomlkit.exceptions import ParseError
 
 from .. import catalogue, models
+from .errors import EmulatorError, emulator_files
 
 
 class Placement(BaseModel, frozen=True):
@@ -40,38 +42,48 @@ class EmulatorLayout(BaseModel, frozen=True):
     def bounds(self) -> Self:
         for p in [*self.controls.values(), *self.displays.values(), *self.ports]:
             if p.x + p.width > self.width or p.y + p.height > self.height:
-                raise ValueError('component extends beyond the emulator canvas')
+                raise EmulatorError('component extends beyond the emulator canvas')
         if len({p.port for p in self.ports}) != len(self.ports):
-            raise ValueError('duplicate port placement')
+            raise EmulatorError('duplicate port placement')
         return self
 
     @classmethod
     def load(cls, path: Path) -> 'EmulatorLayout':
-        layout = cls.model_validate(tomlkit.loads(path.read_text()).unwrap())
-        return layout.model_copy(
-            update={
-                'catalogue': (path.parent / layout.catalogue).resolve(),
-                'faceplate': (path.parent / layout.faceplate).resolve()
-                if layout.faceplate is not None
-                else None,
-            }
-        )
+        try:
+            with emulator_files():
+                text = path.read_text()
+            layout = cls.model_validate(tomlkit.loads(text).unwrap())
+        except (UnicodeDecodeError, ParseError, ValidationError) as error:
+            raise EmulatorError(f'{path}: {error}') from error
+        with emulator_files():
+            return layout.model_copy(
+                update={
+                    'catalogue': (path.parent / layout.catalogue).resolve(),
+                    'faceplate': (path.parent / layout.faceplate).resolve()
+                    if layout.faceplate is not None
+                    else None,
+                }
+            )
 
     def hardware(self) -> models.Controller:
-        controllers = catalogue.load_catalogue(self.catalogue)
+        try:
+            with emulator_files():
+                controllers = catalogue.load_catalogue(self.catalogue)
+        except (UnicodeDecodeError, ParseError, ValidationError) as error:
+            raise EmulatorError(f'{self.catalogue}: {error}') from error
         if self.controller not in controllers:
-            raise ValueError(f'unknown controller: {self.controller}')
+            raise EmulatorError(f'unknown controller: {self.controller}')
         controller = controllers[self.controller]
         controls = [c.id for c in controller.controls]
         displays = [d.id for d in controller.displays]
         if len(set(controls)) != len(controls) or len(set(displays)) != len(displays):
-            raise ValueError('controller component IDs must be unique')
+            raise EmulatorError('controller component IDs must be unique')
         if set(self.controls) != set(controls) or set(self.displays) != set(displays):
-            raise ValueError(
+            raise EmulatorError(
                 'layout must place every controller control and display exactly once'
             )
         if any(p.port >= len(controller.ports) for p in self.ports):
-            raise ValueError('layout references an unknown port')
+            raise EmulatorError('layout references an unknown port')
         return controller
 
     model_config = ConfigDict(extra='forbid')

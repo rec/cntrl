@@ -10,7 +10,8 @@ from typing import Annotated, Self
 import tomlkit
 import tyro
 from PIL import Image
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
+from tomlkit.exceptions import ParseError
 
 from ..file_lock import writer_lock
 from ..localization import catalogue
@@ -18,6 +19,7 @@ from ..patch_chooser import data_files, device_globals, languages
 from ..patch_chooser.models import Target
 from ..patch_chooser.setup_bundle import SetupBundle
 from .backend import Session, bind_target, build
+from .errors import EmulatorError, emulator_files
 from .layout import EmulatorLayout
 from .mirror import download
 from .replay import Scenario
@@ -91,9 +93,9 @@ def prepare(
             if p.stem == command.controller
         ]
         if not matches:
-            raise ValueError(f'unknown emulator controller: {command.controller}')
+            raise EmulatorError(f'unknown emulator controller: {command.controller}')
         if len(matches) != 1:
-            raise ValueError(f'ambiguous emulator controller: {command.controller}')
+            raise EmulatorError(f'ambiguous emulator controller: {command.controller}')
         layout_path = matches[0]
         layout = EmulatorLayout.load(layout_path)
         provider = import_module(
@@ -111,35 +113,49 @@ def prepare(
         target_path = command.target
     target = load_target(target_path)
     bind_target(layout, target)
-    storage.mkdir(parents=True, exist_ok=True)
+    with emulator_files():
+        storage.mkdir(parents=True, exist_ok=True)
+        setup_parent = command.setup.resolve().parent
     if command.port is None:
         language_folder = storage / 'cntrl' / 'languages'
-        language_folder.mkdir(parents=True, exist_ok=True)
-        recovered_languages = command.setup.resolve().parent / 'languages'
+        with emulator_files():
+            language_folder.mkdir(parents=True, exist_ok=True)
+        recovered_languages = setup_parent / 'languages'
         for tag in catalogue.locales():
             destination = language_folder / f'{tag}.bin'
-            if not destination.exists():
-                recovered = recovered_languages / f'{tag}.bin'
-                destination.write_bytes(
-                    recovered.read_bytes()
-                    if recovered.exists()
-                    else languages.pack(tag)
-                )
-    overlay = command.setup.resolve().parent / 'device-globals.toml'
+            recovered = recovered_languages / f'{tag}.bin'
+            with emulator_files():
+                if destination.exists():
+                    continue
+                data = recovered.read_bytes() if recovered.exists() else None
+            if data is None:
+                data = languages.pack(tag)
+            with emulator_files():
+                destination.write_bytes(data)
+    overlay = setup_parent / 'device-globals.toml'
     global_folder = storage / 'cntrl' / 'global'
-    if overlay.is_file() and not any(
-        (global_folder / f'{i}.bin').exists() for i in range(2)
-    ):
-        global_folder.mkdir(parents=True, exist_ok=True)
-        (global_folder / '0.bin').write_bytes(
-            device_globals.journal(device_globals.load(overlay.read_bytes()))
+    with emulator_files():
+        needs_globals = overlay.is_file() and not any(
+            (global_folder / f'{i}.bin').exists() for i in range(2)
         )
+    if needs_globals:
+        with emulator_files():
+            data = overlay.read_bytes()
+        try:
+            preference = device_globals.load(data)
+        except (UnicodeDecodeError, ParseError, ValidationError) as error:
+            raise EmulatorError(f'{overlay}: {error}') from error
+        journal = device_globals.journal(preference)
+        with emulator_files():
+            global_folder.mkdir(parents=True, exist_ok=True)
+            (global_folder / '0.bin').write_bytes(journal)
     setup = command.setup
-    with setup.open('rb') as source:
+    with emulator_files(), setup.open('rb') as source:
         compiled = source.read(4) in (b'CSTB', b'CNBF')
     if not compiled:
         setup = storage / '.emulator-build' / 'setup' / 'setup.bin'
-        setup.parent.mkdir(parents=True, exist_ok=True)
+        with emulator_files():
+            setup.parent.mkdir(parents=True, exist_ok=True)
         compile_setup(
             data_files.Sources(
                 document=[str(command.setup)], target=[str(target_path)]
@@ -155,12 +171,16 @@ def load_target(path: Path) -> Target:
         data_files.DataFile(name='target', paths=[path]), True, errors
     )
     if errors:
-        raise ValueError('\n'.join(errors))
-    return Target.model_validate(data)
+        raise EmulatorError('\n'.join(errors))
+    try:
+        return Target.model_validate(data)
+    except ValidationError as error:
+        raise EmulatorError(f'{path}: {error}') from error
 
 
 def save(session: Session, directory: Path) -> None:
-    directory.mkdir(parents=True, exist_ok=True)
+    with emulator_files():
+        directory.mkdir(parents=True, exist_ok=True)
     for display in session.target.displays:
         frame = session.frames[display.id]
         pixels = bytearray(display.width * display.height * 3)
@@ -173,11 +193,13 @@ def save(session: Session, directory: Path) -> None:
                     (value & 31) * 255 // 31,
                 ]
             )
-        Image.frombytes(
+        image = Image.frombytes(
             'RGB',
             (display.width, display.height),
             bytes(pixels),
-        ).save(directory / f'{display.id}.png')
+        )
+        with emulator_files():
+            image.save(directory / f'{display.id}.png')
     records = [
         dict(
             kind=e.kind,
@@ -189,7 +211,9 @@ def save(session: Session, directory: Path) -> None:
         )
         for e in session.messages
     ]
-    (directory / 'trace.toml').write_text(tomlkit.dumps({'events': records}))
+    trace = tomlkit.dumps({'events': records})
+    with emulator_files():
+        (directory / 'trace.toml').write_text(trace)
 
 
 def preview_storage(command: Emulate) -> Path:
@@ -227,14 +251,15 @@ def emulate_locked(
     for kind, suffix in [('fonts', '.cfont'), ('movies', '.cnsa')]:
         for asset in (setup.parent / kind).glob(f'*{suffix}'):
             destination = storage / 'cntrl' / kind / asset.name
-            if destination.exists():
-                if destination.read_bytes() != asset.read_bytes():
-                    raise ValueError(
-                        f'emulator asset differs from saved session: {destination}'
-                    )
-            else:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                copyfile(asset, destination)
+            with emulator_files():
+                if destination.exists():
+                    if destination.read_bytes() != asset.read_bytes():
+                        raise EmulatorError(
+                            f'emulator asset differs from saved session: {destination}'
+                        )
+                else:
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    copyfile(asset, destination)
     executable = build(target, storage / '.emulator-build', command.source_root)
     with Session(layout, target, executable, storage, setup) as session:
         if command.compare_status_fonts:

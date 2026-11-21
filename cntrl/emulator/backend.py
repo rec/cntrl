@@ -23,13 +23,14 @@ from ..firmware.capabilities import header
 from ..fonts.catalogue import FONT_IDS
 from ..patch_chooser.models import Target
 from . import font_comparison
+from .errors import EmulatorError, emulator_files
 from .layout import EmulatorLayout
 from .replay import Event, validate_name_key
 
 MAX_REPLAY_ADVANCE_US = 10_000_000
 
 
-class RequestRejected(ValueError):
+class RequestRejected(EmulatorError):
     """The native engine declined an input and remains available."""
 
 
@@ -45,18 +46,22 @@ class OutputEvent(BaseModel, frozen=True):
 def bind_target(layout: EmulatorLayout, target: Target) -> models.Controller:
     controller = layout.hardware()
     if {c.id for c in controller.controls} != set(target.buttons):
-        raise ValueError('execution target inputs do not match catalogue control IDs')
+        raise EmulatorError(
+            'execution target inputs do not match catalogue control IDs'
+        )
     if set(layout.displays) != {d.id for d in target.displays}:
-        raise ValueError('execution target displays do not match catalogue display IDs')
+        raise EmulatorError(
+            'execution target displays do not match catalogue display IDs'
+        )
     for control in controller.controls:
         if not isinstance(control, models.Button):
-            raise ValueError(
+            raise EmulatorError(
                 f'cntrl backend does not support built-in {control.kind} '
                 f'control {control.id}'
             )
     for display in controller.displays:
         if display.kind != 'graphical':
-            raise ValueError(
+            raise EmulatorError(
                 f'cntrl backend does not support {display.kind} display {display.id}'
             )
     return controller
@@ -68,21 +73,24 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
         and not target.animation_display_streams
         and len(target.animation.streams) != len(target.displays)
     ):
-        raise ValueError(
+        raise EmulatorError(
             'emulator animations require a stream mapping for every display'
         )
     if target.animation is not None and any(
         d.width != target.animation.width or d.height != target.animation.height
         for d in target.displays
     ):
-        raise ValueError('emulator animations require matching-size displays')
-    directory = directory.resolve()
-    source_root = source_root.resolve()
-    directory.mkdir(parents=True, exist_ok=True)
+        raise EmulatorError('emulator animations require matching-size displays')
+    with emulator_files():
+        directory = directory.resolve()
+        source_root = source_root.resolve()
+        directory.mkdir(parents=True, exist_ok=True)
     include = source_root / 'firmware/include'
     source = source_root / 'firmware/emulator/main.cpp'
-    if not source.is_file():
-        raise ValueError(
+    with emulator_files():
+        has_source = source.is_file()
+    if not has_source:
+        raise EmulatorError(
             'the emulator requires a cntrl source checkout; specify --source-root'
         )
     generated = {'target_capabilities.h': header(target)}
@@ -125,26 +133,30 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
         command.insert(
             1, f'{"/D" if sys.platform == "win32" else "-D"}CNTRL_GIT_COMMIT=0x{commit}'
         )
-    for name, text in generated.items():
-        (directory / name).write_text(text)
-    inputs = [
-        source,
-        *source.parent.rglob('*.h'),
-        *include.rglob('*.h'),
-        *(directory / n for n in generated),
-    ]
+    with emulator_files():
+        for name, text in generated.items():
+            (directory / name).write_text(text)
+        inputs = [
+            source,
+            *source.parent.rglob('*.h'),
+            *include.rglob('*.h'),
+            *(directory / n for n in generated),
+        ]
     if sys.platform == 'win32':
         inputs.append(source_root / 'scripts/windows-native.manifest')
-    key = native_cache.build_key(command, directory, inputs)
-    cache = source_root / 'build/native-cache'
-    record = directory / 'emulator.sha256'
-    if not (executable.is_file() and record.is_file() and record.read_text() == key):
-        # A failed compiler may truncate an old executable. Never reuse its old key.
-        record.write_text('')
-        if not native_cache.restore(cache, key, executable):
-            subprocess.run(command, check=True)
-            native_cache.store(cache, key, executable)
-        record.write_text(key)
+    with emulator_files():
+        key = native_cache.build_key(command, directory, inputs)
+        cache = source_root / 'build/native-cache'
+        record = directory / 'emulator.sha256'
+        if not (
+            executable.is_file() and record.is_file() and record.read_text() == key
+        ):
+            # A failed compiler may truncate an old executable. Never reuse its old key.
+            record.write_text('')
+            if not native_cache.restore(cache, key, executable):
+                subprocess.run(command, check=True)
+                native_cache.store(cache, key, executable)
+            record.write_text(key)
     crashes.native_emulator_ref = commit
     return executable
 
@@ -162,9 +174,12 @@ class Session:
     ) -> None:
         self.layout = layout
         self.target = target
-        self.mode = (
-            'pedal mirror' if (storage / 'mirror.toml').is_file() else 'setup preview'
-        )
+        with emulator_files():
+            self.mode = (
+                'pedal mirror'
+                if (storage / 'mirror.toml').is_file()
+                else 'setup preview'
+            )
         self.controller = bind_target(layout, target)
         self.time_us = 0
         self.random_seed = 1
@@ -180,23 +195,24 @@ class Session:
         self.messages: list[OutputEvent] = []
         self.memory_usage: dict[str, int] = {}
         self.frames = {d.id: bytes(d.width * d.height * 2) for d in target.displays}
-        source_hash = sha256(setup.read_bytes()).hexdigest()
-        source_record = storage / 'setup-source.sha256'
-        command = [
-            str(executable.resolve()),
-            str(storage.resolve()),
-            str(setup.resolve()),
-            '0'
-            if source_record.is_file() and source_record.read_text() == source_hash
-            else '1',
-        ]
+        with emulator_files():
+            source_hash = sha256(setup.read_bytes()).hexdigest()
+            source_record = storage / 'setup-source.sha256'
+            command = [
+                str(executable.resolve()),
+                str(storage.resolve()),
+                str(setup.resolve()),
+                '0'
+                if source_record.is_file() and source_record.read_text() == source_hash
+                else '1',
+            ]
         for name in dict.fromkeys(
             [*target.ui_fonts, *(n for n in target.font_sources if n in FONT_IDS)]
         ):
             if name not in FONT_IDS:
-                raise ValueError(f'unknown UI font family: {name}')
+                raise EmulatorError(f'unknown UI font family: {name}')
             if name not in target.font_sources:
-                raise ValueError(
+                raise EmulatorError(
                     f'execution target lacks exported UI font source: {name}'
                 )
             command.extend(
@@ -210,20 +226,26 @@ class Session:
         self.closed = False
         self._cleanup_complete = False
         with ExitStack() as startup:
-            self.process = subprocess.Popen(
-                command,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-            )
+            with emulator_files():
+                self.process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                )
             startup.callback(self.close)
             self.reader.start()
             self.receive()
             if self.mode == 'pedal mirror':
-                self.request(b'\x0e' + (storage / 'status-snapshot.bin').read_bytes())
+                with emulator_files():
+                    snapshot = (storage / 'status-snapshot.bin').read_bytes()
+                self.request(b'\x0e' + snapshot)
             errors = [e.message for e in self.messages if e.kind == 'error']
             if errors:
-                raise ValueError('native emulator startup failed: ' + '; '.join(errors))
-            source_record.write_text(source_hash)
+                raise EmulatorError(
+                    'native emulator startup failed: ' + '; '.join(errors)
+                )
+            with emulator_files():
+                source_record.write_text(source_hash)
             startup.pop_all()
 
     def __enter__(self) -> 'Session':
@@ -302,15 +324,15 @@ class Session:
         while len(self.pending) < size:
             remaining = self.deadline - time.monotonic()
             if remaining <= 0:
-                raise ValueError('native emulator response timed out')
+                raise EmulatorError('native emulator response timed out')
             try:
                 part = self.output.get(timeout=remaining)
             except Empty:
-                raise ValueError('native emulator response timed out') from None
+                raise EmulatorError('native emulator response timed out') from None
             if not part:
                 if self.reader_error is not None:
                     raise self.reader_error
-                raise ValueError(
+                raise EmulatorError(
                     f'native emulator disconnected (exit {self.process.poll()})'
                 )
             self.pending.extend(part)
@@ -320,9 +342,9 @@ class Session:
 
     def request(self, payload: bytes) -> None:
         if self.failed or self.closed:
-            raise ValueError('native emulator session is no longer usable')
+            raise EmulatorError('native emulator session is no longer usable')
         if len(payload) > 65536:
-            raise ValueError('emulator request exceeds 65536 bytes')
+            raise EmulatorError('emulator request exceeds 65536 bytes')
         assert self.process.stdin is not None
         watchdog = Timer(self.response_timeout, self.process.kill)
         watchdog.daemon = True
@@ -346,7 +368,7 @@ class Session:
         while True:
             (size,) = struct.unpack('<I', self.read(4))
             if not 1 <= size <= 65536:
-                raise ValueError('invalid native emulator frame size')
+                raise EmulatorError('invalid native emulator frame size')
             payload = self.read(size)
             if payload == b'\0':
                 for display, pixels in updated.items():
@@ -360,7 +382,7 @@ class Session:
                 timestamp, endpoint = struct.unpack_from('<QB', payload, 1)
                 connections = {e.route: e.name for e in self.target.midi_endpoints}
                 if endpoint not in connections:
-                    raise ValueError(
+                    raise EmulatorError(
                         'native emulator returned an unknown MIDI endpoint'
                     )
                 self.messages.append(
@@ -380,7 +402,7 @@ class Session:
             elif payload[0] == 4 and len(payload) >= 3 and payload[1] in (0, 1):
                 name = payload[2:].decode()
                 if name not in self.target.relay_outputs:
-                    raise ValueError('native emulator returned an unknown relay')
+                    raise EmulatorError('native emulator returned an unknown relay')
                 self.messages.append(
                     OutputEvent(
                         kind='relay',
@@ -425,14 +447,14 @@ class Session:
             elif payload[0] == 10:
                 rejection = payload[1:].decode()
             else:
-                raise ValueError('unknown native emulator response')
+                raise EmulatorError('unknown native emulator response')
 
     def rectangle(self, payload: bytes, updated: dict[str, bytearray]) -> None:
         if len(payload) < 10:
-            raise ValueError('truncated display rectangle')
+            raise EmulatorError('truncated display rectangle')
         screen, x, y, width, height = struct.unpack_from('<5H', payload)
         if screen >= len(self.target.displays):
-            raise ValueError('native emulator returned an unknown display')
+            raise EmulatorError('native emulator returned an unknown display')
         display = self.target.displays[screen]
         if (
             x + width > display.width
@@ -441,7 +463,7 @@ class Session:
             or not height
             or len(payload) != 10 + width * height * 2
         ):
-            raise ValueError('invalid native display rectangle')
+            raise EmulatorError('invalid native display rectangle')
         if display.id not in updated:
             updated[display.id] = bytearray(self.frames[display.id])
         # Match the byte order on both sides by copying each RGB565 pixel as a unit.
@@ -458,7 +480,7 @@ class Session:
 
     def advance(self, time_us: int, *, replay: bool = False) -> None:
         if not self.time_us <= time_us <= 0xFFFFFFFFFFFFFFFF:
-            raise ValueError('virtual time must advance monotonically within uint64')
+            raise EmulatorError('virtual time must advance monotonically within uint64')
         cursor = self.time_us
         self.time_us = time_us
         # Whole-millisecond segments preserve the native tick phase. Intermediate
@@ -490,7 +512,7 @@ class Session:
 
     def button(self, control_id: str, pressed: bool) -> None:
         if control_id not in self.target.buttons:
-            raise ValueError(f'unknown button: {control_id}')
+            raise EmulatorError(f'unknown button: {control_id}')
         was_held = control_id in self.held
         if pressed:
             self.held.add(control_id)
@@ -518,7 +540,7 @@ class Session:
             (c.id for c in self.controller.controls if c.name.upper() == 'F'), None
         )
         if button is None:
-            raise ValueError('Status font comparison requires a switch labelled F')
+            raise EmulatorError('Status font comparison requires a switch labelled F')
         self.font_sample_button = button
         self.font_samples = font_comparison.load()
         self.font_sample_index = 0
@@ -543,9 +565,9 @@ class Session:
             None,
         )
         if connection is None:
-            raise ValueError(f'unknown MIDI input: {endpoint}')
+            raise EmulatorError(f'unknown MIDI input: {endpoint}')
         if not data:
-            raise ValueError('MIDI input requires message bytes')
+            raise EmulatorError('MIDI input requires message bytes')
         for offset in range(0, len(data), 65534):
             self.request(bytes([3, connection.route]) + data[offset : offset + 65534])
         self.events.append(
@@ -560,7 +582,7 @@ class Session:
             None,
         )
         if connection is None:
-            raise ValueError(f'unknown MIDI output: {endpoint}')
+            raise EmulatorError(f'unknown MIDI output: {endpoint}')
         self.request(bytes([4, connection.route, blocked]))
         self.events.append(
             Event(
@@ -576,7 +598,7 @@ class Session:
             (e for e in self.target.midi_endpoints if e.name == endpoint), None
         )
         if connection is None:
-            raise ValueError(f'unknown MIDI endpoint: {endpoint}')
+            raise EmulatorError(f'unknown MIDI endpoint: {endpoint}')
         self.request(bytes([10, connection.route, connected]))
         self.events.append(
             Event(
@@ -594,7 +616,7 @@ class Session:
 
     def expression(self, port: int, value: int) -> None:
         if not 0 <= port < 4 or not 0 <= value <= 1023:
-            raise ValueError('expression requires a port 0..3 and raw value 0..1023')
+            raise EmulatorError('expression requires a port 0..3 and raw value 0..1023')
         self.request(bytes([5, port]) + struct.pack('<H', value))
         self.events.append(
             Event(
@@ -615,7 +637,7 @@ class Session:
 
     def auxiliary(self, port: int, contacts: int) -> None:
         if not 0 <= port < 4 or not 0 <= contacts <= 3:
-            raise ValueError(
+            raise EmulatorError(
                 'auxiliary input requires a port 0..3 and contact mask 0..3'
             )
         self.request(bytes([11, port, contacts]))
@@ -633,11 +655,11 @@ class Session:
         self.random_seed = value
 
     def absolute(self, control_id: str, value: float) -> None:
-        raise ValueError(
+        raise EmulatorError(
             f'cntrl backend does not support built-in absolute control {control_id}'
         )
 
     def relative(self, control_id: str, delta: int) -> None:
-        raise ValueError(
+        raise EmulatorError(
             f'cntrl backend does not support built-in relative control {control_id}'
         )

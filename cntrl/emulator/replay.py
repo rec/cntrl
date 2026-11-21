@@ -6,8 +6,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 import tomlkit
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from reccy.configuration import units
+from tomlkit.exceptions import ParseError
+
+from .errors import EmulatorError, emulator_files
 
 if TYPE_CHECKING:
     from .backend import Session
@@ -15,7 +18,7 @@ if TYPE_CHECKING:
 
 def validate_name_key(key: int) -> None:
     if key not in (8, 10, 27) and not 32 <= key <= 126:
-        raise ValueError('name input requires printable ASCII or an editing key')
+        raise EmulatorError('name input requires printable ASCII or an editing key')
 
 
 class Event(BaseModel, frozen=True):
@@ -48,21 +51,23 @@ class Event(BaseModel, frozen=True):
             'connection',
             'text',
         ) and self.value not in (0, 1):
-            raise ValueError(f'{self.kind} event value must be 0 or 1')
+            raise EmulatorError(f'{self.kind} event value must be 0 or 1')
         if self.kind in ('button', 'midi', 'block', 'connection') and not self.target:
-            raise ValueError(f'{self.kind} event requires a target')
+            raise EmulatorError(f'{self.kind} event requires a target')
         if self.kind == 'midi' and not self.data:
-            raise ValueError('MIDI event requires message bytes')
+            raise EmulatorError('MIDI event requires message bytes')
         if self.kind == 'expression':
             if self.target not in ('0', '1', '2', '3') or not 0 <= self.value <= 1023:
-                raise ValueError(
+                raise EmulatorError(
                     'expression requires a port 0..3 and raw value 0..1023'
                 )
         if self.kind == 'auxiliary':
             if self.target not in ('0', '1', '2', '3') or not 0 <= self.value <= 3:
-                raise ValueError('auxiliary requires a port 0..3 and contact mask 0..3')
+                raise EmulatorError(
+                    'auxiliary requires a port 0..3 and contact mask 0..3'
+                )
         if self.kind == 'text' and not self.text.isascii():
-            raise ValueError('text message must contain ASCII characters')
+            raise EmulatorError('text message must contain ASCII characters')
         return self
 
     model_config = ConfigDict(extra='forbid')
@@ -79,17 +84,24 @@ class Scenario(BaseModel, frozen=True):
     def chronological(self) -> Self:
         times = [e.at for e in self.events]
         if times != sorted(times) or (times and times[-1] > self.until):
-            raise ValueError('scenario events must be chronological and end by until')
+            raise EmulatorError(
+                'scenario events must be chronological and end by until'
+            )
         return self
 
     @classmethod
     def load(cls, path: Path) -> Scenario:
-        return cls.model_validate(tomlkit.loads(path.read_text()).unwrap())
+        try:
+            with emulator_files():
+                text = path.read_text()
+            return cls.model_validate(tomlkit.loads(text).unwrap())
+        except (UnicodeDecodeError, ParseError, ValidationError) as error:
+            raise EmulatorError(f'{path}: {error}') from error
 
     def run(self, session: Session) -> None:
         for event in self.events:
             if event.kind == 'button' and event.target not in session.target.buttons:
-                raise ValueError(f'unknown button: {event.target}')
+                raise EmulatorError(f'unknown button: {event.target}')
             if event.kind in ('midi', 'block', 'connection') and not any(
                 e.name == event.target
                 and (
@@ -101,7 +113,7 @@ class Scenario(BaseModel, frozen=True):
                 )
                 for e in session.target.midi_endpoints
             ):
-                raise ValueError(
+                raise EmulatorError(
                     f'unknown MIDI endpoint for {event.kind}: {event.target}'
                 )
         session.seed(self.seed)

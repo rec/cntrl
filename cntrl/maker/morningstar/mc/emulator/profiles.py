@@ -6,9 +6,10 @@ from typing import Literal
 
 import tomlkit
 import tyro
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .....emulator.backend import bind_target
+from .....emulator.errors import EmulatorError, emulator_files
 from .....emulator.layout import EmulatorLayout
 from .....fonts.catalogue import UI_FONTS
 from .....patch_chooser import data_files, models
@@ -28,11 +29,13 @@ def adapt(base: models.Target, controller: str, mirror: bool = False) -> models.
     catalogue dimensions. MC8 Pro geometry is explicitly provisional.
     """
     if controller not in ('mc6_pro', 'mc8_pro'):
-        raise ValueError(f'no Morningstar emulator profile for {controller}')
+        raise EmulatorError(f'no Morningstar emulator profile for {controller}')
     if mirror and controller != 'mc6_pro':
-        raise ValueError('live mirroring requires a verified physical target profile')
+        raise EmulatorError(
+            'live mirroring requires a verified physical target profile'
+        )
     if base.buttons != list('ABCDEF') or len(base.displays) != 3:
-        raise ValueError(
+        raise EmulatorError(
             'profile source must be the six-switch, three-display MC6 Pro target'
         )
     controls: dict[str, object] = {
@@ -99,22 +102,27 @@ def export(
         data_files.DataFile(name=target.stem, paths=[target]), True, errors
     )
     if errors:
-        raise ValueError('\n'.join(errors))
-    profile = adapt(models.Target.model_validate(data), controller, mirror)
+        raise EmulatorError('\n'.join(errors))
+    try:
+        base = models.Target.model_validate(data)
+    except ValidationError as error:
+        raise EmulatorError(f'{target}: {error}') from error
+    profile = adapt(base, controller, mirror)
     layout = EmulatorLayout.load(
         Path(__file__).with_name(controller.replace('_', '-') + '.toml')
     )
     bind_target(layout, profile)
-    output.mkdir(parents=True, exist_ok=True)
     fonts = output / 'fonts'
-    fonts.mkdir(exist_ok=True)
+    with emulator_files():
+        fonts.mkdir(parents=True, exist_ok=True)
     sources: dict[str, str] = {}
     for n in dict.fromkeys([*profile.ui_fonts, *profile.font_sources]):
         destination = fonts / f'{n}.cfont'
         if n in profile.font_sources:
             source = Path(profile.font_sources[n])
-            if source.resolve() != destination.resolve():
-                shutil.copyfile(source, destination)
+            with emulator_files():
+                if source.resolve() != destination.resolve():
+                    shutil.copyfile(source, destination)
         else:
             source = (
                 Path(__file__).parents[1]
@@ -122,12 +130,15 @@ def export(
                 / 'patch_chooser'
                 / f'font_{n}.cpp'
             )
-            destination.write_bytes(embedded_font(source, n, UI_FONTS[n]))
+            with emulator_files():
+                destination.write_bytes(embedded_font(source, n, UI_FONTS[n]))
         sources[n] = f'fonts/{destination.name}'
     data = profile.model_dump(mode='json', exclude_none=True)
     data['font_sources'] = sources
     path = output / 'target.toml'
-    path.write_text(tomlkit.dumps(data))
+    text = tomlkit.dumps(data)
+    with emulator_files():
+        path.write_text(text)
     return path
 
 
