@@ -440,7 +440,7 @@ def download_files(
         data = client.download(name)
         try:
             text = resolved.export(data)
-        except ValueError as error:
+        except binary_format.DocumentFormatError as error:
             raise transport.UsbReplyError(
                 f'{name}: cannot decode setup: {error}'
             ) from error

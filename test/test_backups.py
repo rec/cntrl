@@ -96,7 +96,9 @@ def test_unknown_ui_font_is_reported_as_invalid_data(target: models.Target) -> N
     status_font = 76 + ni * 68 + nc * 68 + np * 82 + 16 + 15 * 2
     struct.pack_into('<H', data, status_font, 99)
     struct.pack_into('<I', data, 20, crc32(data[28:]))
-    with pytest.raises(ValueError, match='unknown UI font ID 99'):
+    with pytest.raises(
+        binary_format.DocumentFormatError, match='unknown UI font ID 99'
+    ):
         resolved.upgrade(bytes(data))
 
 

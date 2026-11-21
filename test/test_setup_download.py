@@ -13,6 +13,7 @@ from cntrl.patch_chooser import (
     compiler_errors,
     device_globals,
     global_overlay,
+    resolved,
     transport,
 )
 
@@ -141,4 +142,22 @@ def test_language_fallback_requires_the_pedal_to_report_a_missing_pack(
     client.download_language.side_effect = failure
     with pytest.raises(FileNotFoundError) as caught:
         cli.download_files(client, [])
+    assert caught.value is failure
+
+
+def test_download_distinguishes_damaged_setups_from_decoder_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = Mock(spec=transport.SetupClient)
+    client.catalogue.return_value = [
+        transport.SetupEntry(name='Show', modified=0, length=116, checksum=0)
+    ]
+    client.download.return_value = b'truncated'
+    with pytest.raises(transport.UsbReplyError, match='Show: cannot decode setup'):
+        cli.download_files(client, ['Show'])
+
+    failure = ValueError('unexpected setup decoder failure')
+    monkeypatch.setattr(resolved, 'export', Mock(side_effect=failure))
+    with pytest.raises(ValueError) as caught:
+        cli.download_files(client, ['Show'])
     assert caught.value is failure

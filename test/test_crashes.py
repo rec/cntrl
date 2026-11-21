@@ -233,3 +233,38 @@ def test_unstamped_archive_reports_unknown_revision(
     assert '**Build gitref:** unknown' in crashes.issue_body(
         'cntrl', ValueError(), None
     )
+
+
+def test_stalled_git_lookup_reports_unknown_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / '.git').mkdir()
+    monkeypatch.setattr(crashes, '__file__', str(tmp_path / 'cntrl' / 'crashes.py'))
+    lookup = Mock(side_effect=subprocess.TimeoutExpired('git rev-parse', 5))
+    monkeypatch.setattr(crashes.subprocess, 'check_output', lookup)
+    assert crashes.build_ref() == 'unknown'
+    assert lookup.call_args.kwargs['timeout'] == crashes.REPORT_OPERATION_TIMEOUT
+
+
+def test_stalled_browser_does_not_hold_up_the_crash_reporter(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    release = threading.Event()
+    entered = threading.Event()
+
+    def open_browser(url: str) -> bool:
+        entered.set()
+        return release.wait(timeout=5)
+
+    monkeypatch.setattr(crashes, 'review_report', lambda *args: True)
+    monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
+    monkeypatch.setattr(crashes, 'REPORT_OPERATION_TIMEOUT', 0.01)
+    monkeypatch.setattr(crashes.webbrowser, 'open', open_browser)
+    try:
+        crashes.report('cntrl', ValueError('failure'), None)
+        assert entered.wait(timeout=1)
+        assert 'browser launch timed out' in capsys.readouterr().err
+    finally:
+        release.set()

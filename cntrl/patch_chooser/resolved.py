@@ -5,6 +5,7 @@ from typing import cast
 from zlib import crc32
 
 import tomlkit
+from pydantic import ValidationError
 
 from ..fonts.catalogue import UI_FONTS
 from . import (
@@ -506,6 +507,16 @@ def binding_map(data: bytes, root: int) -> dict[str, object]:
 
 
 def export(data: bytes) -> str:
+    try:
+        decoded = _decode(data)
+    except (struct.error, UnicodeDecodeError, ValidationError) as error:
+        raise binary_format.DocumentFormatError(
+            f'invalid compiled setup: {error}'
+        ) from error
+    return tomlkit.dumps(decoded)
+
+
+def _decode(data: bytes) -> dict[str, object]:
     data = binary_format.core(data)
     if len(data) >= 6 and struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
         data = upgrade(data)
@@ -587,12 +598,13 @@ def export(data: bytes) -> str:
                     if k in source or k in result
                 }
             )
-            same_pages = (
-                layout.pack(authored, windows)
-                == data[cursor : layout.section_end(data, cursor)]
-            )
-        except ValueError:
+            authored_pages_wire = layout.pack(authored, windows)
+        except (ValidationError, layout.LayoutError):
             same_pages = False
+        else:
+            same_pages = (
+                authored_pages_wire == data[cursor : layout.section_end(data, cursor)]
+            )
         if not same_pages:
             # Geometry comes from the upgraded wire, but explicit per-page
             # memory allowances exist only in retained authoring metadata.
@@ -812,7 +824,7 @@ def export(data: bytes) -> str:
     result['definitions'] = {'profiles': profiles, 'programs': programs}
     if offset + size > len(data):
         raise binary_format.DocumentFormatError('truncated Patch graph')
-    return tomlkit.dumps(result)
+    return result
 
 
 def _patch(

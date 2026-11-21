@@ -5,6 +5,7 @@ from fractions import Fraction
 from math import lcm
 
 from . import looper, models
+from .binary_format import DocumentFormatError
 
 
 def pack(show: models.Setup, target: models.Target) -> bytes:
@@ -65,7 +66,7 @@ def section_end(data: bytes, offset: int) -> int:
     if data[offset : offset + 4] != b'CARP':
         return offset
     if offset + CONFIG.size > len(data):
-        raise ValueError('truncated arpeggiator configuration')
+        raise DocumentFormatError('truncated arpeggiator configuration')
     (
         _,
         version,
@@ -99,7 +100,7 @@ def section_end(data: bytes, offset: int) -> int:
         or up + down > denominator
         or not seed
     ):
-        raise ValueError('invalid arpeggiator configuration')
+        raise DocumentFormatError('invalid arpeggiator configuration')
     return offset + CONFIG.size
 
 

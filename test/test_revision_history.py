@@ -117,6 +117,23 @@ def test_history_cli_preserves_unexpected_failures(
     assert caught.value is failure
 
 
+def test_history_compare_reports_damaged_compiled_setup() -> None:
+    with pytest.raises(
+        history.HistoryError, match='cannot decode setup for comparison'
+    ):
+        history.compare(b'truncated', b'truncated')
+
+
+def test_history_compare_preserves_unexpected_decoder_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failure = ValueError('unexpected setup decoder failure')
+    monkeypatch.setattr(resolved, 'export', Mock(side_effect=failure))
+    with pytest.raises(ValueError) as caught:
+        history.compare(b'before', b'after')
+    assert caught.value is failure
+
+
 def test_end_of_input_cancels_history_deletion_before_usb(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

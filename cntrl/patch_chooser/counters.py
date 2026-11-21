@@ -3,6 +3,7 @@
 import struct
 
 from . import midi_endpoints, models
+from .binary_format import DocumentFormatError
 
 
 def pack(
@@ -52,11 +53,11 @@ def section_end(data: bytes, offset: int) -> int:
     if data[offset : offset + 4] != b'CCNT':
         return offset
     if offset + HEADER.size > len(data):
-        raise ValueError('truncated counter metadata')
+        raise DocumentFormatError('truncated counter metadata')
     count = HEADER.unpack_from(data, offset)[1]
     end = offset + HEADER.size + count * RECORD.size
     if not count or end > len(data):
-        raise ValueError('invalid counter metadata size')
+        raise DocumentFormatError('invalid counter metadata size')
     return end
 
 

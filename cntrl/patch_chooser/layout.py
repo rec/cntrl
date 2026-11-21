@@ -1,6 +1,13 @@
 """Compile independently cycling regions and their display allocation."""
 
+from pydantic import ValidationError
+
 from . import models
+from .binary_format import DocumentFormatError
+
+
+class LayoutError(ValueError):
+    """The authored page layout cannot be packed with the declared windows."""
 
 
 def pack(show: models.Setup, windows: list[str]) -> bytes:
@@ -24,22 +31,22 @@ def pack(show: models.Setup, windows: list[str]) -> bytes:
     settings = show.layout or models.PageLayout()
     order = settings.order or list(regions)
     if len(order) != len(regions) or set(order) != set(regions):
-        raise ValueError('layout.order must contain each region exactly once')
+        raise LayoutError('layout.order must contain each region exactly once')
     if settings.focus is not None and settings.focus not in regions:
-        raise ValueError('layout.focus must name a configured region')
+        raise LayoutError('layout.focus must name a configured region')
     assignments = [p for n in order for p in regions[n].pages]
     if len(assignments) != len(pages) or set(assignments) != set(pages):
-        raise ValueError('regions must assign every page exactly once')
+        raise LayoutError('regions must assign every page exactly once')
     records = bytearray()
     for name, page in pages.items():
         if page.min_windows > page.maximum_windows(len(windows)):
-            raise ValueError(
+            raise LayoutError(
                 f'pages.{name}.min_windows exceeds the page type maximum '
                 'or target display count'
             )
         priority = page.give_up_windows or list(reversed(windows))
         if len(priority) != len(windows) or set(priority) != set(windows):
-            raise ValueError(
+            raise LayoutError(
                 f'pages.{name}.give_up_windows must list every target display ID once'
             )
         records.extend(encoded_name(name))
@@ -51,7 +58,7 @@ def pack(show: models.Setup, windows: list[str]) -> bytes:
             f'{n}/{p}={pages[p].min_windows}'
             for n, p in zip(order, largest, strict=True)
         )
-        raise ValueError(
+        raise LayoutError(
             f'region minimum windows exceed the target display count: {claims}'
         )
     region_records = bytearray()
@@ -93,10 +100,10 @@ def section_end(data: bytes, offset: int) -> int:
         count, windows, _, reserved = data[offset + 4 : offset + 8]
         end = offset + 8 + windows * 32 + count * (34 + windows)
         if reserved or not windows or end > len(data):
-            raise ValueError('invalid legacy page layout')
+            raise DocumentFormatError('invalid legacy page layout')
         return end
     if offset + 12 > len(data) or data[offset : offset + 4] != b'CPAG':
-        raise ValueError('missing or truncated page layout')
+        raise DocumentFormatError('missing or truncated page layout')
     count, windows, version, regions, left_wins, focus, first, second = data[
         offset + 4 : offset + 12
     ]
@@ -113,7 +120,7 @@ def section_end(data: bytes, offset: int) -> int:
         or (not regions and focus)
         or end > len(data)
     ):
-        raise ValueError('invalid page layout')
+        raise DocumentFormatError('invalid page layout')
     return end
 
 
@@ -137,7 +144,7 @@ def upgrade(data: bytes, offset: int) -> bytes:
     choosers = [n for n, p in settings.pages.items() if p.type == 'patch-chooser']
     if len(choosers) == 1 and windows >= 2:
         if count == 255:
-            raise ValueError(
+            raise DocumentFormatError(
                 'legacy page layout has no room for the full-performance page'
             )
         chooser = choosers[0]
@@ -216,26 +223,28 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     for _ in range(count):
         name = data[cursor : cursor + 32].split(b'\0')[0].decode('ascii')
         if data[cursor + 32] == 0:
-            raise ValueError(
+            raise DocumentFormatError(
                 'Tap Tempo page has been removed; recompile this setup using Time'
             )
         if data[cursor + 32] in (5, 6):
-            raise ValueError(
+            raise DocumentFormatError(
                 'TRS Ports and Expression pages have been removed; recompile this setup'
             )
         if data[cursor + 32] == 9:
-            raise ValueError('Keyboard page has been removed; recompile this setup')
+            raise DocumentFormatError(
+                'Keyboard page has been removed; recompile this setup'
+            )
         if data[cursor + 32] in (2, 7, 8):
-            raise ValueError(
+            raise DocumentFormatError(
                 'Clock and Firmware pages have been removed; recompile this setup'
             )
         if name in pages or data[cursor + 32] >= len(PAGE_TYPES):
-            raise ValueError('invalid page record')
+            raise DocumentFormatError('invalid page record')
         if data[cursor + 33] > window_count:
-            raise ValueError('invalid page window count')
+            raise DocumentFormatError('invalid page window count')
         priority = data[cursor + 34 : cursor + 34 + window_count]
         if sorted(priority) != list(range(window_count)):
-            raise ValueError('invalid logical window priority')
+            raise DocumentFormatError('invalid logical window priority')
         pages[name] = {
             'type': PAGE_TYPES[data[cursor + 32]],
             'min_windows': data[cursor + 33],
@@ -269,7 +278,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             or start + length > count
             or any(p >= count for p in references)
         ):
-            raise ValueError('invalid region cycle')
+            raise DocumentFormatError('invalid region cycle')
         assigned += length
         regions[name] = {'pages': [names[p] for p in references]}
     result: dict[str, object] = {'pages': pages}
@@ -283,8 +292,12 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
                 'focus': order[focus],
             },
         )
-    if pack(models.Setup.model_validate(result), windows) != canonical:
-        raise ValueError('invalid page layout records')
+    try:
+        encoded = pack(models.Setup.model_validate(result), windows)
+    except (LayoutError, ValidationError) as error:
+        raise DocumentFormatError(f'invalid page layout records: {error}') from error
+    if encoded != canonical:
+        raise DocumentFormatError('invalid page layout records')
     return result
 
 

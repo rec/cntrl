@@ -2,6 +2,8 @@
 
 import struct
 
+from .binary_format import DocumentFormatError
+
 
 def pack(
     global_policy: bool | None, pairing_ms: int, policies: list[bool | None]
@@ -21,7 +23,7 @@ def section_end(data: bytes, offset: int) -> int:
     if data[offset : offset + 4] != b'CPUP':
         return offset
     if offset + HEADER.size > len(data):
-        raise ValueError('truncated pickup metadata')
+        raise DocumentFormatError('truncated pickup metadata')
     _, count, policy, _ = HEADER.unpack_from(data, offset)
     end = offset + HEADER.size + count
     if (
@@ -29,7 +31,7 @@ def section_end(data: bytes, offset: int) -> int:
         or policy > 2
         or any(p > 2 for p in data[offset + HEADER.size : end])
     ):
-        raise ValueError('invalid pickup metadata')
+        raise DocumentFormatError('invalid pickup metadata')
     return end
 
 

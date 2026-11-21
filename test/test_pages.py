@@ -1,6 +1,7 @@
 """Named pages share one configuration and preserve order and window layouts."""
 
 from pathlib import Path
+from unittest.mock import DEFAULT, Mock
 
 import pytest
 import tomlkit
@@ -38,6 +39,26 @@ def test_page_configurations_round_trip(pages: dict[str, object]) -> None:
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert list(exported['pages']) == list(pages)
     assert compiler.compile_show(exported, {}, [], target()) == data
+
+
+def test_export_falls_back_only_for_known_authored_layout_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = {'pages': {'live': {}, 'status': {'type': 'status'}}}
+    data = compiler.compile_show(source, {}, [], target())
+    pack = Mock(
+        wraps=layout.pack,
+        side_effect=[DEFAULT, layout.LayoutError('unsupported retained layout')],
+    )
+    monkeypatch.setattr(layout, 'pack', pack)
+    assert list(tomlkit.parse(resolved.export(data))['pages']) == ['live', 'status']
+    assert pack.call_count == 2
+
+    failure = ValueError('unexpected layout failure')
+    pack.side_effect = [DEFAULT, failure]
+    with pytest.raises(ValueError) as caught:
+        resolved.export(data)
+    assert caught.value is failure
 
 
 def test_pong_reserves_three_windows_and_round_trips() -> None:

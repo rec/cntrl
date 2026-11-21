@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from reccy.configuration import units
 
 from . import lfos
+from .binary_format import DocumentFormatError
 
 
 class Endpoint(Protocol):
@@ -560,10 +561,10 @@ def section_end(data: bytes, offset: int) -> int:
     if data[offset : offset + 4] != b'CSTR':
         return offset
     if offset + HEADER.size > len(data):
-        raise ValueError('truncated MIDI stream header')
+        raise DocumentFormatError('truncated MIDI stream header')
     _, size, _, flags = HEADER.unpack_from(data, offset)
     if size < HEADER.size or offset + size > len(data) or flags > 1:
-        raise ValueError('invalid MIDI stream size or flags')
+        raise DocumentFormatError('invalid MIDI stream size or flags')
     return offset + size
 
 

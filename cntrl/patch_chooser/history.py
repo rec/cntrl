@@ -12,7 +12,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field, ValidationError
 
-from . import data_files, display, resolved, setup_bundle, transport
+from . import binary_format, data_files, display, resolved, setup_bundle, transport
 from .usb_frames import Kind
 
 
@@ -194,10 +194,12 @@ class Change(BaseModel, frozen=True):
 
 def compare(before: bytes, after: bytes) -> list[Change]:
     try:
-        first = tomlkit.parse(resolved.export(before)).unwrap()
-        second = tomlkit.parse(resolved.export(after)).unwrap()
-    except ValueError as error:
+        first_text = resolved.export(before)
+        second_text = resolved.export(after)
+    except binary_format.DocumentFormatError as error:
         raise HistoryError(f'cannot decode setup for comparison: {error}') from error
+    first = tomlkit.parse(first_text).unwrap()
+    second = tomlkit.parse(second_text).unwrap()
     result: list[Change] = []
 
     def visit(path: str, old: object, new: object) -> None:

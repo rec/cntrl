@@ -11,6 +11,7 @@ import webbrowser
 from datetime import UTC, datetime
 from importlib.metadata import distribution, version
 from pathlib import Path
+from queue import Empty, Queue
 from types import TracebackType
 from typing import Literal
 from urllib.parse import urlencode
@@ -18,6 +19,7 @@ from urllib.parse import urlencode
 native_emulator_ref: str = ''
 ISSUE_FORM = 'https://github.com/rec/cntrl/issues/new'
 MAX_PREFILLED_URL_LENGTH = 4096
+REPORT_OPERATION_TIMEOUT = 5.0
 
 
 def install(binary: Literal['cntrl', 'emulator']) -> None:
@@ -52,7 +54,7 @@ def report(binary: str, error: BaseException, trace: TracebackType | None) -> No
             return
         if not prefilled:
             url = f'{ISSUE_FORM}?{urlencode({"title": title})}'
-        if not webbrowser.open(url):
+        if not _open_issue_form(url):
             print('Could not open the crash report in a browser.', file=sys.stderr)
     except (OSError, subprocess.CalledProcessError, webbrowser.Error) as failure:
         print(f'Could not open the crash report: {failure}', file=sys.stderr)
@@ -158,15 +160,37 @@ def issue_body(binary: str, error: BaseException, trace: TracebackType | None) -
 
 
 def build_ref() -> str:
-    root = Path(__file__).resolve().parent.parent
     try:
+        root = Path(__file__).resolve().parent.parent
         if (root / '.git').exists():
             return subprocess.check_output(
-                ['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True
+                ['git', '-C', str(root), 'rev-parse', 'HEAD'],
+                text=True,
+                timeout=REPORT_OPERATION_TIMEOUT,
             ).strip()
         return (
             distribution('cntrl').locate_file('cntrl/_git_ref.txt').read_text().strip()
             or 'unknown'
         )
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return 'unknown'
+
+
+def _open_issue_form(url: str) -> bool:
+    result: Queue[bool | Exception] = Queue(maxsize=1)
+
+    def launch() -> None:
+        try:
+            result.put_nowait(webbrowser.open(url))
+        except Exception as error:
+            # Deliver failures to the reporting thread without invoking its hook again.
+            result.put_nowait(error)
+
+    threading.Thread(target=launch, daemon=True).start()
+    try:
+        opened = result.get(timeout=REPORT_OPERATION_TIMEOUT)
+    except Empty:
+        raise TimeoutError('browser launch timed out') from None
+    if isinstance(opened, Exception):
+        raise opened
+    return opened
