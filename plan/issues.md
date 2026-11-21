@@ -17,15 +17,13 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
    suspend can look like a dead child. Measure idle catch-up and stuck-peer
    behavior separately before choosing execution and cancellation bounds.
 
-9. **Mirroring can capture several points in time (code finding).**
-   [Capture](../cntrl/emulator/mirror.py#L40) reads Status first, scans
-   storage, then downloads and rechecks mutable files already seen. A new
-   journal slot created after enumeration can go unchecked, and a
-   status snapshot need not correspond to the final saved state. Size checks
-   alone do not catch same-sized changes to files outside the rechecked set.
-   Failed captures also leave a partial directory. Validate the complete
-   manifest against one generation or require a demonstrably idle device,
-   and distinguish complete captures from partial ones.
+9. **Mirroring needs a device-side consistency check.**
+   [Capture](../cntrl/emulator/mirror.py#L44) rechecks every downloaded file,
+   repeats the storage scan, and publishes completed mirrors atomically.
+   A write after a file's final read, or one reversed between reads, can
+   still escape detection. Validate the complete manifest and Status
+   snapshot against one device-side generation or prove that the device
+   stayed idle.
 
 11. **Live input history grows for the life of the emulator (code finding).**
     [Session input methods](../cntrl/emulator/backend.py#L438) append replay

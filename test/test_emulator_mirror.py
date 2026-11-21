@@ -1,5 +1,6 @@
 """Mirroring preserves the stored session instead of applying current defaults."""
 
+from contextlib import nullcontext
 from hashlib import sha256
 from pathlib import Path
 
@@ -9,13 +10,13 @@ import tyro
 
 from cntrl.emulator import mirror
 from cntrl.emulator.cli import Emulate
-from cntrl.patch_chooser import storage_info, transport
+from cntrl.patch_chooser import binary_format, storage_info, transport
 
 
 class CapturedPedal(transport.SetupClient):
-    def __init__(self, files: dict[str, bytes], changing: bool = False) -> None:
+    def __init__(self, files: dict[str, bytes], changed_file: str) -> None:
         self.files = files
-        self.changing = changing
+        self.changed_file = changed_file
         self.reads: dict[str, int] = {}
 
     def current(self) -> str:
@@ -23,7 +24,10 @@ class CapturedPedal(transport.SetupClient):
 
     def request(self, command: str) -> str:
         assert command == 'CNTRL STATUS'
-        return 'CNTRL READY persistent_root=305419896'
+        return (
+            'CNTRL READY model=mc6-pro persistent_root=305419896 '
+            f'persistent_format={binary_format.DEVELOPMENT_FORMAT}'
+        )
 
     def download_bundle(self) -> bytes:
         return b'exact compiled bundle'
@@ -34,9 +38,10 @@ class CapturedPedal(transport.SetupClient):
 
     def download_state(self, path: str) -> bytes:
         self.reads[path] = self.reads.get(path, 0) + 1
-        if self.changing and self.reads[path] > 1:
-            return b'changed journal'
-        return self.files[path]
+        data = self.files[path]
+        if path == self.changed_file and self.reads[path] > 1:
+            return bytes([data[0] ^ 1]) + data[1:]
+        return data
 
 
 def test_mirror_invocation_uses_the_connected_controller() -> None:
@@ -59,9 +64,9 @@ def test_mirror_requires_one_session_source(arguments: list[str]) -> None:
         tyro.cli(Emulate, args=arguments)
 
 
-@pytest.mark.parametrize('changing', [False, True])
+@pytest.mark.parametrize('change', ['', 'asset', 'journal', 'new-slot'])
 def test_capture_preserves_active_journals_and_exact_asset_set(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changing: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
 ) -> None:
     files = {
         '/cntrl/generations/12345678/setups/bundle/0.bin': b'active bundle journal',
@@ -89,21 +94,38 @@ def test_capture_preserves_active_journals_and_exact_asset_set(
             for p, d in files.items()
         ],
     )
-    monkeypatch.setattr(storage_info, 'read_storage_report', lambda read: report)
-    client = CapturedPedal(files, changing)
-    if changing:
+    second_report = report
+    if change == 'new-slot':
+        new_slot = report.entries[0].model_copy(
+            update={'path': '/cntrl/generations/12345678/setups/bundle/1.bin'}
+        )
+        second_report = report.model_copy(
+            update={'entries': [*report.entries, new_slot]}
+        )
+    reports = iter([report, second_report])
+    monkeypatch.setattr(storage_info, 'read_storage_report', lambda read: next(reports))
+    changed_file = {
+        'asset': '/cntrl/fonts/01020304.cfont',
+        'journal': '/cntrl/generations/12345678/global/0.bin',
+    }.get(change, '')
+    client = CapturedPedal(files, changed_file)
+    monkeypatch.setattr(transport, 'SerialConnection', lambda *a, **k: nullcontext())
+    monkeypatch.setattr(transport, 'SetupClient', lambda _: client)
+    if change:
         with pytest.raises(ValueError, match='changed during mirror capture'):
-            mirror.capture(client, tmp_path, 'CNTRL READY persistent_root=305419896')
-        assert not (tmp_path / 'mirror.toml').exists()
+            mirror.download(Path('/dev/test-pedal'), tmp_path, None)
+        assert not list(tmp_path.iterdir())
         return
-    setup = mirror.capture(client, tmp_path, 'CNTRL READY persistent_root=305419896')
+    model, setup, capture = mirror.download(Path('/dev/test-pedal'), tmp_path, None)
+    assert model == 'mc6-pro'
+    assert list(tmp_path.iterdir()) == [capture]
     assert setup.read_bytes() == b'exact compiled bundle'
-    assert (tmp_path / 'setup-source.sha256').read_text() == sha256(
+    assert (capture / 'setup-source.sha256').read_text() == sha256(
         setup.read_bytes()
     ).hexdigest()
     actual = {
-        p.relative_to(tmp_path / 'cntrl').as_posix(): p.read_bytes()
-        for p in (tmp_path / 'cntrl').rglob('*')
+        p.relative_to(capture / 'cntrl').as_posix(): p.read_bytes()
+        for p in (capture / 'cntrl').rglob('*')
         if p.is_file()
     }
     assert actual == {
@@ -114,6 +136,6 @@ def test_capture_preserves_active_journals_and_exact_asset_set(
         'fonts/01020304.cfont': b'exact font bytes',
         'movies/12345678.bin': b'exact movie bytes',
     }
-    manifest = tomlkit.loads((tmp_path / 'mirror.toml').read_text())
+    manifest = tomlkit.loads((capture / 'mirror.toml').read_text())
     assert manifest['selected'] == 'stored-setup'
-    assert (tmp_path / 'status-snapshot.bin').read_bytes() == b'CSS1' + bytes(107)
+    assert (capture / 'status-snapshot.bin').read_bytes() == b'CSS1' + bytes(107)
