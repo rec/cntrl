@@ -2,7 +2,11 @@
 
 import time
 
-from ....patch_chooser.transport import SerialConnection, UsbProtocolError
+from ....patch_chooser.transport import (
+    SerialConnection,
+    UsbConnectionError,
+    UsbProtocolError,
+)
 from ....patch_chooser.usb_frames import Frame, Kind, Status
 
 
@@ -12,9 +16,12 @@ class Connection(SerialConnection):
 
     def read_frame(self) -> Frame:
         assert self.serial is not None
-        self.serial.timeout = self.timeout
         limit = (self.usb_block_size * 2 + 128) * 2 + 64
-        data = self.serial.read_until(b'\n', limit)
+        try:
+            self.serial.timeout = self.timeout
+            data = self.serial.read_until(b'\n', limit)
+        except OSError as error:
+            raise UsbConnectionError(str(error)) from error
         return decode_reply(data, self.session, self.sequence)
 
     def release(self) -> None:

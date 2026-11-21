@@ -36,7 +36,7 @@ def test_unattended_connection_stops_retrying_at_its_deadline(
     clock.sleep.side_effect = sleep
     monkeypatch.setattr(transport, 'time', clock)
     unplugged = Mock(side_effect=FileNotFoundError('USB unplugged'))
-    monkeypatch.setattr(SerialConnection, 'connect', unplugged)
+    monkeypatch.setattr(transport, 'Serial', unplugged)
 
     with pytest.raises(transport.UsbCommandTimeout) as caught:
         with SerialConnection(Path('unused'), timeout=1.5):
@@ -93,25 +93,41 @@ def test_nonretrying_session_attempts_one_connection_and_preserves_io_failure(
     failure = OSError('USB device disappeared')
     backend = Mock()
     backend.write.side_effect = failure
-    attempts = 0
-
-    def connect() -> None:
-        nonlocal attempts
-        attempts += 1
-        if failure_during_connect:
-            raise failure
-        connection.serial = backend
-
-    monkeypatch.setattr(connection, 'connect', connect)
-    with pytest.raises(OSError) as caught:
+    connect = Mock(
+        return_value=backend, side_effect=failure if failure_during_connect else None
+    )
+    monkeypatch.setattr(transport, 'Serial', connect)
+    with pytest.raises(
+        transport.UsbConnectionError, match='USB device disappeared'
+    ) as caught:
         connection.exchange(b'', Kind.open)
-    assert caught.value is failure and attempts == 1
+    assert caught.value.__cause__ is failure
     assert connection.serial is None
-    with pytest.raises(OSError, match='connection is closed'):
+    with pytest.raises(transport.UsbConnectionError, match='connection is closed'):
         connection.exchange(b'CNTRL QUAL STOP\n')
-    assert attempts == 1
+    connect.assert_called_once()
     if not failure_during_connect:
         backend.close.assert_called_once()
+
+
+def test_host_io_failure_during_handshake_does_not_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = SerialConnection(Path('unused'))
+    backend = Mock()
+    backend.write.side_effect = len
+    connection.serial = backend
+    failure = OSError('could not save serial trace')
+    monkeypatch.setattr(connection, 'read_frame', Mock(side_effect=failure))
+    reconnect = Mock(side_effect=AssertionError('unexpected USB reconnect'))
+    monkeypatch.setattr(transport, 'Serial', reconnect)
+
+    with pytest.raises(OSError) as caught, connection:
+        pytest.fail('A failed USB handshake cannot enter the session')
+
+    assert caught.value is failure
+    reconnect.assert_not_called()
+    backend.close.assert_called_once()
 
 
 def test_explicit_release_and_close_exits_without_a_new_handshake(
