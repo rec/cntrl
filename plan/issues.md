@@ -18,14 +18,12 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
    can overwrite adjacent state on the pedal or in the native emulator.
    Use capacity-aware UTF-8 copies and exercise long, multibyte messages.
 
-2. **Crash reporting can publish private data automatically (code finding).**
-   [The reporter](../cntrl/crashes.py#L35) uses the user's authenticated
-   GitHub CLI and sends exception messages, paths in tracebacks and the
-   interpreter path to the project. Application errors can incorporate user
-   data, and the startup path installs the hook without runtime consent or
-   a preview. This creates a disclosure risk and can post repeated reports
-   under a user's account. Preserve the full report locally and decide how
-   consent, redaction and duplicate reports should work before wider distribution.
+2. **Crash report drafts can contain private data (remaining risk).**
+   [The reporter](../cntrl/crashes.py#L37) now opens a prefilled GitHub form
+   for review and manual submission. The draft URL still contains exception
+   messages and local paths. GitHub receives those details when the form
+   loads, and the URL may be retained in browser history. Decide whether
+   users should be able to review the report locally before opening GitHub.
 
 3. **Concurrent setup sync operations can overwrite each other's recovery
    records (code finding).** [Apply](../cntrl/patch_chooser/setup_sync.py#L975)
@@ -132,16 +130,16 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     Enter, or Escape with no feedback. Verify under realistic SD/display
     load and decide how the editor indicates discarded input.
 
-15. **Crash reporting can hang or fail to describe the actual runtime
-    (code finding).** [Issue filing](../cntrl/crashes.py#L35) has no subprocess
-    timeout and runs before the Qt failure hook exits the application.
+15. **Crash reporting can fail to open a draft or identify the actual runtime
+    (code finding).** GitHub can reject a [prefilled form URL](../cntrl/crashes.py#L37)
+    if the traceback makes it too long. The full traceback remains on stderr.
     [The build hook](../scripts/build_hook.py#L11) skips the stamp when no
     Git metadata exists, which is correct for a stamped source distribution
     but also applies to an ordinary unstamped source archive. In that case
     reading the stamp aborts report creation. Furthermore, the Python package
     revision can differ from [the native emulator revision](../cntrl/emulator/backend.py#L117)
-    selected by `--source-root`. Bound filing time, allow an explicit unknown
-    stamp and report both revisions when available. Separately, the CLI's
+    selected by `--source-root`. Allow an explicit unknown stamp and report
+    both revisions when available. Separately, the CLI's
     [broad conversion of OSError and ValueError to short messages](../cntrl/patch_chooser/cli.py#L765)
     can hide programming errors of those types. Identify expected user and
     transport failures at their boundaries so unexpected ones keep a trace.

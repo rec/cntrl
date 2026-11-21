@@ -1,18 +1,18 @@
 """Collect pinned research examples and inventory their raw configuration features.
 
 This is an offline research inventory by default, not a converter or device tool.
---collect downloads the source manifest's pinned files through the existing gh CLI.
+--collect lists each pinned Git tree and downloads its files from GitHub.
 """
 
-import base64
 import gzip
 import hashlib
 import json
 import re
-import subprocess
 from collections import Counter
 from fnmatch import fnmatchcase
 from pathlib import Path
+from urllib.parse import quote
+from urllib.request import urlopen
 
 import tomlkit
 import tyro
@@ -182,12 +182,9 @@ def collect(directory: Path) -> None:
     files: list[dict[str, object]] = []
     for source in sources:
         repository, revision = source['repository'], source['revision']
-        response = subprocess.run(
-            ['gh', 'api', f'repos/{repository}/git/trees/{revision}?recursive=1'],
-            stdout=subprocess.PIPE,
-            check=True,
-        )
-        tree = json.loads(response.stdout)
+        api = f'https://api.github.com/repos/{repository}/git'
+        with urlopen(f'{api}/trees/{revision}?recursive=1', timeout=30) as response:
+            tree = json.load(response)
         if tree.get('truncated'):
             raise ValueError(f'{repository}: truncated source tree')
         selected = [
@@ -198,12 +195,9 @@ def collect(directory: Path) -> None:
         ]
         for entry in sorted(selected, key=lambda e: e['path']):
             original = entry['path']
-            response = subprocess.run(
-                ['gh', 'api', f'repos/{repository}/git/blobs/{entry["sha"]}'],
-                stdout=subprocess.PIPE,
-                check=True,
-            )
-            content = base64.b64decode(json.loads(response.stdout)['content'])
+            url = f'https://raw.githubusercontent.com/{repository}/{revision}/{quote(original)}'
+            with urlopen(url, timeout=30) as response:
+                content = response.read()
             if len(content) != entry['size']:
                 raise ValueError(
                     f'{repository}/{original}: download size differs from Git tree'

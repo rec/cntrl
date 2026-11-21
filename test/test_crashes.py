@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -50,56 +51,53 @@ def test_report_contains_build_platform_and_complete_traceback(
     assert all(s.startswith('    ') for s in appendix.splitlines())
 
 
-def test_report_files_issue_using_stdin(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize('binary', ['cntrl', 'emulator'])
+def test_report_opens_prefilled_issue_form(
+    monkeypatch: pytest.MonkeyPatch, binary: str
 ) -> None:
     monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
-    calls: list[tuple[list[str], dict[str, object]]] = []
+    urls: list[str] = []
 
-    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        calls.append((args, kwargs))
-        return subprocess.CompletedProcess(
-            args, 0, 'https://github.com/rec/cntrl/issues/123\n', ''
-        )
+    def open_browser(url: str) -> bool:
+        urls.append(url)
+        return True
 
-    monkeypatch.setattr(crashes.subprocess, 'run', run)
+    monkeypatch.setattr(crashes.webbrowser, 'open', open_browser)
     error = chained_error()
-    crashes.report('emulator', error, error.__traceback__)
-    args, kwargs = calls[0]
-    assert args == [
-        'gh',
-        'issue',
-        'create',
-        '--repo',
-        'rec/cntrl',
-        '--title',
-        'Stack trace in emulator',
-        '--body-file',
-        '-',
-    ]
-    assert 'RuntimeError: outer failure' in str(kwargs['input'])
-    assert kwargs['encoding'] == 'utf-8'
-    assert 'https://github.com/rec/cntrl/issues/123' in capsys.readouterr().err
+    error.add_note('Échec & détails #1?')
+    crashes.report(binary, error, error.__traceback__)
+    (url,) = urls
+    form = urlsplit(url)
+    assert (form.scheme, form.netloc, form.path) == (
+        'https',
+        'github.com',
+        '/rec/cntrl/issues/new',
+    )
+    fields = parse_qs(form.query)
+    assert fields['title'] == [f'Stack trace in {binary}']
+    (body,) = fields['body']
+    assert '**Build gitref:** build-ref' in body
+    assert 'ValueError: original failure' in body
+    assert body.endswith('    Échec & détails #1?\n')
 
 
 @pytest.mark.parametrize(
     'failure',
-    [
-        FileNotFoundError('gh missing'),
-        subprocess.CalledProcessError(1, 'gh', stderr='authentication required'),
-    ],
+    [None, crashes.webbrowser.Error('browser launch failed')],
 )
 def test_reporting_failure_preserves_original_traceback(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    failure: Exception,
+    failure: Exception | None,
 ) -> None:
     monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
 
-    def run(*args: object, **kwargs: object) -> None:
-        raise failure
+    def open_browser(url: str) -> bool:
+        if failure is not None:
+            raise failure
+        return False
 
-    monkeypatch.setattr(crashes.subprocess, 'run', run)
+    monkeypatch.setattr(crashes.webbrowser, 'open', open_browser)
     monkeypatch.setattr(sys, 'excepthook', sys.excepthook)
     monkeypatch.setattr(threading, 'excepthook', threading.excepthook)
     crashes.install('cntrl')
@@ -108,7 +106,7 @@ def test_reporting_failure_preserves_original_traceback(
     output = capsys.readouterr().err
     assert 'ValueError: original failure' in output
     assert 'RuntimeError: outer failure' in output
-    assert 'Could not file crash issue:' in output
+    assert 'Could not open the crash report' in output
 
 
 @pytest.mark.parametrize(

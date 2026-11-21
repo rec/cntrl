@@ -30,11 +30,10 @@ The Makefile wraps portable Python commands for POSIX convenience. Old diagnosti
 transcripts describe historical commands, not the current build contract.
 Physical observations apply only to the recorded host/device combination.
 
-Dispatch complete host and firmware qualification explicitly:
-
-```sh
-gh workflow run cross-platform.yml --ref main -f profile=full -f target_dir=cntrl/maker/morningstar/mc -f cold_cache=true
-```
+To dispatch complete host and firmware qualification, open the
+[Cross-platform workflow](https://github.com/rec/cntrl/actions/workflows/cross-platform.yml)
+on GitHub and select **Run workflow**. Use branch `main`, set `profile` to
+`full` and `target_dir` to `cntrl/maker/morningstar/mc`, and enable `cold_cache`.
 
 The reports include native/Python logs, JUnit output, installed-wheel artifacts,
 the target export and its `memory.txt` section-size report. The installed-wheel

@@ -15,17 +15,15 @@ with a controller layout, virtual MIDI and local session storage without a pedal
 
 ## Crash reporting
 
-Unhandled Python exceptions in `cntrl` and `cntrl emulate` automatically file an
-issue in `rec/cntrl`, titled `Stack trace in cntrl` or `Stack trace in emulator`.
-This requires the GitHub CLI (`gh`) to be installed and authenticated with
-`gh auth login`.
+Unhandled Python exceptions in `cntrl` and `cntrl emulate` open a prefilled
+issue form in your default browser. Review or edit the report before clicking
+**Create** on GitHub, or close the tab to discard it.
 
-Reports include the build gitref, Python and operating system details, and the
-complete traceback as the final appendix. Tracebacks can contain local paths
-and exception messages containing user data; these are published in the issue.
-Nothing is copied to the clipboard. The traceback is also printed to stderr,
-including when issue creation fails. Normal command errors and cancellation do
-not file issues.
+The report includes the build gitref, Python and operating system details, and
+the complete traceback as the final appendix. Local paths and exception
+messages may be present in the draft URL that GitHub receives when the form
+opens. The traceback is also printed to stderr. Normal command errors and
+cancellation do not open the form.
 
 ## What is `cntrl`?
 
