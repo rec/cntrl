@@ -7,11 +7,13 @@ import sys
 import sysconfig
 import threading
 import traceback
+import webbrowser
 from datetime import UTC, datetime
 from importlib.metadata import distribution, version
 from pathlib import Path
 from types import TracebackType
 from typing import Literal
+from urllib.parse import urlencode
 
 
 def install(binary: Literal['cntrl', 'emulator']) -> None:
@@ -33,34 +35,18 @@ def install(binary: Literal['cntrl', 'emulator']) -> None:
 
 
 def report(binary: str, error: BaseException, trace: TracebackType | None) -> None:
-    """Publish the complete traceback; reporting failures retain the stderr copy."""
+    """Open a browser draft with the complete traceback for review."""
     try:
-        result = subprocess.run(
-            [
-                'gh',
-                'issue',
-                'create',
-                '--repo',
-                'rec/cntrl',
-                '--title',
-                f'Stack trace in {binary}',
-                '--body-file',
-                '-',
-            ],
-            input=issue_body(binary, error, trace),
-            encoding='utf-8',
-            capture_output=True,
-            check=True,
+        query = urlencode(
+            {
+                'title': f'Stack trace in {binary}',
+                'body': issue_body(binary, error, trace),
+            }
         )
-    except (OSError, subprocess.CalledProcessError) as failure:
-        detail = (
-            failure.stderr
-            if isinstance(failure, subprocess.CalledProcessError)
-            else str(failure)
-        )
-        print(f'Could not file crash issue: {detail}', file=sys.stderr)
-    else:
-        print(f'Crash issue: {result.stdout.strip()}', file=sys.stderr)
+        if not webbrowser.open(f'https://github.com/rec/cntrl/issues/new?{query}'):
+            print('Could not open the crash report in a browser.', file=sys.stderr)
+    except (OSError, subprocess.CalledProcessError, webbrowser.Error) as failure:
+        print(f'Could not open the crash report: {failure}', file=sys.stderr)
 
 
 def issue_body(binary: str, error: BaseException, trace: TracebackType | None) -> str:
