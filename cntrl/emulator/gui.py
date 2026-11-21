@@ -6,6 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from html import escape
+from math import ceil, floor
 from pathlib import Path
 from time import monotonic_ns
 from types import TracebackType
@@ -23,19 +24,28 @@ from .localization import dialog_messages, messages, tooltip_messages
 def display_rectangle(
     rectangle: QtCore.QRectF, width: int, height: int, pixel_ratio: float
 ) -> QtCore.QRectF:
-    """Map each pedal pixel to an integer block on the physical screen."""
-    scale = max(
-        1,
-        int(
-            min(
-                rectangle.width() * pixel_ratio / width,
-                rectangle.height() * pixel_ratio / height,
-            )
-        ),
-    )
+    """Use whole physical pixels for enlargement and fit smaller bezels."""
+    left_edge = ceil(rectangle.left() * pixel_ratio)
+    top_edge = ceil(rectangle.top() * pixel_ratio)
+    right_edge = floor(rectangle.right() * pixel_ratio)
+    bottom_edge = floor(rectangle.bottom() * pixel_ratio)
+    fit = min((right_edge - left_edge) / width, (bottom_edge - top_edge) / height)
+    if fit <= 0:
+        return QtCore.QRectF()
+    scale = int(fit) if fit >= 1 else fit
     physical_width, physical_height = width * scale, height * scale
-    left = round(rectangle.center().x() * pixel_ratio - physical_width / 2)
-    top = round(rectangle.center().y() * pixel_ratio - physical_height / 2)
+    left = min(
+        max(
+            left_edge, round(rectangle.center().x() * pixel_ratio - physical_width / 2)
+        ),
+        right_edge - physical_width,
+    )
+    top = min(
+        max(
+            top_edge, round(rectangle.center().y() * pixel_ratio - physical_height / 2)
+        ),
+        bottom_edge - physical_height,
+    )
     return QtCore.QRectF(
         left / pixel_ratio,
         top / pixel_ratio,
@@ -119,6 +129,7 @@ class ControllerCanvas(QtWidgets.QWidget):
         self.frames = session.frames.copy()
         self.editing_name = session.editing_name
         self.edit_caption: Callable[[QtCore.QPointF], bool] | None = None
+        self.editable_caption_at: Callable[[QtCore.QPointF], bool] | None = None
         self.caption_geometry_changed: Callable[[], None] | None = None
         self.tooltip_context = session.tooltip_context, session.language
         self.pointer: set[str] = set()
@@ -137,6 +148,7 @@ class ControllerCanvas(QtWidgets.QWidget):
             )
         self.setMinimumSize(400, 260)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+        self.setMouseTracking(True)
         for c in session.controller.controls:
             if isinstance(c, models.AbsoluteControl):
                 slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal, self)
@@ -355,6 +367,15 @@ class ControllerCanvas(QtWidgets.QWidget):
             self.pointer.add(identity)
         self.synchronize()
 
+    def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
+        if self.editable_caption_at is not None and self.editable_caption_at(
+            event.position()
+        ):
+            self.setCursor(QtCore.Qt.CursorShape.IBeamCursor)
+        else:
+            self.unsetCursor()
+        super().mouseMoveEvent(event)
+
     def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
         if event.button() == QtCore.Qt.MouseButton.LeftButton:
             self.pointer.clear()
@@ -497,6 +518,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.log.document().setMaximumBlockCount(2000)
         self.canvas = ControllerCanvas(session, self.submit)
         self.canvas.edit_caption = self.open_correction
+        self.canvas.editable_caption_at = lambda point: (
+            self.correction_at(point) is not None
+        )
         self.canvas.caption_geometry_changed = self.position_correction
         self.correction_batch: CorrectionBatch | None = None
         self.correction_regions: list[TranslationRegion] = []
@@ -575,6 +599,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.correction_mode.toggled.connect(self.toggle_correction)
         correction_controls.addWidget(self.correction_mode)
         self.correction_actions = QtWidgets.QWidget()
+        policy = self.correction_actions.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.correction_actions.setSizePolicy(policy)
         actions = QtWidgets.QHBoxLayout(self.correction_actions)
         actions.setContentsMargins(0, 0, 0, 0)
         self.correction_count = QtWidgets.QLabel()
@@ -649,36 +676,42 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 self.correction_editor.setFocus()
         self.update_correction_controls()
 
-    def open_correction(self, point: QtCore.QPointF) -> bool:
-        if not self.correction_mode.isChecked():
-            return False
-        for region in reversed(self.correction_regions):
-            rectangle = self.canvas.caption_rect(region)
-            if not rectangle.contains(point):
-                continue
-            if self.correction_region is not None:
-                self.correction_editor.setFocus()
-                return True
-            if self.correction_batch is None:
-                self.correction_batch = CorrectionBatch(
-                    self.language, self.correction_language_name
-                )
-            accepted = self.correction_batch.entries.get((region.message, region.field))
-            self.correction_initial = (
-                accepted.replacement if accepted else region.original
+    def correction_at(self, point: QtCore.QPointF) -> TranslationRegion | None:
+        if self.correction_mode.isChecked():
+            return next(
+                (
+                    r
+                    for r in reversed(self.correction_regions)
+                    if self.canvas.caption_rect(r).contains(point)
+                ),
+                None,
             )
-            self.correction_region = region
-            self.correction_position = rectangle.toAlignedRect()
-            self.correction_editor.setText(self.correction_initial)
-            self.correction_editor.setAccessibleName(region.original)
-            self.position_correction()
-            QtWidgets.QToolTip.hideText()
-            self.correction_editor.show()
-            self.correction_cancel.show()
-            self.correction_accept.show()
+        return None
+
+    def open_correction(self, point: QtCore.QPointF) -> bool:
+        region = self.correction_at(point)
+        if region is None:
+            return False
+        if self.correction_region is not None:
             self.correction_editor.setFocus()
             return True
-        return False
+        if self.correction_batch is None:
+            self.correction_batch = CorrectionBatch(
+                self.language, self.correction_language_name
+            )
+        accepted = self.correction_batch.entries.get((region.message, region.field))
+        self.correction_initial = accepted.replacement if accepted else region.original
+        self.correction_region = region
+        self.correction_position = self.canvas.caption_rect(region).toAlignedRect()
+        self.correction_editor.setText(self.correction_initial)
+        self.correction_editor.setAccessibleName(region.original)
+        self.position_correction()
+        QtWidgets.QToolTip.hideText()
+        self.correction_editor.show()
+        self.correction_cancel.show()
+        self.correction_accept.show()
+        self.correction_editor.setFocus()
+        return True
 
     def position_correction(self) -> None:
         region = self.correction_region

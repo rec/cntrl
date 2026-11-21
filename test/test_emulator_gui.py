@@ -407,8 +407,12 @@ def test_correction_editor_overlays_native_pixels_and_consumes_keys(
     window = EmulatorWindow(session)
     window.timer.stop()
     window.show()
+    application.processEvents()
+    original_geometry = window.canvas.geometry()
+    assert window.correction_mode.text() == 'Correction Mode'
     window.correction_mode.click()
     wait_for(lambda: window.correction_regions == [region])
+    assert window.canvas.geometry() == original_geometry
     assert window.correction_count.text() == 'Corrections: 0'
     assert not any(b.isEnabled() for b in window.correction_buttons)
     button = QtCore.Qt.MouseButton.LeftButton
@@ -416,6 +420,8 @@ def test_correction_editor_overlays_native_pixels_and_consumes_keys(
         window.resize(width, 850)
         area = window.canvas.caption_rect(region).toAlignedRect()
         original = window.canvas.grab().toImage()
+        QtTest.QTest.mouseMove(window.canvas, area.center())
+        assert window.canvas.cursor().shape() == QtCore.Qt.CursorShape.IBeamCursor
         QtTest.QTest.mouseClick(window.canvas, button, pos=area.center())
         edited = window.canvas.grab().toImage()
         assert original.copy(area.adjusted(1, 1, -1, -1)) == edited.copy(
@@ -600,6 +606,14 @@ def test_display_size_and_origin_align_to_physical_pixels(ratio: float) -> None:
     assert destination.top() * ratio == pytest.approx(round(destination.top() * ratio))
     assert abs(destination.center().x() - bezel.center().x()) * ratio <= 0.5 + 1e-9
     assert abs(destination.center().y() - bezel.center().y()) * ratio <= 0.5 + 1e-9
+
+
+@pytest.mark.parametrize('ratio', [1.0, 1.25, 2.0])
+def test_display_fits_a_bezel_smaller_than_its_native_pixels(ratio: float) -> None:
+    bezel = QtCore.QRectF(27.3, 15.7, 75.8, 60.2)
+    destination = display_rectangle(bezel, 160, 128, ratio)
+    assert bezel.contains(destination)
+    assert destination.width() / destination.height() == pytest.approx(160 / 128)
 
 
 def test_display_pixel_columns_have_uniform_width_at_fractional_window_sizes(
