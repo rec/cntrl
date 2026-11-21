@@ -18,6 +18,18 @@ class Report(BaseModel, frozen=True):
     output: Path = Path('plan/font-coverage.md')
 
 
+class ReportError(ValueError):
+    """A font coverage report could not be generated or saved."""
+
+
+def run(command: Report) -> None:
+    report = generate()
+    try:
+        command.output.write_text(report)
+    except OSError as error:
+        raise ReportError(str(error)) from error
+
+
 def generate() -> str:
     paths = [
         Path(p)
@@ -39,7 +51,7 @@ def generate() -> str:
             with TTFont(BytesIO(path.read_bytes())) as font:
                 cmap = font.getBestCmap()
                 if cmap is None:
-                    raise ValueError(f'{path}: no Unicode character map')
+                    raise ReportError(f'{path}: no Unicode character map')
                 characters = {chr(c) for c in cmap.keys()}
             name = names.get(path.resolve(), path.stem)
             groups['Outline sources'].append((f'{name}: `{path}`', characters))

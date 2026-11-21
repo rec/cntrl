@@ -7,9 +7,20 @@ from string import Formatter
 from zlib import crc32
 
 import tomlkit
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+from tomlkit.exceptions import ParseError
 
 from ..fonts import assets
+
+
+class CatalogueError(ValueError):
+    """A language catalogue, pack or generated output could not be used."""
 
 
 class Message(BaseModel, frozen=True):
@@ -135,7 +146,7 @@ class Pack(BaseModel, frozen=True):
 
 def inspect(data: bytes) -> Pack:
     if len(data) < HEADER.size or len(data) > 262144:
-        raise ValueError('truncated language pack')
+        raise CatalogueError('truncated language pack')
     magic, version, count, length, checksum, tag, name, abi, font_start, font_size = (
         HEADER.unpack_from(data)
     )
@@ -154,31 +165,37 @@ def inspect(data: bytes) -> Pack:
         or b'\0' not in tag
         or b'\0' not in name
     ):
-        raise ValueError('invalid or incompatible language pack')
-    language = tag.split(b'\0', 1)[0].decode()
-    display_name = name.split(b'\0', 1)[0].decode()
+        raise CatalogueError('invalid or incompatible language pack')
+    try:
+        language = tag.split(b'\0', 1)[0].decode()
+        display_name = name.split(b'\0', 1)[0].decode()
+    except UnicodeDecodeError as error:
+        raise CatalogueError('invalid language identity') from error
     if (
         not re.fullmatch('[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*', language)
         or not display_name
     ):
-        raise ValueError('invalid language identity')
+        raise CatalogueError('invalid language identity')
     for i, message in enumerate(catalogue.messages.values()):
         full, short = struct.unpack_from('<II', data, HEADER.size + i * 8)
         for kind, offset in enumerate((full, short)):
             if kind and not offset:
                 continue
             if not HEADER.size + count * 8 <= offset < font_start:
-                raise ValueError('invalid language string offset')
+                raise CatalogueError('invalid language string offset')
             end = data.find(b'\0', offset, font_start)
             if end < 0:
-                raise ValueError('unterminated language string')
-            text = data[offset:end].decode()
+                raise CatalogueError('unterminated language string')
             if len(data[offset:end]) > 511:
-                raise ValueError('language string exceeds 511 bytes')
-            if dict(fields(text)) != dict(fields(message.en)) or len(
-                fields(text)
-            ) != len(fields(message.en)):
-                raise ValueError('invalid language placeholders')
+                raise CatalogueError('language string exceeds 511 bytes')
+            try:
+                text = data[offset:end].decode()
+            except UnicodeDecodeError as error:
+                raise CatalogueError('invalid UTF-8 in language string') from error
+            actual = fields(text)
+            expected = fields(message.en)
+            if dict(actual) != dict(expected) or len(actual) != len(expected):
+                raise CatalogueError('invalid language placeholders')
     font = data[font_start:]
     if font:
         assets.decode(font, 'language pack', crc32(font))
@@ -192,25 +209,27 @@ def inspect(data: bytes) -> Pack:
 
 
 def fields(text: str) -> list[tuple[str, str]]:
+    try:
+        parts = list(Formatter().parse(text))
+    except ValueError as error:
+        raise CatalogueError(str(error)) from error
     result: list[tuple[str, str]] = []
-    for literal, name, spec, conversion in Formatter().parse(text):
+    for literal, name, spec, conversion in parts:
         if '\0' in literal or conversion:
-            raise ValueError('invalid translation template')
+            raise CatalogueError('invalid translation template')
         if name is not None:
             if (
                 not isinstance(spec, str)
                 or not re.fullmatch('[a-z][a-z0-9_]*', name)
                 or not re.fullmatch(r'(?:[-+ #0]*\d*(?:\.\d+)?)(?:ll|l)?[sdiuxX]', spec)
             ):
-                raise ValueError(f'invalid typed placeholder {name!r}:{spec!r}')
+                raise CatalogueError(f'invalid typed placeholder {name!r}:{spec!r}')
             result.append((name, spec))
     return result
 
 
 def load() -> Catalogue:
-    return Catalogue.model_validate(
-        tomlkit.parse(Path(__file__).with_name('messages.toml').read_text()).unwrap()
-    )
+    return _read_catalogue(Path(__file__).with_name('messages.toml'), Catalogue)
 
 
 def locales() -> list[str]:
@@ -233,11 +252,13 @@ def translation(locale: str) -> Translation:
             },
         )
     if locale not in locales():
-        raise ValueError(f'unsupported UI language {locale!r}')
+        raise CatalogueError(f'unsupported UI language {locale!r}')
     source = Path(__file__).with_name('translations') / f'{locale}.toml'
-    result = Translation.model_validate(tomlkit.parse(source.read_text()).unwrap())
+    result = _read_catalogue(source, Translation)
     if result.language != locale:
-        raise ValueError('translation identity differs from its filename')
+        raise CatalogueError(
+            f'{source}: translation identity differs from its filename'
+        )
     return result
 
 
@@ -397,7 +418,21 @@ def generate(path: Path) -> None:
             '}',
         ]
     )
-    path.write_text('\n'.join(lines) + '\n')
+    try:
+        path.write_text('\n'.join(lines) + '\n')
+    except OSError as error:
+        raise CatalogueError(str(error)) from error
+
+
+def _read_catalogue[Document: BaseModel](path: Path, model: type[Document]) -> Document:
+    try:
+        data = tomlkit.parse(path.read_text()).unwrap()
+    except (OSError, UnicodeDecodeError, ParseError) as error:
+        raise CatalogueError(f'{path}: {error}') from error
+    try:
+        return model.model_validate(data)
+    except ValidationError as error:
+        raise CatalogueError(f'{path}: {error}') from error
 
 
 HEADER = struct.Struct('<4sHHII16s32sIII')

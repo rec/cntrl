@@ -16,7 +16,10 @@ class Build(BaseModel, frozen=True):
 
 
 def build(output: Path) -> None:
-    output.mkdir(parents=True, exist_ok=True)
+    try:
+        output.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise catalogue.CatalogueError(str(error)) from error
     characters = set(ui.supported_characters(Outline(bundled_sources()['Arimo'])))
     for locale in catalogue.locales():
         translated = catalogue.translation(locale)
@@ -25,8 +28,13 @@ def build(output: Path) -> None:
         )
         missing = sorted(set(text) - characters - {'\n'})
         if missing:
-            raise ValueError(f'{locale}: missing shared UI glyphs {missing}')
+            raise catalogue.CatalogueError(
+                f'{locale}: missing shared UI glyphs {missing}'
+            )
         data = catalogue.compile_catalogue(locale, b'')
         catalogue.inspect(data)
-        (output / f'{locale}.bin').write_bytes(data)
+        try:
+            (output / f'{locale}.bin').write_bytes(data)
+        except OSError as error:
+            raise catalogue.CatalogueError(str(error)) from error
         print(f'{locale}: {len(data)} bytes, using flash UI fonts')

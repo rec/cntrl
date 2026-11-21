@@ -41,13 +41,13 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     SD and display load.
 
 15. **CLI error handling can hide unexpected failures (code finding).**
-    `cntrl compile`, `cntrl status`, `cntrl global`, target adapter commands
-    and applying or recovering saved setup reviews report known failures
-    concisely while allowing unexpected exceptions to reach the crash
-    reporter. USB reconnection also distinguishes serial I/O failures from
-    other host errors. Audit the remaining command and reply-validation
-    boundaries, where broad `OSError` and `ValueError` handling can still
-    hide programming errors.
+    `cntrl compile`, `cntrl status`, `cntrl global`, `cntrl language`,
+    `cntrl font-coverage`, target adapter commands and applying or recovering
+    saved setup reviews report known failures concisely while allowing
+    unexpected exceptions to reach the crash reporter. USB reconnection
+    also distinguishes serial I/O failures from other host errors. Audit
+    the remaining command and reply-validation boundaries, where broad
+    `OSError` and `ValueError` handling can still hide programming errors.
 
 ## P2 | Distribution and release risks to verify
 
