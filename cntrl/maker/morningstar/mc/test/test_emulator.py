@@ -368,6 +368,7 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
     layout = EmulatorLayout.load(Path(__file__).parents[1] / 'emulator/mc6-pro.toml')
     storage = tmp_path / 'session'
     with backend.Session(layout, target, executable, storage, bundle) as session:
+        session.record_replay(True)
 
         def press(button: str) -> None:
             session.button(button, True)

@@ -201,14 +201,21 @@ blank translations use the English entry. The table affects the emulator only.
 
 The same native process and input path serve interactive and headless operation.
 A TOML scenario selects a random seed, ordered input events and an end time.
-Save replay exports the inputs from the current session. Replaying requires the
-same target, bundle and initial session state; use fresh session directories
+Turn on **Record replay** before the inputs you want to capture. Turning it off
+keeps that capture available to **Save replay**. Turning it on again starts a
+fresh capture. Replaying requires the same target, bundle and initial session
+state; use fresh session directories
 for independent reproducible runs, or preserve a copy of an existing session
 before recording changes to it.
 Each local setup preview holds its session directory until it exits. Use
 different `--storage` directories to run previews at the same time.
 Times accept the project's duration notation. Events with the same timestamp
 are applied in file order. Advancing time never rewinds the runtime.
+Recorded MIDI is timestamped when each complete message arrives. At the same
+timestamp, the exporter writes MIDI in route order, preserving order within
+each route, then writes other inputs in their recorded order.
+Capture starts with fresh MIDI framing on each port. A message that began
+before recording started or never finished during capture is omitted.
 
 ```toml
 seed = 17

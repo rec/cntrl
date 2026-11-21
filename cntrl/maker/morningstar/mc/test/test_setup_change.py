@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import tomlkit
-
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
@@ -38,6 +36,7 @@ def test_setup_change_stops_looping_file_and_lfo(tmp_path: Path) -> None:
     executable = backend.build(target, tmp_path / 'native', BASE.parents[3])
     layout = EmulatorLayout.load(BASE / 'emulator/mc6-pro.toml')
     with backend.Session(layout, target, executable, storage, bundle) as session:
+        session.record_replay(True)
         now = 0
 
         def advance(duration: int) -> None:
@@ -83,14 +82,7 @@ def test_setup_change_stops_looping_file_and_lfo(tmp_path: Path) -> None:
         press('a')  # The destination setup's patch must work.
         assert any(e.data == b'\xb0\x07\x63' for e in session.messages[start:])
         cli.save(session, tmp_path / 'finished')
-        (tmp_path / 'replay.toml').write_text(
-            tomlkit.dumps(
-                {
-                    'until': now / 1000000,
-                    'events': [e.model_dump() for e in session.events],
-                }
-            )
-        )
+        session.write_replay(tmp_path / 'replay.toml')
         assert not [e.message for e in session.messages if e.kind == 'error']
         assert session.memory()['failures'] == 0
 
