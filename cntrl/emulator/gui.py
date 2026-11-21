@@ -146,7 +146,7 @@ class ControllerCanvas(QtWidgets.QWidget):
             raise ValueError(
                 f'cannot load emulator faceplate: {session.layout.faceplate}'
             )
-        self.setMinimumSize(400, 260)
+        self.update_minimum_size()
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.setMouseTracking(True)
         for c in session.controller.controls:
@@ -168,6 +168,22 @@ class ControllerCanvas(QtWidgets.QWidget):
                 self.widgets[c.id] = dial
         self.relative_positions: dict[str, int] = {}
 
+    def update_minimum_size(self) -> None:
+        layout = self.session.layout
+        scale = 0.0
+        ratio = self.devicePixelRatioF()
+        for display in self.session.target.displays:
+            placement = layout.displays[display.id]
+            # Rounding both bezel edges inward can cost one physical pixel.
+            scale = max(
+                scale,
+                (display.width + 1) / (placement.width * ratio),
+                (display.height + 1) / (placement.height * ratio),
+            )
+        self.setMinimumSize(
+            max(400, ceil(layout.width * scale)), max(260, ceil(layout.height * scale))
+        )
+
     def update_tooltip_context(self) -> None:
         context = self.session.tooltip_context, self.session.language
         if context != self.tooltip_context:
@@ -175,6 +191,8 @@ class ControllerCanvas(QtWidgets.QWidget):
             QtWidgets.QToolTip.hideText()
 
     def event(self, event: QtCore.QEvent) -> bool:
+        if event.type() == QtCore.QEvent.Type.DevicePixelRatioChange:
+            self.update_minimum_size()
         if (
             isinstance(event, QtGui.QHelpEvent)
             and event.type() == QtCore.QEvent.Type.ToolTip

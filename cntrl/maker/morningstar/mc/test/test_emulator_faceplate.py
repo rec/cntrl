@@ -63,10 +63,15 @@ def test_mc6_faceplate_keeps_display_and_switch_positions(
         ):
             point = canvas.placement_rect(session.layout.displays[n]).center().toPoint()
             assert image.pixelColor(point).name() == color
-        # These are the canvas sizes from the Status clipping report.
+        # A dropped row erases single-pixel strokes in the Status bitmap font.
         session.frames['lcd-1'] = (
-            b'\xf8\x00' * 4 + b'\xff\xff' * 152 + b'\x00\x1f' * 4
-        ) * 128
+            b'\xf8\x00'
+            + b'\xff\xff' * 158
+            + b'\x00\x1f'
+            + b'\xf8\x00'
+            + b'\x00\x00' * 158
+            + b'\x00\x1f'
+        ) * 64
         canvas.frames = session.frames.copy()
         for height in (439, 420):
             canvas.resize(976, height)
@@ -76,6 +81,14 @@ def test_mc6_faceplate_keeps_display_and_switch_positions(
             destination = display_rectangle(bezel, 160, 128, ratio)
             middle = round(destination.center().y() * ratio)
             assert bezel.contains(destination)
+            scale = round(destination.width() * ratio) // 160
+            assert scale >= 1
+            assert destination.size() * ratio == QtCore.QSizeF(160 * scale, 128 * scale)
+            top = round(destination.top() * ratio)
+            for row in range(128):
+                assert image.pixelColor(
+                    round(destination.center().x() * ratio), top + row * scale
+                ).name() == ('#000000' if row % 2 else '#ffffff')
             assert (
                 image.pixelColor(round(destination.left() * ratio), middle).name()
                 == '#ff0000'
