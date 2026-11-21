@@ -11,7 +11,7 @@ from pydantic import BaseModel, ValidationError
 from serial import Serial, SerialTimeoutException
 
 from . import binary_format, device_settings, global_overlay
-from .data_files import validate_name
+from .data_files import InvalidSetupName, validate_name
 from .models import PlayMidiFile, TargetMemory
 from .usb_frames import HEADER, MAGIC, Frame, Kind, Status
 
@@ -453,9 +453,15 @@ class SetupClient:
     def memory(self) -> TargetMemory:
         response = self.request('CNTRL MEMORY')
         fields = response.split()
+        message = f'invalid memory response: {response}'
         if len(fields) != 4 or fields[:2] != ['CNTRL', 'MEMORY']:
-            raise ValueError(f'invalid memory response: {response}')
-        return TargetMemory(capacity=int(fields[2]), runtime=int(fields[3]))
+            raise UsbReplyError(message)
+        capacity = _reply_integer(fields[2], message)
+        runtime = _reply_integer(fields[3], message)
+        try:
+            return TargetMemory(capacity=capacity, runtime=runtime)
+        except ValidationError as error:
+            raise UsbReplyError(f'{message}\n{error}') from error
 
     def global_settings(self) -> global_overlay.Overlay:
         fields = self.request('CNTRL GLOBAL GET').split()
@@ -469,10 +475,7 @@ class SetupClient:
             if key == 'startup_set' and separator:
                 if startup_set is not None:
                     raise UsbReplyError('duplicate startup set response')
-                try:
-                    startup_set = bytes.fromhex(value).decode('ascii')
-                except ValueError as error:
-                    raise UsbReplyError('invalid startup set response') from error
+                startup_set = _reply_hex_text(value, 'invalid startup set response')
                 continue
             if key == 'language' and separator:
                 if language is not None:
@@ -487,7 +490,8 @@ class SetupClient:
                 or not value.isdecimal()
             ):
                 raise UsbReplyError('invalid device-global settings response')
-            field, raw = int(key), int(value)
+            field = _reply_integer(key, 'invalid device-global settings response')
+            raw = _reply_integer(value, 'invalid device-global settings response')
             if field in result:
                 raise UsbReplyError('duplicate device-global settings response')
             result[field] = raw
@@ -531,26 +535,31 @@ class SetupClient:
         response = self.request('CNTRL SETUP LIST')
         while response != 'CNTRL END':
             parts = response.split()
-            if len(parts) == 3 and parts[:2] == ['CNTRL', 'INVALID']:
-                result.append(
-                    SetupEntry(
-                        name=validate_name(bytes.fromhex(parts[2]).decode('ascii')),
-                        modified=0,
-                        length=0,
-                        checksum=0,
-                        valid=False,
-                    )
+            invalid = len(parts) == 3 and parts[:2] == ['CNTRL', 'INVALID']
+            message = f'invalid catalogue entry: {response}'
+            if not invalid and (len(parts) != 6 or parts[:2] != ['CNTRL', 'ENTRY']):
+                raise UsbReplyError(message)
+            name = _reply_hex_text(parts[2], message)
+            try:
+                validate_name(name)
+            except InvalidSetupName as error:
+                raise UsbReplyError(message) from error
+            modified, length, checksum = (
+                (0, 0, 0)
+                if invalid
+                else (
+                    _reply_integer(parts[3], message),
+                    _reply_integer(parts[4], message),
+                    _reply_integer(parts[5], message, 16),
                 )
-                response = self.request('CNTRL NEXT')
-                continue
-            if len(parts) != 6 or parts[:2] != ['CNTRL', 'ENTRY']:
-                raise ValueError(f'invalid catalogue entry: {response}')
+            )
             result.append(
                 SetupEntry(
-                    name=validate_name(bytes.fromhex(parts[2]).decode('ascii')),
-                    modified=int(parts[3]),
-                    length=int(parts[4]),
-                    checksum=int(parts[5], 16),
+                    name=name,
+                    modified=modified,
+                    length=length,
+                    checksum=checksum,
+                    valid=not invalid,
                 )
             )
             response = self.request('CNTRL NEXT')
@@ -558,9 +567,10 @@ class SetupClient:
 
     def current(self) -> str:
         response = self.request('CNTRL SETUP CURRENT')
+        message = f'invalid selection response: {response}'
         if not response.startswith('CNTRL CURRENT '):
-            raise ValueError(f'invalid selection response: {response}')
-        return bytes.fromhex(response[14:]).decode('ascii')
+            raise UsbReplyError(message)
+        return _reply_hex_text(response[14:], message)
 
     def select(self, name: str) -> None:
         self.ok('CNTRL SETUP SET ' + validate_name(name).encode('ascii').hex())
@@ -574,13 +584,13 @@ class SetupClient:
             f'CNTRL SETUP PUT {hex_name} {len(data)} {crc32(data):08x} {int(overwrite)}'
         )
         if (response := self.request(command)) != 'CNTRL SEND':
-            raise ValueError(response)
+            raise UsbReplyError(response)
         self.connection.write(data, Kind.setup)
         if (response := self.connection.line()) != 'CNTRL OK':
-            raise ValueError(response)
+            raise UsbReplyError(response)
         # Read back the committed bytes, not merely the acknowledged checksum.
         if self.download(name) != data:
-            raise ValueError(f'{name}: read-back verification failed')
+            raise UsbReplyError(f'{name}: read-back verification failed')
 
     def copy_bundle(self, data: bytes, overwrite: bool) -> None:
         from .setup_bundle import unpack
@@ -593,12 +603,12 @@ class SetupClient:
             f'CNTRL BUNDLE BEGIN {len(data)} {crc32(data):08x} {int(overwrite)}'
         )
         if response != 'CNTRL SEND':
-            raise ValueError(response)
+            raise UsbReplyError(response)
         for i in range(0, len(data), self.connection.usb_block_size):
             self.send_data(Kind.bundle, data[i : i + self.connection.usb_block_size])
         self.ok('CNTRL BUNDLE END')
         if self.download_bundle() != data:
-            raise ValueError('bundle read-back verification failed')
+            raise UsbReplyError('bundle read-back verification failed')
 
     def require_format(self, kind: binary_format.Kind) -> None:
         response = self.request('CNTRL FORMAT').split()
@@ -608,7 +618,9 @@ class SetupClient:
             != ['CNTRL', 'FORMAT', str(binary_format.DEVELOPMENT_FORMAT)]
             or str(int(kind)) not in response[3:]
         ):
-            raise ValueError('firmware does not support the persistent document format')
+            raise UsbReplyError(
+                'firmware does not support the persistent document format'
+            )
 
     def begin_deployment(self, *, recovery: bool = False) -> int:
         state = self.request('CNTRL DEPLOY STATUS').split()
@@ -618,7 +630,7 @@ class SetupClient:
             or state[3] != '0'
             or state[4] not in (['0', '1'] if recovery else ['1'])
         ):
-            raise ValueError(
+            raise UsbReplyError(
                 'device requires deployment recovery before another update'
             )
         root = secrets.randbelow(0xFFFFFFFF) + 1
@@ -633,11 +645,11 @@ class SetupClient:
             or state[3] not in ('0', '1')
             or state[4] not in ('0', '1')
         ):
-            raise ValueError('firmware does not provide deployment recovery status')
+            raise UsbReplyError('firmware does not provide deployment recovery status')
         if state[3] == '1':
             response = self.request('CNTRL DEPLOY ABORT')
             if response not in ('CNTRL OK', 'CNTRL ERROR deployment-recovery'):
-                raise ValueError(response)
+                raise UsbReplyError(response)
             state = self.request('CNTRL DEPLOY STATUS').split()
             if (
                 len(state) != 5
@@ -645,7 +657,7 @@ class SetupClient:
                 or state[3] != '0'
                 or state[4] not in ('0', '1')
             ):
-                raise ValueError('deployment remains unresolved after abort')
+                raise UsbReplyError('deployment remains unresolved after abort')
         return state[4] == '1'
 
     def commit_deployment(self, bundle: bytes, library: bytes) -> None:
@@ -654,15 +666,15 @@ class SetupClient:
     def download_starts(self) -> bytes:
         response = self.request('CNTRL STARTS SIZE').split()
         if len(response) != 4 or response[:3] != ['CNTRL', 'STARTS', 'SIZE']:
-            raise ValueError('invalid startup counter size response')
-        size = int(response[3])
+            raise UsbReplyError('invalid startup counter size response')
+        size = _reply_integer(response[3], 'invalid startup counter size')
         if not 0 < size <= 1024:
-            raise ValueError('invalid startup counter size')
+            raise UsbReplyError('invalid startup counter size')
         data = bytearray()
         while len(data) < size:
             part = self.request_data(f'CNTRL STARTS READ {len(data)}')
             if not 0 < len(part) <= size - len(data):
-                raise ValueError('invalid startup counter read')
+                raise UsbReplyError('invalid startup counter read')
             data.extend(part)
         return bytes(data)
 
@@ -670,13 +682,13 @@ class SetupClient:
         encoded = path.encode('ascii').hex()
         response = self.request(f'CNTRL STATE SIZE {encoded}')
         if response == 'CNTRL STATE MISSING':
-            raise FileNotFoundError(f'{path}: device state is missing')
+            raise UsbFileMissing(f'{path}: device state is missing')
         fields = response.split()
         if len(fields) != 3 or fields[:2] != ['CNTRL', 'STATE']:
-            raise ValueError(f'{path}: invalid device state size response')
-        size = int(fields[2])
+            raise UsbReplyError(f'{path}: invalid device state size response')
+        size = _reply_integer(fields[2], f'{path}: invalid device state size')
         if not 0 <= size <= 0xFFFFFFFF:
-            raise ValueError(f'{path}: invalid device state size')
+            raise UsbReplyError(f'{path}: invalid device state size')
         result = bytearray()
         while len(result) < size:
             part = self.request_data(f'CNTRL STATE READ {encoded} {len(result)}')
@@ -685,21 +697,22 @@ class SetupClient:
                 < len(part)
                 <= min(self.connection.usb_block_size, size - len(result))
             ):
-                raise ValueError(f'{path}: invalid device state read')
+                raise UsbReplyError(f'{path}: invalid device state read')
             result.extend(part)
         return bytes(result)
 
     def download_bundle(self) -> bytes:
         parts = self.request('CNTRL BUNDLE SIZE').split()
         if len(parts) != 4 or parts[:2] != ['CNTRL', 'BUNDLE']:
-            raise ValueError('invalid bundle size response')
-        length, checksum = int(parts[2]), int(parts[3], 16)
+            raise UsbReplyError('invalid bundle size response')
+        length = _reply_integer(parts[2], 'invalid bundle size response')
+        checksum = _reply_integer(parts[3], 'invalid bundle checksum response', 16)
         result = bytearray()
         for i in range(0, length, self.connection.usb_block_size):
             count = min(self.connection.usb_block_size, length - i)
             result.extend(self.request_data(f'CNTRL BUNDLE GET {i} {count}'))
         if len(result) != length or crc32(result) != checksum:
-            raise ValueError('bundle checksum mismatch')
+            raise UsbReplyError('bundle checksum mismatch')
         return bytes(result)
 
     def download(self, name: str, revision: int | None = None) -> bytes:
@@ -710,12 +723,11 @@ class SetupClient:
             else f'CNTRL HISTORY GET {hex_name} {revision}'
         )
         parts = response.split()
+        message = f'invalid download response: {response}'
         if len(parts) != 4 or parts[:2] != ['CNTRL', 'FILE']:
-            raise UsbReplyError(f'invalid download response: {response}')
-        try:
-            length, checksum = int(parts[2]), int(parts[3], 16)
-        except ValueError as error:
-            raise UsbReplyError(f'invalid download response: {response}') from error
+            raise UsbReplyError(message)
+        length = _reply_integer(parts[2], message)
+        checksum = _reply_integer(parts[3], message, 16)
         if not 116 <= length <= 0xFFFFFFFF - 100:
             raise UsbReplyError('invalid download length')
         result = bytearray()
@@ -736,10 +748,10 @@ class SetupClient:
             f'CNTRL SETUP DELETE {len(payload)} {crc32(payload):08x}'
         )
         if response != 'CNTRL SEND':
-            raise ValueError(response)
+            raise UsbReplyError(response)
         self.connection.write(payload, Kind.setup)
         if (response := self.connection.line()) != 'CNTRL OK':
-            raise ValueError(response)
+            raise UsbReplyError(response)
 
     def copy_midi(self, name: str, data: bytes, overwrite: bool) -> None:
         PlayMidiFile.basename(name)
@@ -778,7 +790,7 @@ class SetupClient:
             raise ValueError('invalid source snapshot identifier')
         content = self._download_asset('SOURCE', snapshot + '.bin')
         if sha256(content).hexdigest() != snapshot:
-            raise ValueError('source archive checksum mismatch')
+            raise UsbReplyError('source archive checksum mismatch')
         return content
 
     def _copy_asset(
@@ -834,14 +846,10 @@ class SetupClient:
         if response == f'CNTRL {protocol} MISSING':
             raise UsbFileMissing(f'{name}: {protocol} file is missing on the pedal')
         parts = response.split()
+        message = f'invalid {protocol} file response: {response}'
         if len(parts) != 3 or parts[:2] != ['CNTRL', protocol]:
-            raise UsbReplyError(f'invalid {protocol} file response: {response}')
-        try:
-            length = int(parts[2])
-        except ValueError as error:
-            raise UsbReplyError(
-                f'invalid {protocol} file response: {response}'
-            ) from error
+            raise UsbReplyError(message)
+        length = _reply_integer(parts[2], message)
         if not 0 < length <= 0xFFFFFFFF:
             raise UsbReplyError(f'invalid {protocol} file length')
         result = bytearray()
@@ -861,13 +869,13 @@ class SetupClient:
             raise ValueError('invalid font asset size/checksum')
         response = self.request(f'CNTRL FONT BEGIN {key:08x} {len(data)}')
         if response not in ('CNTRL SEND', 'CNTRL EXISTS'):
-            raise ValueError(response)
+            raise UsbReplyError(response)
         if response == 'CNTRL SEND':
             for i in range(0, len(data), self.connection.usb_block_size):
                 self.send_data(Kind.font, data[i : i + self.connection.usb_block_size])
             self.ok('CNTRL FONT END')
         if self.download_font(key) != data:
-            raise ValueError('font asset read-back mismatch or checksum collision')
+            raise UsbReplyError('font asset read-back mismatch or checksum collision')
 
     def copy_movie(self, data: bytes) -> str:
         from ..animation.asset import inspect_asset
@@ -887,11 +895,11 @@ class SetupClient:
                     else f'CNTRL SPLASH DONE {len(data)} {key:08x}'
                 )
                 if (response := self.connection.line()) != expected:
-                    raise ValueError(response)
+                    raise UsbReplyError(response)
         elif response != 'CNTRL SPLASH EXISTS':
-            raise ValueError(response)
+            raise UsbReplyError(response)
         if self.download_movie(key) != data:
-            raise ValueError('movie asset read-back mismatch or checksum collision')
+            raise UsbReplyError('movie asset read-back mismatch or checksum collision')
         return f'CNTRL SPLASH READY {len(data)} {key:08x}'
 
     def download_movie(self, key: int) -> bytes:
@@ -899,13 +907,13 @@ class SetupClient:
 
         response = self.request(f'CNTRL SPLASH SIZE {key:08x}')
         if response == 'CNTRL SPLASH ERROR missing':
-            raise FileNotFoundError(f'{key:08x}: device cannot read the stored movie')
+            raise UsbFileMissing(f'{key:08x}: device cannot read the stored movie')
         parts = response.split()
         if len(parts) != 4 or parts[:3] != ['CNTRL', 'SPLASH', 'SIZE']:
-            raise ValueError(f'invalid movie response: {response}')
-        length = int(parts[3])
+            raise UsbReplyError(f'invalid movie response: {response}')
+        length = _reply_integer(parts[3], 'invalid movie asset length')
         if not HEADER.size < length <= 0xFFFFFFFF - 20:
-            raise ValueError('invalid movie asset length')
+            raise UsbReplyError('invalid movie asset length')
         result = bytearray()
         while len(result) < length:
             chunk = self.request_data(f'CNTRL SPLASH READ {key:08x} {len(result)}')
@@ -914,28 +922,28 @@ class SetupClient:
                 <= len(chunk)
                 <= min(self.connection.usb_block_size, length - len(result))
             ):
-                raise ValueError('invalid movie asset chunk')
+                raise UsbReplyError('invalid movie asset chunk')
             result.extend(chunk)
         if crc32(result) != key:
-            raise ValueError('movie asset checksum mismatch')
+            raise UsbReplyError('movie asset checksum mismatch')
         return bytes(result)
 
     def download_font(self, key: int) -> bytes:
         response = self.request(f'CNTRL FONT SIZE {key:08x}')
         parts = response.split()
         if len(parts) != 3 or parts[:2] != ['CNTRL', 'FONT']:
-            raise ValueError(f'invalid font response: {response}')
-        length = int(parts[2])
+            raise UsbReplyError(f'invalid font response: {response}')
+        length = _reply_integer(parts[2], 'invalid font asset length')
         if not 8 <= length <= 262144:
-            raise ValueError('invalid font asset length')
+            raise UsbReplyError('invalid font asset length')
         result = bytearray()
         while len(result) < length:
             chunk = self.request_data(f'CNTRL FONT READ {key:08x} {len(result)}')
             if not 1 <= len(chunk) <= self.connection.usb_block_size:
-                raise ValueError('invalid font asset chunk')
+                raise UsbReplyError('invalid font asset chunk')
             result.extend(chunk)
         if len(result) != length or crc32(result) != key:
-            raise ValueError('font asset checksum/length mismatch')
+            raise UsbReplyError('font asset checksum/length mismatch')
         return bytes(result)
 
 
@@ -945,3 +953,17 @@ def device_status(port: Path, reset_starts: bool = False) -> str:
         if reset_starts:
             client.ok('CNTRL STARTS RESET')
         return client.request('CNTRL STATUS')
+
+
+def _reply_integer(text: str, message: str, base: int = 10) -> int:
+    try:
+        return int(text, base)
+    except ValueError as error:
+        raise UsbReplyError(message) from error
+
+
+def _reply_hex_text(text: str, message: str) -> str:
+    try:
+        return bytes.fromhex(text).decode('ascii')
+    except ValueError as error:
+        raise UsbReplyError(message) from error

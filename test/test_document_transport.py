@@ -1154,24 +1154,53 @@ def test_download_collects_setups_companions_and_midi_before_writing(
 
 
 @pytest.mark.parametrize(
-    ('method', 'name', 'reply', 'message'),
+    ('method', 'arguments', 'reply', 'message'),
     [
-        ('download', 'Show', 'CNTRL FILE missing bcd', 'invalid download response'),
+        ('download', ('Show',), 'CNTRL FILE missing bcd', 'invalid download response'),
         (
             'download_midi',
-            'song.mid',
+            ('song.mid',),
             'CNTRL MIDI_FILE missing',
             'invalid MIDI_FILE file response',
         ),
+        ('memory', (), 'CNTRL MEMORY 8 8', 'runtime memory use exhausts target memory'),
+        ('catalogue', (), 'CNTRL INVALID 2f', 'invalid catalogue entry'),
+        ('catalogue', (), 'CNTRL ENTRY 41 0 data 1234', 'invalid catalogue entry'),
+        ('current', (), 'CNTRL CURRENT ff', 'invalid selection response'),
+        (
+            'download_starts',
+            (),
+            'CNTRL STARTS SIZE n/a',
+            'invalid startup counter size',
+        ),
+        (
+            'download_state',
+            ('/cntrl/state',),
+            'CNTRL STATE n/a',
+            'invalid device state size',
+        ),
+        (
+            'download_bundle',
+            (),
+            'CNTRL BUNDLE 1 n/a',
+            'invalid bundle checksum response',
+        ),
+        ('download_movie', (8,), 'CNTRL SPLASH SIZE n/a', 'invalid movie asset length'),
+        ('download_font', (8,), 'CNTRL FONT n/a', 'invalid font asset length'),
+        ('recover_deployment', (), 'CNTRL DEPLOY 0 2 0', 'deployment recovery status'),
     ],
 )
-def test_invalid_transfer_length_is_reported_as_a_pedal_reply_error(
-    monkeypatch: pytest.MonkeyPatch, method: str, name: str, reply: str, message: str
+def test_invalid_usb_replies_are_classified(
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    arguments: tuple[str | int, ...],
+    reply: str,
+    message: str,
 ) -> None:
     client = transport.SetupClient(transport.SerialConnection(Path('/unused')))
     monkeypatch.setattr(client, 'request', lambda command: reply)
     with pytest.raises(transport.UsbReplyError, match=message):
-        getattr(client, method)(name)
+        getattr(client, method)(*arguments)
 
 
 def test_progress_reply_is_not_returned_as_the_command_result() -> None:
