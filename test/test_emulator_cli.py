@@ -80,6 +80,7 @@ def test_mirror_preserves_unexpected_host_file_failures(
 ) -> None:
     failure = FileNotFoundError('unexpected host file missing')
     client = Mock(spec=transport.SetupClient)
+    client.request.return_value = 'CNTRL MIRROR 1'
     client.download_state.side_effect = failure
     path = '/cntrl/setups/bundle/0.bin'
     monkeypatch.setattr(

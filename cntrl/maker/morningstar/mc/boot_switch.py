@@ -172,6 +172,17 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             '*(.text._ZN5cntrl10Deployment7recoverE*)',
             '*(.text._ZN5cntrl10Deployment6commitE*)',
             '*(.text._ZN5cntrl5SongsC[12]E*)',
+            # Calibration-file I/O and its owning strings run outside sampling.
+            '*(.text._ZN5cntrl15CalibrationFile*)',
+            '*(.text._ZNSt6vectorIN5cntrl15CalibrationFile*)',
+            '*(.text.*_ZNSt7__cxx1112basic_stringIc*)',
+            # SD initialization and formatting, and one-time MIDI storage setup.
+            '*(.text._ZN8SdioCard5beginE*)',
+            '*(.text._ZN12FatFormatter*)',
+            '*(.text._ZN14ExFatFormatter*)',
+            '*(.text._ZN5cntrl4midi9MidiFilesC[12]E*)',
+            # Upload command parsing, separate from animation playback.
+            '*(.text._ZN5cntrl9animation8Receiver7commandE*)',
             # target.cpp's static Board/runtime construction runs only at boot.
             '*(.text.startup._GLOBAL__sub_I__Z15switch_scan_duev)',
         )

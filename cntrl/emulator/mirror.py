@@ -48,6 +48,7 @@ def download(
 
 def capture(client: transport.SetupClient, directory: Path, status: str) -> Path:
     """Normalize the active deployment root, preserving journal and asset bytes."""
+    generation = storage_generation(client)
     selected = client.current()
     prefix = persistent_prefix(status)
     manifest = storage_manifest(client, prefix)
@@ -91,6 +92,8 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
         raise EmulatorError('pedal setup selection changed during mirror capture')
     if client.request('CNTRL STATUS') != status:
         raise EmulatorError('pedal status changed during mirror capture')
+    if storage_generation(client) != generation:
+        raise EmulatorError('pedal storage generation changed during mirror capture')
     # Importing a bundle would replace the copied journals and selection.
     metadata = tomlkit.dumps(dict(status=status, selected=selected, files=files))
     with emulator_files():
@@ -98,6 +101,25 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
         (directory / 'status-snapshot.bin').write_bytes(snapshot)
         (directory / 'mirror.toml').write_text(metadata)
     return setup
+
+
+def storage_generation(client: transport.SetupClient) -> str:
+    try:
+        response = client.request('CNTRL MIRROR GENERATION')
+    except transport.UsbReplyError as error:
+        if str(error) == 'CNTRL ERROR invalid-command':
+            raise EmulatorError(
+                'pedal firmware lacks the mirror storage check; update firmware first'
+            ) from error
+        raise
+    fields = response.split()
+    if (
+        len(fields) != 3
+        or fields[:2] != ['CNTRL', 'MIRROR']
+        or not fields[2].isdecimal()
+    ):
+        raise EmulatorError(f'invalid pedal storage generation response: {response}')
+    return fields[2]
 
 
 def storage_manifest(

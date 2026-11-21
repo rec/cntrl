@@ -18,14 +18,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
    Verify catch-up after actual host suspend. Keeping the window responsive
    during a stalled request remains open.
 
-9. **Mirroring needs a device-side consistency check.**
-   [Capture](../cntrl/emulator/mirror.py#L44) rechecks every downloaded file,
-   repeats the storage scan, and publishes completed mirrors atomically.
-   A write after a file's final read, or one reversed between reads, can
-   still escape detection. Validate the complete manifest and Status
-   snapshot against one device-side generation or prove that the device
-   stayed idle.
-
 11. **Live input history grows for the life of the emulator (code finding).**
     [Session input methods](../cntrl/emulator/backend.py#L438) append replay
     events including inbound MIDI. The [GUI bounds the visible log](../cntrl/emulator/gui.py#L333)

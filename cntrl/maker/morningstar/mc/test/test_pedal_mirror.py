@@ -37,6 +37,8 @@ class StoredPedal(transport.SetupClient):
         return (self.directory / path.lstrip('/')).read_bytes()
 
     def request(self, command: str) -> str:
+        if command == 'CNTRL MIRROR GENERATION':
+            return 'CNTRL MIRROR 1'
         assert command == 'CNTRL STATUS'
         return self.status
 
