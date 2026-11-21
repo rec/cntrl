@@ -34,6 +34,7 @@ from . import (
     setup_bundle,
     setup_create,
     setup_sync,
+    setup_sync_store,
     songs,
     source_archive,
     transport,
@@ -317,7 +318,7 @@ def setup_transfer(
                 (upload_snapshot / 'device-globals.toml').write_bytes(
                     device_globals.dump(live_globals)
                 )
-            setup_sync.advance(
+            setup_sync_store.advance(
                 setup_sync.store(command), upload_snapshot, uploaded_names
             )
         else:

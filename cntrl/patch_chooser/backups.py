@@ -191,7 +191,7 @@ def artifact_format(path: Path) -> str:
 def backup_pedal(
     directory: Path, port: Path, connection: transport.SerialConnection | None = None
 ) -> None:
-    from .setup_sync import write_record
+    from .setup_sync_store import write_record
 
     directory.mkdir(parents=True)
     write_record(directory / 'backup-pending.toml', {'complete': False})
@@ -359,7 +359,7 @@ def backup_pedal(
 
 
 def write_backup_manifest(directory: Path, *, complete: bool, raw_state: bool) -> None:
-    from .setup_sync import write_record
+    from .setup_sync_store import write_record
 
     manifest = BackupManifest(
         complete=complete,
@@ -1017,7 +1017,7 @@ def check_deployment_space(
 
 def prepare_restore(directory: Path, destination: Path, target: models.Target) -> Path:
     """Validate a backup and prepare current-format copies, retaining originals."""
-    from .setup_sync import write_record
+    from .setup_sync_store import write_record
 
     check_conversion(directory)
     recording_high_water(directory)

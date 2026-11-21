@@ -24,7 +24,7 @@ from ....patch_chooser import (
     storage_info,
     transport,
 )
-from ....patch_chooser.setup_sync import write_record
+from ....patch_chooser.setup_sync_store import write_record
 from ....upload import Upload
 from . import legacy_usb, release, upload_helper
 

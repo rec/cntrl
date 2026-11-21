@@ -73,11 +73,11 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 19. **Setup sync and the compiler are hard to review by responsibility.**
     [compiler.py](../cntrl/patch_chooser/compiler.py#L282) has about 2,800
     lines and mixes catalogue expansion, patch graph validation, display
-    assembly and binary encoding. [setup_sync.py](../cntrl/patch_chooser/setup_sync.py#L283)
-    has about 1,270 lines and mixes review construction, source attribution,
-    migration, transaction publication and recovery. Function size compounds
-    file size. Isolate boundaries as behavior changes, starting with review
-    publication and recovery because they share critical invariants.
+    assembly and binary encoding. Review records, baseline migration,
+    publication and recovery now live in [setup_sync_store.py](../cntrl/patch_chooser/setup_sync_store.py).
+    [Setup sync](../cntrl/patch_chooser/setup_sync.py) still combines review
+    construction, source attribution and candidate validation. Isolate the
+    remaining boundaries as behavior changes.
 
 21. **Historical snapshots and native builds can consume disk unchecked
     (risk to verify).** [Sync snapshots](../cntrl/patch_chooser/setup_sync.py#L342)

@@ -8,7 +8,13 @@ import tomlkit
 import tyro
 
 from cntrl.file_lock import writer_lock
-from cntrl.patch_chooser import binary_format, data_files, global_config, setup_sync
+from cntrl.patch_chooser import (
+    binary_format,
+    data_files,
+    global_config,
+    setup_sync,
+    setup_sync_store,
+)
 
 
 @pytest.mark.parametrize('interrupted', [False, True])
@@ -25,30 +31,32 @@ def test_baseline_conversion_preserves_provenance_and_recovers_publication(
     provenance = b'compiler_checksum="original"\nsources=[]\n'
     (snapshot / 'snapshot.toml').write_bytes(provenance)
     (snapshot / 'source-0.original').write_bytes(b'brightness=192\n')
-    setup_sync.advance(root, snapshot, ['Show'])
-    original = setup_sync.base_record(root)
-    publish = setup_sync.write_record
+    setup_sync_store.advance(root, snapshot, ['Show'])
+    original = setup_sync_store.base_record(root)
+    publish = setup_sync_store.write_record
 
     def write(path: Path, value: Mapping[str, object]) -> None:
         if interrupted and path == root / 'base.toml':
             raise OSError('interrupted baseline publication')
         publish(path, value)
 
-    monkeypatch.setattr(setup_sync, 'write_record', write)
+    monkeypatch.setattr(setup_sync_store, 'write_record', write)
     if interrupted:
         with pytest.raises(OSError, match='interrupted baseline'):
-            setup_sync.migrate_baselines(root)
+            setup_sync_store.migrate_baselines(root)
         with pytest.raises(ValueError, match='interrupted apply'):
-            setup_sync.check_pending(root)
-        setup_sync.recover(root / 'pending.toml')
-        assert setup_sync.base_record(root) == original
-        assert setup_sync.baseline(root) == {'Show': data}
+            setup_sync_store.check_pending(root)
+        setup_sync_store.recover(root / 'pending.toml')
+        assert setup_sync_store.base_record(root) == original
+        assert setup_sync_store.baseline(root) == {'Show': data}
     else:
-        setup_sync.migrate_baselines(root)
-        assert setup_sync.baseline(root) == {'Show': binary_format.wrap(data)}
-        entry = tomlkit.parse(setup_sync.base_record(root).decode())['setups']['Show']
+        setup_sync_store.migrate_baselines(root)
+        assert setup_sync_store.baseline(root) == {'Show': binary_format.wrap(data)}
+        entry = tomlkit.parse(setup_sync_store.base_record(root).decode())['setups'][
+            'Show'
+        ]
         assert (root / entry['file']).parent == snapshot
-        assert setup_sync.base_record(root) != original
+        assert setup_sync_store.base_record(root) != original
         assert not (root / 'pending.toml').exists()
     assert (snapshot / 'Show.bin').read_bytes() == data
     assert (snapshot / 'snapshot.toml').read_bytes() == provenance
@@ -63,7 +71,8 @@ def test_three_way_choices(
     base: int, host: int, pedal: int, choices: list[str]
 ) -> None:
     changes = setup_sync.merge_changes(
-        'A', *[setup_sync.Value(present=True, value=v) for v in (base, host, pedal)]
+        'A',
+        *[setup_sync_store.Value(present=True, value=v) for v in (base, host, pedal)],
     )
     assert [c.choice for c in changes] == choices
 
@@ -82,7 +91,8 @@ def test_anonymous_reorder_requires_review_but_named_patches_merge() -> None:
         'patches': {'A': {'volume': 80}, 'B': {'volume': 50}},
     }
     changes = setup_sync.merge_changes(
-        'A', *[setup_sync.Value(present=True, value=v) for v in (base, host, pedal)]
+        'A',
+        *[setup_sync_store.Value(present=True, value=v) for v in (base, host, pedal)],
     )
     assert [(c.path, c.choice) for c in changes] == [
         (['patch_cycles', 'one'], 'unresolved'),
@@ -133,7 +143,7 @@ def test_recovery_restores_sources_and_base_after_partial_publication(
     (folder / 'after').write_bytes(source.read_bytes())
     (folder / 'base.before').write_bytes(b'old-base')
     (root / 'base.toml').write_bytes(b'new-base')
-    setup_sync.write_record(
+    setup_sync_store.write_record(
         root / 'pending.toml',
         {
             'review': str(folder / 'review.toml'),
@@ -141,23 +151,23 @@ def test_recovery_restores_sources_and_base_after_partial_publication(
         },
     )
     with pytest.raises(ValueError, match='interrupted apply'):
-        setup_sync.check_pending(root)
+        setup_sync_store.check_pending(root)
     with writer_lock(root, operation='setup sync operation'):
         with pytest.raises(ValueError, match='another setup sync operation'):
-            setup_sync.recover(root / 'pending.toml')
+            setup_sync_store.recover(root / 'pending.toml')
         assert source.read_bytes() == b'brightness=20\n'
         assert (root / 'pending.toml').exists()
-    setup_sync.recover(root / 'pending.toml')
+    setup_sync_store.recover(root / 'pending.toml')
     assert source.read_bytes() == b'brightness=10\n'
     assert (root / 'base.toml').read_bytes() == b'old-base'
-    setup_sync.check_pending(root)
+    setup_sync_store.check_pending(root)
 
 
 def test_targeted_toml_change_keeps_comments_and_relative_paths() -> None:
     original = '# setup\nbrightness = 10 # dim\n[fonts]\nsmall = "fonts/source.ttf"\n'
     document = tomlkit.parse(original)
     setup_sync.assign(
-        document, ['brightness'], setup_sync.Value(present=True, value=20)
+        document, ['brightness'], setup_sync_store.Value(present=True, value=20)
     )
     assert tomlkit.dumps(document) == original.replace('10 # dim', '20 # dim')
 
@@ -227,7 +237,8 @@ def test_inherited_page_cycle_edit_writes_a_complete_local_list(
     host = {'patch_cycles': {'main': [1, 2]}}
     after = {'patch_cycles': {'main': pedal}}
     changes = setup_sync.merge_changes(
-        'Show', *[setup_sync.Value(present=True, value=v) for v in (host, host, after)]
+        'Show',
+        *[setup_sync_store.Value(present=True, value=v) for v in (host, host, after)],
     )
     change = setup_sync.destination(changes[0], trace, host, after)
     assert change.path == ['patch_cycles', 'main']
@@ -268,7 +279,10 @@ def test_deleting_an_inherited_value_records_a_local_removal(
     change = setup_sync.destination(
         setup_sync.merge_changes(
             'Show',
-            *[setup_sync.Value(present=True, value=v) for v in (host, host, pedal)],
+            *[
+                setup_sync_store.Value(present=True, value=v)
+                for v in (host, host, pedal)
+            ],
         )[0],
         trace,
         host,
@@ -317,13 +331,17 @@ def test_materializing_an_inherited_patch_removes_its_derived_parent(
     )
     program = {'type': 'program-change', 'instrument': 'synth', 'program': 7}
     change = setup_sync.destination(
-        setup_sync.Change(
+        setup_sync_store.Change(
             setup='Show',
             path=path,
-            base=setup_sync.Value(present=True, value={'parent': 'base', 'volume': 80}),
-            host=setup_sync.Value(present=True, value={'parent': 'base', 'volume': 80}),
-            pedal=setup_sync.Value(present=True, value=program),
-            choice=setup_sync.Choice.pedal,
+            base=setup_sync_store.Value(
+                present=True, value={'parent': 'base', 'volume': 80}
+            ),
+            host=setup_sync_store.Value(
+                present=True, value={'parent': 'base', 'volume': 80}
+            ),
+            pedal=setup_sync_store.Value(present=True, value=program),
+            choice=setup_sync_store.Choice.pedal,
             note='Materialize the complete program selection.',
         ),
         trace,

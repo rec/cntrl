@@ -760,7 +760,7 @@ def test_installing_a_converted_collection_retains_an_unreadable_active_root(
     converted: bool,
     journal_ready: bool,
 ) -> None:
-    from cntrl.patch_chooser.setup_sync import write_record
+    from cntrl.patch_chooser.setup_sync_store import write_record
 
     original = tmp_path / 'original'
     (original / 'setups').mkdir(parents=True)
