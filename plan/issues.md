@@ -9,23 +9,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 ## P1 | Memory integrity, data loss and disclosure
 
-2. **Crash report drafts can contain private data (remaining risk).**
-   [The reporter](../cntrl/crashes.py#L37) now shows the report locally and
-   opens a prefilled GitHub form only if the user chooses to report it.
-   GitHub receives the draft text when the form loads, and the URL may be
-   retained in browser history. The local review explains this before the
-   user decides whether to open the form.
-
-3. **Concurrent setup sync operations can overwrite each other's recovery
-   records (code finding).** [Apply](../cntrl/patch_chooser/setup_sync.py#L975)
-   checks for `pending.toml`, validates source and baseline hashes, then
-   [replaces the pending record and publishes files](../cntrl/patch_chooser/setup_sync.py#L1123).
-   Two applies against one root can both pass the checks. Atomic replacement
-   of each file leaves the multi-file transaction unprotected and gives
-   recovery only the last journal written. An editor can also save in the
-   gap after the last source check. Serialize cooperating mutations through
-   recovery and test interleaving two reviews and an outside edit.
-
 4. **Engine failure can leave notes or pedals held on real MIDI devices
    (risk to verify).** [The emulator forwards MIDI to external ports](../cntrl/emulator/gui.py#L631),
    but [session exit skips native cleanup on failure](../cntrl/emulator/backend.py#L225)

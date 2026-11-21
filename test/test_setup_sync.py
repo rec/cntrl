@@ -141,6 +141,11 @@ def test_recovery_restores_sources_and_base_after_partial_publication(
     )
     with pytest.raises(ValueError, match='interrupted apply'):
         setup_sync.check_pending(root)
+    with setup_sync.writer_lock(root):
+        with pytest.raises(ValueError, match='another setup sync operation'):
+            setup_sync.recover(root / 'pending.toml')
+        assert source.read_bytes() == b'brightness=20\n'
+        assert (root / 'pending.toml').exists()
     setup_sync.recover(root / 'pending.toml')
     assert source.read_bytes() == b'brightness=10\n'
     assert (root / 'base.toml').read_bytes() == b'old-base'

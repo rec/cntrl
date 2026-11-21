@@ -381,6 +381,19 @@ def run_setup(
     if isinstance(command, history.History):
         history.run(command)
         return
+    lock = (
+        setup_sync.writer_lock(setup_sync.store(command))
+        if isinstance(command, Copy)
+        else nullcontext()
+    )
+    with lock:
+        setup_transfer(command, connection)
+
+
+def setup_transfer(
+    command: Set | Rotate | List | Copy | Download | Delete,
+    connection: transport.SerialConnection | None,
+) -> None:
     assets: dict[str, dict[int, bytes]] = {}
     movies: dict[int, bytes] = {}
     trace = data_files.Trace()
