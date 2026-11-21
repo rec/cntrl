@@ -604,7 +604,7 @@ def main() -> None:
             languages.run(command.command)
         elif command.command is not None:
             if command.reset_starts:
-                raise ValueError('--reset-starts cannot be combined with disk-speed')
+                sys.exit('--reset-starts cannot be combined with disk-speed')
             rates = disk_speed.measure(devices.select_port(command.port))
             print(f'Upload: {rates.upload_bytes_per_second:,.0f} bytes/second')
             print(f'Download: {rates.download_bytes_per_second:,.0f} bytes/second')
@@ -622,11 +622,15 @@ def main() -> None:
     except (
         compiler_errors.CompilationError,
         CompileOutputError,
+        devices.DeviceSelectionError,
         source_archive.RecoveredSourceError,
+        transport.UsbCommandTimeout,
+        transport.UsbProtocolError,
+        transport.UsbReplyError,
     ) as error:
         sys.exit(str(error))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        if isinstance(command, Compile):
+        if isinstance(command, (Compile, Status)):
             raise
         sys.exit(str(error))
 

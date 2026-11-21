@@ -7,7 +7,7 @@ from zlib import crc32
 from pydantic import BaseModel
 from tqdm.std import tqdm
 
-from .transport import SerialConnection, SetupClient
+from .transport import SerialConnection, SetupClient, UsbReplyError
 from .usb_frames import Kind
 
 
@@ -47,12 +47,12 @@ def measure(port: Path) -> Throughput:
                         <= len(chunk)
                         <= min(connection.usb_block_size, length - len(result))
                     ):
-                        raise ValueError('invalid disk-speed download chunk')
+                        raise UsbReplyError('invalid disk-speed download chunk')
                     result.extend(chunk)
                     progress.update(len(chunk))
                 download_ns = perf_counter_ns() - start
             if result != data:
-                raise ValueError('disk-speed read-back verification failed')
+                raise UsbReplyError('disk-speed read-back verification failed')
             client.ok('CNTRL DISK DELETE')
             return Throughput(
                 upload_bytes_per_second=length * 1_000_000_000 / upload_ns,

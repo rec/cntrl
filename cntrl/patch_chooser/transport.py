@@ -20,6 +20,10 @@ class UsbProtocolError(ValueError):
     """The device replied, but this host cannot interpret its USB protocol."""
 
 
+class UsbReplyError(ValueError):
+    """The pedal rejected the command or returned an unexpected result."""
+
+
 class UsbCommandTimeout(TimeoutError):
     """The USB operation exceeded its deadline."""
 
@@ -353,8 +357,10 @@ class SerialConnection:
                     )
                 line = frame.payload.rstrip(b'\r\n')
                 if len(line) >= limit:
-                    raise ValueError(f'USB serial response exceeds {limit - 1} bytes')
-                response = line.decode('ascii').rstrip('\r')
+                    raise self.protocol_error(
+                        f'USB serial response exceeds {limit - 1} bytes', frame.encode()
+                    )
+                response = self._reply_text(frame)
                 if response != 'CNTRL WAIT':
                     return response
         finally:
@@ -369,9 +375,9 @@ class SerialConnection:
                 frame = self._reply()
                 if frame.kind == Kind.data:
                     return frame.payload
-                text = frame.payload.decode('ascii').rstrip('\r\n')
+                text = self._reply_text(frame)
                 if text != 'CNTRL WAIT':
-                    raise ValueError(text)
+                    raise UsbReplyError(text)
         finally:
             self.deadline = None
             self.command_sent = False
@@ -384,6 +390,14 @@ class SerialConnection:
             self.exchange(b'', Kind.poll)
             if not self.received:
                 self._pause(0.01)
+
+    def _reply_text(self, frame: Frame) -> str:
+        try:
+            return frame.payload.decode('ascii').rstrip('\r\n')
+        except UnicodeDecodeError as error:
+            raise self.protocol_error(
+                'USB text reply is not ASCII', frame.encode()
+            ) from error
 
 
 class SetupEntry(BaseModel, frozen=True):
@@ -402,17 +416,17 @@ class SetupClient:
         self.connection.write((command + '\n').encode('ascii'))
         response = self.connection.line()
         if response.startswith('CNTRL ERROR'):
-            raise ValueError(response)
+            raise UsbReplyError(response)
         return response
 
     def ok(self, command: str) -> None:
         if (response := self.request(command)) != 'CNTRL OK':
-            raise ValueError(f'unexpected response: {response}')
+            raise UsbReplyError(f'unexpected response: {response}')
 
     def send_data(self, kind: Kind, data: bytes) -> None:
         self.connection.write(data, kind)
         if (response := self.connection.line()) != 'CNTRL OK':
-            raise ValueError(response)
+            raise UsbReplyError(response)
 
     def request_data(self, command: str) -> bytes:
         self.connection.write((command + '\n').encode('ascii'))
