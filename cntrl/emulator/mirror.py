@@ -2,6 +2,7 @@
 
 from hashlib import sha256
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 import tomlkit
@@ -29,21 +30,72 @@ def download(
                 'pedal persistent format differs from this emulator; '
                 'update firmware first'
             )
-        directory = (
-            storage or Path('.cntrl-emulator') / model
-        ) / f'mirror-{uuid4().hex}'
-        directory.mkdir(parents=True)
-        setup = capture(client, directory, status)
-    return model, setup, directory
+        root = storage or Path('.cntrl-emulator') / model
+        root.mkdir(parents=True, exist_ok=True)
+        directory = root / f'mirror-{uuid4().hex}'
+        with TemporaryDirectory(prefix='.mirror-', dir=root) as staging:
+            draft = Path(staging) / 'capture'
+            draft.mkdir()
+            setup = capture(client, draft, status)
+            draft.rename(directory)
+    return model, directory / setup.name, directory
 
 
 def capture(client: transport.SetupClient, directory: Path, status: str) -> Path:
     """Normalize the active deployment root, preserving journal and asset bytes."""
-    first = True
     selected = client.current()
+    prefix = persistent_prefix(status)
+    manifest = storage_manifest(client, prefix)
+    files: list[dict[str, object]] = []
+    checksums: dict[str, str] = {}
+    for physical, (logical, size) in manifest.items():
+        try:
+            data = client.download_state(physical)
+        except (OSError, ValueError) as error:
+            raise ValueError(
+                f'{physical}: cannot capture pedal file: {error}'
+            ) from error
+        if len(data) != size:
+            raise ValueError(f'{physical}: storage changed during mirror capture')
+        path = directory / logical.lstrip('/')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        checksums[physical] = sha256(data).hexdigest()
+        files.append(dict(path=logical, sha256=checksums[physical]))
+    bundle = client.download_bundle()
+    if not bundle:
+        raise ValueError('pedal has no compiled setup bundle')
+    setup = directory / 'pedal-setup.bin'
+    setup.write_bytes(bundle)
+    if not any(
+        (directory / 'cntrl/setups/bundle' / f'{i}.bin').is_file() for i in range(2)
+    ):
+        raise ValueError('pedal mirror is missing its compiled setup journals')
+    for physical, digest in checksums.items():
+        if sha256(client.download_state(physical)).hexdigest() != digest:
+            raise ValueError(f'{physical}: storage changed during mirror capture')
+    if storage_manifest(client, prefix) != manifest:
+        raise ValueError('pedal storage listing changed during mirror capture')
     snapshot = client.request_data('CNTRL STATUS SNAPSHOT')
     if len(snapshot) != 111 or snapshot[:4] != b'CSS1':
         raise ValueError('pedal returned an unsupported Status snapshot')
+    if client.current() != selected:
+        raise ValueError('pedal setup selection changed during mirror capture')
+    if client.request('CNTRL STATUS') != status:
+        raise ValueError('pedal status changed during mirror capture')
+    # Importing a bundle would replace the copied journals and selection.
+    (directory / 'setup-source.sha256').write_text(sha256(bundle).hexdigest())
+    (directory / 'status-snapshot.bin').write_bytes(snapshot)
+    (directory / 'mirror.toml').write_text(
+        tomlkit.dumps(dict(status=status, selected=selected, files=files))
+    )
+    return setup
+
+
+def storage_manifest(
+    client: transport.SetupClient, prefix: str
+) -> dict[str, tuple[str, int]]:
+    first = True
 
     def next_line() -> str:
         nonlocal first
@@ -51,12 +103,9 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
         first = False
         return client.request(command)
 
-    report = storage_info.read_storage_report(next_line)
-    prefix = persistent_prefix(status)
     mutable = ('setups/', 'history/', 'songs/', 'selection/', 'global/', 'languages/')
-    files: list[dict[str, object]] = []
-    journals: dict[str, str] = {}
-    for entry in report.entries:
+    manifest: dict[str, tuple[str, int]] = {}
+    for entry in storage_info.read_storage_report(next_line).entries:
         if entry.directory or not entry.path.startswith('/cntrl/'):
             continue
         if entry.path.startswith('/cntrl/generations/'):
@@ -69,42 +118,5 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
                 continue
         if '..' in Path(logical).parts:
             raise ValueError(f'{entry.path}: invalid mirror storage path')
-        try:
-            data = client.download_state(entry.path)
-        except (OSError, ValueError) as error:
-            raise ValueError(
-                f'{entry.path}: cannot capture pedal file: {error}'
-            ) from error
-        if len(data) != entry.size_bytes:
-            raise ValueError(f'{entry.path}: storage changed during mirror capture')
-        path = directory / logical.lstrip('/')
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        files.append(dict(path=logical, sha256=sha256(data).hexdigest()))
-        if logical[7:].startswith(mutable):
-            journals[entry.path] = sha256(data).hexdigest()
-    bundle = client.download_bundle()
-    if not bundle:
-        raise ValueError('pedal has no compiled setup bundle')
-    setup = directory / 'pedal-setup.bin'
-    setup.write_bytes(bundle)
-    if not any(
-        (directory / 'cntrl/setups/bundle' / f'{i}.bin').is_file() for i in range(2)
-    ):
-        raise ValueError('pedal mirror is missing its compiled setup journals')
-    for path, digest in journals.items():
-        if sha256(client.download_state(path)).hexdigest() != digest:
-            raise ValueError(
-                'pedal settings changed during mirror capture; capture again while idle'
-            )
-    if client.current() != selected:
-        raise ValueError('pedal setup selection changed during mirror capture')
-    if persistent_prefix(client.request('CNTRL STATUS')) != prefix:
-        raise ValueError('pedal deployment changed during mirror capture')
-    # Importing a bundle would replace the copied journals and selection.
-    (directory / 'setup-source.sha256').write_text(sha256(bundle).hexdigest())
-    (directory / 'mirror.toml').write_text(
-        tomlkit.dumps(dict(status=status, selected=selected, files=files))
-    )
-    (directory / 'status-snapshot.bin').write_bytes(snapshot)
-    return setup
+        manifest[entry.path] = (logical, entry.size_bytes)
+    return manifest
