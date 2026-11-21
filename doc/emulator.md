@@ -223,6 +223,8 @@ endpoint and `value` zero/one), `expression` (`target` port slot as text and
 or 27 for Escape), `cleanup`, and `text` (`text` ASCII cue and optional `value = 1` for
 warning). Input follows production debounce and scheduling;
 a press/release at one instant is not a debounced physical press.
+If the native engine rejects an input, replay stops and `cntrl` exits with an
+error. Runtime notifications are recorded in the trace and allow replay to continue.
 
 ```sh
 cntrl emulate setup.bin --layout controller-layout.toml --target target.toml --storage replay-session --scenario scenario.toml --output replay-results

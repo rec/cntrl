@@ -601,6 +601,34 @@ def test_preview_storage_rejects_a_second_setup_until_the_session_ends(
     ).hexdigest()
 
 
+def test_replay_stops_on_native_rejection_and_session_can_continue(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    replay = Scenario.model_validate(
+        {
+            'until': 0.1,
+            'events': [
+                {'at': 0, 'kind': 'connection', 'target': 'din', 'value': 0},
+                {'at': 0.01, 'kind': 'midi', 'target': 'din', 'data': [0x90, 60, 100]},
+                {'at': 0.02, 'kind': 'connection', 'target': 'din', 'value': 1},
+            ],
+        }
+    )
+    scenario = tmp_path / 'replay.toml'
+    scenario.write_text(tomlkit.dumps(replay.model_dump(mode='json')))
+    with backend.Session(
+        files.layout, files.target, files.executable, tmp_path, files.setup
+    ) as session:
+        with pytest.raises(backend.RequestRejected, match='MIDI input is disconnected'):
+            Scenario.load(scenario).run(session)
+        assert session.time_us == 10000
+        assert session.events == [replay.events[0]]
+        session.connection('din', True)
+        session.midi('din', bytes([0x90, 60, 100]))
+        assert any(e.kind == 'midi' and e.endpoint == 'trs' for e in session.messages)
+
+
 def test_replay_drives_real_button_actions_and_draws_pages(
     backend_files: BackendFiles, tmp_path: Path
 ) -> None:
