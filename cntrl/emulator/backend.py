@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import ExitStack
 from hashlib import sha256
 from pathlib import Path
 from queue import Empty, Full, Queue
@@ -195,19 +196,21 @@ class Session:
             command.extend(
                 [str(FONT_IDS[name]), str(Path(target.font_sources[name]).resolve())]
             )
-        self.process = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-        )
         self.pending = bytearray()
         self.output: Queue[bytes] = Queue(maxsize=16)
         self.reader_stop = threading.Event()
         self.reader_error: OSError | None = None
         self.reader = Thread(target=self.read_stdout, daemon=True)
-        self.reader.start()
         self.closed = False
-        try:
+        self._cleanup_complete = False
+        with ExitStack() as startup:
+            self.process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+            )
+            startup.callback(self.close)
+            self.reader.start()
             self.receive()
             if self.mode == 'pedal mirror':
                 self.request(b'\x0e' + (storage / 'status-snapshot.bin').read_bytes())
@@ -215,9 +218,7 @@ class Session:
             if errors:
                 raise ValueError('native emulator startup failed: ' + '; '.join(errors))
             source_record.write_text(source_hash)
-        except (OSError, ValueError):
-            self.close()
-            raise
+            startup.pop_all()
 
     def __enter__(self) -> 'Session':
         return self
@@ -237,15 +238,24 @@ class Session:
             self.close()
 
     def close(self) -> None:
-        if self.closed:
+        if self._cleanup_complete:
             return
         self.closed = True
         self.reader_stop.set()
-        if self.process.stdin is not None:
-            try:
-                self.process.stdin.close()
-            except BrokenPipeError:
-                pass
+        with ExitStack() as cleanup:
+            if self.process.stdout is not None:
+                cleanup.callback(self.process.stdout.close)
+            if self.reader.ident is not None:
+                cleanup.callback(self.join_reader)
+            cleanup.callback(self.stop_process)
+            if self.process.stdin is not None:
+                try:
+                    self.process.stdin.close()
+                except BrokenPipeError:
+                    pass
+        self._cleanup_complete = True
+
+    def stop_process(self) -> None:
         try:
             self.process.wait(timeout=3)
         except subprocess.TimeoutExpired:
@@ -255,9 +265,11 @@ class Session:
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait(timeout=3)
-        if self.process.stdout is not None:
-            self.process.stdout.close()
+
+    def join_reader(self) -> None:
         self.reader.join(timeout=3)
+        if self.reader.is_alive():
+            raise TimeoutError('native emulator reader did not stop')
 
     def poll_exit(self) -> int | None:
         return self.process.poll()
