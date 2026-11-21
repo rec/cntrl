@@ -43,17 +43,8 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     Enter, or Escape with no feedback. Verify under realistic SD/display
     load and decide how the editor indicates discarded input.
 
-15. **Crash reporting can fail to open a draft or identify the actual runtime
-    (code finding).** GitHub can reject a [prefilled form URL](../cntrl/crashes.py#L37)
-    if the traceback makes it too long. The full traceback remains on stderr.
-    [The build hook](../scripts/build_hook.py#L11) skips the stamp when no
-    Git metadata exists, which is correct for a stamped source distribution
-    but also applies to an ordinary unstamped source archive. In that case
-    reading the stamp aborts report creation. Furthermore, the Python package
-    revision can differ from [the native emulator revision](../cntrl/emulator/backend.py#L117)
-    selected by `--source-root`. Allow an explicit unknown stamp and report
-    both revisions when available. Separately, the CLI's
-    [broad conversion of OSError and ValueError to short messages](../cntrl/patch_chooser/cli.py#L765)
+15. **CLI error handling can hide unexpected failures (code finding).** The CLI's
+    [broad conversion of OSError and ValueError to short messages](../cntrl/patch_chooser/cli.py#L611)
     can hide programming errors of those types. Identify expected user and
     transport failures at their boundaries so unexpected ones keep a trace.
 

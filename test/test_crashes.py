@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from unittest.mock import Mock
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -27,10 +28,13 @@ def test_report_contains_build_platform_and_complete_traceback(
     monkeypatch: pytest.MonkeyPatch, binary: str
 ) -> None:
     monkeypatch.setattr(crashes, 'build_ref', lambda: 'a' * 40)
+    monkeypatch.setattr(crashes, 'native_emulator_ref', 'b' * 7)
     error = chained_error()
     body = crashes.issue_body(binary, error, error.__traceback__)
     assert f'An unhandled Python exception occurred in {binary}.' in body
     assert f'**Build gitref:** {"a" * 40}' in body
+    if binary == 'emulator':
+        assert f'**Native emulator gitref:** {"b" * 7}' in body
     for label in (
         'Python version',
         'Python build',
@@ -89,6 +93,25 @@ def test_report_opens_prefilled_issue_form(
     assert '**Build gitref:** build-ref' in body
     assert 'ValueError: original failure' in body
     assert body.endswith('    Échec & détails #1?\n')
+
+
+def test_large_report_opens_title_only_and_keeps_full_text_local(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
+    monkeypatch.setattr(sys.stdin, 'isatty', lambda: True)
+    monkeypatch.setattr(sys.stderr, 'isatty', lambda: True)
+    monkeypatch.setattr('builtins.input', lambda: 'yes')
+    browser = Mock(return_value=True)
+    monkeypatch.setattr(crashes.webbrowser, 'open', browser)
+    message = 'Échec ' * 1000
+    crashes.report('cntrl', RuntimeError(message), None)
+    assert browser.call_count == 1
+    form = urlsplit(browser.call_args.args[0])
+    assert parse_qs(form.query) == {'title': ['Stack trace in cntrl']}
+    preview = capsys.readouterr().err
+    assert message in preview
+    assert 'Copy the full report before opening' in preview
 
 
 @pytest.mark.parametrize('interactive', [True, False])
@@ -198,3 +221,15 @@ def test_checkout_revision_matches_git() -> None:
         ['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True
     ).strip()
     assert crashes.build_ref() == expected
+
+
+def test_unstamped_archive_reports_unknown_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(crashes, '__file__', str(tmp_path / 'cntrl' / 'crashes.py'))
+    monkeypatch.setattr(
+        crashes, 'distribution', lambda _: Mock(locate_file=tmp_path.joinpath)
+    )
+    assert '**Build gitref:** unknown' in crashes.issue_body(
+        'cntrl', ValueError(), None
+    )

@@ -16,7 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from .. import models
+from .. import crashes, models
 from ..firmware import native_cache
 from ..firmware.build_info import commit_id
 from ..firmware.capabilities import header
@@ -136,14 +136,14 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
     key = native_cache.build_key(command, directory, inputs)
     cache = source_root / 'build/native-cache'
     record = directory / 'emulator.sha256'
-    if executable.is_file() and record.is_file() and record.read_text() == key:
-        return executable
-    # A failed compiler may truncate an old executable. Never reuse its old key.
-    record.write_text('')
-    if not native_cache.restore(cache, key, executable):
-        subprocess.run(command, check=True)
-        native_cache.store(cache, key, executable)
-    record.write_text(key)
+    if not (executable.is_file() and record.is_file() and record.read_text() == key):
+        # A failed compiler may truncate an old executable. Never reuse its old key.
+        record.write_text('')
+        if not native_cache.restore(cache, key, executable):
+            subprocess.run(command, check=True)
+            native_cache.store(cache, key, executable)
+        record.write_text(key)
+    crashes.native_emulator_ref = commit
     return executable
 
 
