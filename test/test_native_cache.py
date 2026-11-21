@@ -1,5 +1,6 @@
 """Native test binaries survive pytest's disposable compilation directories."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -7,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from cntrl.file_lock import writer_lock
+from cntrl.firmware import native_cache
 from scripts import native_tests
 
 
@@ -129,3 +132,59 @@ def test_failed_native_compilation_is_not_cached(
     native_build.fail = False
     output = native_build.build(tmp_path / 'second')
     assert output.read_text() == 'build 2'
+
+
+def test_native_cache_evicts_the_least_recently_used_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(native_cache, 'MAX_CACHE_BYTES', 8)
+    cache = tmp_path / 'cache'
+    output = tmp_path / 'program'
+    output.write_bytes(b'code')
+    first, second, third = ('1' * 64, '2' * 64, '3' * 64)
+    native_cache.store(cache, first, output)
+    native_cache.store(cache, second, output)
+    os.utime(cache / first, (1, 1))
+    os.utime(cache / second, (2, 2))
+    unrelated = cache / 'notes.txt'
+    unrelated.write_bytes(b'keep this file')
+
+    assert native_cache.restore(cache, first, tmp_path / 'restored')
+    native_cache.store(cache, third, output)
+
+    assert not native_cache.restore(cache, second, tmp_path / 'missing')
+    assert native_cache.restore(cache, first, tmp_path / 'first')
+    assert native_cache.restore(cache, third, tmp_path / 'third')
+    assert unrelated.read_bytes() == b'keep this file'
+
+
+def test_native_cache_contention_leaves_built_output_available(tmp_path: Path) -> None:
+    cache = tmp_path / 'cache'
+    output = tmp_path / 'program'
+    output.write_bytes(b'code')
+    key = '1' * 64
+    native_cache.store(cache, key, output)
+
+    with writer_lock(cache, operation='native cache operation'):
+        assert not native_cache.restore(cache, key, tmp_path / 'restored')
+        native_cache.store(cache, '2' * 64, output)
+
+    assert output.read_bytes() == b'code'
+    assert not native_cache.restore(cache, '2' * 64, tmp_path / 'other')
+    assert native_cache.restore(cache, key, tmp_path / 'restored')
+
+
+def test_oversized_build_keeps_smaller_cached_builds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(native_cache, 'MAX_CACHE_BYTES', 4)
+    cache = tmp_path / 'cache'
+    output = tmp_path / 'program'
+    output.write_bytes(b'code')
+    native_cache.store(cache, '1' * 64, output)
+    output.write_bytes(b'bigger code')
+    native_cache.store(cache, '2' * 64, output)
+
+    assert output.read_bytes() == b'bigger code'
+    assert not native_cache.restore(cache, '2' * 64, tmp_path / 'oversized')
+    assert native_cache.restore(cache, '1' * 64, tmp_path / 'smaller')

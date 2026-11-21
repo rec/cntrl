@@ -79,13 +79,14 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     construction, source attribution and candidate validation. Isolate the
     remaining boundaries as behavior changes.
 
-21. **Historical snapshots and native builds can consume disk unchecked
-    (risk to verify).** [Sync snapshots](../cntrl/patch_chooser/setup_sync.py#L342)
-    create new directories with source and setup copies, and the [native cache](../cntrl/firmware/native_cache.py#L49)
-    retains outputs by build key. Measure growth during ordinary development
-    and show use. Any pruning must preserve current baselines, pending
-    recovery records and intentional backups; build-cache retention can be
-    handled separately.
+21. **Historical setup snapshots have no retention limit (risk to verify).**
+    [Sync snapshots](../cntrl/patch_chooser/setup_sync.py) create new
+    directories with source and setup copies. A two-setup round-trip test
+    retained five snapshots and conversion records using 320 KiB on disk.
+    Measure growth during show use before choosing a retention policy that
+    preserves current baselines, pending recovery and intentional backups.
+    The [native build cache](../cntrl/firmware/native_cache.py) now has a
+    separate 2 GiB limit for generated executables.
 
 ## Hardware and lifetime follow-up
 
