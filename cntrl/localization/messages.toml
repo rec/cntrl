@@ -1421,3 +1421,15 @@ context = 'Start a standalone song at its initial empty position'
 en = 'Hold {control:s}: menu'
 context = 'Hold the named physical control to open Pages and tools during song performance'
 
+[messages.calibration_heel]
+en = 'Heel'
+context = 'Expression calibration table column'
+
+[messages.calibration_toe]
+en = 'Toe'
+context = 'Expression calibration table column'
+
+[messages.press_heel_then_toe]
+en = 'Press heel, then toe'
+context = 'Active expression calibration instruction'
+

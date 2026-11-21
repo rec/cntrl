@@ -226,15 +226,46 @@ public:
         for (auto &clock : clocks_) clock.poll(now_us);
         select_available_clock(); tap_.flash(now, 0);
     }
-    cntrl::Pane calibration_view(uint32_t now, const char *title, const char *position, const char *prompt) {
+    template<class Pedals, class Enabled>
+    cntrl::Pane calibration_view(uint32_t now, const Pedals &pedals, Enabled enabled) {
         using R = cntrl::PageSettings;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background]; pane.graphics.pad = uint8_t(settings_[R::padding]);
-        page_heading(pane, i18n::text(i18n::Message::calibrate));
-        line(pane, 1, title, vertical(28), vertical(24), localized_face, true);
-        line(pane, 2, position, vertical(54), vertical(24), localized_face, true);
-        line(pane, 3, prompt, vertical(80), vertical(28), localized_face, true);
+        const bool active = pedals.calibrating();
+        constexpr uint16_t green = 0x03e0, red = 0xf800;
+        const unsigned split = viewport_.width / 3;
+        line(pane, 0, i18n::text(active ? i18n::Message::press_heel_then_toe : i18n::Message::calibrate),
+            vertical(4), vertical(18), localized_face, false, nullptr, 0, viewport_.width, 12, true);
+        if (active) pane.lines[0].graphics.foreground = green;
+        line(pane, 1, i18n::text(i18n::Message::calibration_heel), vertical(23), vertical(16), localized_face, true, nullptr, 0, split);
+        line(pane, 2, i18n::text(i18n::Message::calibration_toe), vertical(23), vertical(16), localized_face, true, nullptr, split, 2 * split);
+        unsigned row = 0;
+        for (unsigned jack = 0; jack < pedals.count() && row < 4; ++jack) {
+            if (!enabled(jack)) continue;
+            const auto saved = pedals.calibration(jack);
+            const auto &capture = pedals.capture(jack);
+            const int heel = active && capture.heel >= 0 ? capture.heel : saved.valid() ? int(saved.heel) : -1;
+            const int toe = active && capture.toe >= 0 ? capture.toe : saved.valid() ? int(saved.toe) : -1;
+            char text[16];
+            const auto percent = [&](int value) {
+                if (value < 0) { std::strcpy(text, "--.-"); return; }
+                const unsigned hundredths = (unsigned(value) * 10000 + ExpressionCalibration::maximum / 2) / ExpressionCalibration::maximum;
+                std::snprintf(text, sizeof(text), "%u.%02u%%", hundredths / 100, hundredths % 100);
+            };
+            const unsigned index = 3 + 3 * row, y = vertical(42 + 20 * row);
+            percent(heel);
+            line(pane, index, text, y, vertical(17), localized_face, false, "100.00%", 0, split, 12, true);
+            percent(toe);
+            line(pane, index + 1, text, y, vertical(17), localized_face, false, "100.00%", split, 2 * split, 12, true);
+            line(pane, index + 2, pedals.name(jack), y, vertical(17), localized_face, false, nullptr, 2 * split, viewport_.width, 12);
+            if (active) {
+                pane.lines[index].graphics.foreground = capture.heel_ready ? green : red;
+                pane.lines[index + 1].graphics.foreground = capture.toe_ready ? green : red;
+            }
+            ++row;
+        }
+        if (!row) line(pane, 3, i18n::text(i18n::Message::select_expression_role), vertical(52), vertical(30), localized_face, true);
         return pane;
     }
 
@@ -636,7 +667,7 @@ private:
 #endif
         auto &l = pane.lines[index];
         utf8::copy(l.text, sizeof(l.text), text);
-        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::time && page_ != Page::pong;
+        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::time && page_ != Page::pong && page_ != Page::calibrate;
         if (ordinary) {
             face = 17;
             maximum_size = std::min(maximum_size, index ? (page_ == Page::panic ? 24u : 12u) : 16u);

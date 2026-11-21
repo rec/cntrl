@@ -116,17 +116,14 @@ struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink, cntrl::K
     cntrl::midi::Monitor monitor;
     cntrl::midi::Monitor &midi_monitor() { return monitor; }
     struct Expression {
-        unsigned index = 0;
-        const char *position_text = "50%";
         void configure(const cntrl::ExpressionAssignment *, cntrl::midi::Outputs) {}
         void cancel() {}
-        void select(unsigned value) { index = value; }
-        unsigned selected() const { return index; }
         unsigned count() const { return 1; }
-        void calibrate(bool) {}
-        void status(const char *,bool,char *title,char *position,char *prompt) {
-            std::strcpy(title,"Expression"); std::strcpy(position,position_text); std::strcpy(prompt,"Calibrate");
-        }
+        bool calibrate() { return true; }
+        bool calibrating() const { return false; }
+        cntrl::ExpressionCalibration calibration(unsigned) const { return {}; }
+        cntrl::CalibrationCapture capture(unsigned) const { return {}; }
+        const char *name(unsigned) const { return ""; }
     } expression;
     struct Bridge { void clock_owner(unsigned) {} void configure(bool) {} } bridge;
     cntrl::midi::Outputs midi_outputs() const override { return endpoints; }

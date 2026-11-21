@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Asennus on palautettava' }
 target_setup_bundle_invalid = { text = 'Virheellinen kokoonpanopaketti' }
 target_global_recovery = { text = 'Yleiset asetukset on palautettava' }
 target_song_storage_invalid = { text = 'Kappaleiden tallennustila virheellinen' }
+[messages.calibration_heel]
+text = 'Kanta'
+
+[messages.calibration_toe]
+text = 'Kärki'
+
+[messages.press_heel_then_toe]
+text = 'Paina kantaa, sitten kärkeä'

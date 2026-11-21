@@ -9,7 +9,7 @@ reverse-page control cycle only the focused region. Page and region names
 contain 1 to 31 printable ASCII characters.
 
 The default utility-page cycle is Status, MIDI Cable Test, Panic,
-Time, Pong, Language, then None. Language appears immediately
+Time, Pong, Language, None, then Calibration. Language appears immediately
 before None; Pong appears immediately before Language on targets with three
 or more displays. Time and Language require at least two displays and are omitted from
 the defaults on one-display targets.

@@ -82,10 +82,11 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     assert not {'menu', 'trs-ports', 'expression'} & pages.keys()
     assert pages['patch-chooser']['min_windows'] == 0
     if count == 3:
-        assert exported['regions']['tools']['pages'][-3:] == [
+        assert exported['regions']['tools']['pages'][-4:] == [
             'pong',
             'language',
             'None',
+            'calibration',
         ]
         assert pages['pong']['min_windows'] == 3
     else:
@@ -93,6 +94,8 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
         assert 'None' in pages
     assert ('language' in pages) == (count >= 2)
     assert ('time' in pages) == (count >= 2)
+    assert pages['calibration']['type'] == 'calibrate'
+    assert pages['calibration']['min_windows'] == 1
     if count >= 2:
         assert pages['language']['min_windows'] == 2
     assert compiler.compile_show(exported, {}, [], device) == data

@@ -232,27 +232,28 @@ def test_calibrate_page_saves_each_expression_jack(
             session.button(button, False)
             session.advance(session.time_us + 60000)
 
-        session.advance(1000000)
-        for jack, (heel, toe) in enumerate([(100, 900), (920, 120), (200, 820)]):
-            session.expression(jack, heel)
-            press('a')
-            session.advance(session.time_us + 200000)
-            press('a')
-            # Move smoothly so two samples in a bias pair see the same pedal.
+        def move(jack: int, start: int, end: int) -> None:
             for step in range(1, 9):
-                session.expression(jack, heel + (toe - heel) * step // 8)
+                session.expression(jack, start + (end - start) * step // 8)
                 session.advance(session.time_us + 10000)
-            session.advance(session.time_us + 200000)
-            press('a')
-            press('b')
+
+        for jack in range(3):
+            session.expression(jack, 512)
+        session.advance(1000000)
+        press('a')
+        ranges = [(100, 900), (920, 120), (200, 820)]
+        for jack in (2, 0, 1):
+            heel, toe = ranges[jack]
+            move(jack, 512, heel)
+            move(jack, heel, toe)
+        session.advance(session.time_us + 2100000)
+        press('a')
     saved = tomlkit.parse(calibration.read_text()).unwrap()
     assert saved['configurable-1']['name'] == 'Boss EV-30, left'
-    assert saved['configurable-1']['heel'] == pytest.approx(100, abs=1)
-    assert saved['configurable-1']['toe'] == pytest.approx(900, abs=1)
-    assert saved['configurable-2']['heel'] == pytest.approx(920, abs=1)
-    assert saved['configurable-2']['toe'] == pytest.approx(120, abs=2)
-    assert saved['configurable-3']['heel'] == pytest.approx(200, abs=1)
-    assert saved['configurable-3']['toe'] == pytest.approx(820, abs=1)
+    assert saved['bits'] == 12
+    for jack, (heel, toe) in enumerate(ranges, 1):
+        assert saved[f'configurable-{jack}']['heel'] == round(heel * 4095 / 1023)
+        assert saved[f'configurable-{jack}']['toe'] == round(toe * 4095 / 1023)
 
 
 def test_mirrored_status_uses_captured_values_and_remains_frozen(

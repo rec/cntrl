@@ -327,11 +327,13 @@ def run(command: ImportBackup) -> None:
         'other global settings are not imported',
     }
     (command.output / 'import.toml').write_text(tomlkit.dumps(report))
-    # Virtual ADC inputs span 0..1023; these are not physical pedal calibration.
+    # Virtual sliders cover the full ADC range.
     session = command.output / 'session' / 'cntrl'
     session.mkdir(parents=True)
     (session / 'calibration.toml').write_text(
-        tomlkit.dumps({j: {'heel': 0, 'toe': 1023} for j in setup.trs_ports})
+        tomlkit.dumps(
+            {'bits': 12, **{j: {'heel': 0, 'toe': 4095} for j in setup.trs_ports}}
+        )
     )
     (command.output / 'start.toml').write_text(
         tomlkit.dumps(

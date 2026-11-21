@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Dağıtımın kurtarılması gerekiyor' }
 target_setup_bundle_invalid = { text = 'Kurulum paketi geçersiz' }
 target_global_recovery = { text = 'Genel ayarların kurtarılması gerekiyor' }
 target_song_storage_invalid = { text = 'Şarkı depolaması geçersiz' }
+[messages.calibration_heel]
+text = 'Topuk'
+
+[messages.calibration_toe]
+text = 'Uç'
+
+[messages.press_heel_then_toe]
+text = 'Önce topuğa, sonra uca basın'

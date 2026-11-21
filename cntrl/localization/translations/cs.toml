@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Nutná obnova nasazení' }
 target_setup_bundle_invalid = { text = 'Neplatný balíček konfigurací' }
 target_global_recovery = { text = 'Nutná obnova globálního nastavení' }
 target_song_storage_invalid = { text = 'Neplatné úložiště skladeb' }
+[messages.calibration_heel]
+text = 'Pata'
+
+[messages.calibration_toe]
+text = 'Špička'
+
+[messages.press_heel_then_toe]
+text = 'Sešlápněte patu, pak špičku'

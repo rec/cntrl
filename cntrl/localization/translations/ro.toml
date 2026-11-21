@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Este necesară recuperarea instalării' }
 target_setup_bundle_invalid = { text = 'Pachet de configurații nevalid' }
 target_global_recovery = { text = 'Este necesară recuperarea setărilor globale' }
 target_song_storage_invalid = { text = 'Stocare piese nevalidă' }
+[messages.calibration_heel]
+text = 'Călcâi'
+
+[messages.calibration_toe]
+text = 'Vârf'
+
+[messages.press_heel_then_toe]
+text = 'Apăsați călcâiul, apoi vârful'

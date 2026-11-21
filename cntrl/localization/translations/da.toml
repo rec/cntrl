@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Installation skal gendannes' }
 target_setup_bundle_invalid = { text = 'Ugyldig opsætningspakke' }
 target_global_recovery = { text = 'Globale indstillinger skal gendannes' }
 target_song_storage_invalid = { text = 'Ugyldigt sanglager' }
+[messages.calibration_heel]
+text = 'Hæl'
+
+[messages.calibration_toe]
+text = 'Tå'
+
+[messages.press_heel_then_toe]
+text = 'Tryk hæl, så tå'

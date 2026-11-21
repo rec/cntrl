@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Wymagane odzyskanie wdrożenia' }
 target_setup_bundle_invalid = { text = 'Nieprawidłowy pakiet konfiguracji' }
 target_global_recovery = { text = 'Wymagane odzyskanie ustawień globalnych' }
 target_song_storage_invalid = { text = 'Nieprawidłowa pamięć utworów' }
+[messages.calibration_heel]
+text = 'Pięta'
+
+[messages.calibration_toe]
+text = 'Palce'
+
+[messages.press_heel_then_toe]
+text = 'Naciśnij piętę, potem palce'

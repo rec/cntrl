@@ -423,8 +423,7 @@ public:
           song_sources(board,board,board,storage.setups(),documents,application,songs),
           midi_source(filesystem), midi_index(filesystem), recording(filesystem), midi_directory(filesystem),
           midi_files(filesystem,midi_source,midi_index,recording,midi_directory,target::midi_connections.mask(true),"/cntrl/midi","/cntrl/midi/.playback-index"),
-          expression(target::port_count,filesystem,
-              target::controls.confirm < target::button_count ? target::button_labels[target::controls.confirm] : "",1,1),
+          expression(target::port_count,filesystem,1,1),
           switches(board,board,board), work(target::maximum_display_area),
           renderer(display,fonts,work.data(),unsigned(work.size())),
           host(board,application,documents,display,fonts,renderer,target::controls),
@@ -522,7 +521,7 @@ public:
     void midi() { if (!board.stock_firmware) { board.midi_runtime.poll(board); board.relays.tick(now()); } }
     void expression_poll(uint32_t now) {
         expression.poll(now,[&](unsigned i) { return board.expression_available(i); },
-            [&](unsigned i,unsigned) { return board.readings[i]; },
+            [&](unsigned i,unsigned) { return ExpressionCalibration::from_10_bit(board.readings[i]); },
             [&](const char *output) { return board.available(output); },
             [&](unsigned source,const char *output,const uint8_t *bytes) {
                 auto *connection = board.midi_outputs().find(output);
