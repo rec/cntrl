@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Installationswiederherstellung erforderli
 target_setup_bundle_invalid = { text = 'Ungültiges Setup-Paket' }
 target_global_recovery = { text = 'Globale Einstellungen müssen wiederhergestellt werden' }
 target_song_storage_invalid = { text = 'Ungültiger Songspeicher' }
+[messages.calibration_heel]
+text = 'Ferse'
+
+[messages.calibration_toe]
+text = 'Spitze'
+
+[messages.press_heel_then_toe]
+text = 'Ferse, dann Spitze drücken'

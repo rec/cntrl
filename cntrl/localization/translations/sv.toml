@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Installationen måste återställas' }
 target_setup_bundle_invalid = { text = 'Ogiltigt konfigurationspaket' }
 target_global_recovery = { text = 'Globala inställningar måste återställas' }
 target_song_storage_invalid = { text = 'Ogiltig låtlagring' }
+[messages.calibration_heel]
+text = 'Häl'
+
+[messages.calibration_toe]
+text = 'Tå'
+
+[messages.press_heel_then_toe]
+text = 'Tryck häl, sedan tå'

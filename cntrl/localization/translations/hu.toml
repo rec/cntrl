@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Telepítés helyreállítása szükséges
 target_setup_bundle_invalid = { text = 'Érvénytelen összeállításcsomag' }
 target_global_recovery = { text = 'Globális beállítások helyreállítása szükséges' }
 target_song_storage_invalid = { text = 'Érvénytelen daltárhely' }
+[messages.calibration_heel]
+text = 'Sarok'
+
+[messages.calibration_toe]
+text = 'Orr'
+
+[messages.press_heel_then_toe]
+text = 'Nyomja le a sarkat, majd az orrot'

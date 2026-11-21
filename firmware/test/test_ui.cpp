@@ -714,7 +714,40 @@ void test_time_sources_and_clock_output() {
     pages.poll_clock(4240000,1,sink);
     assert(pages.clock_selection() == 0);
 }
+void test_calibration_table_shows_raw_percentages_and_capture_status() {
+    Fonts fonts;
+    cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
+    auto layout = page_fixture(1, {cntrl::PageLayout::calibrate}, {{0}});
+    pages.layout({layout.data()});
+    struct Pedals {
+        cntrl::CalibrationCapture candidate;
+        bool active = false;
+        bool calibrating() const { return active; }
+        unsigned count() const { return 2; }
+        cntrl::ExpressionCalibration calibration(unsigned jack) const { return jack ? cntrl::ExpressionCalibration{0, 4095} : cntrl::ExpressionCalibration{}; }
+        const char *name(unsigned jack) const { return jack ? "Roland" : ""; }
+        const cntrl::CalibrationCapture &capture(unsigned) const { return candidate; }
+    } pedals;
+    auto all = [](unsigned) { return true; };
+    auto pane = pages.calibration_view(0, pedals, all);
+    assert(!std::strcmp(pane.lines[0].text, "Calibrate") && pane.lines[0].graphics.foreground == 0);
+    assert(!std::strcmp(pane.lines[1].text, "Heel") && !std::strcmp(pane.lines[2].text, "Toe"));
+    assert(!std::strcmp(pane.lines[3].text, "--.-"));
+    assert(!std::strcmp(pane.lines[6].text, "0.00%") && !std::strcmp(pane.lines[7].text, "100.00%"));
+    assert(!std::strcmp(pane.lines[8].text, "Roland"));
+    pedals.active = true;
+    pedals.candidate.sample(1000, 0, 2000);
+    pedals.candidate.sample(484, 100, 2000);
+    pane = pages.calibration_view(100, pedals, all);
+    assert(!std::strcmp(pane.lines[0].text, "Press heel, then toe") && pane.lines[0].graphics.foreground == 0x03e0);
+    assert(!std::strcmp(pane.lines[3].text, "11.82%") && pane.lines[3].graphics.foreground == 0xf800);
+    pedals.candidate.sample(800, 200, 2000);
+    pane = pages.calibration_view(200, pedals, all);
+    assert(pane.lines[3].graphics.foreground == 0x03e0 && pane.lines[4].graphics.foreground == 0xf800);
+}
+
 int main() {
+    test_calibration_table_shows_raw_percentages_and_capture_status();
     test_time_sources_and_clock_output();
     cable_test_preserves_its_original_font_and_indicators();
     panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed();

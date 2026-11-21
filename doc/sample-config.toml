@@ -40,7 +40,7 @@ pages = ["patch-chooser"]
 
 [regions.tools]
 
-pages = ["status", "cable-test", "panic", "time", "pong", "language", "None"]
+pages = ["status", "cable-test", "panic", "time", "pong", "language", "None", "calibration"]
 
 [layout]
 
@@ -186,6 +186,14 @@ patch = "sample"
 type = "None"
 ram2_bytes = 0
 min_windows = 0
+give_up_windows = []
+patch = "sample"
+
+[pages.calibration]
+
+type = "calibrate"
+ram2_bytes = 0
+min_windows = 1
 give_up_windows = []
 patch = "sample"
 

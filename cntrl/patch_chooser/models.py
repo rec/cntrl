@@ -1282,6 +1282,7 @@ class Setup(BindingScope, frozen=True):
                     'None',
                 )
             },
+            'calibration': Page(type='calibrate'),
             'patch-chooser': Page(min_windows=0),
         },
         max_length=255,

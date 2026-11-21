@@ -1080,3 +1080,11 @@ text = 'Restauration des réglages globaux requise'
 
 [messages.target_song_storage_invalid]
 text = 'Stockage des morceaux invalide'
+[messages.calibration_heel]
+text = 'Talon'
+
+[messages.calibration_toe]
+text = 'Pointe'
+
+[messages.press_heel_then_toe]
+text = 'Appuyez talon, puis pointe'

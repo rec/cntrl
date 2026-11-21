@@ -1,7 +1,6 @@
 #pragma once
 #include <cntrl/document.h>
 #include <cntrl/calibration_file.h>
-#include <cntrl/ui/messages.h>
 #include <vector>
 #include <array>
 #include <cstdio>
@@ -10,10 +9,10 @@ namespace cntrl {
 // The adapter supplies biased measurements; settling never blocks the runtime.
 class ExpressionPedals {
 public:
-    ExpressionPedals(unsigned count, files::FileSystem &filesystem, const char *confirm,
+    ExpressionPedals(unsigned count, files::FileSystem &filesystem,
                      uint32_t rest_ms, uint32_t bias_ms)
         : inputs_(count), assignments_(count), mirrors_(count), delivered_(count), low_(count),
-          filesystem_(filesystem), calibrations_(filesystem, count), confirm_(confirm),
+          filesystem_(filesystem), calibrations_(filesystem, count), captures_(count),
           rest_ms_(rest_ms), bias_ms_(bias_ms) {}
     bool load_calibrations() {
         calibration_ready_ = calibrations_.load();
@@ -47,31 +46,21 @@ public:
         cancel();
     }
     void cancel() {
-        if (stage_ != Capture::idle) { inputs_[selected_].disarm(); delivered_[selected_] = {-1, -1}; }
-        stage_ = Capture::idle;
-        message_ = no_message;
+        if (!calibrating_) return;
+        for (auto &input : inputs_) input.disarm();
+        for (auto &values : delivered_) values = {-1, -1};
+        calibrating_ = false;
     }
-    void select(unsigned index) { cancel(); selected_ = index; }
-    void calibrate(bool enabled) {
-        if (!enabled) { cancel(); return; }
-        if (stage_ == Capture::idle) {
-            stage_ = Capture::heel;
-            message_ = no_message;
-            inputs_[selected_].reset();
-            return;
+    bool calibrate() {
+        if (!calibrating_) {
+            std::fill(captures_.begin(), captures_.end(), CalibrationCapture{});
+            calibrating_ = true;
+            return true;
         }
-        int reading = inputs_[selected_].reading();
-        if (reading < 0) { message_ = ui::i18n::Message::no_pedal; return; }
-        if (stage_ == Capture::heel) {
-            heel_ = reading;
-            stage_ = Capture::toe;
-            message_ = no_message;
-            return;
-        }
-        cntrl::ExpressionCalibration cal{uint16_t(heel_), uint16_t(reading)};
-        if (!cal.valid()) { message_ = ui::i18n::Message::travel_too_short; return; }
-        if (!calibration_ready_ || !calibrations_.save(selected_, cal)) { message_ = ui::i18n::Message::save_failed; return; }
-        cancel(); inputs_[selected_].reset();
+        const bool changed = std::any_of(captures_.begin(), captures_.end(), [](const auto &capture) { return capture.toe_ready; });
+        if (changed && (!calibration_ready_ || !calibrations_.save(captures_))) return false;
+        cancel();
+        return true;
     }
 
     // Each poll samples every enabled input at most once.
@@ -84,18 +73,16 @@ public:
             if (!enabled(i)) {
                 inputs_[i].reset();
                 delivered_[i] = {-1, -1};
-                if (selected_ == i && stage_ != Capture::idle) cancel();
                 continue;
             }
             if (phase_ == 0) { sample(i, phase_); continue; }
             if (phase_ == 1) { low_[i] = sample(i, phase_); continue; }
-            inputs_[i].sample(low_[i], sample(i, phase_), calibrations_.calibration(i));
+            const int high = sample(i, phase_);
+            inputs_[i].sample(low_[i], high, calibrations_.calibration(i));
             if (inputs_[i].position() < 0) delivered_[i] = {-1, -1};
-            if (stage_ != Capture::idle && i == selected_) {
-                if (inputs_[i].reading() < 0 && stage_ == Capture::toe) {
-                    stage_ = Capture::heel;
-                    message_ = ui::i18n::Message::reconnect_heel;
-                }
+            if (calibrating_) {
+                if (inputs_[i].reading() >= 0)
+                    captures_[i].sample((low_[i] + high + 1) / 2, now, calibrations_.settle_ms());
                 continue;
             }
             const auto &a = assignments_[i];
@@ -113,34 +100,20 @@ public:
         phase_ = (phase_ + 1) % 3;
         if (!phase_) first_ = (first_ + 1) % inputs_.size();
     }
-    unsigned selected() const { return selected_; }
     unsigned count() const { return inputs_.size(); }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(expression_status)
-#endif
-    void status(const char *label, bool enabled, char (&title)[40], char (&position)[40], char (&prompt)[40]) const {
-        using ui::i18n::Message;
-        const auto &a = assignments_[selected_];
-        if (a.channel) ui::i18n::format(title, sizeof(title), Message::expression_assigned, label, a.controller, a.channel);
-        else ui::i18n::format(title, sizeof(title), Message::unassigned_port, label);
-        const auto &input = inputs_[selected_];
-        if (!enabled) ui::utf8::copy(position, sizeof(position), ui::i18n::text(Message::select_expression_role));
-        else if (input.reading() < 0) ui::utf8::copy(position, sizeof(position), ui::i18n::text(Message::no_pedal));
-        else if (!calibrations_.calibration(selected_).valid()) ui::i18n::format(position, sizeof(position), Message::raw_uncalibrated, input.reading());
-        else ui::i18n::format(position, sizeof(position), Message::calibrated_position, (input.position() * 100 + 511) / 1023);
-        if (message_ != no_message) ui::utf8::copy(prompt, sizeof(prompt), ui::i18n::text(message_));
-        else if (!enabled) ui::utf8::copy(prompt, sizeof(prompt), ui::i18n::text(Message::select_expression_role));
-        else if (!confirm_[0]) prompt[0] = 0;
-        else ui::i18n::format(prompt, sizeof(prompt), Message::expression_step, confirm_,
-            ui::i18n::text(stage_ == Capture::heel ? Message::heel_down : stage_ == Capture::toe ? Message::toe_down : Message::calibrate));
-    }
+    bool calibrating() const { return calibrating_; }
+    const CalibrationCapture &capture(unsigned jack) const { return captures_[jack]; }
+    ExpressionCalibration calibration(unsigned jack) const { return calibrations_.calibration(jack); }
+    const char *name(unsigned jack) const { return calibrations_.name(jack); }
 
 private:
     struct LegacyRecord {
         uint32_t generation = 0;
         cntrl::ExpressionCalibration cal{};
         static LegacyRecord decode(const uint8_t *bytes) {
-            const ExpressionCalibration calibration{u16(bytes + 4), u16(bytes + 6)};
+            const auto heel = u16(bytes + 4), toe = u16(bytes + 6);
+            if (heel > 1023 || toe > 1023) return {};
+            const ExpressionCalibration calibration{ExpressionCalibration::from_10_bit(heel), ExpressionCalibration::from_10_bit(toe)};
             if (!calibration.valid() || u32(bytes + 8) != cntrl::checksum(bytes, 8)) return {};
             return {u32(bytes), calibration};
         }
@@ -152,16 +125,12 @@ private:
     std::vector<int> low_;
     files::FileSystem &filesystem_;
     CalibrationFile calibrations_;
+    std::vector<CalibrationCapture> captures_;
     bool calibration_ready_ = false;
-    const char *confirm_;
+    bool calibrating_ = false;
     uint32_t rest_ms_, bias_ms_;
-    enum class Capture { idle, heel, toe };
-    Capture stage_ = Capture::idle;
-    unsigned selected_ = 0, phase_ = 0, first_ = 0;
+    unsigned phase_ = 0, first_ = 0;
     uint32_t tick_ = 0;
-    int heel_ = 0;
-    static constexpr auto no_message = ui::i18n::Message(ui::i18n::message_count);
-    ui::i18n::Message message_ = no_message;
 };
 
 } // namespace cntrl

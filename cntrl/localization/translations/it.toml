@@ -358,3 +358,11 @@ target_deployment_recovery = { text = 'Ripristino installazione necessario' }
 target_setup_bundle_invalid = { text = 'Pacchetto configurazioni non valido' }
 target_global_recovery = { text = 'Ripristino impostazioni globali necessario' }
 target_song_storage_invalid = { text = 'Archivio brani non valido' }
+[messages.calibration_heel]
+text = 'Tallone'
+
+[messages.calibration_toe]
+text = 'Punta'
+
+[messages.press_heel_then_toe]
+text = 'Premi tallone, poi punta'

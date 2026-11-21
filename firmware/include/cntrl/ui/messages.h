@@ -359,9 +359,12 @@ enum class Message : uint16_t {
     startup_set,
     perform_song,
     hold_menu,
+    calibration_heel,
+    calibration_toe,
+    press_heel_then_toe,
 };
-inline constexpr unsigned message_count = 356;
-inline constexpr uint32_t catalogue_schema = 0x9f600946u;
+inline constexpr unsigned message_count = 359;
+inline constexpr uint32_t catalogue_schema = 0xd32c9351u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -1489,6 +1492,12 @@ inline const char hold_menu_control_spec[] CNTRL_I18N_STORAGE = "s";
 inline const Field hold_menu_fields[] CNTRL_I18N_STORAGE = {
     {hold_menu_control_name, hold_menu_control_spec},
 };
+inline const char calibration_heel_text[] CNTRL_I18N_STORAGE = "Heel";
+inline const char calibration_heel_short[] CNTRL_I18N_STORAGE = "";
+inline const char calibration_toe_text[] CNTRL_I18N_STORAGE = "Toe";
+inline const char calibration_toe_short[] CNTRL_I18N_STORAGE = "";
+inline const char press_heel_then_toe_text[] CNTRL_I18N_STORAGE = "Press heel, then toe";
+inline const char press_heel_then_toe_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {patch_chooser_text, patch_chooser_short, nullptr, 0},
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
@@ -1846,6 +1855,9 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {startup_set_text, startup_set_short, nullptr, 0},
     {perform_song_text, perform_song_short, nullptr, 0},
     {hold_menu_text, hold_menu_short, hold_menu_fields, 1},
+    {calibration_heel_text, calibration_heel_short, nullptr, 0},
+    {calibration_toe_text, calibration_toe_short, nullptr, 0},
+    {press_heel_then_toe_text, press_heel_then_toe_short, nullptr, 0},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

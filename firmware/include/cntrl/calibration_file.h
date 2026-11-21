@@ -25,19 +25,21 @@ public:
         std::string text(file->size(), '\0');
         if (!text.empty() && !file->read(0, reinterpret_cast<uint8_t *>(text.data()), text.size())) return false;
         std::vector<Entry> parsed(entries_.size());
-        if (!parse(text, parsed)) return false;
+        if (!parse(text, parsed, settle_ms_)) return false;
         entries_.swap(parsed);
         return true;
     }
 
     ExpressionCalibration calibration(unsigned jack) const { return entries_[jack].calibration; }
+    const char *name(unsigned jack) const { return entries_[jack].label.c_str(); }
+    unsigned settle_ms() const { return settle_ms_; }
     void import(unsigned jack, ExpressionCalibration value) { entries_[jack].calibration = value; }
 
-    bool save(unsigned jack, ExpressionCalibration value) {
-        std::string text;
+    bool save(const std::vector<CalibrationCapture> &captures) {
+        std::string text = "bits = 12\nsettle_ms = " + std::to_string(settle_ms_) + "\n\n";
         for (unsigned i = 0; i < entries_.size(); ++i) {
             const auto &entry = entries_[i];
-            const auto calibration = i == jack ? value : entry.calibration;
+            const auto calibration = captures[i].toe_ready ? captures[i].value() : entry.calibration;
             if (!calibration.valid() && entry.name.empty()) continue;
             text += "[configurable-" + std::to_string(i + 1) + "]\n";
             if (!entry.name.empty()) text += "name = " + entry.name + '\n';
@@ -69,7 +71,8 @@ public:
             return false;
         }
         if (existing) filesystem_.remove(previous);
-        entries_[jack].calibration = value;
+        for (unsigned i = 0; i < entries_.size(); ++i)
+            if (captures[i].toe_ready) entries_[i].calibration = captures[i].value();
         return true;
     }
 
@@ -78,12 +81,14 @@ private:
         ExpressionCalibration calibration{};
         // Keep the TOML string spelling, including escapes, when updating endpoints.
         std::string name;
+        std::string label;
         unsigned fields = 0;
     };
     static constexpr const char *temporary = "/cntrl/calibration.tmp", *previous = "/cntrl/calibration.prev";
     static constexpr unsigned maximum = 4096;
     files::FileSystem &filesystem_;
     std::vector<Entry> entries_;
+    unsigned settle_ms_ = 2000;
 
     static std::string_view trim(std::string_view text) {
         const auto first = text.find_first_not_of(" \t\r");
@@ -97,8 +102,10 @@ private:
         return result.ec == std::errc{} && result.ptr == text.data() + text.size();
     }
 
-    static bool parse(std::string_view text, std::vector<Entry> &entries) {
+    static bool parse(std::string_view text, std::vector<Entry> &entries, unsigned &settle_ms) {
         Entry *entry = nullptr;
+        unsigned bits = 10, delay = 2000;
+        bool have_bits = false, have_delay = false;
         while (!text.empty()) {
             const auto end = text.find('\n');
             auto line = trim(text.substr(0, end));
@@ -116,15 +123,28 @@ private:
                 continue;
             }
             const auto equals = line.find('=');
-            if (!entry || equals == line.npos) return false;
+            if (equals == line.npos) return false;
             const auto key = trim(line.substr(0, equals));
             const auto value = trim(line.substr(equals + 1));
+            if (!entry) {
+                unsigned raw;
+                if (!number(trim(value.substr(0, value.find('#'))), raw)) return false;
+                if (key == "bits" && !have_bits && (raw == 10 || raw == 12)) { bits = raw; have_bits = true; }
+                else if (key == "settle_ms" && !have_delay && raw && raw <= 60000) { delay = raw; have_delay = true; }
+                else return false;
+                continue;
+            }
             if (key == "name") {
                 if (!entry->name.empty() || value.empty() || (value.front() != '"' && value.front() != '\'')) return false;
                 const char quote = value.front();
                 unsigned i = 1;
-                for (; i < value.size() && value[i] != quote; ++i)
-                    if (quote == '"' && value[i] == '\\') ++i;
+                for (; i < value.size() && value[i] != quote; ++i) {
+                    if (quote == '"' && value[i] == '\\') {
+                        if (++i == value.size()) return false;
+                        if (value[i] != '"' && value[i] != '\\') entry->label += '\\';
+                    }
+                    entry->label += value[i];
+                }
                 if (i >= value.size()) return false;
                 const auto tail = trim(value.substr(i + 1));
                 if (!tail.empty() && tail.front() != '#') return false;
@@ -134,7 +154,8 @@ private:
             const unsigned field = key == "heel" ? 2 : key == "toe" ? 4 : 0;
             unsigned raw;
             if (!field || (entry->fields & field)
-                || !number(trim(value.substr(0, value.find('#'))), raw) || raw > 1023) return false;
+                || !number(trim(value.substr(0, value.find('#'))), raw) || raw >= (1u << bits)) return false;
+            if (bits == 10) raw = ExpressionCalibration::from_10_bit(raw);
             if (field == 2) entry->calibration.heel = uint16_t(raw);
             else entry->calibration.toe = uint16_t(raw);
             entry->fields |= field;
@@ -143,6 +164,7 @@ private:
             const auto endpoints = value.fields & 6;
             if (endpoints && (endpoints != 6 || !value.calibration.valid())) return false;
         }
+        settle_ms = delay;
         return true;
     }
 };

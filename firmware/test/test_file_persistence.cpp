@@ -30,53 +30,38 @@ void test_calibration_survives_reload(TestFileSystem &filesystem) {
     assert(filesystem.make_directory("/cntrl"));
     {
         std::ofstream file(filesystem.path(cntrl::CalibrationFile::path));
-        file << "[configurable-1]\nname = \"Boss EV-30, left\"\n"
+        file << "settle_ms = 80\n[configurable-1]\nname = \"Boss EV-30, left\"\n"
             "[configurable-2]\nname = 'Right pedal'\nheel = 900\ntoe = 100\n";
     }
-    cntrl::ExpressionPedals pedals(2, filesystem, "Confirm", 8, 2);
+    cntrl::ExpressionPedals pedals(2, filesystem, 1, 1);
     assert(pedals.load_calibrations());
     cntrl::ExpressionAssignment assignments[2]{};
     pedals.configure(assignments);
-    pedals.calibrate(true);
-    unsigned raw = 100;
+    assert(pedals.calibrate());
+    unsigned raw = 2000;
     auto cycle = [&](uint32_t now) {
-        pedals.poll(now, [](unsigned) { return true; }, [&](unsigned, unsigned) { return int(raw); },
+        pedals.poll(now, [](unsigned jack) { return jack == 0; }, [&](unsigned, unsigned) { return int(raw); },
             [](const char *) { return true; }, [](unsigned, const char *, const uint8_t *) { return true; });
     };
-    for (unsigned now = 8; now <= 44; now += 2) cycle(now);
-    pedals.calibrate(true); // Capture heel.
-    raw = 900;
-    for (unsigned now = 46; now <= 500; now += 2) cycle(now);
-    pedals.calibrate(true); // Capture toe and persist both endpoints.
+    unsigned now = 0;
+    for (unsigned position : {2000, 1300, 600, 1500, 2400, 3250, 3780}) {
+        raw = position;
+        const unsigned end = now + 40;
+        while (now < end) cycle(++now);
+    }
+    assert(!pedals.capture(0).toe_ready);
+    for (unsigned i = 0; i < 80; ++i) cycle(++now);
+    assert(pedals.capture(0).toe_ready && pedals.calibrate());
     std::ifstream file(filesystem.path(cntrl::CalibrationFile::path));
     std::string text((std::istreambuf_iterator<char>(file)), {});
-    assert(text.find("name = \"Boss EV-30, left\"\nheel = 100\ntoe = 899") != text.npos);
-    assert(text.find("name = 'Right pedal'\nheel = 900\ntoe = 100") != text.npos);
-    cntrl::ExpressionPedals recovered(2, filesystem, "Confirm", 8, 2);
-    assert(recovered.load_calibrations()); recovered.configure(assignments);
-    for (unsigned now = 8; now <= 44; now += 2)
-        recovered.poll(now, [](unsigned) { return true; }, [](unsigned, unsigned) { return 500; },
-            [](const char *) { return true; }, [](unsigned, const char *, const uint8_t *) { return true; });
-    char title[40], position[40], prompt[40];
-    recovered.status("Pedal", true, title, position, prompt);
-    assert(std::strstr(position, "Calibrated"));
-    assert(!std::strstr(position, "Uncalibrated"));
-    assert(!std::strcmp(prompt, "Confirm: Calibrate"));
-}
-void test_calibration_error_follows_the_current_language(TestFileSystem &filesystem) {
-    cntrl::ExpressionPedals pedals(1, filesystem, "Confirm", 8, 2);
-    pedals.calibrate(true); pedals.calibrate(true); // Retain the no-pedal error.
-    char title[40], position[40], prompt[40];
-    pedals.status("Pedal", true, title, position, prompt);
-    assert(!std::strcmp(prompt, "No pedal"));
-    cntrl::ui::i18n::lookup = [](cntrl::ui::i18n::Message message, bool) -> const char * {
-        return message == cntrl::ui::i18n::Message::no_pedal ? "Aucune pédale" : nullptr;
-    };
-    pedals.status("Pedal", true, title, position, prompt);
-    assert(!std::strcmp(prompt, "Aucune pédale") && !std::strcmp(position, "Aucune pédale"));
-    cntrl::ui::i18n::lookup = nullptr;
-    pedals.status("Pedal", true, title, position, prompt);
-    assert(!std::strcmp(prompt, "No pedal"));
+    assert(text.find("bits = 12\nsettle_ms = 80") == 0);
+    assert(text.find("name = \"Boss EV-30, left\"\nheel = 600\ntoe = 3780") != text.npos);
+    cntrl::ExpressionPedals recovered(2, filesystem, 1, 1);
+    assert(recovered.load_calibrations());
+    assert(!std::strcmp(recovered.name(0), "Boss EV-30, left"));
+    assert(recovered.calibration(0).heel == 600 && recovered.calibration(0).toe == 3780);
+    assert(recovered.calibration(1).heel == cntrl::ExpressionCalibration::from_10_bit(900));
+    assert(recovered.calibration(1).toe == cntrl::ExpressionCalibration::from_10_bit(100));
 }
 void test_legacy_calibration_carries_forward(TestFileSystem &filesystem) {
     TestFileSystem legacy(filesystem.path("/legacy"));
@@ -90,24 +75,10 @@ void test_legacy_calibration_carries_forward(TestFileSystem &filesystem) {
     assert(file.write(0, record, sizeof(record)));
     file.close();
 
-    cntrl::ExpressionPedals pedals(2, legacy, "Confirm", 1, 1);
+    cntrl::ExpressionPedals pedals(2, legacy, 1, 1);
     assert(pedals.load_calibrations());
-    unsigned raw = 118;
-    auto sample = [&](unsigned first, unsigned end) {
-        for (unsigned now = first; now < end; ++now)
-            pedals.poll(now, [](unsigned) { return true; }, [&](unsigned, unsigned) { return int(raw); },
-                [](const char *) { return true; }, [](unsigned, const char *, const uint8_t *) { return true; });
-    };
-    pedals.calibrate(true);
-    sample(1, 30);
-    pedals.calibrate(true);
-    for (raw = 218; raw < 906; raw += 100) sample(raw, raw + 24);
-    raw = 906;
-    sample(1000, 1100);
-    pedals.calibrate(true);
-    std::ifstream saved(legacy.path(cntrl::CalibrationFile::path));
-    std::string text((std::istreambuf_iterator<char>(saved)), {});
-    assert(text.find("[configurable-2]\nheel = 921\ntoe = 103") != text.npos);
+    assert(pedals.calibration(1).heel == cntrl::ExpressionCalibration::from_10_bit(921));
+    assert(pedals.calibration(1).toe == cntrl::ExpressionCalibration::from_10_bit(103));
 }
 int main(int argc, char **argv) {
     cntrl::memory_budget = 524288;
@@ -115,6 +86,5 @@ int main(int argc, char **argv) {
     TestFileSystem filesystem(argv[1]);
     test_recording_selection(filesystem);
     test_calibration_survives_reload(filesystem);
-    test_calibration_error_follows_the_current_language(filesystem);
     test_legacy_calibration_carries_forward(filesystem);
 }
