@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_chooser import compiler, history, models, transport
+from cntrl.patch_chooser import compiler, compiler_inputs, history, models, transport
 from scripts import native_tests
 
 
@@ -46,7 +46,7 @@ def test_history_overlay_preserves_old_slots_and_reserved_numbers(
 ) -> None:
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
     data = compiler.compile_show({}, {}, [], target)
     record = history.pack_revision(

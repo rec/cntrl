@@ -8,7 +8,14 @@ from zlib import crc32
 from pydantic import BaseModel, Field, model_validator
 from reccy.configuration import units
 
-from . import binary_format, compiler, data_files, display, models, resolved
+from . import (
+    binary_format,
+    compiler_wire,
+    data_files,
+    display,
+    models,
+    resolved,
+)
 
 
 class SetupBundle(BaseModel, frozen=True):
@@ -139,7 +146,7 @@ def build(
         metadata_offset = 76 + instruments * 68 + cycles * 68 + patches * 82
         page_ram2.append(
             struct.unpack_from(
-                '<I', data, metadata_offset + compiler.METADATA.size - 8
+                '<I', data, metadata_offset + compiler_wire.METADATA.size - 8
             )[0]
         )
     metadata: list[binary_format.Record] = []
@@ -162,13 +169,13 @@ def build(
                 # change references. Recompilation or reindexing may do so.
                 for value in (before, after):
                     if value.startswith(b'CSW1'):
-                        ni, nc, np = compiler.HEADER.unpack_from(value)[4:7]
+                        ni, nc, np = compiler_wire.HEADER.unpack_from(value)[4:7]
                         at = (
                             76
                             + ni * 68
                             + nc * 68
                             + np * 82
-                            + compiler.METADATA.size
+                            + compiler_wire.METADATA.size
                             - 8
                         )
                         value[at : at + 4] = bytes(4)
@@ -210,7 +217,9 @@ def reindex(
         for i in range(count):
             at = (
                 graph
-                + struct.unpack_from('<I', data, graph + compiler.GRAPH.size + i * 4)[0]
+                + struct.unpack_from(
+                    '<I', data, graph + compiler_wire.GRAPH.size + i * 4
+                )[0]
             )
             if data[at] != 6 or struct.unpack_from('<H', data, at + 4)[0] == 65535:
                 continue
@@ -221,14 +230,14 @@ def reindex(
             if struct.unpack_from('<H', data, at + 4)[0] != destination:
                 binary_format.require_structural_edit(original)
             struct.pack_into('<H', data, at + 4, destination)
-        ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
+        ni, nc, np = compiler_wire.HEADER.unpack_from(data)[4:7]
         meta = 76 + ni * 68 + nc * 68 + np * 82
         if (
-            struct.unpack_from('<I', data, meta + compiler.METADATA.size - 4)[0]
+            struct.unpack_from('<I', data, meta + compiler_wire.METADATA.size - 4)[0]
             != signature
         ):
             binary_format.require_structural_edit(original)
-        struct.pack_into('<I', data, meta + compiler.METADATA.size - 4, signature)
+        struct.pack_into('<I', data, meta + compiler_wire.METADATA.size - 4, signature)
         struct.pack_into('<I', data, 20, crc32(data[28:]))
         result[name] = binary_format.replace_core(original, bytes(data))
     return result

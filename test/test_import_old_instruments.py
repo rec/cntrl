@@ -6,7 +6,7 @@ from types import ModuleType
 
 import pytest
 
-from cntrl.patch_chooser import compiler, models
+from cntrl.patch_chooser import compiler_inputs, models
 
 
 @pytest.fixture
@@ -72,20 +72,20 @@ def test_emits_valid_files_without_inventing_routing(
     output = tmp_path / 'output'
     importer.import_instruments(output)
     definitions = models.Definitions.model_validate(
-        compiler.read_document(output / 'definitions.toml')
+        compiler_inputs.read_document(output / 'definitions.toml')
     )
     assert [(s.instrument, s.name) for s in definitions.profiles] == [
         ('vl70m', 'default'),
         ('patchman', 'default'),
     ]
     assert definitions.profiles[0].banks[0] == models.Bank(msb=33, lsb=0)
-    table = compiler.read_document(output / 'patchman.toml')
+    table = compiler_inputs.read_document(output / 'patchman.toml')
     assert isinstance(table, dict)
     programs = table['instruments']['patchman']['programs']['1']
     assert programs == [{}] * 127 + ['Bass']
-    stock = compiler.read_document(output / 'vl70m.toml')
+    stock = compiler_inputs.read_document(output / 'vl70m.toml')
     assert stock['instruments']['vl70m']['programs']['0'] == ['Flute']
-    tags = compiler.read_document(output / 'tags.toml')
+    tags = compiler_inputs.read_document(output / 'tags.toml')
     assert tags == {'instruments': {'vl70m': {'tags': {'wind': ['Flute']}}}}
     assert sorted(p.name for p in output.iterdir()) == [
         'definitions.toml',

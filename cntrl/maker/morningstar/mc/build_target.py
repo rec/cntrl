@@ -8,7 +8,7 @@ import tyro
 from pydantic import BaseModel
 
 from ....firmware.capabilities import header
-from ....patch_chooser.compiler import read_document
+from ....patch_chooser.compiler_inputs import read_document
 from ....patch_chooser.models import Target
 from . import boot_switch, export_fonts, release, toolchain
 

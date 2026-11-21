@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved
 from scripts import native_tests
 
 
@@ -37,9 +37,9 @@ def test_forwarding_and_fast_switches_are_independent(
     enabled: bool, fast: bool
 ) -> None:
     root = Path(__file__).resolve().parents[1]
-    show = compiler.read_document(root / 'firmware/test/show.json')
+    show = compiler_inputs.read_document(root / 'firmware/test/show.json')
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
     assert isinstance(show, dict)
     assert models.Setup.model_validate(show).forward_device_to_host is True

@@ -5,20 +5,20 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved, songs
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved, songs
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
 
 
 def test_strings_in_every_patch_position_compile_and_round_trip(
     target: models.Target,
 ) -> None:
-    source = compiler.read_document(
+    source = compiler_inputs.read_document(
         Path('examples/patch-chooser/string-references.toml')
     )
     assert isinstance(source, dict)

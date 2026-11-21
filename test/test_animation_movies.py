@@ -13,6 +13,8 @@ from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,
+    compiler_errors,
+    compiler_inputs,
     data_files,
     device_settings,
     models,
@@ -59,7 +61,7 @@ def test_utf8_crlf_setup_resolves_movies_from_a_directory_with_spaces(
     directory.mkdir()
     source = directory / 'show.toml'
     source.write_bytes("name = 'Café'\r\nsplash_movie = ['movie.gif']\r\n".encode())
-    document = compiler.read_document(source)
+    document = compiler_inputs.read_document(source)
     assert document == {
         'name': 'Café',
         'splash_movie': [str((directory / 'movie.gif').resolve())],
@@ -173,19 +175,19 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
 
 def test_missing_and_unsupported_movies_fail_before_transfer(tmp_path: Path) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     ).model_copy(update={'animation': GEOMETRY})
     path = tmp_path / 'missing.gif'
-    with pytest.raises(compiler.CompilationError, match='does not exist'):
+    with pytest.raises(compiler_errors.CompilationError, match='does not exist'):
         compiler.compile_show({'splash_movie': str(path)}, {}, [], target)
     path.write_bytes(b'not an image')
-    with pytest.raises(compiler.CompilationError, match='cannot identify image'):
+    with pytest.raises(compiler_errors.CompilationError, match='cannot identify image'):
         compiler.compile_show({'idle_movie': [str(path)]}, {}, [], target)
 
 
 def test_old_movie_format_is_rejected_without_conversion(tmp_path: Path) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     ).model_copy(update={'animation': GEOMETRY})
     path = tmp_path / 'old.cnsa'
     frame = struct.pack('<I', 100) + bytes(GEOMETRY.width * GEOMETRY.height * 4)
@@ -196,7 +198,7 @@ def test_old_movie_format_is_rejected_without_conversion(tmp_path: Path) -> None
         + frame
     )
     path.write_bytes(data)
-    with pytest.raises(compiler.CompilationError, match='version-2'):
+    with pytest.raises(compiler_errors.CompilationError, match='version-2'):
         compiler.compile_show({'splash_movie': str(path)}, {}, [], target)
     assert path.read_bytes() == data
 

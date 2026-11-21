@@ -5,7 +5,7 @@ from pathlib import Path
 
 import tomlkit
 
-from . import compiler, models, resolved, source_archive
+from . import compiler_inputs, models, resolved, source_archive
 
 
 def filenames(value: object) -> list[str]:
@@ -64,7 +64,9 @@ def collect(setups: dict[str, bytes], sources: dict[Path, bytes]) -> dict[str, b
         for name in filenames(document):
             if (
                 name in origins
-                and (path := compiler.source_reference(origin, name, relocations))
+                and (
+                    path := compiler_inputs.source_reference(origin, name, relocations)
+                )
                 not in origins[name]
             ):
                 origins[name].append(path)

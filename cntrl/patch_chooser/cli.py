@@ -21,7 +21,9 @@ from ..maker.morningstar.mc import font_coverage
 from . import (
     backups,
     binary_format,
-    compiler,
+    compiler_errors,
+    compiler_inputs,
+    compiler_wire,
     data_files,
     device_globals,
     devices,
@@ -174,7 +176,7 @@ def run_setup(
         backups.prepare_restore(
             command.directory,
             command.destination,
-            models.Target.model_validate(compiler.read_document(command.target)),
+            models.Target.model_validate(compiler_inputs.read_document(command.target)),
         )
         print(f'Converted backup: {command.destination}')
         return
@@ -190,7 +192,7 @@ def run_setup(
         backups.restore_setups(
             command.directory,
             command.port,
-            models.Target.model_validate(compiler.read_document(command.target)),
+            models.Target.model_validate(compiler_inputs.read_document(command.target)),
             preserve_memory_estimates=command.preserve_memory_estimates,
         )
         return
@@ -198,7 +200,7 @@ def run_setup(
         backups.verify_after_flashing(
             command.directory,
             command.port,
-            models.Target.model_validate(compiler.read_document(command.target)),
+            models.Target.model_validate(compiler_inputs.read_document(command.target)),
             preserve_memory_estimates=command.preserve_memory_estimates,
         )
         return
@@ -270,7 +272,7 @@ def setup_transfer(
                 if n.lower() in existing and existing[n.lower()] != n
             ]
             if errors:
-                raise compiler.CompilationError(errors)
+                raise compiler_errors.CompilationError(errors)
             uploaded_names = bundle.names
             bundle, upload_snapshot = setup_sync.prepare_upload(
                 command, bundle, trace, client
@@ -309,7 +311,7 @@ def setup_transfer(
             except (OSError, ValueError) as error:
                 failures.append(f'batch completion: {error}')
             if failures:
-                raise compiler.CompilationError(failures)
+                raise compiler_errors.CompilationError(failures)
             setup_sync.capture_assets(
                 client, {n: bundle.setups[n] for n in uploaded_names}, upload_snapshot
             )
@@ -342,7 +344,7 @@ def setup_transfer(
             if not names:
                 errors.append('at least one setup name is required')
             if errors:
-                raise compiler.CompilationError(errors)
+                raise compiler_errors.CompilationError(errors)
             if isinstance(command, SetupDelete):
                 if not command.yes:
                     if not sys.stdin.isatty():
@@ -457,7 +459,7 @@ def publish_download(
             if (parent.exists() or parent.is_symlink()) and not parent.is_dir():
                 errors.append(f'{parent}: not a directory')
     if errors:
-        raise compiler.CompilationError(errors)
+        raise compiler_errors.CompilationError(errors)
     for relative, data in files.items():
         destination = output / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -504,7 +506,7 @@ def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
     ):
         data = bundle.setups[name]
         data = binary_format.core(data)
-        ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
+        ni, nc, np = compiler_wire.HEADER.unpack_from(data)[4:7]
         print(
             f'{i}: {name}: {size} RAM bytes; {ni} instruments, '
             f'{nc} patch cycles, {np} patches'

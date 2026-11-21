@@ -8,6 +8,8 @@ import tomlkit
 from cntrl.patch_chooser import (
     binary_format,
     compiler,
+    compiler_errors,
+    compiler_inputs,
     data_files,
     device_settings,
     global_config,
@@ -19,7 +21,7 @@ from cntrl.patch_chooser import (
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
 
 
@@ -145,7 +147,7 @@ def test_legacy_documents_remain_explicit_and_override_metadata_is_checked(
 def test_global_setting_actions_reject_invalid_values(
     setting: str, value: object, target: models.Target
 ) -> None:
-    with pytest.raises(compiler.CompilationError):
+    with pytest.raises(compiler_errors.CompilationError):
         compiler.compile_show(
             {
                 'patch_cycles': {

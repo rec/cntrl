@@ -7,14 +7,22 @@ import pytest
 import tomlkit
 from test_display_format import lines
 
-from cntrl.patch_chooser import compiler, display, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    compiler_wire,
+    display,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
 
 
@@ -22,14 +30,16 @@ def test_dual_internal_setup_has_one_program_action_and_both_names(
     target: models.Target,
     tmp_path: Path,
 ) -> None:
-    document = compiler.read_document(Path('examples/patch-chooser/dual-internal.toml'))
-    tags = compiler.read_document(Path('instruments/tags.toml'))
+    document = compiler_inputs.read_document(
+        Path('examples/patch-chooser/dual-internal.toml')
+    )
+    tags = compiler_inputs.read_document(Path('instruments/tags.toml'))
     data = compiler.compile_show(document, {}, [tags], target)
-    header = compiler.HEADER.unpack_from(data)
+    header = compiler_wire.HEADER.unpack_from(data)
     assert (header[4], header[6]) == (1, 64)
     assert data[76 + 64] == 0  # One route, MIDI channel 1.
     graph = resolved.graph_offset(data)
-    assert compiler.GRAPH.unpack_from(data, graph)[2] == 64
+    assert compiler_wire.GRAPH.unpack_from(data, graph)[2] == 64
     source = display.read_source(data, graph)
     for metadata in source['patch_metadata'].values():
         sounds = metadata['_program']['names']
@@ -46,7 +56,7 @@ def test_dual_internal_setup_has_one_program_action_and_both_names(
     assert program['names'] == {'vl70m': 'Igneous', 'patchman': '!XTREME!'}
     assert program['tags'] == ['synth']
     assert source['patch_metadata']['20']['_program']['tags'] == ['synth', 'reed']
-    block = data[graph + compiler.GRAPH.unpack_from(data, graph)[1] :]
+    block = data[graph + compiler_wire.GRAPH.unpack_from(data, graph)[1] :]
     # Second browser patch's right window uses its two distinct sound labels.
     reference = struct.unpack_from('<H', data, 76 + 68 + 68 + 82 + 80)[0]
     assert [v[3] for v in lines(block, reference)] == [
@@ -125,17 +135,17 @@ def test_shared_catalogues_reject_misalignment(
         "[instruments.both]\ncatalogues = ['first.toml', 'second.toml']\n"
     )
     with pytest.raises(ValueError, match=error):
-        compiler.read_document(source)
+        compiler_inputs.read_document(source)
 
 
 def test_catalogue_paths_are_relative_and_cycles_are_rejected(tmp_path: Path) -> None:
     source = tmp_path / 'show.toml'
     source.write_text("[instruments.both]\ncatalogues = ['missing.toml']\n")
     with pytest.raises(FileNotFoundError):
-        compiler.read_document(source)
+        compiler_inputs.read_document(source)
     source.write_text("[instruments.both]\ncatalogues = ['show.toml']\n")
     with pytest.raises(ValueError, match='reference cycle'):
-        compiler.read_document(source)
+        compiler_inputs.read_document(source)
 
 
 def test_numeric_cycle_entries_require_one_route(target: models.Target) -> None:
@@ -146,5 +156,7 @@ def test_numeric_cycle_entries_require_one_route(target: models.Target) -> None:
         },
         'patch_cycles': {'All': [1]},
     }
-    with pytest.raises(compiler.CompilationError, match='exactly one instrument'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='exactly one instrument'
+    ):
         compiler.compile_show(show, {}, [], target)

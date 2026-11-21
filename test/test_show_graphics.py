@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_chooser import compiler, graphics, models
+from cntrl.patch_chooser import compiler_inputs, graphics, models
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(FIXTURES / 'target.json')
+        compiler_inputs.read_document(FIXTURES / 'target.json')
     )
 
 

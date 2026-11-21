@@ -6,7 +6,13 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import cli, compiler, data_files, global_config, setup_create
+from cntrl.patch_chooser import (
+    cli,
+    compiler_errors,
+    data_files,
+    global_config,
+    setup_create,
+)
 from cntrl.patch_chooser.setup_compiler import compile_inputs
 
 
@@ -139,7 +145,7 @@ def test_existing_file_prevents_all_writes(
     existing.parent.mkdir()
     existing.write_text('keep me')
     answer(monkeypatch, ['', '', '', '', '', ''])
-    with pytest.raises(compiler.CompilationError, match='exists'):
+    with pytest.raises(compiler_errors.CompilationError, match='exists'):
         setup_create.run(setup_create.Create(output=tmp_path))
     assert existing.read_text() == 'keep me'
     assert not (tmp_path / 'setup.toml').exists()

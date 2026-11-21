@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 
 from cntrl.fonts import ui
-from cntrl.patch_chooser import compiler, models, songs
+from cntrl.patch_chooser import compiler, compiler_inputs, models, songs
 from scripts.native_tests import NativePrograms
 
 
@@ -12,7 +12,7 @@ def test_song_step_navigation_and_boundaries(
     tmp_path: Path, native_programs: NativePrograms
 ) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     font = tmp_path / 'Arimo.cfont'
     font.write_bytes(

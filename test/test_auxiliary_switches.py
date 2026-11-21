@@ -5,13 +5,13 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved, songs
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved, songs
 from scripts import native_tests
 
 
 def target() -> models.Target:
     value = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     return value.model_copy(
         update={'trs_ports': {f'configurable-{i}': ['off', 'aux'] for i in (1, 2)}}

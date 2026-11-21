@@ -5,13 +5,15 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, display, models, resolved
+from cntrl.patch_chooser import compiler, compiler_inputs, display, models, resolved
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+        compiler_inputs.read_document(
+            Path(__file__).parents[1] / 'firmware/test/target.json'
+        )
     )
 
 

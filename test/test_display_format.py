@@ -6,13 +6,20 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, display, graphics, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_inputs,
+    display,
+    graphics,
+    models,
+    resolved,
+)
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(FIXTURES / 'target.json')
+        compiler_inputs.read_document(FIXTURES / 'target.json')
     )
 
 
@@ -92,8 +99,8 @@ def test_disabled_style_filling_preserves_plain_page(target: models.Target) -> N
 
 def test_display_fixture_matches_portable_firmware(target: models.Target) -> None:
     data = compiler.compile_show(
-        compiler.read_document(FIXTURES / 'display.toml'),
-        compiler.read_document(FIXTURES / 'definitions.json'),
+        compiler_inputs.read_document(FIXTURES / 'display.toml'),
+        compiler_inputs.read_document(FIXTURES / 'definitions.json'),
         [],
         target,
     )
@@ -256,7 +263,7 @@ def test_window_errors_are_reported_together(target: models.Target) -> None:
 
 
 def test_export_preserves_styles_and_unset_properties(target: models.Target) -> None:
-    show = compiler.read_document(FIXTURES / 'show.json')
+    show = compiler_inputs.read_document(FIXTURES / 'show.json')
     assert isinstance(show, dict)
     show['contrast'] = 0.5
     show['patch_views'] = {
@@ -268,7 +275,7 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
     show['tag_styles'] = {'wind': {'foreground_color': 'red'}}
     show['windows'] = {'next': {'pad': '8 px', 'style': {'background_color': 'black'}}}
     show['patch_cycles']['wind'][0]['style'] = {'background_color': 'white'}
-    definitions = compiler.read_document(FIXTURES / 'definitions.json')
+    definitions = compiler_inputs.read_document(FIXTURES / 'definitions.json')
     assert isinstance(definitions, dict)
     definitions['programs'] = [
         {

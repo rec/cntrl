@@ -3,7 +3,7 @@
 import subprocess
 from pathlib import Path
 
-from cntrl.patch_chooser import compiler, models, setup_bundle
+from cntrl.patch_chooser import compiler, compiler_inputs, models, setup_bundle
 from scripts import native_tests
 
 
@@ -34,7 +34,7 @@ program = 10
 Live = ['sound']
 """)
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     target = target.model_copy(
         update={
@@ -44,7 +44,10 @@ Live = ['sound']
             ]
         }
     )
-    sources = {'a': compiler.read_document(first), 'b': compiler.read_document(second)}
+    sources = {
+        'a': compiler_inputs.read_document(first),
+        'b': compiler_inputs.read_document(second),
+    }
     compiled = {
         n: compiler.compile_show(d, {}, [], target, setting_overrides=d)
         for n, d in sources.items()

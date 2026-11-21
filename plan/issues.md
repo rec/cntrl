@@ -70,15 +70,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 ## P3 | Maintenance and performance
 
-19. **Setup sync and the compiler are hard to review by responsibility.**
-    [compiler.py](../cntrl/patch_chooser/compiler.py#L282) has about 2,800
-    lines and mixes catalogue expansion, patch graph validation, display
-    assembly and binary encoding. Review records, baseline migration,
-    publication and recovery now live in [setup_sync_store.py](../cntrl/patch_chooser/setup_sync_store.py).
-    [Setup sync](../cntrl/patch_chooser/setup_sync.py) still combines review
-    construction, source attribution and candidate validation. Isolate the
-    remaining boundaries as behavior changes.
-
 21. **Historical setup snapshots have no retention limit (risk to verify).**
     [Sync snapshots](../cntrl/patch_chooser/setup_sync.py) create new
     directories with source and setup copies. A two-setup round-trip test

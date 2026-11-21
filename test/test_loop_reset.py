@@ -6,12 +6,14 @@ import pytest
 import tomlkit
 from pydantic import ValidationError
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved
 
 
 def test_loop_reset_policy_round_trips_all_neutral_parameter_types() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+        compiler_inputs.read_document(
+            Path(__file__).parents[1] / 'firmware/test/target.json'
+        )
     )
     source = {
         'loop_stop_reset_controls': True,

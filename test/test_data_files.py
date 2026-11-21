@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_chooser import compiler, data_files
+from cntrl.patch_chooser import compiler_errors, data_files
 
 
 @pytest.mark.parametrize('prefix', ['Evening=', 'A==B=', r'A\=B='])
@@ -36,7 +36,7 @@ def test_default_names_and_literal_plus_and_spaces() -> None:
     ],
 )
 def test_invalid_expressions_are_rejected(arguments: list[str]) -> None:
-    with pytest.raises(compiler.CompilationError):
+    with pytest.raises(compiler_errors.CompilationError):
         data_files.expressions(arguments)
 
 

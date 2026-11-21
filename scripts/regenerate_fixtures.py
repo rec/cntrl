@@ -9,7 +9,7 @@ from pathlib import Path
 import tyro
 from pydantic import BaseModel
 
-from cntrl.patch_chooser import compiler, models, setup_bundle, songs
+from cntrl.patch_chooser import compiler, compiler_inputs, models, setup_bundle, songs
 
 
 class RegenerateFixtures(BaseModel, frozen=True):
@@ -17,17 +17,17 @@ class RegenerateFixtures(BaseModel, frozen=True):
 
 
 def compile_switches(assignments: dict[str, object], capacity: int = 5) -> bytes:
-    show = compiler.read_document(ROOT / 'show.json')
+    show = compiler_inputs.read_document(ROOT / 'show.json')
     assert isinstance(show, dict)
     patch_cycles = show['patch_cycles']
     assert isinstance(patch_cycles, dict)
     show['patches'] = {p['name']: p for v in patch_cycles.values() for p in v}
     show['switches'] = assignments
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'target.json')
+        compiler_inputs.read_document(ROOT / 'target.json')
     ).model_copy(update={'max_switches': capacity})
     return compiler.compile_show(
-        show, compiler.read_document(ROOT / 'definitions.json'), [], target
+        show, compiler_inputs.read_document(ROOT / 'definitions.json'), [], target
     )
 
 
@@ -82,11 +82,13 @@ def fixture_assignments() -> dict[str, object]:
 
 
 def regenerate_fixtures() -> None:
-    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
-    definitions = compiler.read_document(ROOT / 'definitions.json')
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
+    definitions = compiler_inputs.read_document(ROOT / 'definitions.json')
     fixtures = {
         n: compiler.compile_show(
-            compiler.read_document(ROOT / f'{n}.{s}'), definitions, [], target
+            compiler_inputs.read_document(ROOT / f'{n}.{s}'), definitions, [], target
         )
         for n, s in [
             ('show', 'json'),

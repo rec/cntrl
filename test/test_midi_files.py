@@ -5,13 +5,20 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    models,
+    patch_graph,
+    resolved,
+)
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
 
 
@@ -41,8 +48,8 @@ def test_midi_file_operations_round_trip(target: models.Target) -> None:
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     actual = models.Setup.model_validate(exported)
     expected = models.Setup.model_validate(setup)
-    assert {k: compiler.normalize_patch(v) for k, v in actual.patches.items()} == {
-        k: compiler.normalize_patch(v) for k, v in expected.patches.items()
+    assert {k: patch_graph.normalize_patch(v) for k, v in actual.patches.items()} == {
+        k: patch_graph.normalize_patch(v) for k, v in expected.patches.items()
     }
     assert compiler.compile_show(exported, {}, [], target) == data
 
@@ -76,7 +83,9 @@ def test_invalid_playback_is_rejected(fields: dict[str, object]) -> None:
 
 
 def test_unavailable_file_output_is_rejected(target: models.Target) -> None:
-    with pytest.raises(compiler.CompilationError, match='unavailable MIDI file output'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='unavailable MIDI file output'
+    ):
         compiler.compile_show(
             {
                 'patches': {
@@ -103,7 +112,9 @@ def test_file_output_respects_usb_enable_flags(
             ]
         }
     )
-    with pytest.raises(compiler.CompilationError, match='unavailable MIDI file output'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='unavailable MIDI file output'
+    ):
         compiler.compile_show(
             {
                 setting: False,

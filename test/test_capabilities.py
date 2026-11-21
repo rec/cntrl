@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from cntrl.firmware.capabilities import header
-from cntrl.patch_chooser import compiler, models
+from cntrl.patch_chooser import compiler_inputs, models
 from scripts import native_tests
 
 
@@ -16,7 +16,7 @@ def test_capabilities_compile_without_an_implementation(
     tmp_path: Path, count: int, buttons: list[str]
 ) -> None:
     root = Path(__file__).resolve().parents[1]
-    data = compiler.read_document(root / 'firmware/test/target.json')
+    data = compiler_inputs.read_document(root / 'firmware/test/target.json')
     assert isinstance(data, dict)
     data['memory'] = {'capacity': 803840, 'runtime': 120000}
     data['buttons'] = buttons
@@ -66,7 +66,7 @@ def test_capabilities_compile_without_an_implementation(
 
 
 def test_button_labels_require_declared_switches() -> None:
-    data = compiler.read_document(
+    data = compiler_inputs.read_document(
         Path(__file__).parents[1] / 'firmware/test/target.json'
     )
     assert isinstance(data, dict)
@@ -79,7 +79,7 @@ def test_button_labels_require_declared_switches() -> None:
 def test_animation_mapping_requires_a_valid_stream_for_every_display(
     mapping: list[int],
 ) -> None:
-    data = compiler.read_document(
+    data = compiler_inputs.read_document(
         Path(__file__).parents[1] / 'firmware/test/target.json'
     )
     assert isinstance(data, dict)

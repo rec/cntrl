@@ -6,7 +6,12 @@ from zlib import crc32
 
 import pytest
 
-from cntrl.patch_chooser import binary_format, compiler, models, resolved
+from cntrl.patch_chooser import (
+    binary_format,
+    compiler_inputs,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
@@ -75,7 +80,9 @@ def test_legacy_import_and_memory_refresh_preserve_optional_records() -> None:
     assert resolved.export(data) == resolved.export(source)
     assert resolved.upgrade(data) == data
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+        compiler_inputs.read_document(
+            Path(__file__).parents[1] / 'firmware/test/target.json'
+        )
     )
     refreshed = resolved.refresh_memory(data, {}, target=target)
     assert (

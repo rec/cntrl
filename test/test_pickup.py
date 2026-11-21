@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, pickup, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_inputs,
+    models,
+    patch_graph,
+    pickup,
+    resolved,
+)
 from scripts import native_tests
 
 
@@ -17,7 +24,9 @@ def test_pickup_accepts_only_nullable_booleans(
     value: object, expected: bool | None
 ) -> None:
     assert models.Setup.model_validate({'pickup': value}).pickup is expected
-    assert compiler.normalize_patch({'patches': [], 'pickup': value}).pickup is expected
+    assert (
+        patch_graph.normalize_patch({'patches': [], 'pickup': value}).pickup is expected
+    )
 
 
 @pytest.mark.parametrize('value', [0, 1, 'true', 'false', 'NONE', '', []])
@@ -25,7 +34,7 @@ def test_pickup_rejects_implicit_boolean_coercion(value: object) -> None:
     with pytest.raises(ValueError):
         models.Setup.model_validate({'pickup': value})
     with pytest.raises(ValueError):
-        compiler.normalize_patch({'patches': [], 'pickup': value})
+        patch_graph.normalize_patch({'patches': [], 'pickup': value})
 
 
 def test_pickup_policy_round_trips(
@@ -33,7 +42,9 @@ def test_pickup_policy_round_trips(
 ) -> None:
     executable = native_programs.build('test/test_midi_pickup.cpp')
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+        compiler_inputs.read_document(
+            Path(__file__).parents[1] / 'firmware/test/target.json'
+        )
     )
     setup = {
         'pickup': False,
@@ -69,7 +80,7 @@ def test_pairing_window_requires_whole_milliseconds(value: object) -> None:
 def test_explicit_inheritance_survives_reference_export() -> None:
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
     source = {
         'inline_patches': False,

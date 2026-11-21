@@ -15,7 +15,12 @@ from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.catalogue import bundled_sources
 from cntrl.fonts.characters import printable_characters
 from cntrl.fonts.outline import Glyph, Outline
-from cntrl.patch_chooser import compiler, data_files, models, page_settings
+from cntrl.patch_chooser import (
+    compiler_inputs,
+    data_files,
+    models,
+    page_settings,
+)
 from scripts import native_tests
 
 
@@ -203,7 +208,7 @@ def test_french_runtime_glyphs_render_without_replacing_authored_fonts(
 
 
 def test_page_fonts_use_declared_ui_families_without_entering_patch_picker() -> None:
-    data = compiler.read_document(ROOT / 'firmware/test/target.json')
+    data = compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     assert isinstance(data, dict)
     target = models.Target.model_validate(data)
     assert not any(f.name == 'AtkinsonNextSemiBold' for f in target.fonts)
@@ -247,7 +252,7 @@ def test_relocated_outline_resources_are_used_at_every_scale(
     fonts.mkdir(parents=True)
     source = bundled_sources()['AtkinsonNextSemiBold']
     (fonts / 'portable.ttf').write_bytes(source.read_bytes())
-    data = compiler.read_document(ROOT / 'firmware/test/target.json')
+    data = compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     assert isinstance(data, dict)
     data['font_sources'] = {family: 'fonts/portable.ttf'}
     (exported / 'target.toml').write_text(tomlkit.dumps(data))
@@ -289,7 +294,7 @@ def test_relocated_outline_resources_are_used_at_every_scale(
 
 def test_all_canonical_ui_ids_round_trip_for_each_page_role() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     show = models.Setup.model_validate(
         {

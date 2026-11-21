@@ -9,7 +9,7 @@ from pytest_regressions.file_regression import FileRegressionFixture
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_chooser import compiler, models, setup_bundle
+from cntrl.patch_chooser import compiler, compiler_inputs, models, setup_bundle
 
 
 @pytest.mark.parametrize('default_catalogue', [False, True])
@@ -20,7 +20,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
     source = (
         {'layout': {'focus': 'tools'}, 'fill_in_styles': False}
         if default_catalogue
-        else compiler.read_document(BASE / 'emulator/pong.toml')
+        else compiler_inputs.read_document(BASE / 'emulator/pong.toml')
     )
     assert isinstance(source, dict)
     utility_pages = [

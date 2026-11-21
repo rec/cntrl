@@ -7,6 +7,7 @@ import pytest
 
 from cntrl.firmware import distribution
 from cntrl.maker.morningstar.mc import flash_target, release
+from cntrl.patch_chooser import compiler_inputs
 
 
 @pytest.mark.parametrize(
@@ -61,9 +62,11 @@ def test_starter_has_no_musical_actions() -> None:
         )
     )
     assert not errors
-    source = compiler.read_document(root / 'starter.toml')
+    source = compiler_inputs.read_document(root / 'starter.toml')
     data = compiler.compile_show(source, {'profiles': []}, [], target)
-    result = models.Setup.model_validate(compiler.read_document(root / 'starter.toml'))
+    result = models.Setup.model_validate(
+        compiler_inputs.read_document(root / 'starter.toml')
+    )
     assert not result.patches and not result.instruments
     assert result.midi == {}
     assert not result.usb_device_midi and not result.usb_host_midi

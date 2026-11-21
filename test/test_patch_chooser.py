@@ -12,7 +12,11 @@ from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,
+    compiler_errors,
+    compiler_inputs,
+    compiler_wire,
     models,
+    patch_graph,
     resolved,
     setup_bundle,
 )
@@ -21,7 +25,7 @@ from cntrl.patch_chooser import (
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(FIXTURES / 'target.json')
+        compiler_inputs.read_document(FIXTURES / 'target.json')
     )
 
 
@@ -148,18 +152,18 @@ def test_invalid_pages_are_rejected(
     settings: dict[str, object],
 ) -> None:
     show['page_settings'] = settings
-    with pytest.raises(compiler.CompilationError):
+    with pytest.raises(compiler_errors.CompilationError):
         compiler.compile_show(show, definitions, [], target)
 
 
 @pytest.fixture
 def definitions() -> object:
-    return compiler.read_document(FIXTURES / 'definitions.json')
+    return compiler_inputs.read_document(FIXTURES / 'definitions.json')
 
 
 @pytest.fixture
 def show() -> dict[str, object]:
-    value = compiler.read_document(FIXTURES / 'show.json')
+    value = compiler_inputs.read_document(FIXTURES / 'show.json')
     assert isinstance(value, dict)
     return value
 
@@ -169,9 +173,9 @@ def test_compiler_matches_shared_cpp_fixture(
 ) -> None:
     result = compiler.compile_show(show, definitions, [], target)
     assert result.hex() == (FIXTURES / 'show.golden').read_text().strip()
-    assert compiler.HEADER.unpack_from(result)[2:7] == (1500, len(result), 2, 2, 4)
-    assert compiler.HEADER.unpack_from(result)[1] == compiler.DOCUMENT_VERSION
-    assert compiler.HEADER.unpack_from(result)[7] == 192 | 2048 | 4096
+    assert compiler_wire.HEADER.unpack_from(result)[2:7] == (1500, len(result), 2, 2, 4)
+    assert compiler_wire.HEADER.unpack_from(result)[1] == compiler_wire.DOCUMENT_VERSION
+    assert compiler_wire.HEADER.unpack_from(result)[7] == 192 | 2048 | 4096
 
 
 @pytest.mark.parametrize('duration', [0.001, 1.0, 2.0, 0.75, 65.535])
@@ -189,7 +193,7 @@ def test_scroll_durations_and_directions_survive_resolved_export(
         'cycles': 'left',
     }
     data = compiler.compile_show(show, definitions, [], target)
-    _, _, _, _, ni, nc, np, _, _, _ = compiler.HEADER.unpack_from(data)
+    _, _, _, _, ni, nc, np, _, _, _ = compiler_wire.HEADER.unpack_from(data)
     meta = 76 + ni * 68 + nc * 68 + np * 82
     assert struct.unpack_from('<H', data, meta + 6)[0] == round(duration * 1000)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
@@ -286,7 +290,7 @@ def test_patch_table_uses_filename_only_for_missing_instruments(tmp_path: Path) 
         '[[patches]]\nprogram = 2\ninstrument = "vl70"\n'
         '[[patches]]\nprogram = 3\ninstrument = ""\n'
     )
-    table = compiler.read_document(path)
+    table = compiler_inputs.read_document(path)
     assert isinstance(table, dict)
     assert [p['instrument'] for p in table['patches']] == ['pman', 'vl70', '']
 
@@ -327,14 +331,16 @@ def test_trs_roles_control_routing_and_round_trip(target: models.Target) -> None
     )
     for mode in ('midi-a', 'midi-b'):
         configured = setup | {'trs_ports': {jack: mode}}
-        with pytest.raises(compiler.CompilationError, match='unsupported role'):
+        with pytest.raises(compiler_errors.CompilationError, match='unsupported role'):
             compiler.compile_show(configured, {}, [], target)
         data = compiler.compile_show(configured, {}, [], capable)
         exported = tomlkit.parse(resolved.export(data)).unwrap()
         assert exported['trs_ports'] == {jack: mode}
         assert compiler.compile_show(exported, {}, [], capable) == data
     for modes in ({}, {jack: 'expression'}, {jack: 'aux'}, {jack: 'off'}):
-        with pytest.raises(compiler.CompilationError, match='unavailable output'):
+        with pytest.raises(
+            compiler_errors.CompilationError, match='unavailable output'
+        ):
             compiler.compile_show(setup | {'trs_ports': modes}, {}, [], capable)
 
 
@@ -364,7 +370,7 @@ def test_clock_output_requires_enabled_trs_and_usb_routes(
     assert compiler.compile_show(exported, {}, [], capable) == data
     for overrides in ({'trs_ports': {jack: 'expression'}}, {'usb_device_midi': False}):
         with pytest.raises(
-            compiler.CompilationError, match='clock_outputs: unavailable output'
+            compiler_errors.CompilationError, match='clock_outputs: unavailable output'
         ):
             compiler.compile_show(setup | overrides, {}, [], capable)
 
@@ -399,7 +405,7 @@ def test_usb_midi_switch_rejects_non_booleans(
     field: str,
 ) -> None:
     show[field] = value
-    with pytest.raises(compiler.CompilationError, match=field):
+    with pytest.raises(compiler_errors.CompilationError, match=field):
         compiler.compile_show(show, definitions, [], target)
 
 
@@ -413,7 +419,7 @@ def test_animation_color_cycle_round_trips_independently_of_splash(
     if enabled is not None:
         show['animation_color_cycle'] = enabled
     data = compiler.compile_show(show, definitions, [], target)
-    assert bool(compiler.HEADER.unpack_from(data)[7] & 1024) is bool(enabled)
+    assert bool(compiler_wire.HEADER.unpack_from(data)[7] & 1024) is bool(enabled)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['animation_color_cycle'] is bool(enabled)
     assert exported['splash_movie'] == []
@@ -425,7 +431,7 @@ def test_animation_color_cycle_rejects_non_booleans(
     show: dict[str, object], definitions: object, target: models.Target, value: object
 ) -> None:
     show['animation_color_cycle'] = value
-    with pytest.raises(compiler.CompilationError, match='animation_color_cycle'):
+    with pytest.raises(compiler_errors.CompilationError, match='animation_color_cycle'):
         compiler.compile_show(show, definitions, [], target)
 
 
@@ -435,7 +441,7 @@ def test_brightness_is_encoded_in_show(
 ) -> None:
     show['brightness'] = brightness
     result = compiler.compile_show(show, definitions, [], target)
-    assert compiler.HEADER.unpack_from(result)[7] & 255 == brightness
+    assert compiler_wire.HEADER.unpack_from(result)[7] & 255 == brightness
 
 
 @pytest.mark.parametrize('movie', [None, '', []])
@@ -459,7 +465,7 @@ def test_screensaver_timeout_is_encoded_in_milliseconds(
     assert models.Setup.model_validate(show).screensaver_timeout == 0
     show['screensaver_timeout'] = seconds
     result = compiler.compile_show(show, definitions, [], target)
-    assert compiler.HEADER.unpack_from(result)[9] == seconds * 1000
+    assert compiler_wire.HEADER.unpack_from(result)[9] == seconds * 1000
 
 
 @pytest.mark.parametrize('seconds', [-1, 2147484, True, 0.5, '3 Hz', '0.5 s'])
@@ -467,7 +473,7 @@ def test_invalid_screensaver_timeout_is_rejected(
     show: dict[str, object], definitions: object, target: models.Target, seconds: object
 ) -> None:
     show['screensaver_timeout'] = seconds
-    with pytest.raises(compiler.CompilationError, match='screensaver_timeout'):
+    with pytest.raises(compiler_errors.CompilationError, match='screensaver_timeout'):
         compiler.compile_show(show, definitions, [], target)
 
 
@@ -479,7 +485,7 @@ def test_invalid_brightness_is_rejected(
     brightness: object,
 ) -> None:
     show['brightness'] = brightness
-    with pytest.raises(compiler.CompilationError, match='brightness'):
+    with pytest.raises(compiler_errors.CompilationError, match='brightness'):
         compiler.compile_show(show, definitions, [], target)
 
 
@@ -492,7 +498,7 @@ def test_toml_json_and_explicit_patch_tables_agree(
     assert compiler.compile_show(
         toml, definitions, [], target
     ) == compiler.compile_show(show, definitions, [], target)
-    assert compiler.normalize_patch(
+    assert patch_graph.normalize_patch(
         {
             'volume': 100,
             'name': 'Flute',
@@ -509,10 +515,10 @@ def test_toml_json_and_explicit_patch_tables_agree(
         volume=100,
         name='Flute',
     )
-    first = compiler.normalize_patch(
+    first = patch_graph.normalize_patch(
         {'type': 'program-change', 'instrument': 'a', 'program': 'Name:.*'}
     )
-    second = compiler.normalize_patch(
+    second = patch_graph.normalize_patch(
         {'type': 'program-change', 'instrument': 'a', 'program': '^12$'}
     )
     assert isinstance(first, models.ProgramChange) and first.program == 'Name:.*'
@@ -530,13 +536,13 @@ def test_toml_json_and_explicit_patch_tables_agree(
 )
 def test_invalid_shorthand_is_rejected(value: object) -> None:
     with pytest.raises(ValueError):
-        compiler.normalize_patch(value)
+        patch_graph.normalize_patch(value)
 
 
 @pytest.mark.parametrize('key', [':a:1:2:3:4:5', ':'])
 def test_reference_uses_literal_patch_key(key: str, target: models.Target) -> None:
     setup = {'patches': {'alias': {'patch': key}}}
-    with pytest.raises(compiler.CompilationError) as error:
+    with pytest.raises(compiler_errors.CompilationError) as error:
         compiler.compile_show(setup, {}, [], target)
     assert f'{key!r} does not exist' in str(error.value)
 
@@ -560,7 +566,7 @@ def test_reports_errors_across_all_patch_entries(
             {'bank': 999, 'type': 'program-change', 'instrument': 'a', 'program': 1},
         ]
     }
-    with pytest.raises(compiler.CompilationError) as failure:
+    with pytest.raises(compiler_errors.CompilationError) as failure:
         compiler.compile_show(show, definitions, [], target)
     message = str(failure.value)
     for index in range(6):
@@ -580,7 +586,7 @@ def test_zero_matches_always_fail(
     show['patch_cycles'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'absent'}]
     }
-    with pytest.raises(compiler.CompilationError, match='no patch matches'):
+    with pytest.raises(compiler_errors.CompilationError, match='no patch matches'):
         compiler.compile_show(show, definitions, [], target)
 
 
@@ -607,7 +613,7 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
     show['patch_cycles'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': 'Flute'}]
     }
-    with pytest.raises(compiler.CompilationError, match='multiple matches'):
+    with pytest.raises(compiler_errors.CompilationError, match='multiple matches'):
         compiler.compile_show(show, definitions, [table], target)
     show['take_first_match'] = True
     data = compiler.compile_show(show, definitions, [table], target)
@@ -623,7 +629,7 @@ def test_regex_search_uses_first_seen_order_and_explicit_bank_filter(
     show['patch_cycles'] = {
         'wind': [{'type': 'program-change', 'instrument': 'a', 'program': '^Flute$'}]
     }
-    with pytest.raises(compiler.CompilationError, match='no patch matches'):
+    with pytest.raises(compiler_errors.CompilationError, match='no patch matches'):
         compiler.compile_show(show, definitions, [table], target)
 
 
@@ -724,7 +730,7 @@ def test_two_show_labels_share_one_program_description(
             {'type': 'program-change', 'instrument': 'a', 'program': 'Muted Trumpet'}
         ]
     }
-    with pytest.raises(compiler.CompilationError, match='no patch matches'):
+    with pytest.raises(compiler_errors.CompilationError, match='no patch matches'):
         compiler.compile_show(show, {}, [], target)
 
 
@@ -775,7 +781,7 @@ def test_name_cannot_override_known_synthesizer_name(
             }
         ]
     }
-    with pytest.raises(compiler.CompilationError, match='use display_name'):
+    with pytest.raises(compiler_errors.CompilationError, match='use display_name'):
         compiler.compile_show(show, definitions, [table], target)
 
 
@@ -792,7 +798,7 @@ def test_table_conflicts_are_collected_and_missing_metadata_is_filled(
     conflict = {
         'patches': [dict(base, name='Sax', description='new'), dict(base, name='Oboe')]
     }
-    with pytest.raises(compiler.CompilationError) as failure:
+    with pytest.raises(compiler_errors.CompilationError) as failure:
         compiler.compile_show(show, definitions, [second, conflict], target)
     assert sum('conflicting name' in e for e in failure.value.errors) == 2
 
@@ -830,7 +836,7 @@ def test_all_display_fields_are_checked(
             }
         ]
     }
-    with pytest.raises(compiler.CompilationError) as failure:
+    with pytest.raises(compiler_errors.CompilationError) as failure:
         compiler.compile_show(show, definitions, [], target)
     assert len(failure.value.errors) >= 2
 
@@ -853,7 +859,7 @@ def test_bad_tag_does_not_hide_errors_in_other_tags(
         'bad': 1,
         'wind': [{'type': 'program-change', 'instrument': 'missing', 'program': 12}],
     }
-    with pytest.raises(compiler.CompilationError) as failure:
+    with pytest.raises(compiler_errors.CompilationError) as failure:
         compiler.compile_show(show, definitions, [], target)
     assert 'patch_cycles.bad' in str(failure.value)
     assert 'patch_cycles.wind[0]' in str(failure.value)
@@ -945,7 +951,7 @@ def test_cli_preserves_repeated_table_inputs(
         ],
     )
     cli.main()
-    assert compiler.HEADER.unpack_from(
+    assert compiler_wire.HEADER.unpack_from(
         binary_format.core(setup_bundle.unpack(output.read_bytes())['patches'])
     )[4:7] == (1, 2, 3)
 

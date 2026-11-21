@@ -11,14 +11,14 @@ from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.catalogue import FONT_IDS, UI_FONTS, bundled_sources
 from cntrl.fonts.characters import printable_characters
 from cntrl.fonts.outline import Outline
-from cntrl.patch_chooser import compiler, display, graphics, models
+from cntrl.patch_chooser import compiler_inputs, display, graphics, models
 from scripts import native_tests
 
 
 @pytest.fixture(scope='module')
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(ROOT / 'patch-chooser-target.json')
+        compiler_inputs.read_document(ROOT / 'patch-chooser-target.json')
     )
 
 

@@ -9,9 +9,13 @@ import tomlkit
 
 from cntrl.patch_chooser import (
     compiler,
+    compiler_errors,
+    compiler_inputs,
+    compiler_wire,
     display,
     midi_processing,
     models,
+    patch_graph,
     resolved,
     songs,
 )
@@ -20,7 +24,7 @@ from scripts import native_tests
 
 def target() -> models.Target:
     result = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     return result.model_copy(
         update={
@@ -142,8 +146,8 @@ def test_route_only_patch_infers_empty_entry_sequence() -> None:
 def test_derived_routes_replace_by_name_and_inherit_other_routes() -> None:
     source = setup()
     patches = source['patches']
-    value = compiler.resolve_derivation(
-        compiler.normalize_patch(patches['variation']), patches, 'variation'
+    value = patch_graph.resolve_derivation(
+        patch_graph.normalize_patch(patches['variation']), patches, 'variation'
     )
     assert value.midi == patches['base']['midi'] | patches['variation']['midi']
     assert value.midi['octave']['via'] == [{'transpose': 7}]
@@ -155,7 +159,9 @@ def test_derived_routes_replace_by_name_and_inherit_other_routes() -> None:
 
 
 def test_inactive_configurable_port_name_stays_reserved() -> None:
-    with pytest.raises(compiler.CompilationError, match='reserved MIDI route name'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='reserved MIDI route name'
+    ):
         compiler.compile_show(
             {
                 'trs_ports': {'configurable-1': 'off'},
@@ -178,7 +184,7 @@ def test_configurable_input_cannot_be_used_in_expression_mode() -> None:
             ]
         }
     )
-    with pytest.raises(compiler.CompilationError, match='not an input'):
+    with pytest.raises(compiler_errors.CompilationError, match='not an input'):
         compiler.compile_show(
             {
                 'trs_ports': {'configurable-1': 'off'},
@@ -255,7 +261,7 @@ def test_derived_export_rejects_cyclic_wrappers(wrapped_program: bytes) -> None:
     address = (
         graph
         + struct.unpack_from(
-            '<I', wrapped_program, graph + compiler.GRAPH.size + node * 4
+            '<I', wrapped_program, graph + compiler_wire.GRAPH.size + node * 4
         )[0]
     )
     damaged = bytearray(wrapped_program)
@@ -286,5 +292,5 @@ def test_unknown_stream_gate_is_rejected(reference: str) -> None:
         'stream': reference,
         'enabled': False,
     }
-    with pytest.raises(compiler.CompilationError, match='unknown MIDI stream'):
+    with pytest.raises(compiler_errors.CompilationError, match='unknown MIDI stream'):
         compiler.compile_show(source, {}, [], target())

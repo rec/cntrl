@@ -5,20 +5,20 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import compiler, compiler_inputs, models, patch_graph, resolved
 from scripts import native_tests
 
 
 @pytest.mark.parametrize('duration', [0, -1, True, 65.536, '1 Hz', '0.1 ms'])
 def test_invalid_delay_is_rejected(duration: object) -> None:
     with pytest.raises(ValueError):
-        compiler.normalize_patch({'duration': duration})
+        patch_graph.normalize_patch({'duration': duration})
 
 
 def test_delay_round_trip_and_native_execution(tmp_path: Path) -> None:
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
     message = {
         'type': 'control-change',

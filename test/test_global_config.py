@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, data_files, global_config, resolved
+from cntrl.patch_chooser import (
+    compiler_inputs,
+    data_files,
+    global_config,
+    resolved,
+)
 from cntrl.patch_chooser.setup_compiler import compile_inputs
 
 
@@ -281,7 +286,7 @@ def test_recovered_foreign_references_use_archived_files(
         Path(catalogue_origin): catalogue,
         Path(origin + r'\FONTS\Font.cfont'): font,
     }
-    document = compiler.read_document(root, relocations=relocations)
+    document = compiler_inputs.read_document(root, relocations=relocations)
     assert document == {
         'fonts': {'main': str(font)},
         'instruments': {

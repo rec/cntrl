@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_inputs,
+    compiler_wire,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
@@ -22,7 +28,7 @@ def test_gesture_patches_round_trip_and_execute(
     assert models.Setup().fast_switches is True
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
     patches = [
         dict(type='control-change', output='din', channel=1, controller=7, value=i)
@@ -68,7 +74,9 @@ def test_triple_actions_round_trip_and_execute(
     tmp_path: Path, gesture_runner: Path, long_triple: bool
 ) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+        compiler_inputs.read_document(
+            Path(__file__).parents[1] / 'firmware/test/target.json'
+        )
     )
     patches = [
         dict(type='control-change', output='din', channel=1, controller=7, value=i)
@@ -81,7 +89,7 @@ def test_triple_actions_round_trip_and_execute(
                 'on': patches[0],
                 'gestures': {
                     e: patches[i + 1]
-                    for i, e in enumerate(compiler.GESTURE_EVENTS)
+                    for i, e in enumerate(compiler_wire.GESTURE_EVENTS)
                     if long_triple or not e.startswith('long_triple')
                 },
             }
@@ -118,7 +126,7 @@ def test_triple_actions_round_trip_and_execute(
 )
 def test_invalid_gesture_assignments_are_rejected(changes: dict[str, object]) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     assignment = {
         'button': 'A',

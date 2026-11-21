@@ -9,7 +9,13 @@ import pytest
 from cntrl.fonts import assets
 from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.fonts.outline import Outline, text_runs
-from cntrl.patch_chooser import compiler, display, models
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    display,
+    models,
+)
 
 
 @pytest.fixture(scope='module')
@@ -77,7 +83,7 @@ def test_selected_fonts_can_exceed_the_former_separate_budget(
 
 
 def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
-    source = compiler.read_document(ROOT / 'firmware/test/display.toml')
+    source = compiler_inputs.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
     source['patch_cycles'] = {
         'Group': [
@@ -97,13 +103,13 @@ def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
     source['parameters'] = {'other': {'value': '♣'}}
     source['windows'] = {}
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     font_data: dict[int, bytes] = {}
-    with pytest.raises(compiler.CompilationError) as failure:
+    with pytest.raises(compiler_errors.CompilationError) as failure:
         compiler.compile_show(
             source,
-            compiler.read_document(ROOT / 'firmware/test/definitions.json'),
+            compiler_inputs.read_document(ROOT / 'firmware/test/definitions.json'),
             [],
             target,
             font_data,
@@ -149,7 +155,7 @@ def test_adding_text_requires_the_original_outline(
         assets.Preparation(
             show,
             models.Target.model_validate(
-                compiler.read_document(ROOT / 'firmware/test/target.json')
+                compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
             ),
             [(255, 'Never prepared', models.Style(font_name='Custom'), 4, 1, 0)],
             ['field title'],
@@ -158,7 +164,7 @@ def test_adding_text_requires_the_original_outline(
 
 def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     show = models.Setup.model_validate(
         {
@@ -204,7 +210,7 @@ def test_line_boxes_reserve_font_descent(source: str, text: str, descent: int) -
 
 def test_prepared_capitals_keep_space_below_the_baseline() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     prepared = assets.Preparation(
         models.Setup(),

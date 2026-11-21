@@ -5,14 +5,20 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
 
 
@@ -125,7 +131,7 @@ def test_invalid_shifted_actions_are_rejected(
     source = {
         'switches': {'test': {'button': 'A', 'on': {'operation': 'shift'}} | assignment}
     }
-    with pytest.raises(compiler.CompilationError):
+    with pytest.raises(compiler_errors.CompilationError):
         compiler.compile_show(source, {}, [], target)
 
 
@@ -133,9 +139,9 @@ def test_shift_requires_switch_support_and_a_switch_context(
     target: models.Target,
 ) -> None:
     source = {'patch_cycles': {'test': [{'operation': 'shift'}]}}
-    with pytest.raises(compiler.CompilationError, match='switch assignment'):
+    with pytest.raises(compiler_errors.CompilationError, match='switch assignment'):
         compiler.compile_show(source, {}, [], target)
-    with pytest.raises(compiler.CompilationError, match='target switch support'):
+    with pytest.raises(compiler_errors.CompilationError, match='target switch support'):
         compiler.compile_show(
             {'patches': {'shift': {'operation': 'shift'}}},
             {},

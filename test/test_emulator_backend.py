@@ -19,6 +19,7 @@ from cntrl.emulator.replay import Scenario
 from cntrl.fonts import assets, catalogue, ui
 from cntrl.patch_chooser import (
     compiler,
+    compiler_inputs,
     device_globals,
     languages,
     models,
@@ -152,7 +153,7 @@ def backend_files(
         )
         + '\n'
     )
-    data = compiler.read_document(root / 'firmware/test/target.json')
+    data = compiler_inputs.read_document(root / 'firmware/test/target.json')
     assert isinstance(data, dict)
     data['buttons'] = list(buttons.lower())
     data['controls'] = {'app_actions': {'a': 'activate-selection', 'b': 'next-patch'}}

@@ -14,7 +14,7 @@ import tyro
 from pydantic import BaseModel, Field
 
 from cntrl.patch_chooser import data_files, models, setup_bundle
-from cntrl.patch_chooser.compiler import read_document
+from cntrl.patch_chooser.compiler_inputs import read_document
 
 
 class Qualification(BaseModel, frozen=True):
