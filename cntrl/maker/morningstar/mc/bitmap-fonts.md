@@ -1,11 +1,12 @@
 # Bitmap display fonts
 
-Seventeen bundled outline faces are available alongside ComicSansMS and Tamzen. Arimo is
+Eighteen bundled outline faces are available alongside Tamzen. Arimo is
 the default performance font. Atkinson is an additional page-text face, excluded
 from random patch formatting. The IDs below identify their generated reference tables:
 
 | Configuration name | Source | Face ID | License |
 | --- | --- | --- | --- |
+| `ComicRelief` | Comic Relief Regular | 2 | SIL OFL 1.1 |
 | `Circuit` | Orbitron Medium | 3 | SIL OFL 1.1 |
 | `CircuitBold` | Orbitron Bold | 4 | SIL OFL 1.1 |
 | `StillTime` | Still Time | 5 | CC0 1.0 |
@@ -115,7 +116,9 @@ show, at the sizes selected by automatic fitting, are uploaded to
 `/cntrl/fonts/` on the pedal's SD card. The bundled families instead use their
 shared flash assets unless explicitly overridden. Only CourierPrime,
 AtkinsonNextSemiBold, Arimo and TamzenBold7x13 are offered for utility-page UI use.
-ComicSansMS, StillTime, CourierPrimeBold and ArimoBold are performance-only fonts.
+ComicRelief, StillTime, CourierPrimeBold and ArimoBold are performance-only fonts.
+For existing setups that select `ComicSansMS`, use `ComicRelief` and recompile
+them against the updated target so line layouts use the new glyph metrics.
 Arial and its classic alias have been removed; update existing source selections
 to Arimo and recompile. Cable Test uses Atkinson for its title and body.
 
@@ -387,8 +390,8 @@ Different scales can coexist in a setup. Exported font assets use names such as
 autoformatting. Recompiling an export reuses the already-scaled assets. Changing
 the scale of a compiled-only font requires rebuilding from its original source.
 
-Outline fonts are rasterized at the requested width. Scaling ComicSansMS
-resamples its prepared native bitmaps. Exported assets are self-contained
+Outline fonts are rasterized at the requested width. Scaling a shared bitmap
+font resamples its prepared glyphs. Exported assets are self-contained
 and do not require those sources for unchanged recompilation.
 
 

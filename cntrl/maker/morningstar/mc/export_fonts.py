@@ -13,14 +13,13 @@ from ....fonts.catalogue import FONT_IDS, SIZES, UI_FONTS, bundled_sources
 from ....fonts.outline import Glyph, Outline
 from ....fonts.ui import embedded_header
 from ....patch_chooser import models
-from .build_font_metrics import Options, native_face
+from .build_font_metrics import native_face
 from .native_raster import NativeRaster
 
 
 class FontExport(BaseModel, frozen=True):
     output: Path
     ui_fonts: list[str] = Field(default_factory=lambda: list(UI_FONTS))
-    source: Path = Options().source
     generated: Path = Path(__file__).parent / 'firmware/patch_chooser'
     display_height: int = 128
 
@@ -60,34 +59,6 @@ def export(options: FontExport) -> dict[str, str]:
             continue
         if name == 'TamzenBold7x13':
             data = status.prepare()
-        elif name == 'ComicSansMS':
-            raster = EmbeddedRaster(
-                options.source / 'st7735_t3_font_ComicSansMS.c', name
-            )
-            characters = ''.join(chr(c) for c in range(32, 127))
-            heights = {}
-            for size in raster.tables:
-                glyphs = [raster.glyph(size, ord(c)) for c in characters]
-                heights[size] = max(g.top for g in glyphs) + max(
-                    g.height - g.top for g in glyphs
-                )
-            size = max(
-                s
-                for s, h in heights.items()
-                if h <= (options.display_height // 3) * 2 // 3
-            )
-            data = pack(
-                raster,
-                {size: list(characters)},
-                {
-                    size: models.FontMetrics(
-                        line_height=heights[size], top=raster.tables[size][2][-1]
-                    )
-                },
-                runtime_characters=characters,
-                hinted_advances=True,
-                prepared_runs=False,
-            )
         else:
             outline = Outline(bundled_sources()[name], hinting='auto')
             characters = ui.supported_characters(outline)

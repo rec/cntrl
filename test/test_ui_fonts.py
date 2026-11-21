@@ -234,7 +234,7 @@ def test_page_fonts_use_declared_ui_families_without_entering_patch_picker() -> 
 
 
 @pytest.mark.parametrize(
-    'name', ['ComicSansMS', 'StillTime', 'CourierPrimeBold', 'ArimoBold']
+    'name', ['ComicRelief', 'StillTime', 'CourierPrimeBold', 'ArimoBold']
 )
 def test_performance_only_fonts_cannot_be_selected_for_ui(name: str) -> None:
     with pytest.raises(ValueError, match='unknown canonical UI font'):

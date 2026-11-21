@@ -120,14 +120,10 @@ def test_firmware_glyphs_preserve_pixels_and_baseline(
 
 
 def test_generated_fonts_and_exported_metrics_are_current(
-    tmp_path: Path, sdk_font_source: Path
+    tmp_path: Path,
 ) -> None:
     root = Path(__file__).parents[1]
-    sources = export(
-        FontExport(
-            output=tmp_path / 'fonts', generated=tmp_path, source=sdk_font_source.parent
-        )
-    )
+    sources = export(FontExport(output=tmp_path / 'fonts', generated=tmp_path))
     target = models.Target.model_validate(
         compiler_inputs.read_document(root / 'patch-chooser-target.json')
     )

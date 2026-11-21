@@ -523,18 +523,17 @@ Foreground/background color selection and warnings are resolved on the host.
 Rendering fills the whole background and clips all text to the padded rectangle.
 
 Arimo is the default performance font. Embedded UI fonts are Arimo,
-CourierPrime, AtkinsonNextSemiBold and TamzenBold7x13. ComicSansMS, StillTime,
+CourierPrime, AtkinsonNextSemiBold and TamzenBold7x13. ComicRelief, StillTime,
 CourierPrimeBold and ArimoBold are performance-only; Arial/classic are removed.
 Bundled outline families and user-supplied TTF/OTF files use
 [sparse SD assets](../bitmap-fonts.md#fonts-supplied-by-a-show), containing only
 the glyphs and sizes used by the show. Unicode shaping and missing-glyph checks
-run on the host. The pedal draws prepared positions. ComicSansMS sizes are 8, 9, 10, 11,
-12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 60, 72 and 96; these are the
-library's nominal size names. The compiler selects among these available bitmap faces automatically.
-Automatic sizing picks the largest supported size fitting each line. The selected size is resolved once on the Mac, never searched on the pedal.
+run on the host. The pedal draws prepared positions. The bundled performance
+fonts each have one prepared size. The compiler fits each line using the
+available metrics and resolves its size before uploading the setup.
 
 `build_font_metrics.py` exports advances, left bearings, widths and vertical
-extents from the pinned library into `patch-chooser-target.json`:
+extents from the generated bitmap resources into `patch-chooser-target.json`:
 
 ```bash
 uv run --frozen -m cntrl.maker.morningstar.mc.build_font_metrics
@@ -543,9 +542,9 @@ uv run --frozen -m cntrl.maker.morningstar.mc.build_font_metrics
 Packed glyph metrics in the target file are generated data. The document stores
 only selected font IDs/sizes, RGB565 colors, padding, vertical metrics and
 precomputed name offsets. Sparse font records reference their SD asset by CRC32;
-bitmaps and shaped runs are transferred separately. Only the four UI fonts
-remain embedded in firmware. Changing performance
-fonts uses SD uploads without reflashing.
+bitmaps and shaped runs are transferred separately. The shared UI and performance
+fonts are embedded in firmware. Custom performance fonts use SD uploads without
+reflashing.
 `fonts-in-flash.patch` places the library's immutable native font data in mapped
 program flash instead of DTCM. It does not change font contents or decoding.
 Native tests link the same library font tables; their graphics test double tests

@@ -97,13 +97,6 @@ def run(options: QualificationRun) -> None:
             'junit_logging=all',
             f'--basetemp={output / "pytest-temp"}',
             *(['test'] if options.profile == 'core' else []),
-            *(
-                ['--require-morningstar-sdk']
-                if options.profile == 'full'
-                and options.target_dir
-                and options.target_dir.resolve() == root / 'cntrl/maker/morningstar/mc'
-                else []
-            ),
             f'--junitxml={output / "pytest.xml"}',
         ],
         'lint': [

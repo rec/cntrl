@@ -143,7 +143,7 @@ The canonical IDs are:
 The outline sources for Arimo, AtkinsonNextSemiBold and CourierPrime are bundled
 with the shared font tooling. Tamzen uses its prepared bitmap asset.
 `cntrl.fonts.ui.prepare(name, sizes, path=None)` prepares hinted outline text as
-ASCII CFN2. ComicSansMS, StillTime, CourierPrimeBold and ArimoBold are performance
+ASCII CFN2. ComicRelief, StillTime, CourierPrimeBold and ArimoBold are performance
 fonts and cannot be selected for UI page roles. Performance-only fonts use setup
 font assets rather than the embedded UI font provider.
 `ui.embedded_header({name: data})` generates an `EmbeddedFont` array. The optional

@@ -1,4 +1,4 @@
-"""Export measurements from the pinned display library into target capabilities."""
+"""Export measurements from the generated bitmap fonts into target capabilities."""
 
 import json
 import re
@@ -13,11 +13,6 @@ from ....patch_chooser import models
 
 
 class Options(BaseModel, frozen=True):
-    source: Path = (
-        Path(__file__).parent
-        / 'firmware/.tools/data/packages/teensy/hardware/avr/1.62.0'
-        / 'libraries/ST7735_t3/src'
-    )
     output: Path = Path(__file__).parent / 'patch-chooser-target.json'
 
 

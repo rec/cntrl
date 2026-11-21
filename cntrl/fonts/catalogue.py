@@ -15,7 +15,7 @@ UI_FONTS = {
     'TamzenBold7x13': 19,
 }
 FONT_IDS = {
-    'ComicSansMS': 2,
+    'ComicRelief': 2,
     'Circuit': 3,
     'CircuitBold': 4,
     'StillTime': 5,
@@ -33,6 +33,7 @@ FONT_IDS = {
     **UI_FONTS,
 }
 OUTLINE_SOURCES = {
+    'ComicRelief': 'comic-relief/ComicRelief-Regular.ttf',
     'BarlowCondensedSemiBold': 'barlow-condensed/BarlowCondensed-SemiBold.ttf',
     'Arimo': 'arimo/Arimo-Regular.ttf',
     'ArimoBold': 'arimo/Arimo-Bold.ttf',

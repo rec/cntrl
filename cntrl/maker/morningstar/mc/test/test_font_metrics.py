@@ -7,7 +7,6 @@ from PIL import Image
 
 from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.maker.morningstar.mc import build_font_metrics
-from cntrl.maker.morningstar.mc.export_fonts import EmbeddedRaster
 from cntrl.patch_chooser import compiler_inputs, display, graphics, models
 from scripts import native_tests
 
@@ -51,7 +50,7 @@ def test_page_lines_select_different_native_font_families() -> None:
             'patch_cycles': {},
             'style': {'font_name': 'Arimo'},
             'patch_views': {
-                'patch': {'line_styles': {'display_name': {'font_name': 'ComicSansMS'}}}
+                'patch': {'line_styles': {'display_name': {'font_name': 'ComicRelief'}}}
             },
         }
     )
@@ -77,7 +76,7 @@ def test_page_lines_select_different_native_font_families() -> None:
     [
         'Arimo',
         'ArimoBold',
-        'ComicSansMS',
+        'ComicRelief',
         'Circuit',
         'CircuitBold',
         'StillTime',
@@ -154,7 +153,7 @@ def test_ui_and_performance_catalogues_exclude_retired_fonts() -> None:
         'AtkinsonNextSemiBold',
         'TamzenBold7x13',
     }
-    assert {'ComicSansMS', 'StillTime', 'CourierPrimeBold', 'ArimoBold'} <= {
+    assert {'ComicRelief', 'StillTime', 'CourierPrimeBold', 'ArimoBold'} <= {
         f.name for f in target.fonts
     }
 
@@ -179,7 +178,7 @@ def test_unknown_font_is_rejected() -> None:
         )
 
 
-@pytest.mark.parametrize('family', ['ComicSansMS'])
+@pytest.mark.parametrize('family', ['ComicRelief'])
 def test_bitmap_scaling_doubles_columns_without_changing_rows(family: str) -> None:
     resource = Path(__file__).parents[1] / 'font_sources' / f'{family}.cfont'
     normal = BitmapRaster(resource)
@@ -201,19 +200,3 @@ def test_bitmap_scaling_doubles_columns_without_changing_rows(family: str) -> No
                         & (128 >> (column % 8))
                     )
                     assert actual == expected
-
-
-def test_exported_native_resources_preserve_scaled_glyphs_and_runs(
-    sdk_font_source: Path,
-) -> None:
-    family = 'ComicSansMS'
-    resource = Path(__file__).parents[1] / 'font_sources' / f'{family}.cfont'
-    for scale in (1.0, 1.25, 2.0):
-        original = EmbeddedRaster(sdk_font_source, family, scale)
-        portable = BitmapRaster(resource, scale)
-        for size in portable.tables:
-            for code in range(32, 127):
-                assert portable.glyph(size, code) == original.glyph(size, code)
-            assert portable.shape(size, 'Wide patch 123') == original.shape(
-                size, 'Wide patch 123'
-            )
