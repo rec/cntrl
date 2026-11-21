@@ -1,6 +1,7 @@
 """The pre-binary USB codec preserves session ordering and exact backup bytes."""
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -9,6 +10,7 @@ from cntrl.maker.morningstar.mc.legacy_usb import (
     decode_reply,
     encode_request,
 )
+from cntrl.patch_chooser import transport
 from cntrl.patch_chooser.transport import UsbProtocolError
 from cntrl.patch_chooser.usb_frames import Frame, Kind, Status
 
@@ -61,6 +63,28 @@ def test_advertised_large_blocks_are_preserved_without_truncation() -> None:
 def test_lost_session_is_not_replayed_as_a_new_session() -> None:
     result = decode_reply(b'CNTRL USB LOST\n', 7, 4)
     assert result.status == Status.lost and result.session == 7 and result.sequence == 4
+
+
+def test_backup_reconnects_on_a_failed_serial_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = Connection(Path('/unused'))
+    connection.session = 0x12AB
+    disconnected, reconnected = Mock(), Mock()
+    for serial in (disconnected, reconnected):
+        serial.write.side_effect = len
+    disconnected.read_until.side_effect = OSError('USB disconnected')
+    reconnected.read_until.return_value = (
+        b'CNTRL USB 12ab 1 1 4096 434e54524c204f4b0a\n'
+    )
+    connect = Mock(side_effect=[disconnected, reconnected])
+    monkeypatch.setattr(transport, 'Serial', connect)
+
+    connection.exchange(b'', Kind.open)
+
+    assert connection.line() == 'CNTRL OK'
+    assert connect.call_count == 2
+    disconnected.close.assert_called_once()
 
 
 @pytest.mark.parametrize('reply', [b'', b'CNTRL USB 1 2 0 -', b'wrong\n'])

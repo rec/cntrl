@@ -632,8 +632,10 @@ def main() -> None:
         subprocess.CalledProcessError,
         target_process.TargetAdapterError,
         transport.UsbCommandTimeout,
+        transport.UsbConnectionError,
         transport.UsbProtocolError,
         transport.UsbReplyError,
+        transport.UsbSerialTimeout,
         WriterLockError,
         WriterLockHeld,
     ) as error:

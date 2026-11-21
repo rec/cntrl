@@ -1184,7 +1184,7 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
                 )
                 if writes == 3:
                     write_frame(frame[: len(frame) // 2])
-                    raise OSError('injected partial USB write')
+                    raise transport.UsbConnectionError('injected partial USB write')
                 write_frame(frame)
 
             def lost_reply() -> transport.Frame:
@@ -1192,7 +1192,9 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
                 result = read_frame()
                 if data_frame and losses == 0:
                     losses += 1
-                    raise OSError('injected lost data acknowledgement')
+                    raise transport.UsbConnectionError(
+                        'injected lost data acknowledgement'
+                    )
                 return result
 
             monkeypatch.setattr(connection, 'write_frame', interrupted_write)
@@ -1208,7 +1210,9 @@ def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
                 result = read_frame()
                 if result.payload == b'CNTRL OK\n' and losses < 3:
                     losses += 1
-                    raise OSError('injected lost command completion')
+                    raise transport.UsbConnectionError(
+                        'injected lost command completion'
+                    )
                 return result
 
             monkeypatch.setattr(connection, 'read_frame', lost_completion)
@@ -1232,7 +1236,7 @@ def test_usb_wait_backoff_keeps_retrying_until_control_c(
     attempts = 0
     seconds = 0
 
-    def unplugged() -> None:
+    def unplugged(*args: object, **kwargs: object) -> None:
         nonlocal attempts
         attempts += 1
         raise FileNotFoundError('USB unplugged')
@@ -1243,7 +1247,7 @@ def test_usb_wait_backoff_keeps_retrying_until_control_c(
         if seconds == 15:
             raise KeyboardInterrupt
 
-    monkeypatch.setattr(connection, 'connect', unplugged)
+    monkeypatch.setattr(transport, 'Serial', unplugged)
     monkeypatch.setattr(transport.time, 'sleep', wait)
     with pytest.raises(KeyboardInterrupt):
         connection.__enter__()

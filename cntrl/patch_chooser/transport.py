@@ -24,6 +24,14 @@ class UsbReplyError(ValueError):
     """The pedal rejected the command or returned an unexpected result."""
 
 
+class UsbConnectionError(OSError):
+    """The USB serial connection failed."""
+
+
+class UsbSerialTimeout(TimeoutError):
+    """A serial read or write timed out."""
+
+
 class UsbCommandTimeout(TimeoutError):
     """The USB operation exceeded its deadline."""
 
@@ -101,13 +109,16 @@ class SerialConnection:
             pass  # The USB device may have disappeared during the command.
 
     def connect(self) -> None:
-        self.serial = Serial(
-            str(self.port),
-            baudrate=115200,
-            timeout=self.timeout,
-            write_timeout=self.timeout,
-        )
-        self.serial.reset_input_buffer()
+        try:
+            self.serial = Serial(
+                str(self.port),
+                baudrate=115200,
+                timeout=self.timeout,
+                write_timeout=self.timeout,
+            )
+            self.serial.reset_input_buffer()
+        except OSError as error:
+            raise UsbConnectionError(str(error)) from error
         self.frame_received.clear()
 
     def exchange(
@@ -139,7 +150,7 @@ class SerialConnection:
                 self._check_deadline()
                 if self.serial is None:
                     if not retry or (not self.retry and self.connection_attempted):
-                        raise OSError('USB connection is closed')
+                        raise UsbConnectionError('USB connection is closed')
                     self.connection_attempted = True
                     self.connect()
                 self._check_deadline()
@@ -166,7 +177,7 @@ class SerialConnection:
                                 flush=True,
                             )
                             lost_reported = True
-                        raise OSError('USB session lost')
+                        raise UsbConnectionError('USB session lost')
                     if response.status != Status.ok or response.kind not in (
                         Kind.text,
                         Kind.data,
@@ -195,9 +206,7 @@ class SerialConnection:
                     self.usb_block_size = response.block_size
                     self.sequence += 1
                     return
-            except UsbCommandTimeout:
-                raise
-            except OSError as error:
+            except (UsbConnectionError, UsbSerialTimeout) as error:
                 self._check_deadline()
                 self.close()
                 if not retry or not self.retry:
@@ -255,14 +264,16 @@ class SerialConnection:
         while pending:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise TimeoutError('USB serial write timed out')
-            self.serial.write_timeout = remaining
+                raise UsbSerialTimeout('USB serial write timed out')
             try:
+                self.serial.write_timeout = remaining
                 count = self.serial.write(pending)
             except SerialTimeoutException as error:
-                raise TimeoutError('USB serial write timed out') from error
+                raise UsbSerialTimeout('USB serial write timed out') from error
+            except OSError as error:
+                raise UsbConnectionError(str(error)) from error
             if count == 0:
-                raise OSError('USB serial disconnected')
+                raise UsbConnectionError('USB serial disconnected')
             pending = pending[count:]
 
     def read_frame(self) -> Frame:
@@ -323,18 +334,21 @@ class SerialConnection:
                     raise self.protocol_error(
                         failure, bytes(discarded + self.frame_received)
                     )
-                raise TimeoutError('USB serial response timed out')
-            available = self.serial.in_waiting
-            if not available:
-                self.serial.timeout = remaining
-            count = min(max(1, available), max(1, limit - len(self.frame_received)))
-            value = self.serial.read(count)
+                raise UsbSerialTimeout('USB serial response timed out')
+            try:
+                available = self.serial.in_waiting
+                if not available:
+                    self.serial.timeout = remaining
+                count = min(max(1, available), max(1, limit - len(self.frame_received)))
+                value = self.serial.read(count)
+            except OSError as error:
+                raise UsbConnectionError(str(error)) from error
             if not value:
                 if discarded or (self.sequence == 1 and self.deadline is None):
                     raise self.protocol_error(
                         failure, bytes(discarded + self.frame_received)
                     )
-                raise TimeoutError('USB serial response timed out')
+                raise UsbSerialTimeout('USB serial response timed out')
             self.frame_received.extend(value)
 
     def write(self, data: bytes, kind: Kind = Kind.command) -> None:
