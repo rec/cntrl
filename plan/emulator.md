@@ -292,7 +292,10 @@ properties.
 - Keep setup-file compilation separate from live pedal mirroring. Mirroring
   downloads the compiled setups, selected setup, assets, available language
   packs and device preferences without recompilation or local-default
-  substitution. Preserve physical movie stream-to-display mappings.
+  substitution. Preserve physical movie stream-to-display mappings. Live
+  mirroring requires firmware that reports a storage write generation. A
+  capture is published only if the device reports the same idle generation
+  before capture and after the Status snapshot.
 - Other unsupported controller component kinds are reported explicitly; the
   generic layout records retain their hardware-independent shape for later
   execution adapters.

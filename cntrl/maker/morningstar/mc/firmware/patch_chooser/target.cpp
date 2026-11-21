@@ -967,6 +967,15 @@ PerformanceStatus performance_status() {
 void midi_status(unsigned route) { board.midi_status(route); }
 void midi_reset() { board.midi_reset(); }
 FLASHMEM bool native_asset_command(const char *line) {
+    if (!std::strcmp(line, "CNTRL MIRROR GENERATION")) {
+        if (!setup_filesystem.available()) { board.reply("CNTRL ERROR storage-unavailable"); return true; }
+        if (deployment.pending() || documents.busy() || documents.dirty() || cntrl::device::sd_open_writers) {
+            board.reply("CNTRL ERROR mirror-storage-busy"); return true;
+        }
+        char response[48] = "CNTRL MIRROR ";
+        *std::to_chars(response + 13, response + sizeof(response) - 1, cntrl::device::sd_write_generation).ptr = 0;
+        board.reply(response); return true;
+    }
     if (!std::strcmp(line, "CNTRL STATUS SNAPSHOT")) {
         const auto snapshot = board.runtime_pages().capture_status(performance_status());
         uint8_t bytes[cntrl::ui::StatusSnapshot::wire_size];

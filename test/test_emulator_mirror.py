@@ -14,15 +14,23 @@ from cntrl.patch_chooser import binary_format, storage_info, transport
 
 
 class CapturedPedal(transport.SetupClient):
-    def __init__(self, files: dict[str, bytes], changed_file: str) -> None:
+    def __init__(self, files: dict[str, bytes], changed_file: str, change: str) -> None:
         self.files = files
         self.changed_file = changed_file
+        self.change = change
+        self.generation = 1
         self.reads: dict[str, int] = {}
 
     def current(self) -> str:
         return 'stored-setup'
 
     def request(self, command: str) -> str:
+        if command == 'CNTRL MIRROR GENERATION':
+            if self.change == 'legacy-firmware':
+                raise transport.UsbReplyError('CNTRL ERROR invalid-command')
+            if self.change == 'busy' and self.generation > 1:
+                raise transport.UsbReplyError('CNTRL ERROR mirror-storage-busy')
+            return f'CNTRL MIRROR {self.generation}'
         assert command == 'CNTRL STATUS'
         return (
             'CNTRL READY model=mc6-pro persistent_root=305419896 '
@@ -34,6 +42,8 @@ class CapturedPedal(transport.SetupClient):
 
     def request_data(self, command: str) -> bytes:
         assert command == 'CNTRL STATUS SNAPSHOT'
+        if self.change in {'generation', 'busy'}:
+            self.generation += 1
         return b'CSS1' + bytes(107)
 
     def download_state(self, path: str) -> bytes:
@@ -64,9 +74,20 @@ def test_mirror_requires_one_session_source(arguments: list[str]) -> None:
         tyro.cli(Emulate, args=arguments)
 
 
-@pytest.mark.parametrize('change', ['', 'asset', 'journal', 'new-slot'])
+@pytest.mark.parametrize(
+    ('change', 'error'),
+    [
+        ('', ''),
+        ('asset', 'changed during mirror capture'),
+        ('journal', 'changed during mirror capture'),
+        ('new-slot', 'changed during mirror capture'),
+        ('generation', 'storage generation changed during mirror capture'),
+        ('busy', 'mirror-storage-busy'),
+        ('legacy-firmware', 'update firmware first'),
+    ],
+)
 def test_capture_preserves_active_journals_and_exact_asset_set(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str, error: str
 ) -> None:
     files = {
         '/cntrl/generations/12345678/setups/bundle/0.bin': b'active bundle journal',
@@ -108,11 +129,11 @@ def test_capture_preserves_active_journals_and_exact_asset_set(
         'asset': '/cntrl/fonts/01020304.cfont',
         'journal': '/cntrl/generations/12345678/global/0.bin',
     }.get(change, '')
-    client = CapturedPedal(files, changed_file)
+    client = CapturedPedal(files, changed_file, change)
     monkeypatch.setattr(transport, 'SerialConnection', lambda *a, **k: nullcontext())
     monkeypatch.setattr(transport, 'SetupClient', lambda _: client)
-    if change:
-        with pytest.raises(ValueError, match='changed during mirror capture'):
+    if error:
+        with pytest.raises(ValueError, match=error):
             mirror.download(Path('/dev/test-pedal'), tmp_path, None)
         assert not list(tmp_path.iterdir())
         return
