@@ -312,6 +312,19 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
 
         session.advance(1000000)
         press('f')
+        session.capture_corrections(True)
+        panic = next(r for r in session.correction_regions if r.message == 'panic')
+        assert panic.original == 'Panic'
+        original = session.frames.copy()
+        session.preview_correction(panic, 'Alarm')
+        assert session.frames != original
+        assert (
+            next(r for r in session.correction_regions if r.message == 'panic').original
+            == 'Panic'
+        )
+        session.clear_corrections()
+        assert session.frames == original
+        session.capture_corrections(False)
         press('c')
         session.advance(session.time_us + 1000000)
         assert any(

@@ -8,6 +8,7 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import ExitStack
+from functools import cache
 from hashlib import sha256
 from heapq import merge
 from pathlib import Path
@@ -24,8 +25,10 @@ from ..firmware import native_cache
 from ..firmware.build_info import commit_id
 from ..firmware.capabilities import header
 from ..fonts.catalogue import FONT_IDS
+from ..localization import catalogue
 from ..patch_chooser.models import Target
 from . import font_comparison
+from .corrections import TranslationRegion
 from .errors import EmulatorError, emulator_files
 from .layout import EmulatorLayout
 from .localization import TOOLTIP_PAGES
@@ -33,6 +36,11 @@ from .midi_history import MidiHistory
 from .replay import Event, validate_name_key
 
 MAX_REPLAY_ADVANCE_US = 10_000_000
+
+
+@cache
+def translation_message_ids() -> tuple[str, ...]:
+    return tuple(catalogue.load().messages)
 
 
 class RequestRejected(EmulatorError):
@@ -196,6 +204,9 @@ class Session:
         self.stock_firmware = False
         self.editing_name = False
         self.language = 'en'
+        self.correction_regions: list[TranslationRegion] = []
+        self.correction_language_name = ''
+        self.requested_correction_language = ''
         self.tooltip_context: tuple[str, tuple[tuple[str, int], ...]] = ('', ())
         self.held: set[str] = set()
         self.font_samples: list[font_comparison.FontSample] = []
@@ -370,9 +381,30 @@ class Session:
         finally:
             watchdog.cancel()
 
+    def capture_corrections(self, enabled: bool) -> None:
+        self.request(bytes((18, enabled)))
+        if not enabled:
+            self.correction_regions = []
+            self.correction_language_name = ''
+
+    def preview_correction(self, region: TranslationRegion, replacement: str) -> None:
+        self.request(
+            struct.pack('<BHB', 17, region.index, region.field == 'short')
+            + replacement.encode()
+        )
+
+    def clear_corrections(self) -> None:
+        self.request(b'\x10')
+
+    def resolve_correction_language(self, apply: bool) -> None:
+        self.request(bytes((19, apply)))
+
     def receive(self) -> None:
         self.deadline = time.monotonic() + self.response_timeout
         updated: dict[str, bytearray] = {}
+        regions: list[TranslationRegion] | None = None
+        language_name = ''
+        requested_language = ''
         rejection = None
         while True:
             (size,) = struct.unpack('<I', self.read(4))
@@ -380,8 +412,12 @@ class Session:
                 raise EmulatorError('invalid native emulator frame size')
             payload = self.read(size)
             if payload == b'\0':
+                self.requested_correction_language = requested_language
                 for display, pixels in updated.items():
                     self.frames[display] = bytes(pixels)
+                if regions is not None:
+                    self.correction_regions = regions
+                    self.correction_language_name = language_name
                 if rejection is not None:
                     raise RequestRejected(rejection)
                 return
@@ -465,6 +501,44 @@ class Session:
                         for p, w in zip(payload[2::2], payload[3::2], strict=True)
                     ),
                 )
+            elif payload[0] == 12:
+                regions = []
+                language_name = payload[1:].decode()
+            elif payload[0] == 13 and len(payload) >= 16 and regions is not None:
+                screen, short, index, left, top, right, bottom, short_length = (
+                    struct.unpack_from('<BBHHHHHH', payload, 1)
+                )
+                names = translation_message_ids()
+                text_offset = 16 + payload[15] * 8
+                if (
+                    index >= len(names)
+                    or screen >= len(self.target.displays)
+                    or short > 1
+                    or text_offset > len(payload)
+                ):
+                    raise EmulatorError('invalid native translation region')
+                regions.append(
+                    TranslationRegion(
+                        message=names[index],
+                        field='short' if short else 'text',
+                        original=payload[text_offset:].decode(),
+                        index=index,
+                        screen=screen,
+                        left=left,
+                        top=top,
+                        right=right,
+                        bottom=bottom,
+                        short_length=short_length,
+                        glyphs=[
+                            list(g)
+                            for g in struct.iter_unpack(
+                                '<HHHH', payload[16:text_offset]
+                            )
+                        ],
+                    )
+                )
+            elif payload[0] == 14:
+                requested_language = payload[1:].decode()
             else:
                 raise EmulatorError('unknown native emulator response')
 

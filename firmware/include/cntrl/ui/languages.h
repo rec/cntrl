@@ -5,6 +5,10 @@
 #include <cntrl/checked_array.h>
 #include "fonts.h"
 #include "messages.h"
+#ifdef CNTRL_EMULATOR
+#include <map>
+#include <string>
+#endif
 
 namespace cntrl::ui {
 // Read and validate one candidate without disturbing the visible catalogue.
@@ -18,6 +22,28 @@ public:
         }
     }
     const char *current() const { return tag_; }
+#ifdef CNTRL_EMULATOR
+    const char *current_name() const {
+        return active_.size ? reinterpret_cast<const char *>(active_.data + 32) : "English";
+    }
+    static const char *original(i18n::Message message, bool short_form) {
+        if (const char *value = pack_text(message, short_form)) return value;
+        const auto &definition = i18n::definitions[unsigned(message)];
+        return short_form ? definition.short_text : definition.text;
+    }
+    void correction(i18n::Message message, bool short_form, const std::string &value) {
+        if (correction_language_ != tag_) corrections_.clear();
+        correction_language_ = tag_;
+        i18n::lookup = lookup;
+        const unsigned field = unsigned(message) * 2 + short_form;
+        if (value.empty() || value == original(message, short_form)) corrections_.erase(field);
+        else corrections_[field] = value;
+    }
+    void clear_corrections() {
+        corrections_.clear();
+        i18n::lookup = active_.size ? lookup : nullptr;
+    }
+#endif
     bool available(const char *tag) const {
         if (!std::strcmp(tag, "en")) return true;
         char path[48]; filename(tag, path);
@@ -208,11 +234,25 @@ private:
     CNTRL_FLASH_ROUTINE(languages_lookup)
 #endif
     static const char *lookup(i18n::Message message, bool short_form) {
+#ifdef CNTRL_EMULATOR
+        if (visible_ && visible_->correction_language_ == visible_->tag_) {
+            const auto &overrides = visible_->corrections_;
+            const auto found = overrides.find(unsigned(message) * 2 + short_form);
+            if (found != overrides.end()) return found->second.c_str();
+        }
+#endif
+        return pack_text(message, short_form);
+    }
+    static const char *pack_text(i18n::Message message, bool short_form) {
         if (!visible_ || !visible_->active_.size) return nullptr;
         const unsigned index = static_cast<unsigned>(message);
         if (index >= i18n::message_count) return nullptr;
         unsigned at = u32(visible_->active_.data + header_size + index * 8 + (short_form ? 4 : 0));
         return at ? reinterpret_cast<const char *>(visible_->active_.data + at) : nullptr;
     }
+#ifdef CNTRL_EMULATOR
+    std::string correction_language_;
+    std::map<unsigned, std::string> corrections_;
+#endif
 };
 } // namespace cntrl::ui

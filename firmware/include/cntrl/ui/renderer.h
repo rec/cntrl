@@ -91,7 +91,11 @@ public:
             auto &line = pane.lines[row]; line.graphics = pane.graphics;
             if (!row) {
                 line.graphics.font = localized_face;
-                utf8::copy(line.text, sizeof(line.text), i18n::text(message.kind() == TextMessages::Kind::cue ? i18n::Message::cue : i18n::Message::warning));
+                const auto heading = message.kind() == TextMessages::Kind::cue ? i18n::Message::cue : i18n::Message::warning;
+                utf8::copy(line.text, sizeof(line.text), i18n::text(heading));
+#ifdef CNTRL_EMULATOR
+                line.translation_id = uint16_t(unsigned(heading) + 1);
+#endif
             }
             else {
                 unsigned used = 0;
@@ -126,6 +130,21 @@ public:
         reset_scroll_ = true;
     }
     void invalidate_language() { message_.reset(); message_revision_ = 0; invalidate(); }
+#ifdef CNTRL_EMULATOR
+    struct TranslationRegion {
+        Region bounds;
+        uint16_t id = 0;
+        bool short_form = false;
+        std::vector<Region> glyphs;
+    };
+    using TranslationRegions = std::array<TranslationRegion, max_lines>;
+    void capture_translations(bool enabled) {
+        if (enabled) translation_regions_.resize(screens_.size());
+        else translation_regions_.clear();
+        invalidate();
+    }
+    const std::vector<TranslationRegions> &translation_regions() const { return translation_regions_; }
+#endif
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_show)
 #endif
@@ -149,9 +168,17 @@ public:
         pane.graphics.font = localized_face; pane.graphics.size = 8; pane.graphics.asset = 0;
         auto &line = pane.lines[0]; line.graphics = pane.graphics; line.wrap = true;
         line.graphics.asset = i18n::identity(message);
+#ifdef CNTRL_EMULATOR
+        line.translation_id = uint16_t(line.graphics.asset);
+#endif
         if (line.graphics.asset && std::strlen(message) >= sizeof(line.text)) {
             const char *shorter = i18n::short_text(i18n::Message(line.graphics.asset - 1));
-            if (shorter && *shorter) message = shorter;
+            if (shorter && *shorter) {
+                message = shorter;
+#ifdef CNTRL_EMULATOR
+                line.translation_short = true;
+#endif
+            }
         }
         if (!utf8::copy(line.text, sizeof(line.text), message)) {
             while (std::strlen(line.text) > sizeof(line.text) - 4) utf8::erase_last(line.text);
@@ -232,6 +259,9 @@ private:
     unsigned reserved_ = 0;
     unsigned selected_count_ = 1, brightness_screen_ = 0, next_screen_ = 0;
     int drawing_ = -1, selected_ = -1;
+#ifdef CNTRL_EMULATOR
+    std::vector<TranslationRegions> translation_regions_;
+#endif
     unsigned column_ = 0, field_ = 0, letter_ = 0, progress_ = 0, duration_ = 0, animation_screen_ = 0, animation_column_ = 0, dim_column_ = 0;
     uint32_t started_ = 0;
     uint8_t brightness_ = 128, requested_brightness_ = 128;
@@ -245,6 +275,10 @@ private:
             full = std::strcmp(a.text, b.text) || std::memcmp(&a.graphics, &b.graphics, sizeof(a.graphics))
                 || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.fit != b.fit || a.stippled != b.stippled
                 || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color;
+#ifdef CNTRL_EMULATOR
+            if (!translation_regions_.empty())
+                full = full || a.translation_id != b.translation_id || a.translation_short != b.translation_short;
+#endif
         }
         if (full) {
             screen.damage = {0, 0, int(screen.viewport.width), int(screen.viewport.height)};
@@ -281,6 +315,21 @@ private:
         if (painting_region_.empty()) { drawing_ = -1; return; }
         column_ = unsigned(painting_region_.left); field_ = letter_ = 0;
         raster_.configure(v, painting_.graphics, painting_region_); backgrounds();
+#ifdef CNTRL_EMULATOR
+        if (!translation_regions_.empty()) {
+            auto &regions = translation_regions_[screen];
+            for (unsigned i = 0; i < max_lines; ++i) {
+                const auto &line = painting_.lines[i];
+                regions[i] = {};
+                if (line.translation_id && !i18n::definitions[line.translation_id - 1].count) {
+                    auto &region = regions[i];
+                    region.id = line.translation_id;
+                    region.short_form = line.translation_short;
+                    region.bounds = raster_.text_region(line, text_y(i), region.glyphs);
+                }
+            }
+        }
+#endif
         for (const auto &circle : painting_.circles) raster_.circle(circle);
         for (const auto &r : painting_.rectangles) raster_.rectangle(r.x, r.y, r.width, r.height, r.color, r.stippled);
         raster_.toggle(painting_.toggle); rendering_ = true; incoming_screen_ = -1;
@@ -338,7 +387,13 @@ private:
             if (choose()) continue;
             if (face == localized_face && line.graphics.asset) {
                 const char *shorter = i18n::short_text(static_cast<i18n::Message>(line.graphics.asset - 1));
-                if (shorter && *shorter) { utf8::copy(line.text, sizeof(line.text), shorter); if (choose()) continue; }
+                if (shorter && *shorter) {
+                    utf8::copy(line.text, sizeof(line.text), shorter);
+#ifdef CNTRL_EMULATOR
+                    line.translation_short = true;
+#endif
+                    if (choose()) continue;
+                }
             }
             char prefix[sizeof(line.text)]; utf8::copy(prefix, sizeof(prefix), line.text);
             while (*prefix) {

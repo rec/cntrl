@@ -7,16 +7,18 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from threading import Event
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
 pytest.importorskip('PySide6')
 pytest.importorskip('middy')
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from cntrl import crashes
 from cntrl.emulator import gui
 from cntrl.emulator.backend import MAX_REPLAY_ADVANCE_US, OutputEvent, Session
+from cntrl.emulator.corrections import TranslationRegion
 from cntrl.emulator.gui import ControllerCanvas, EmulatorWindow, display_rectangle
 from cntrl.emulator.host_midi import HostMidi
 from cntrl.emulator.layout import EmulatorLayout, Placement
@@ -63,6 +65,10 @@ class CapturedSession(Session):
         self.stock_firmware = False
         self.editing_name = False
         self.language = 'en'
+        self.correction_regions: list[TranslationRegion] = []
+        self.correction_language_name = 'English'
+        self.requested_correction_language = ''
+        self.preview_words: list[str] = []
         self.tooltip_context = ('', ())
         self.keys: list[int] = []
         self.mode = 'setup preview'
@@ -76,6 +82,20 @@ class CapturedSession(Session):
 
     def key(self, key: int) -> None:
         self.keys.append(key)
+
+    def capture_corrections(self, enabled: bool) -> None:
+        pass
+
+    def preview_correction(self, region: TranslationRegion, replacement: str) -> None:
+        self.preview_words.append(replacement)
+
+    def clear_corrections(self) -> None:
+        self.preview_words.clear()
+
+    def resolve_correction_language(self, apply: bool) -> None:
+        if apply:
+            self.language = self.requested_correction_language
+        self.requested_correction_language = ''
 
     def advance(self, time_us: int, *, replay: bool = False) -> None:
         self.time_us = time_us
@@ -365,6 +385,205 @@ def test_frame_pixels_keep_native_aspect_ratio_and_correct_rgb565_byte_order(
         255,
     )
     canvas.close()
+
+
+def test_correction_editor_overlays_native_pixels_and_consumes_keys(
+    application: QtWidgets.QApplication,
+) -> None:
+    session = CapturedSession()
+    region = TranslationRegion(
+        index=0,
+        message='patch_chooser',
+        field='text',
+        original='Patch Chooser',
+        screen=0,
+        left=2,
+        top=1,
+        right=6,
+        bottom=3,
+        glyphs=[[2, 1, 3, 3], [3, 1, 4, 3], [4, 1, 5, 3], [5, 1, 6, 3]],
+    )
+    session.correction_regions = [region]
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    window.show()
+    window.correction_mode.click()
+    wait_for(lambda: window.correction_regions == [region])
+    assert window.correction_count.text() == 'Corrections: 0'
+    assert not any(b.isEnabled() for b in window.correction_buttons)
+    button = QtCore.Qt.MouseButton.LeftButton
+    for width in (1000, 1150):
+        window.resize(width, 850)
+        area = window.canvas.caption_rect(region).toAlignedRect()
+        original = window.canvas.grab().toImage()
+        QtTest.QTest.mouseClick(window.canvas, button, pos=area.center())
+        edited = window.canvas.grab().toImage()
+        assert original.copy(area.adjusted(1, 1, -1, -1)) == edited.copy(
+            area.adjusted(1, 1, -1, -1)
+        )
+        QtTest.QTest.keyClick(window.correction_editor, QtCore.Qt.Key.Key_Escape)
+        assert not window.correction_editor.isVisible()
+    QtTest.QTest.mouseClick(window.canvas, button, pos=area.center())
+    window.correction_editor.setText('Choose patch')
+    QtTest.QTest.keyClick(window.correction_editor, QtCore.Qt.Key.Key_Return)
+    assert window.correction_count.text() == 'Corrections: 1'
+    assert all(b.isEnabled() for b in window.correction_buttons)
+    assert not session.inputs and not session.keys
+    window.correction_buttons[2].click()
+    assert window.correction_mode.isChecked()
+    assert window.correction_count.text() == 'Corrections: 0'
+    wait_for(window.close)
+
+
+def test_failed_export_preserves_a_quit_draft(
+    application: QtWidgets.QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    session = CapturedSession()
+    region = TranslationRegion(
+        index=0,
+        message='patch_chooser',
+        field='text',
+        original='Patch Chooser',
+        screen=0,
+        left=2,
+        top=1,
+        right=6,
+        bottom=3,
+    )
+    session.correction_regions = [region]
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    window.show()
+    window.correction_mode.click()
+    wait_for(lambda: window.correction_regions == [region])
+    assert window.open_correction(window.canvas.caption_rect(region).center())
+    window.correction_editor.setText('Choose patch')
+    destination = tmp_path / 'draft.toml'
+    monkeypatch.setattr(window, 'save_path', lambda *args: '')
+
+    def choose_save(message_box: QtWidgets.QMessageBox) -> int:
+        next(b for b in message_box.buttons() if b.text() == 'Save...').click()
+        return 0
+
+    monkeypatch.setattr(QtWidgets.QMessageBox, 'exec', choose_save)
+    assert not window.close()
+    assert window.correction_editor.text() == 'Choose patch'
+    assert window.correction_mode.isChecked()
+    assert window.correction_count.text() == 'Corrections: 0'
+    monkeypatch.setattr(window, 'save_path', lambda *args: str(destination))
+    wait_for(window.close)
+    assert 'replacement = "Choose patch"' in destination.read_text()
+
+
+def test_caption_edits_follow_the_field_across_display_updates(
+    application: QtWidgets.QApplication,
+) -> None:
+    session = CapturedSession()
+    first = TranslationRegion(
+        index=0,
+        message='patch_chooser',
+        field='text',
+        original='Same',
+        screen=0,
+        left=1,
+        top=1,
+        right=3,
+        bottom=3,
+    )
+    second = first.model_copy(
+        update={
+            'index': 1,
+            'message': 'pages_and_tools',
+            'left': 5,
+            'right': 7,
+        }
+    )
+    session.correction_regions = [first, second]
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    window.show()
+    window.correction_mode.click()
+    wait_for(lambda: window.correction_regions == [first, second])
+    assert not window.open_correction(
+        window.canvas.placement_rect(session.layout.displays['screen']).topLeft()
+    )
+    assert window.open_correction(window.canvas.caption_rect(second).center())
+    window.correction_editor.setText('Other')
+    window.correction_accept.click()
+    assert window.open_correction(window.canvas.caption_rect(first).center())
+    assert window.correction_editor.text() == 'Same'
+    window.correction_cancel.click()
+    moved = second.model_copy(update={'left': 2, 'right': 4})
+    session.correction_regions = [moved]
+    window.display_updates()
+    assert window.open_correction(window.canvas.caption_rect(moved).center())
+    assert window.correction_editor.text() == 'Other'
+    window.correction_editor.setText('Same')
+    window.correction_accept.click()
+    assert window.correction_count.text() == 'Corrections: 0'
+    wait_for(window.close)
+
+
+def test_language_prompt_preserves_batch_and_contribution_uses_browser(
+    application: QtWidgets.QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = CapturedSession()
+    session.language = 'fr'
+    session.correction_language_name = 'Français'
+    region = TranslationRegion(
+        index=0,
+        message='patch_chooser',
+        field='text',
+        original='Sélecteur de sons',
+        screen=0,
+        left=2,
+        top=1,
+        right=6,
+        bottom=3,
+    )
+    session.correction_regions = [region]
+    window = EmulatorWindow(session)
+    window.timer.stop()
+    window.show()
+    window.correction_mode.click()
+    wait_for(lambda: window.correction_regions == [region])
+    assert window.open_correction(window.canvas.caption_rect(region).center())
+    window.correction_editor.setText('Choisir un son')
+    window.correction_accept.click()
+    assert window.correction_count.text() == 'Corrections : 1'
+
+    def continue_editing(dialog: QtWidgets.QMessageBox) -> int:
+        dialog.defaultButton().click()
+        return 0
+
+    monkeypatch.setattr(QtWidgets.QMessageBox, 'exec', continue_editing)
+    session.requested_correction_language = 'de'
+    window.display_updates()
+    wait_for(lambda: not session.requested_correction_language)
+    assert window.language == 'fr'
+    assert window.correction_count.text() == 'Corrections : 1'
+
+    drafts: list[str] = []
+
+    def open_issue(url: QtCore.QUrl) -> bool:
+        drafts.append(url.toString())
+        return len(drafts) == 2
+
+    monkeypatch.setattr(QtGui.QDesktopServices, 'openUrl', open_issue)
+    monkeypatch.setattr(QtWidgets.QMessageBox, 'warning', lambda *args: None)
+    window.correction_buttons[0].click()
+    assert window.correction_mode.isChecked()
+    window.correction_buttons[0].click()
+    assert not window.correction_mode.isChecked()
+    queries = [parse_qs(urlsplit(u).query) for u in drafts]
+    assert [q['title'] for q in queries] == [
+        ['Translation correction for Français']
+    ] * 2
+    assert all('Choisir un son' in q['body'][0] for q in queries)
+    wait_for(window.close)
 
 
 @pytest.mark.parametrize('ratio', [1.0, 1.25, 1.5, 2.0, 3.0])
