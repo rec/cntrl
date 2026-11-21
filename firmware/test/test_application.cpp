@@ -122,6 +122,7 @@ struct PagePlatform : Hardware, cntrl::PanicOutputs, cntrl::midi::Sink, cntrl::K
         void cancel() {}
         void select(unsigned value) { index = value; }
         unsigned selected() const { return index; }
+        unsigned count() const { return 1; }
         void calibrate(bool) {}
         void status(const char *,bool,char *title,char *position,char *prompt) {
             std::strcpy(title,"Expression"); std::strcpy(position,position_text); std::strcpy(prompt,"Calibrate");

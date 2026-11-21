@@ -68,7 +68,7 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu, time };
+    enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu, time, calibrate };
     struct ViewState {
         unsigned index = 0, language = 0;
         Page page = Page::none;
@@ -226,7 +226,20 @@ public:
         for (auto &clock : clocks_) clock.poll(now_us);
         select_available_clock(); tap_.flash(now, 0);
     }
+    cntrl::Pane calibration_view(uint32_t now, const char *title, const char *position, const char *prompt) {
+        using R = cntrl::PageSettings;
+        dirty_ = false; refreshed_ = now;
+        cntrl::Pane pane;
+        pane.graphics.background = settings_[R::background]; pane.graphics.pad = uint8_t(settings_[R::padding]);
+        page_heading(pane, i18n::text(i18n::Message::calibrate));
+        line(pane, 1, title, vertical(28), vertical(24), localized_face, true);
+        line(pane, 2, position, vertical(54), vertical(24), localized_face, true);
+        line(pane, 3, prompt, vertical(80), vertical(28), localized_face, true);
+        return pane;
+    }
+
     bool due(uint32_t now) {
+        if (page_ == Page::calibrate) return dirty_ || uint32_t(now - refreshed_) >= 100;
         using R = cntrl::PageSettings;
         if (page_ == Page::pong) { pong.advance(now); return dirty_ || uint32_t(now - refreshed_) >= 20; }
         if (dirty_) return true;

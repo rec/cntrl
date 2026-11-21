@@ -492,6 +492,10 @@ def test_backup_keeps_older_history_raw_and_collects_unreferenced_assets(
 def test_failed_startup_still_allows_an_incomplete_raw_recovery_backup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    calibration = (
+        b'[configurable-1]\nname = "Boss EV-30, left"\nheel = 118\ntoe = 906\n'
+    )
+
     class Client(transport.SetupClient):
         def __init__(self) -> None:
             super().__init__(transport.SerialConnection(Path('/unused')))
@@ -501,7 +505,9 @@ def test_failed_startup_still_allows_an_incomplete_raw_recovery_backup(
                     'CNTRL ENTRY 1 0 D 0 636e74726c',
                     'CNTRL ENTRY 2 1 D 0 736574757073',
                     'CNTRL ENTRY 3 2 F 8 302e62696e',
-                    'CNTRL STORAGE END 3',
+                    f'CNTRL ENTRY 4 1 F {len(calibration)} '
+                    + b'calibration.toml'.hex(),
+                    'CNTRL STORAGE END 4',
                 ]
             )
 
@@ -514,6 +520,8 @@ def test_failed_startup_still_allows_an_incomplete_raw_recovery_backup(
             return next(self.storage)
 
         def download_state(self, path: str) -> bytes:
+            if path == '/cntrl/calibration.toml':
+                return calibration
             assert path == '/cntrl/setups/0.bin'
             return b'original'
 
@@ -525,6 +533,7 @@ def test_failed_startup_still_allows_an_incomplete_raw_recovery_backup(
     saved = tmp_path / 'recovery'
     backups.backup_pedal(saved, Path('/unused'))
     assert (saved / 'raw/cntrl/setups/0.bin').read_bytes() == b'original'
+    assert (saved / 'raw/cntrl/calibration.toml').read_bytes() == calibration
     with pytest.raises(ValueError, match='incomplete'):
         backups.check_conversion(saved)
     assert not (saved / 'backup-pending.toml').exists()

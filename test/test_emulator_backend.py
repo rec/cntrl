@@ -195,6 +195,66 @@ def backend_files(
     )
 
 
+def test_calibrate_page_saves_each_expression_jack(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    jacks = [f'configurable-{i}' for i in range(1, 4)]
+    target = files.target.model_copy(
+        update={
+            'controls': models.TargetControls(confirm='a', previous='b'),
+            'trs_ports': {j: ['expression'] for j in jacks},
+        }
+    )
+    setup = tmp_path / 'expression.bin'
+    write_bundle(
+        {
+            'expression': {
+                'pages': {'calibrate': {'type': 'calibrate'}},
+                'trs_ports': dict.fromkeys(jacks, 'expression'),
+            }
+        },
+        target,
+        setup,
+    )
+    executable = backend.build(
+        target, files.setup.parent / 'calibration-native', Path(__file__).parents[1]
+    )
+    storage = tmp_path / 'session'
+    calibration = storage / 'cntrl/calibration.toml'
+    calibration.parent.mkdir(parents=True)
+    calibration.write_text('[configurable-1]\nname = "Boss EV-30, left"\n')
+    with backend.Session(files.layout, target, executable, storage, setup) as session:
+
+        def press(button: str) -> None:
+            session.button(button, True)
+            session.advance(session.time_us + 60000)
+            session.button(button, False)
+            session.advance(session.time_us + 60000)
+
+        session.advance(1000000)
+        for jack, (heel, toe) in enumerate([(100, 900), (920, 120), (200, 820)]):
+            session.expression(jack, heel)
+            press('a')
+            session.advance(session.time_us + 200000)
+            press('a')
+            # Move smoothly so two samples in a bias pair see the same pedal.
+            for step in range(1, 9):
+                session.expression(jack, heel + (toe - heel) * step // 8)
+                session.advance(session.time_us + 10000)
+            session.advance(session.time_us + 200000)
+            press('a')
+            press('b')
+    saved = tomlkit.parse(calibration.read_text()).unwrap()
+    assert saved['configurable-1']['name'] == 'Boss EV-30, left'
+    assert saved['configurable-1']['heel'] == pytest.approx(100, abs=1)
+    assert saved['configurable-1']['toe'] == pytest.approx(900, abs=1)
+    assert saved['configurable-2']['heel'] == pytest.approx(920, abs=1)
+    assert saved['configurable-2']['toe'] == pytest.approx(120, abs=2)
+    assert saved['configurable-3']['heel'] == pytest.approx(200, abs=1)
+    assert saved['configurable-3']['toe'] == pytest.approx(820, abs=1)
+
+
 def test_mirrored_status_uses_captured_values_and_remains_frozen(
     backend_files: BackendFiles, tmp_path: Path
 ) -> None:
