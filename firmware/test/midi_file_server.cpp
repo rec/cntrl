@@ -16,6 +16,9 @@ struct FileSystem : TestFileSystem {
     bool rename(const char *from, const char *to) override {
         return !(failure == "rename" && std::strstr(from, ".cntrl-upload-")) && TestFileSystem::rename(from, to);
     }
+    bool remove(const char *name) override {
+        return !(failure == "cleanup" && std::strstr(name, ".cntrl-previous-")) && TestFileSystem::remove(name);
+    }
 };
 struct File : TestFile {
     std::string failure;

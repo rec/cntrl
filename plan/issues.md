@@ -71,14 +71,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     Explicit recording or streaming to disk would preserve replay fidelity
     while bounding live memory.
 
-13. **Asset upload reports failure after committing an overwrite
-    (code finding).** [FileTransfer END](../firmware/include/cntrl/file_transfer.h#L55)
-    installs the replacement before deleting the previous file. A cleanup
-    failure returns an error even though the new file is live. A caller can
-    report that the write failed or retry it needlessly. Expose a committed
-    outcome with cleanup pending, and test that a subsequent operation
-    recovers the leftover file.
-
 14. **Keyboard queue overflow silently discards editing actions
     (code finding).** [The ring](../firmware/include/cntrl/keyboard_input.h#L8)
     holds 31 pending keys and returns false when full. [The target callback](../cntrl/maker/morningstar/mc/firmware/patch_chooser/target.cpp#L110)
