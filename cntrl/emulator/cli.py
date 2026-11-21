@@ -1,6 +1,7 @@
 """Launch or replay a controller against the production native runtime."""
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from importlib import import_module
 from pathlib import Path
 from shutil import copyfile
@@ -11,6 +12,7 @@ import tyro
 from PIL import Image
 from pydantic import BaseModel, Field, model_validator
 
+from ..file_lock import writer_lock
 from ..localization import catalogue
 from ..patch_chooser import data_files, device_globals, languages
 from ..patch_chooser.models import Target
@@ -80,12 +82,7 @@ def prepare(
             update=dict(controller=controller, setup=setup, storage=storage)
         )
     assert command.setup is not None
-    if command.controller is None:
-        assert command.layout is not None
-        name = command.layout.stem
-    else:
-        name = command.controller
-    storage = command.storage or Path('.cntrl-emulator') / name
+    storage = preview_storage(command)
     if command.controller is not None:
         root = Path(__file__).resolve().parents[1]
         matches = [
@@ -195,7 +192,29 @@ def save(session: Session, directory: Path) -> None:
     (directory / 'trace.toml').write_text(tomlkit.dumps({'events': records}))
 
 
+def preview_storage(command: Emulate) -> Path:
+    if command.storage is not None:
+        return command.storage
+    if command.controller is not None:
+        return Path('.cntrl-emulator') / command.controller
+    assert command.layout is not None
+    return Path('.cntrl-emulator') / command.layout.stem
+
+
 def emulate(
+    command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
+) -> None:
+    # Live mirrors allocate their own fresh snapshot directory.
+    lock = (
+        writer_lock(preview_storage(command), operation='emulator session')
+        if command.port is None
+        else nullcontext()
+    )
+    with lock:
+        emulate_locked(command, compile_setup)
+
+
+def emulate_locked(
     command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
 ) -> None:
     layout, target, setup, storage = prepare(command, compile_setup)

@@ -7,6 +7,7 @@ import pytest
 import tomlkit
 import tyro
 
+from cntrl.file_lock import writer_lock
 from cntrl.patch_chooser import binary_format, data_files, global_config, setup_sync
 
 
@@ -141,7 +142,7 @@ def test_recovery_restores_sources_and_base_after_partial_publication(
     )
     with pytest.raises(ValueError, match='interrupted apply'):
         setup_sync.check_pending(root)
-    with setup_sync.writer_lock(root):
+    with writer_lock(root, operation='setup sync operation'):
         with pytest.raises(ValueError, match='another setup sync operation'):
             setup_sync.recover(root / 'pending.toml')
         assert source.read_bytes() == b'brightness=20\n'

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from .. import build, flash, importing, qualify, upload
 from ..emulator.cli import Emulate, emulate
+from ..file_lock import writer_lock
 from ..maker.morningstar.mc import font_coverage
 from . import (
     backups,
@@ -382,7 +383,7 @@ def run_setup(
         history.run(command)
         return
     lock = (
-        setup_sync.writer_lock(setup_sync.store(command))
+        writer_lock(setup_sync.store(command), operation='setup sync operation')
         if isinstance(command, Copy)
         else nullcontext()
     )
