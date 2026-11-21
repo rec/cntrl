@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from cntrl.fonts.bitmap import BitmapRaster
 from cntrl.maker.morningstar.mc import build_font_metrics
 from cntrl.maker.morningstar.mc.export_fonts import EmbeddedRaster
-from cntrl.maker.morningstar.mc.native_raster import NativeRaster
 from cntrl.patch_chooser import compiler, display, graphics, models
 from scripts import native_tests
 
@@ -171,11 +171,11 @@ def test_unknown_font_is_rejected() -> None:
 
 @pytest.mark.parametrize('family', ['ComicSansMS'])
 def test_bitmap_scaling_doubles_columns_without_changing_rows(family: str) -> None:
-    source = build_font_metrics.Options().source / f'st7735_t3_font_{family}.c'
-    normal = NativeRaster(source, family, 1.0)
-    wide = NativeRaster(source, family, 2.0)
-    for letter in 'AgW':
-        first, second = normal.glyph(24, ord(letter)), wide.glyph(24, ord(letter))
+    resource = Path(__file__).parents[1] / 'font_sources' / f'{family}.cfont'
+    normal = BitmapRaster(resource)
+    wide = BitmapRaster(resource, 2.0)
+    for size, letter in ((s, c) for s in normal.tables for c in 'AgW'):
+        first, second = normal.glyph(size, ord(letter)), wide.glyph(size, ord(letter))
         assert second.width == 2 * first.width
         assert (second.height, second.top) == (first.height, first.top)
         assert second.left == 2 * first.left
@@ -193,14 +193,13 @@ def test_bitmap_scaling_doubles_columns_without_changing_rows(family: str) -> No
                     assert actual == expected
 
 
-@pytest.mark.parametrize('family', ['ComicSansMS'])
-def test_exported_native_resources_preserve_scaled_glyphs_and_runs(family: str) -> None:
-    from cntrl.fonts.bitmap import BitmapRaster
-
-    source = build_font_metrics.Options().source / f'st7735_t3_font_{family}.c'
+def test_exported_native_resources_preserve_scaled_glyphs_and_runs(
+    sdk_font_source: Path,
+) -> None:
+    family = 'ComicSansMS'
     resource = Path(__file__).parents[1] / 'font_sources' / f'{family}.cfont'
     for scale in (1.0, 1.25, 2.0):
-        original = EmbeddedRaster(source, family, scale)
+        original = EmbeddedRaster(sdk_font_source, family, scale)
         portable = BitmapRaster(resource, scale)
         for size in portable.tables:
             for code in range(32, 127):

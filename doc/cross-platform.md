@@ -10,6 +10,11 @@ reccy revision and installs its locked source during the isolated wheel check.
 These two dependency sources use HTTPS so clean CI runners do not need SSH
 credentials. This repository's Git origin remains on SSH.
 
+An installed wheel can compile setups and song libraries using an exported
+controller target and its font resources. It can also transfer content to a
+pedal. These workflows do not need a vendor SDK. The desktop emulator uses a
+source checkout and the host C++ compiler. See [emulator setup](emulator.md).
+
 Provision FreeType 2.14.3 after syncing dependencies so font pixels match the
 committed assets. This uses CMake and the host compiler, downloads digest-checked
 FreeType/HarfBuzz sources, and installs the library into the current environment
@@ -50,6 +55,12 @@ Native programs are collected as pytest cases or run by their authoring-fixture
 tests. A session-scoped builder compiles each shared source once with the same
 strict compiler flags; core LFO, pickup and application scenarios are not rerun
 for every compiled configuration. There is no separate shared native test runner.
+
+Plain pytest works without the Morningstar Teensy SDK. The two font checks that
+compare against the pinned display library report a skip when its sources are
+absent. Full qualification of the in-tree Morningstar MC target provisions
+the SDK and enables `--require-morningstar-sdk`, which makes a missing SDK an
+error. See the [Morningstar build instructions](../cntrl/maker/morningstar/mc/cross-platform.md).
 
 Type checking can target another host without that operating system installed,
 for example `uv run --no-sync ty check --python-platform win32 cntrl`. This checks
