@@ -45,14 +45,11 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     `cntrl font-coverage`, setup creation, history, selection, listing, rotation,
     deletion, copy, download and storage-root recovery, target adapter
     commands, song library copy and download, emulator startup and replay,
-    backup, and setup sync preview, apply and recovery classify known
-    failures at their command boundaries. USB reconnection distinguishes
-    serial I/O failures from other host errors, and the shared setup client classifies
-    malformed replies, rejected transfers and missing device files. End-of-input
-    cancellation is handled at the affected interactive prompts. Audit
-    the remaining broad catches in restore, verification, conversion and
-    compiled setup decoding. Those catches can still hide programming
-    errors from the crash reporter.
+    backup, restore, verification, conversion, and setup sync preview,
+    apply and recovery classify known failures at their command boundaries.
+    The dispatcher no longer catches bare `OSError` or `ValueError`.
+    Audit the remaining broad catches around compiled setup decoding,
+    including history comparison and setup download.
 
 ## P2 | Distribution and release risks to verify
 

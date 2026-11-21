@@ -7,6 +7,7 @@ import struct
 import sys
 from contextlib import nullcontext
 from hashlib import sha256
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
@@ -19,6 +20,7 @@ from tomlkit.exceptions import ParseError
 from ..localization import catalogue
 from . import (
     binary_format,
+    compiler_inputs,
     compiler_wire,
     data_files,
     device_globals,
@@ -112,51 +114,56 @@ class BackupManifest(BaseModel, frozen=True):
 
 
 def check_conversion(directory: Path, *, raw_recovery: bool = False) -> None:
-    if (directory / 'backup-pending.toml').exists():
-        raise ValueError(f'{directory}: interrupted backup')
-    if (directory / 'conversion-pending.toml').exists():
-        raise ValueError(
+    if _exists(directory / 'backup-pending.toml'):
+        raise BackupError(f'{directory}: interrupted backup')
+    if _exists(directory / 'conversion-pending.toml'):
+        raise BackupError(
             f'{directory}: interrupted conversion; retain the original backup'
         )
     report = directory / 'conversion.toml'
-    if not report.exists():
+    if not _exists(report):
         report = directory / 'backup.toml'
-        if raw_recovery and not report.exists():
-            raise ValueError(f'{directory}: missing raw recovery backup manifest')
-        if report.exists():
-            backup = BackupManifest.model_validate(
-                tomlkit.parse(report.read_text()).unwrap()
-            )
+        present = _exists(report)
+        if raw_recovery and not present:
+            raise BackupError(f'{directory}: missing raw recovery backup manifest')
+        if present:
+            backup = _read_model(report, BackupManifest)
             if not backup.complete and not (raw_recovery and backup.raw_state):
-                raise ValueError(
+                raise BackupError(
                     f'{directory}: incomplete backup; retain raw files for recovery'
                 )
             for record in backup.files:
-                path = (directory / record.path).resolve()
+                with sync_files():
+                    path = (directory / record.path).resolve()
+                    root = directory.resolve()
                 if (
-                    not path.is_relative_to(directory.resolve())
-                    or not path.is_file()
-                    or sha256(path.read_bytes()).hexdigest() != record.sha256
+                    not path.is_relative_to(root)
+                    or not _is_file(path)
+                    or sha256(read_sync_file(path)).hexdigest() != record.sha256
                 ):
-                    raise ValueError(f'{record.path}: backup file checksum differs')
+                    raise BackupError(f'{record.path}: backup file checksum differs')
         return
-    conversion = Conversion.model_validate(tomlkit.parse(report.read_text()).unwrap())
+    conversion = _read_model(report, Conversion)
     if not conversion.complete:
-        raise ValueError(f'{directory}: incomplete conversion')
+        raise BackupError(f'{directory}: incomplete conversion')
     for record in conversion.files:
-        path = (directory / record.path).resolve()
-        if not path.is_relative_to(directory.resolve()) or not path.is_file():
-            raise ValueError(f'{record.path}: converted file missing or outside backup')
-        if sha256(path.read_bytes()).hexdigest() != record.destination_sha256:
-            raise ValueError(f'{record.path}: converted file checksum differs')
+        with sync_files():
+            path = (directory / record.path).resolve()
+            root = directory.resolve()
+        if not path.is_relative_to(root) or not _is_file(path):
+            raise BackupError(
+                f'{record.path}: converted file missing or outside backup'
+            )
+        if sha256(read_sync_file(path)).hexdigest() != record.destination_sha256:
+            raise BackupError(f'{record.path}: converted file checksum differs')
 
 
 def recording_high_water(directory: Path) -> int:
     """Retain recording-name uniqueness without restoring a stale counter sector."""
     minimum = 0
     counter = directory / 'starts.toml'
-    if counter.exists():
-        data = counter.read_bytes()
+    if _exists(counter):
+        data = read_sync_file(counter)
         valid = False
         for i in range(2):
             record = data[i * 512 : (i + 1) * 512]
@@ -179,8 +186,8 @@ def recording_high_water(directory: Path) -> int:
                 minimum = max(minimum, count)
                 valid = True
         if not valid:
-            raise ValueError(f'{counter}: no valid startup counter record')
-    for path in (directory / 'setups/midi').glob('*.mid'):
+            raise BackupError(f'{counter}: no valid startup counter record')
+    for path in _glob(directory / 'setups/midi', '*.mid'):
         parts = path.stem.split('-')
         if len(parts) == 2 and all(p.isascii() and p.isdigit() for p in parts):
             count = int(parts[0])
@@ -194,21 +201,15 @@ def artifact_format(path: Path) -> str:
         return 'TOML'
     if path.suffix == '.txt':
         return 'text'
-    with path.open('rb') as source:
-        return binary_format.identify(source.read(binary_format.HEADER.size))
+    with sync_files(), path.open('rb') as source:
+        header = source.read(binary_format.HEADER.size)
+    return binary_format.identify(header)
 
 
 def backup_pedal(
     directory: Path, port: Path, connection: transport.SerialConnection | None = None
 ) -> None:
-    try:
-        directory.mkdir(parents=True)
-    except FileExistsError as error:
-        raise BackupDirectoryExists(
-            error.errno, error.strerror, error.filename
-        ) from error
-    except OSError as error:
-        raise SyncFileError(str(error)) from error
+    _create_directory(directory)
     write_record(directory / 'backup-pending.toml', {'complete': False})
     setups = directory / 'setups'
     with sync_files():
@@ -612,11 +613,69 @@ def _write_file(path: Path, data: bytes) -> None:
         path.write_bytes(data)
 
 
-def _read_model[Document: BaseModel](path: Path, model: type[Document]) -> Document:
+def _create_directory(path: Path) -> None:
+    try:
+        path.mkdir(parents=True)
+    except FileExistsError as error:
+        raise BackupDirectoryExists(
+            error.errno, error.strerror, error.filename
+        ) from error
+    except OSError as error:
+        raise SyncFileError(str(error)) from error
+
+
+def _exists(path: Path) -> bool:
+    with sync_files():
+        return path.exists()
+
+
+def _is_file(path: Path) -> bool:
+    with sync_files():
+        return path.is_file()
+
+
+def _glob(path: Path, pattern: str) -> list[Path]:
+    with sync_files():
+        return sorted(path.glob(pattern))
+
+
+def _read_text(path: Path) -> str:
     data = read_sync_file(path)
     try:
-        return model.model_validate(tomlkit.parse(data.decode()).unwrap())
-    except (UnicodeDecodeError, ParseError, ValidationError) as error:
+        return data.decode()
+    except UnicodeDecodeError as error:
+        raise BackupError(f'{path}: {error}') from error
+
+
+def _read_model[Document: BaseModel](path: Path, model: type[Document]) -> Document:
+    try:
+        return model.model_validate(tomlkit.parse(_read_text(path)).unwrap())
+    except (ParseError, ValidationError) as error:
+        raise BackupError(f'{path}: {error}') from error
+
+
+def _asset_key(path: Path) -> int:
+    try:
+        return int(path.stem, 16)
+    except ValueError as error:
+        raise BackupError(f'{path}: invalid asset checksum in filename') from error
+
+
+def _read_fonts(directory: Path) -> dict[int, bytes]:
+    return {
+        _asset_key(p): read_sync_file(p)
+        for p in _glob(directory / 'setups/fonts', '*.cfont')
+    }
+
+
+def read_target(path: Path) -> models.Target:
+    try:
+        document = compiler_inputs.read_document(path)
+    except (OSError, UnicodeDecodeError, JSONDecodeError, ParseError) as error:
+        raise BackupError(f'{path}: {error}') from error
+    try:
+        return models.Target.model_validate(document)
+    except ValidationError as error:
         raise BackupError(f'{path}: {error}') from error
 
 
@@ -632,14 +691,13 @@ def restore_setups(
     minimum_starts = recording_high_water(directory)
     overlay = directory / 'device-globals.toml'
     restored_globals = (
-        device_globals.load(overlay.read_bytes()) if overlay.exists() else None
+        device_globals.load_saved(overlay, read_sync_file(overlay))
+        if _exists(overlay)
+        else None
     )
     folder = directory / 'setups'
-    selected = (directory / 'selected.txt').read_bytes().decode()
-    fonts = {
-        int(f.stem, 16): f.read_bytes()
-        for f in sorted((folder / 'fonts').glob('*.cfont'))
-    }
+    selected = _read_text(directory / 'selected.txt')
+    fonts = _read_fonts(directory)
     setups = {
         n: resolved.prepare_restore(
             d,
@@ -663,7 +721,7 @@ def restore_setups(
         for n, r, d in read_history_binaries(directory)
     ]
     library = songs.upgrade(
-        (directory / 'songs.bin').read_bytes(),
+        read_sync_file(directory / 'songs.bin'),
         fonts,
         target=target,
         preserve_memory_estimates=preserve_memory_estimates,
@@ -671,19 +729,19 @@ def restore_setups(
     undo_path = directory / 'songs-undo.bin'
     undo = (
         songs.upgrade(
-            undo_path.read_bytes(),
+            read_sync_file(undo_path),
             fonts,
             target=target,
             preserve_memory_estimates=preserve_memory_estimates,
         )
-        if undo_path.exists()
+        if _exists(undo_path)
         else b''
     )
     validate_assets(
         directory, [*setups.values(), *(d for _, _, d in snapshots)], [library, undo]
     )
     if selected and selected not in setups:
-        raise ValueError(f'{selected}: saved selection is absent from the backup')
+        raise BackupError(f'{selected}: saved selection is absent from the backup')
     with (
         nullcontext(connection)
         if connection is not None
@@ -696,16 +754,18 @@ def restore_setups(
         )
         backup_pedal(recovery, port, connection)
         current_overlay = recovery / 'device-globals.toml'
-        if restored_globals is None and current_overlay.exists():
-            restored_globals = device_globals.load(current_overlay.read_bytes())
+        if restored_globals is None and _exists(current_overlay):
+            restored_globals = device_globals.load_saved(
+                current_overlay, read_sync_file(current_overlay)
+            )
         language_packs = {
-            p.stem: p.read_bytes()
-            for p in sorted((recovery / 'raw/cntrl/languages').glob('*.bin'))
+            p.stem: read_sync_file(p)
+            for p in _glob(recovery / 'raw/cntrl/languages', '*.bin')
         }
         language_packs.update(
             {
-                p.stem: p.read_bytes()
-                for p in sorted((directory / 'raw/cntrl/languages').glob('*.bin'))
+                p.stem: read_sync_file(p)
+                for p in _glob(directory / 'raw/cntrl/languages', '*.bin')
             }
         )
         if language_packs:
@@ -713,13 +773,11 @@ def restore_setups(
 
             for tag, pack in language_packs.items():
                 if inspect(pack).language != tag:
-                    raise ValueError(f'{tag}: language pack tag differs from filename')
-        snapshot = BackupManifest.model_validate(
-            tomlkit.parse((recovery / 'backup.toml').read_text()).unwrap()
-        )
+                    raise BackupError(f'{tag}: language pack tag differs from filename')
+        snapshot = _read_model(recovery / 'backup.toml', BackupManifest)
         active_ready = active_ready and snapshot.complete
-        if not active_ready and not (directory / 'conversion.toml').exists():
-            raise ValueError(
+        if not active_ready and not _exists(directory / 'conversion.toml'):
+            raise BackupError(
                 'recovery installation requires an offline converted backup'
             )
         check_conversion(recovery, raw_recovery=not active_ready)
@@ -736,7 +794,7 @@ def restore_setups(
                     or old.modified != revision.modified
                     or resolved.export(original) != resolved.export(data)
                 ):
-                    raise ValueError(
+                    raise BackupError(
                         f'{name}/{revision.number}: history conflicts with device; '
                         f'backup: {recovery}'
                     )
@@ -746,14 +804,9 @@ def restore_setups(
         existing = setup_bundle.unpack(current_bundle) if current_bundle else {}
         combined = setup_bundle.reindex(existing | setups)
         template_path = directory / 'bundle.bin'
-        template = (
-            template_path.read_bytes() if template_path.exists() else current_bundle
-        )
-        if (
-            current_bundle
-            and template_path.exists()
-            and existing.keys() - setups.keys()
-        ):
+        has_template = _exists(template_path)
+        template = read_sync_file(template_path) if has_template else current_bundle
+        if current_bundle and has_template and existing.keys() - setups.keys():
             old_metadata = (
                 binary_format.unpack(current_bundle, binary_format.Kind.bundle).records[
                     1:
@@ -767,7 +820,7 @@ def restore_setups(
                 else []
             )
             if old_metadata != new_metadata:
-                raise ValueError(
+                raise BackupError(
                     'cannot merge different opaque bundle metadata; '
                     f'original retained in {recovery}'
                 )
@@ -775,10 +828,10 @@ def restore_setups(
         if undo:
             undo = songs.reindex(undo, list(combined))
         bundle_data = b''
-        if not combined and template_path.exists():
+        if not combined and has_template:
             bundle_data = template
             if setup_bundle.unpack(bundle_data):
-                raise ValueError(
+                raise BackupError(
                     'backup bundle contains setups absent from its setup files'
                 )
         if combined:
@@ -808,27 +861,27 @@ def restore_setups(
             | set(history.reserved_numbers(recovery))
         )
         report_path = recovery / 'storage.toml'
-        if report_path.exists():
-            report = storage_info.StorageInfo.model_validate(
-                tomlkit.parse(report_path.read_text()).unwrap()
-            )
+        if _exists(report_path):
+            report = _read_model(report_path, storage_info.StorageInfo)
             lengths = [len(bundle_data) + 100] * 2
             lengths.extend([len(library) + 28, len(library) + 28, len(undo) + 28])
             lengths.extend(len(history.pack_revision(n, r, d)) for n, r, d in snapshots)
             stored = {e.path for e in report.entries if not e.directory}
-            for path in (directory / 'raw/cntrl/source').glob('*.bin'):
+            for path in _glob(directory / 'raw/cntrl/source', '*.bin'):
                 if f'/cntrl/source/{path.name}' not in stored:
-                    lengths.append(path.stat().st_size)
+                    with sync_files():
+                        lengths.append(path.stat().st_size)
             lengths.extend(len(p) for p in language_packs.values())
             for kind, pattern in (
                 ('fonts', '*.cfont'),
                 ('movies', '*.cnsa'),
                 ('midi', '*'),
             ):
-                for path in (folder / kind).glob(pattern):
+                for path in _glob(folder / kind, pattern):
                     name = f'{path.stem}.bin' if kind == 'movies' else path.name
                     if f'/cntrl/{kind}/{name}' not in stored:
-                        lengths.append(path.stat().st_size)
+                        with sync_files():
+                            lengths.append(path.stat().st_size)
             # Includes both activation slots, selection journals, directory
             # clusters, and a replacement/upload slot while journals advance.
             directories = 16 + len(combined) * 2 + len(reservations) + len(snapshots)
@@ -839,13 +892,14 @@ def restore_setups(
             check_deployment_space(report, lengths + [96, 96, 24, 24], directories)
         for key, data in fonts.items():
             client.copy_font(key, data)
-        for p in sorted((folder / 'movies').glob('*.cnsa')):
-            client.copy_movie(p.read_bytes())
-        for p in sorted((folder / 'midi').glob('*')):
-            client.copy_midi(p.name, p.read_bytes(), overwrite=False)
-        for p in sorted((directory / 'raw/cntrl/source').glob('*.bin')):
-            source_archive.read(p.read_bytes())
-            client.copy_source(p.stem, p.read_bytes())
+        for p in _glob(folder / 'movies', '*.cnsa'):
+            client.copy_movie(read_sync_file(p))
+        for p in _glob(folder / 'midi', '*'):
+            client.copy_midi(p.name, read_sync_file(p), overwrite=False)
+        for p in _glob(directory / 'raw/cntrl/source', '*.bin'):
+            content = read_sync_file(p)
+            source_archive.read(content)
+            client.copy_source(p.stem, content)
         if minimum_starts:
             client.ok(f'CNTRL STARTS ENSURE {minimum_starts}')
         if active_ready:
@@ -871,7 +925,7 @@ def restore_setups(
             encoded = data_files.validate_name(name).encode('ascii').hex()
             response = client.request(f'CNTRL HISTORY RESERVE {encoded} {number}')
             if response not in ('CNTRL OK', 'CNTRL EXISTS'):
-                raise ValueError(
+                raise BackupError(
                     f'{name}/{number}: could not restore history reservation'
                 )
         if undo:
@@ -884,7 +938,7 @@ def restore_setups(
         if selected:
             client.select(selected)
             if client.current() != selected:
-                raise ValueError('restored selection does not match the backup')
+                raise BackupError('restored selection does not match the backup')
             print(f'Selected: {selected}', flush=True)
         if restored_globals is not None:
             client.replace_globals(restored_globals)
@@ -901,12 +955,9 @@ def verify_after_flashing(
     connection: transport.SerialConnection | None = None,
 ) -> None:
     check_conversion(directory)
-    selected = (directory / 'selected.txt').read_bytes().decode()
-    catalogue = (directory / 'catalogue.txt').read_bytes().decode()
-    fonts = {
-        int(f.stem, 16): f.read_bytes()
-        for f in sorted((directory / 'setups/fonts').glob('*.cfont'))
-    }
+    selected = _read_text(directory / 'selected.txt')
+    expected_catalogue = _read_text(directory / 'catalogue.txt')
+    fonts = _read_fonts(directory)
     setups = {
         n: resolved.prepare_restore(
             d,
@@ -917,7 +968,7 @@ def verify_after_flashing(
         for n, d in read_setup_binaries(directory).items()
     }
     library = songs.upgrade(
-        (directory / 'songs.bin').read_bytes(),
+        read_sync_file(directory / 'songs.bin'),
         fonts,
         target=target,
         preserve_memory_estimates=preserve_memory_estimates,
@@ -930,50 +981,50 @@ def verify_after_flashing(
         client = transport.SetupClient(connection)
         status = client.request('CNTRL STATUS')
         overlay = directory / 'device-globals.toml'
-        if overlay.exists() and client.global_settings() != device_globals.load(
-            overlay.read_bytes()
+        if _exists(overlay) and client.global_settings() != device_globals.load_saved(
+            overlay, read_sync_file(overlay)
         ):
-            raise ValueError('device-global settings differ from the backup')
+            raise BackupError('device-global settings differ from the backup')
         parts = status.split()
         if len(parts) < 5 or parts[:3] != [
             'CNTRL',
             'READY',
             str(compiler_wire.DOCUMENT_VERSION),
         ]:
-            raise ValueError(
+            raise BackupError(
                 f'expected READY format {compiler_wire.DOCUMENT_VERSION}; '
                 f'received {status}'
             )
         actual = client.current()
         if actual != selected:
-            raise ValueError(
+            raise BackupError(
                 f'selection differs: expected {selected!r}, received {actual!r}'
             )
         actual_catalogue = '\n'.join(f'{e.name} {e.valid}' for e in client.catalogue())
-        if actual_catalogue != catalogue:
-            raise ValueError(
-                f'setup catalogue differs:\nExpected:\n{catalogue}\n'
+        if actual_catalogue != expected_catalogue:
+            raise BackupError(
+                f'setup catalogue differs:\nExpected:\n{expected_catalogue}\n'
                 f'Received:\n{actual_catalogue}'
             )
         for name, data in setups.items():
             if binary_format.wrap(client.download(name)) != binary_format.wrap(data):
-                raise ValueError(f'{name}: setup binary differs from the backup')
+                raise BackupError(f'{name}: setup binary differs from the backup')
             print(f'{name}: verified identical', flush=True)
         for key, data in fonts.items():
             if client.download_font(key) != data:
-                raise ValueError(f'{key:08x}: font differs from the backup')
-        for p in sorted((directory / 'setups/movies').glob('*.cnsa')):
-            if client.download_movie(int(p.stem, 16)) != p.read_bytes():
-                raise ValueError(f'{p.name}: movie differs from the backup')
-        for p in sorted((directory / 'setups/midi').glob('*')):
-            if client.download_midi(p.name) != p.read_bytes():
-                raise ValueError(f'{p.name}: MIDI file differs from the backup')
-        for p in sorted((directory / 'raw/cntrl/source').glob('*.bin')):
-            if client.download_source(p.stem) != p.read_bytes():
-                raise ValueError(f'{p.name}: source archive differs from the backup')
-        for p in sorted((directory / 'raw/cntrl/languages').glob('*.bin')):
-            if client.download_language(p.stem) != p.read_bytes():
-                raise ValueError(f'{p.name}: language pack differs from the backup')
+                raise BackupError(f'{key:08x}: font differs from the backup')
+        for p in _glob(directory / 'setups/movies', '*.cnsa'):
+            if client.download_movie(_asset_key(p)) != read_sync_file(p):
+                raise BackupError(f'{p.name}: movie differs from the backup')
+        for p in _glob(directory / 'setups/midi', '*'):
+            if client.download_midi(p.name) != read_sync_file(p):
+                raise BackupError(f'{p.name}: MIDI file differs from the backup')
+        for p in _glob(directory / 'raw/cntrl/source', '*.bin'):
+            if client.download_source(p.stem) != read_sync_file(p):
+                raise BackupError(f'{p.name}: source archive differs from the backup')
+        for p in _glob(directory / 'raw/cntrl/languages', '*.bin'):
+            if client.download_language(p.stem) != read_sync_file(p):
+                raise BackupError(f'{p.name}: language pack differs from the backup')
         listed: dict[str, list[history.Revision]] = {}
         for name, revision, data in read_history_binaries(directory):
             _, expected = history.normalize_revision(
@@ -992,18 +1043,18 @@ def verify_after_flashing(
             )
             actual_data = client.download(name, revision.number)
             if binary_format.wrap(actual_data) != binary_format.wrap(expected):
-                raise ValueError(
+                raise BackupError(
                     f'{name}/{revision.number}: history differs from the backup'
                 )
             if actual_revision != revision.model_copy(
                 update={'length': len(actual_data)}
             ):
-                raise ValueError(
+                raise BackupError(
                     f'{name}/{revision.number}: '
                     'history metadata differs from the backup'
                 )
         if songs.download(client) != library:
-            raise ValueError('song library differs from the backup')
+            raise BackupError('song library differs from the backup')
     print(
         f'{status}\nSelection, setups, history, assets and songs verified unchanged.',
         flush=True,
@@ -1012,14 +1063,15 @@ def verify_after_flashing(
 
 def read_setup_binaries(directory: Path) -> dict[str, bytes]:
     folder = directory / 'setups'
-    if not folder.is_dir():
-        raise ValueError(f'{folder}: missing backup setup directory')
-    setups = {s.stem: s.read_bytes() for s in sorted(folder.glob('*.bin'))}
+    with sync_files():
+        if not folder.is_dir():
+            raise BackupError(f'{folder}: missing backup setup directory')
+    setups = {s.stem: read_sync_file(s) for s in _glob(folder, '*.bin')}
     for name, data in setups.items():
         try:
             resolved.graph_offset(resolved.upgrade(data))
-        except ValueError as error:
-            raise ValueError(f'{folder / name}: {error}') from error
+        except binary_format.DocumentFormatError as error:
+            raise BackupError(f'{folder / name}: {error}') from error
     return setups
 
 
@@ -1030,16 +1082,16 @@ def validate_assets(
     needed: set[str] = set()
     overlay_path = directory / 'device-globals.toml'
     language = (
-        device_globals.load(overlay_path.read_bytes()).language
-        if overlay_path.exists()
+        device_globals.load_saved(overlay_path, read_sync_file(overlay_path)).language
+        if _exists(overlay_path)
         else None
     )
     if language is not None and language != 'en':
         from ..localization.catalogue import inspect
 
         pack = directory / 'raw/cntrl/languages' / f'{language}.bin'
-        if not pack.is_file() or inspect(pack.read_bytes()).language != language:
-            raise ValueError(
+        if not _is_file(pack) or inspect(read_sync_file(pack)).language != language:
+            raise BackupError(
                 f'{language}: language pack is absent or invalid in the backup'
             )
     sources: set[str] = set()
@@ -1052,27 +1104,33 @@ def validate_assets(
     for data in setups:
         if (source := source_archive.identifier(data)) is not None:
             sources.add(source)
-        settings = models.Setup.model_validate(
-            tomlkit.parse(resolved.export(data)).unwrap()
-        )
+        source_data = tomlkit.parse(resolved.export(data)).unwrap()
+        try:
+            settings = models.Setup.model_validate(source_data)
+        except ValidationError as error:
+            raise binary_format.DocumentFormatError(
+                f'invalid compiled setup asset references: {error}'
+            ) from error
         needed.update(settings.fonts.values())
         needed.update(settings.splash_movie + settings.idle_movie)
-        needed.update(f'midi/{n}' for n in midi_assets.referenced({'setup': data}))
+        needed.update(f'midi/{n}' for n in midi_assets.filenames(source_data))
     for source in sources:
         archive = directory / 'raw/cntrl/source' / f'{source}.bin'
-        if not archive.is_file():
-            raise ValueError(
+        if not _is_file(archive):
+            raise BackupError(
                 f'{source}: required source archive is absent from the backup'
             )
-        content = archive.read_bytes()
+        content = read_sync_file(archive)
         if sha256(content).hexdigest() != source:
-            raise ValueError(f'{source}: source archive checksum mismatch')
+            raise BackupError(f'{source}: source archive checksum mismatch')
         source_archive.read(content)
-    asset_root = (directory / 'setups').resolve()
+    with sync_files():
+        asset_root = (directory / 'setups').resolve()
     for name in sorted(needed):
-        path = (asset_root / name).resolve()
-        if not path.is_relative_to(asset_root) or not path.is_file():
-            raise ValueError(f'{name}: required asset is absent from the backup')
+        with sync_files():
+            path = (asset_root / name).resolve()
+        if not path.is_relative_to(asset_root) or not _is_file(path):
+            raise BackupError(f'{name}: required asset is absent from the backup')
 
 
 def check_deployment_space(
@@ -1080,11 +1138,11 @@ def check_deployment_space(
 ) -> None:
     """Budget staging without counting retained committed files as reclaimable."""
     if report.free_bytes is None:
-        raise ValueError('deployment requires a storage scan with free space')
+        raise BackupError('deployment requires a storage scan with free space')
     unit = report.allocation_unit_bytes
     required = (directories + sum((n + unit - 1) // unit for n in lengths)) * unit
     if required > report.free_bytes:
-        raise ValueError(
+        raise BackupError(
             f'deployment needs {required} free bytes including staging; '
             f'only {report.free_bytes} are available'
         )
@@ -1094,28 +1152,29 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
     """Validate a backup and prepare current-format copies, retaining originals."""
     check_conversion(directory)
     recording_high_water(directory)
-    if destination.resolve().is_relative_to(directory.resolve()):
-        raise ValueError('conversion destination must be outside the original backup')
+    with sync_files():
+        source_root = directory.resolve()
+        if destination.resolve().is_relative_to(source_root):
+            raise BackupError(
+                'conversion destination must be outside the original backup'
+            )
     setups = read_setup_binaries(directory)
     snapshots = read_history_binaries(directory)
-    fonts = {
-        int(f.stem, 16): f.read_bytes()
-        for f in sorted((directory / 'setups/fonts').glob('*.cfont'))
-    }
+    fonts = _read_fonts(directory)
     library = songs.upgrade(
-        (directory / 'songs.bin').read_bytes(),
+        read_sync_file(directory / 'songs.bin'),
         fonts,
         target=target,
     )
     undo_path = directory / 'songs-undo.bin'
     undo = (
-        songs.upgrade(undo_path.read_bytes(), fonts, target=target)
-        if undo_path.exists()
+        songs.upgrade(read_sync_file(undo_path), fonts, target=target)
+        if _exists(undo_path)
         else b''
     )
-    selected = (directory / 'selected.txt').read_bytes().decode()
+    selected = _read_text(directory / 'selected.txt')
     if selected and selected not in setups:
-        raise ValueError(f'{selected}: saved selection is absent from the backup')
+        raise BackupError(f'{selected}: saved selection is absent from the backup')
     upgraded = {
         n: binary_format.wrap(resolved.prepare_restore(d, fonts, target=target))
         for n, d in setups.items()
@@ -1133,10 +1192,10 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
     )
     bundle = b''
     bundle_path = directory / 'bundle.bin'
-    if bundle_path.exists():
-        original_bundle = bundle_path.read_bytes()
+    if _exists(bundle_path):
+        original_bundle = read_sync_file(bundle_path)
         if setup_bundle.unpack(original_bundle) != setups:
-            raise ValueError(f'{bundle_path}: bundle and authoritative setups differ')
+            raise BackupError(f'{bundle_path}: bundle and authoritative setups differ')
         core = binary_format.core(original_bundle, binary_format.Kind.bundle)
         if upgraded:
             bundle = setup_bundle.build(
@@ -1176,31 +1235,36 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
         library = songs.reindex(library, list(upgraded))
         if undo:
             undo = songs.reindex(undo, list(upgraded))
+    with sync_files():
+        original_paths = [
+            p
+            for p in sorted(directory.rglob('*'))
+            if p.is_file()
+            and p.name not in ('conversion.toml', 'conversion-pending.toml')
+        ]
     originals = {
-        p.relative_to(directory).as_posix(): sha256(p.read_bytes()).hexdigest()
-        for p in sorted(directory.rglob('*'))
-        if p.is_file() and p.name not in ('conversion.toml', 'conversion-pending.toml')
+        p.relative_to(directory).as_posix(): sha256(read_sync_file(p)).hexdigest()
+        for p in original_paths
     }
-    destination.mkdir(parents=True)
-    write_record(
-        destination / 'conversion-pending.toml', {'source': str(directory.resolve())}
-    )
-    shutil.copytree(directory, destination, dirs_exist_ok=True)
-    (destination / 'songs.bin').write_bytes(library)
+    _create_directory(destination)
+    write_record(destination / 'conversion-pending.toml', {'source': str(source_root)})
+    with sync_files():
+        shutil.copytree(directory, destination, dirs_exist_ok=True)
+    _write_file(destination / 'songs.bin', library)
     if bundle:
-        (destination / 'bundle.bin').write_bytes(bundle)
+        _write_file(destination / 'bundle.bin', bundle)
     if undo:
-        (destination / 'songs-undo.bin').write_bytes(undo)
+        _write_file(destination / 'songs-undo.bin', undo)
     for name, data in upgraded.items():
-        (destination / 'setups' / f'{name}.bin').write_bytes(data)
-        (destination / 'setups' / f'{name}.toml').write_bytes(
-            resolved.export(data).encode()
+        _write_file(destination / 'setups' / f'{name}.bin', data)
+        _write_file(
+            destination / 'setups' / f'{name}.toml', resolved.export(data).encode()
         )
     manifest: list[dict[str, object]] = []
     for name, revision, data in revisions:
         folder = destination / 'history' / name
-        (folder / f'{revision.number}.bin').write_bytes(data)
-        (folder / f'{revision.number}.toml').write_bytes(resolved.export(data).encode())
+        _write_file(folder / f'{revision.number}.bin', data)
+        _write_file(folder / f'{revision.number}.toml', resolved.export(data).encode())
         manifest.append(
             revision.model_dump()
             | {
@@ -1210,9 +1274,16 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
                 'version': compiler_wire.DOCUMENT_VERSION,
             }
         )
-    (destination / 'history.toml').write_bytes(
-        tomlkit.dumps({'revisions': manifest}).encode()
+    _write_file(
+        destination / 'history.toml', tomlkit.dumps({'revisions': manifest}).encode()
     )
+    with sync_files():
+        converted_paths = [
+            p
+            for p in sorted(destination.rglob('*'))
+            if p.is_file()
+            and p.name not in ('conversion.toml', 'conversion-pending.toml')
+        ]
     report = Conversion(
         format=binary_format.format_name(binary_format.DEVELOPMENT_FORMAT),
         complete=True,
@@ -1224,36 +1295,43 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
                 else 'generated',
                 destination_format=artifact_format(p),
                 source_sha256=originals.get(p.relative_to(destination).as_posix(), ''),
-                destination_sha256=sha256(p.read_bytes()).hexdigest(),
+                destination_sha256=sha256(read_sync_file(p)).hexdigest(),
             )
-            for p in sorted(destination.rglob('*'))
-            if p.is_file()
-            and p.name not in ('conversion.toml', 'conversion-pending.toml')
+            for p in converted_paths
         ],
     )
     write_record(destination / 'conversion.toml', report.model_dump())
-    (destination / 'conversion-pending.toml').unlink()
+    with sync_files():
+        (destination / 'conversion-pending.toml').unlink()
     check_conversion(destination)
     return destination
 
 
 def read_history_binaries(directory: Path) -> list[tuple[str, history.Revision, bytes]]:
     path = directory / 'history.toml'
-    if not path.exists():
+    if not _exists(path):
         return []
-    document = tomlkit.parse(path.read_bytes().decode()).unwrap()
+    try:
+        document = tomlkit.parse(_read_text(path)).unwrap()
+    except ParseError as error:
+        raise BackupError(f'{path}: {error}') from error
     snapshots = document.get('revisions', [])
     if not isinstance(snapshots, list):
-        raise ValueError('invalid history backup manifest')
+        raise BackupError('invalid history backup manifest')
     result = []
     for entry in snapshots:
-        if not isinstance(entry, dict):
-            raise ValueError('invalid history backup entry')
+        if not isinstance(entry, dict) or 'name' not in entry:
+            raise BackupError('invalid history backup entry')
         name = data_files.validate_name(str(entry['name']))
-        revision = history.Revision.model_validate(entry)
-        data = (directory / 'history' / name / f'{revision.number}.bin').read_bytes()
+        try:
+            revision = history.Revision.model_validate(entry)
+        except ValidationError as error:
+            raise BackupError(f'{path}: {error}') from error
+        data = read_sync_file(directory / 'history' / name / f'{revision.number}.bin')
         if len(data) != revision.length:
-            raise ValueError(f'{name}/{revision.number}: history backup length differs')
+            raise BackupError(
+                f'{name}/{revision.number}: history backup length differs'
+            )
         resolved.graph_offset(resolved.upgrade(data))
         result.append((name, revision, data))
     return result
