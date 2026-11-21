@@ -369,3 +369,9 @@ text = 'Naciśnij piętę, potem palce'
 
 [messages.keyboard_input_dropped]
 text = 'Pominięte klawisze'
+
+[messages.ram_value]
+text = 'RAM:{used_a:lu}/{total_a:lu}k {used_b:lu}/{total_b:lu}k'
+
+[messages.git_value]
+text = 'Git:{commit:07x}'

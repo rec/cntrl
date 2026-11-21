@@ -273,7 +273,7 @@ def test_exported_profiles_build_without_the_physical_sdk(
         ]
 
 
-def test_starter_status_heading_remains_editable_with_the_real_time_clock(
+def test_starter_status_labels_remain_editable_with_the_real_time_clock(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).parents[5]
@@ -293,9 +293,30 @@ def test_starter_status_heading_remains_editable_with_the_real_time_clock(
                 r for r in session.correction_regions if r.message == 'status'
             )
             assert heading.screen == 0
+        regions = session.correction_regions
+        summary = [r for r in regions if r.message == 'cycles_patches']
+        assert [r.editor_text(r.original) for r in summary] == ['Cycles:', 'Patches:']
+        assert summary[0].right < summary[1].left
+        assert [len(r.glyphs) for r in summary] == [7, 8]
+        assert {
+            'clock_value',
+            'tap_value',
+            'ram_value',
+            'git_value',
+            'starts_value',
+            'uptime_value',
+        } <= {r.message for r in regions}
         original = session.frames.copy()
         session.preview_correction(heading, 'Device status')
         assert session.frames['lcd-1'] != original['lcd-1']
+        cycles = summary[0]
+        session.preview_correction(
+            cycles, cycles.replace_literal(cycles.original, 'Loops:')
+        )
+        updated = [
+            r for r in session.correction_regions if r.message == 'cycles_patches'
+        ]
+        assert [len(r.glyphs) for r in updated] == [6, 8]
 
 
 def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(

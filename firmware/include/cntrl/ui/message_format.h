@@ -109,7 +109,11 @@ inline bool format_integer(char *destination, unsigned capacity, const Argument 
 CNTRL_FLASH_ROUTINE(i18n_render)
 #endif
 inline bool render(char *destination, unsigned capacity, const Definition &definition,
-                   const char *text, const Argument *values, unsigned count) {
+                   const char *text, const Argument *values, unsigned count
+#ifdef CNTRL_EMULATOR
+                   , uint8_t (*literals)[2] = nullptr
+#endif
+                   ) {
     if (!capacity) return false;
     destination[0] = 0;
     if (count != definition.count || !validate(definition, text)) return false;
@@ -119,8 +123,18 @@ inline bool render(char *destination, unsigned capacity, const Definition &defin
         const unsigned copied = length < available ? length : available;
         std::memcpy(destination + used, value, copied); used += copied; destination[used] = 0;
     };
+#ifdef CNTRL_EMULATOR
+    unsigned literal = 0;
+    if (literals) literals[0][0] = literals[0][1] = 0;
+#endif
     for (const char *p = text; *p;) {
-        if (*p != '{') { append(p++, 1); continue; }
+        if (*p != '{') {
+            append(p++, 1);
+#ifdef CNTRL_EMULATOR
+            if (literals) literals[literal][1] = uint8_t(used);
+#endif
+            continue;
+        }
         const char *end = std::strchr(p + 1, '}');
         const unsigned index = unsigned(field(definition, p + 1, end));
         const auto &argument = values[index]; const char *spec = definition.fields[index].spec;
@@ -134,6 +148,9 @@ inline bool render(char *destination, unsigned capacity, const Definition &defin
             utf8::copy(result, sizeof(result), result);
         } else if (!format_integer(result, sizeof(result), argument, spec)) return false;
         append(result, unsigned(std::strlen(result))); p = end + 1;
+#ifdef CNTRL_EMULATOR
+        if (literals) { ++literal; literals[literal][0] = literals[literal][1] = uint8_t(used); }
+#endif
     }
     // The formatter's byte bound must not leave a partial UTF-8 character.
     utf8::copy(destination, capacity, destination);

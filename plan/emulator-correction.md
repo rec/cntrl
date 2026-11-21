@@ -27,10 +27,12 @@ caption on two pages counts once. Two messages that happen to read identically
 can be corrected independently. The count is the number of accepted fields
 that differ from their originals. Enable all three buttons when it is positive.
 
-Editable text is static interface copy on the emulated displays. Authored names,
-live values, formatted messages with runtime values, desktop controls, and page
-tooltips stay outside the click targets. Use the language actually rendered by
-the display, including English when the runtime falls back to English.
+Editable text is static interface copy on the emulated displays. On Status,
+each fixed label in a formatted row is a click target. Edits to labels that
+share a catalogue field combine into one correction and keep the field's
+placeholders. Authored names, displayed live values, desktop controls, and
+page tooltips stay outside the click targets. Use the language actually
+rendered by the display, including English when the runtime falls back to English.
 
 ## Leaving Correction mode
 

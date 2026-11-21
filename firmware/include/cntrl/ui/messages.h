@@ -363,9 +363,11 @@ enum class Message : uint16_t {
     calibration_toe,
     press_heel_then_toe,
     keyboard_input_dropped,
+    ram_value,
+    git_value,
 };
-inline constexpr unsigned message_count = 360;
-inline constexpr uint32_t catalogue_schema = 0xdda43be0u;
+inline constexpr unsigned message_count = 362;
+inline constexpr uint32_t catalogue_schema = 0x011555e8u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -1501,6 +1503,29 @@ inline const char press_heel_then_toe_text[] CNTRL_I18N_STORAGE = "Press heel, t
 inline const char press_heel_then_toe_short[] CNTRL_I18N_STORAGE = "";
 inline const char keyboard_input_dropped_text[] CNTRL_I18N_STORAGE = "Missed keys";
 inline const char keyboard_input_dropped_short[] CNTRL_I18N_STORAGE = "";
+inline const char ram_value_text[] CNTRL_I18N_STORAGE = "RAM:{used_a:lu}/{total_a:lu}k {used_b:lu}/{total_b:lu}k";
+inline const char ram_value_short[] CNTRL_I18N_STORAGE = "";
+inline const char ram_value_used_a_name[] CNTRL_I18N_STORAGE = "used_a";
+inline const char ram_value_used_a_spec[] CNTRL_I18N_STORAGE = "lu";
+inline const char ram_value_total_a_name[] CNTRL_I18N_STORAGE = "total_a";
+inline const char ram_value_total_a_spec[] CNTRL_I18N_STORAGE = "lu";
+inline const char ram_value_used_b_name[] CNTRL_I18N_STORAGE = "used_b";
+inline const char ram_value_used_b_spec[] CNTRL_I18N_STORAGE = "lu";
+inline const char ram_value_total_b_name[] CNTRL_I18N_STORAGE = "total_b";
+inline const char ram_value_total_b_spec[] CNTRL_I18N_STORAGE = "lu";
+inline const Field ram_value_fields[] CNTRL_I18N_STORAGE = {
+    {ram_value_used_a_name, ram_value_used_a_spec},
+    {ram_value_total_a_name, ram_value_total_a_spec},
+    {ram_value_used_b_name, ram_value_used_b_spec},
+    {ram_value_total_b_name, ram_value_total_b_spec},
+};
+inline const char git_value_text[] CNTRL_I18N_STORAGE = "Git:{commit:07x}";
+inline const char git_value_short[] CNTRL_I18N_STORAGE = "";
+inline const char git_value_commit_name[] CNTRL_I18N_STORAGE = "commit";
+inline const char git_value_commit_spec[] CNTRL_I18N_STORAGE = "07x";
+inline const Field git_value_fields[] CNTRL_I18N_STORAGE = {
+    {git_value_commit_name, git_value_commit_spec},
+};
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {patch_chooser_text, patch_chooser_short, nullptr, 0},
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
@@ -1862,6 +1887,8 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {calibration_toe_text, calibration_toe_short, nullptr, 0},
     {press_heel_then_toe_text, press_heel_then_toe_short, nullptr, 0},
     {keyboard_input_dropped_text, keyboard_input_dropped_short, nullptr, 0},
+    {ram_value_text, ram_value_short, ram_value_fields, 4},
+    {git_value_text, git_value_short, git_value_fields, 1},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)
