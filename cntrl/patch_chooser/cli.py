@@ -548,22 +548,26 @@ def publish_download(
 
 
 def save_asset(destination: Path, data: bytes) -> None:
-    destination.parent.mkdir(exist_ok=True)
-    if destination.exists():
-        if destination.read_bytes() != data:
-            raise CompileOutputError(f'{destination}: asset checksum collision')
-        return
-    with NamedTemporaryFile(
-        dir=destination.parent, prefix='.cntrl-', delete=False
-    ) as output:
-        temporary = Path(output.name)
-        output.write(data)
-        output.flush()
-        os.fsync(output.fileno())
     try:
-        destination.hardlink_to(temporary)
-    finally:
-        temporary.unlink(missing_ok=True)
+        destination.parent.mkdir(exist_ok=True)
+        if destination.exists():
+            if destination.read_bytes() != data:
+                raise CompileOutputError(f'{destination}: asset checksum collision')
+            return
+        output = NamedTemporaryFile(
+            dir=destination.parent, prefix='.cntrl-', delete=False
+        )
+        temporary = Path(output.name)
+        try:
+            with output:
+                output.write(data)
+                output.flush()
+                os.fsync(output.fileno())
+            destination.hardlink_to(temporary)
+        finally:
+            temporary.unlink(missing_ok=True)
+    except OSError as error:
+        raise CompileOutputError(f'{destination}: {error}') from error
 
 
 def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
@@ -711,14 +715,11 @@ def main() -> None:
         sys.exit(str(error))
     except (OSError, ValueError) as error:
         if isinstance(command, SetupCLI):
-            if isinstance(command.command, setup_sync.Sync) and (
-                command.command.apply is not None or command.command.recover is not None
-            ):
-                raise
             if isinstance(
                 command.command,
                 (
                     history.History,
+                    setup_sync.Sync,
                     backups.Recover,
                     SetupSet,
                     SetupRotate,

@@ -348,14 +348,20 @@ def recovered_recipe(
 
 def recovered_baselines(directory: Path) -> dict[str, bytes]:
     path = directory / 'cntrl-session.toml'
-    if not path.exists():
-        return {}
-    manifest = Manifest.model_validate(tomlkit.parse(path.read_text()).unwrap())
+    try:
+        if not path.exists():
+            return {}
+    except OSError as error:
+        raise RecoveredSourceError(f'{path}: {error}') from error
+    manifest = _read_manifest(directory)
     result: dict[str, bytes] = {}
     for name, relative in manifest.baselines.items():
-        content = _local(directory, relative).read_bytes()
+        try:
+            content = _local(directory, relative).read_bytes()
+        except OSError as error:
+            raise RecoveredSourceError(f'{relative}: {error}') from error
         if sha256(content).hexdigest() != manifest.baseline_hashes.get(name):
-            raise ValueError(f'{name}: recovered baseline checksum mismatch')
+            raise RecoveredSourceError(f'{name}: recovered baseline checksum mismatch')
         result[name] = content
     return result
 
