@@ -249,9 +249,13 @@ def run(command: History) -> None:
         else '-'
     )
     if action in ('delete', 'clear') and not command.yes:
-        if not sys.stdin.isatty() or input(
-            f'{action} history for {command.name}? [y/N] '
-        ).lower() not in ('y', 'yes'):
+        if not sys.stdin.isatty():
+            raise HistoryError('deletion requires confirmation or --yes')
+        try:
+            answer = input(f'{action} history for {command.name}? [y/N] ')
+        except EOFError as error:
+            raise HistoryError('Input ended; history deletion cancelled.') from error
+        if answer.lower() not in ('y', 'yes'):
             raise HistoryError('deletion requires confirmation or --yes')
     with transport.SerialConnection(command.port) as connection:
         client = transport.SetupClient(connection)

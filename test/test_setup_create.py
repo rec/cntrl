@@ -176,7 +176,27 @@ def test_interrupted_input_writes_nothing(
     monkeypatch.setattr('builtins.input', interrupted)
     with pytest.raises(EOFError):
         setup_create.run(setup_create.Create(output=tmp_path / 'new'))
+    monkeypatch.setattr(
+        'sys.argv', ['cntrl', 'setup', 'create', '-o', str(tmp_path / 'new')]
+    )
+    with pytest.raises(SystemExit, match='Input ended; setup creation cancelled'):
+        cli.main()
     assert not (tmp_path / 'new').exists()
+
+
+def test_unexpected_end_of_file_reaches_the_crash_reporter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failure = EOFError('unexpected end of setup data')
+
+    def fail(command: setup_create.Create) -> None:
+        raise failure
+
+    monkeypatch.setattr(setup_create, 'run', fail)
+    monkeypatch.setattr('sys.argv', ['cntrl', 'setup', 'create'])
+    with pytest.raises(EOFError) as caught:
+        cli.main()
+    assert caught.value is failure
 
 
 ROOT = Path(__file__).resolve().parents[1]
