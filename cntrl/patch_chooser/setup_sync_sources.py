@@ -7,7 +7,7 @@ from pathlib import Path
 import tomlkit
 
 from . import data_files
-from .setup_sync_store import Change, Choice, Value, base_record
+from .setup_sync_store import Change, Choice, SyncError, Value, base_record
 
 
 def known_consumers(root: Path, trace: data_files.Trace) -> None:
@@ -203,7 +203,7 @@ def inherited_destination(
 
 def apply_change(document: MutableMapping[str, object], change: Change) -> None:
     if change.destination is None:
-        raise ValueError(
+        raise SyncError(
             f'{change.setup}: {change.path}: manual source placement required'
         )
     if change.scope == 'device-global':
@@ -212,13 +212,13 @@ def apply_change(document: MutableMapping[str, object], change: Change) -> None:
         return
     if change.remove_inherited:
         if any(not isinstance(p, str) for p in change.path):
-            raise ValueError('inherited removals require table keys')
+            raise SyncError('inherited removals require table keys')
         current = document.setdefault('inheritance', tomlkit.table())
         if not isinstance(current, MutableMapping):
-            raise ValueError('inheritance must be a table')
+            raise SyncError('inheritance must be a table')
         removals = current.setdefault('remove', [])
         if not isinstance(removals, MutableSequence):
-            raise ValueError('inheritance.remove must be a list')
+            raise SyncError('inheritance.remove must be a list')
         path = change.path
         if not any(list(p) == path[: len(p)] for p in removals):
             for index in reversed(range(len(removals))):
@@ -277,9 +277,9 @@ def assign(document: object, path: list[str | int], value: Value) -> None:
         elif isinstance(current, MutableSequence) and isinstance(key, int):
             current = current[key]
         else:
-            raise ValueError(f'{path}: source shape requires manual placement')
+            raise SyncError(f'{path}: source shape requires manual placement')
     if not path:
-        raise ValueError('cannot replace a whole source document automatically')
+        raise SyncError('cannot replace a whole source document automatically')
     key = path[-1]
     if isinstance(current, MutableMapping):
         if value.present:
@@ -292,4 +292,4 @@ def assign(document: object, path: list[str | int], value: Value) -> None:
         else:
             del current[key]
     else:
-        raise ValueError(f'{path}: source shape requires manual placement')
+        raise SyncError(f'{path}: source shape requires manual placement')

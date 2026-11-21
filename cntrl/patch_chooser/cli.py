@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from .. import build, flash, importing, qualify, target_process, upload
 from ..emulator.cli import Emulate, emulate
-from ..file_lock import writer_lock
+from ..file_lock import WriterLockError, WriterLockHeld, writer_lock
 from ..maker.morningstar.mc import font_coverage
 from . import (
     backups,
@@ -623,15 +623,27 @@ def main() -> None:
         compiler_errors.CompilationError,
         CompileOutputError,
         devices.DeviceSelectionError,
+        setup_sync_store.SyncError,
+        setup_sync_store.SyncFileError,
         source_archive.RecoveredSourceError,
         subprocess.CalledProcessError,
         target_process.TargetAdapterError,
         transport.UsbCommandTimeout,
         transport.UsbProtocolError,
         transport.UsbReplyError,
+        WriterLockError,
+        WriterLockHeld,
     ) as error:
         sys.exit(str(error))
     except (OSError, ValueError) as error:
+        if (
+            isinstance(command, SetupCLI)
+            and isinstance(command.command, setup_sync.Sync)
+            and (
+                command.command.apply is not None or command.command.recover is not None
+            )
+        ):
+            raise
         if isinstance(
             command,
             (

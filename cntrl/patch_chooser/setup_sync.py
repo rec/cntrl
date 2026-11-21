@@ -8,7 +8,8 @@ from typing import Annotated, cast
 
 import tomlkit
 import tyro
-from pydantic import Field
+from pydantic import Field, ValidationError
+from tomlkit.exceptions import ParseError
 
 from ..file_lock import writer_lock
 from . import (
@@ -43,6 +44,7 @@ from .setup_sync_store import (
     Choice,
     Review,
     Source,
+    SyncError,
     Value,
     base_record,
     baseline,
@@ -50,8 +52,12 @@ from .setup_sync_store import (
     digest,
     global_baseline,
     migrate_baselines,
+    parse_record,
     publish,
+    read_review,
+    read_sync_file,
     recover,
+    sync_files,
     write_record,
 )
 
@@ -158,7 +164,7 @@ def member(value: dict[str, object], key: str) -> Value:
 def store(command: data_files.Sources) -> Path:
     expressions = data_files.expressions(command.document)
     if not expressions:
-        raise ValueError('a root setup document is required')
+        raise SyncError('a root setup document is required')
     return expressions[0].paths[0].resolve().parent / 'setup-sync'
 
 
@@ -257,7 +263,7 @@ def capture_assets(
         try:
             backups.backup_assets(client, data, folder, fonts, movies)
         except (OSError, ValueError) as error:
-            raise ValueError(
+            raise SyncError(
                 f'incomplete snapshot retained at {folder}: {error}'
             ) from error
     write_record(folder / 'complete.toml', {'complete': True})
@@ -508,7 +514,7 @@ def setting_changes(
         )
     )
     if errors:
-        raise ValueError('\n'.join(errors))
+        raise SyncError('\n'.join(errors))
     values = [
         models.Setup.model_validate(canonical(d)).model_dump(mode='json')
         for d in (base, host, pedal)
@@ -557,8 +563,9 @@ def setting_changes(
 
 
 def apply_review(path: Path) -> None:
-    path = path.resolve()
-    review = Review.model_validate(tomlkit.parse(path.read_bytes().decode()).unwrap())
+    with sync_files():
+        path = path.resolve()
+    review = read_review(path)
     with writer_lock(review.root, operation='setup sync operation'):
         apply_locked(path, review)
 
@@ -573,9 +580,7 @@ def apply_locked(path: Path, review: Review) -> None:
 
 
 def validate_review(path: Path, review: Review) -> None:
-    proposal = Review.model_validate(
-        tomlkit.parse((path.parent / 'proposal.toml').read_bytes().decode()).unwrap()
-    )
+    proposal = read_review(path.parent / 'proposal.toml')
     if (
         len(review.changes) != len(proposal.changes)
         or review.model_copy(
@@ -588,56 +593,60 @@ def validate_review(path: Path, review: Review) -> None:
         )
         != proposal
     ):
-        raise ValueError(
+        raise SyncError(
             'only change choices in review.toml; preview again for other edits'
         )
     check_pending(review.root)
-    if (path.parent / 'applied.toml').exists():
-        raise ValueError('this review has already been applied; preview again')
+    with sync_files():
+        applied = (path.parent / 'applied.toml').exists()
+    if applied:
+        raise SyncError('this review has already been applied; preview again')
     if any(c.choice == Choice.unresolved for c in review.changes):
-        raise ValueError('resolve every choice to host or pedal before applying')
+        raise SyncError('resolve every choice to host or pedal before applying')
     if digest(base_record(review.root)) != review.baseline:
-        raise ValueError('baseline changed since review; preview again')
+        raise SyncError('baseline changed since review; preview again')
     for n, checksum in review.pedal.items():
-        if digest((path.parent / f'{n}.bin').read_bytes()) != checksum:
-            raise ValueError(f'{n}: pedal snapshot changed since review; preview again')
+        if digest(read_sync_file(path.parent / f'{n}.bin')) != checksum:
+            raise SyncError(f'{n}: pedal snapshot changed since review; preview again')
     if (
         review.global_snapshot is not None
-        and digest((path.parent / 'device-globals.toml').read_bytes())
+        and digest(read_sync_file(path.parent / 'device-globals.toml'))
         != review.global_snapshot
     ):
-        raise ValueError('device-global snapshot changed since review; preview again')
+        raise SyncError('device-global snapshot changed since review; preview again')
     for s in review.sources:
+        with sync_files():
+            present = s.file.exists()
         if (
-            s.file.exists() != s.present
-            or digest(s.file.read_bytes() if s.present else b'') != s.before
+            present != s.present
+            or digest(read_sync_file(s.file) if s.present else b'') != s.before
         ):
-            raise ValueError(f'{s.file}: source changed since review; preview again')
+            raise SyncError(f'{s.file}: source changed since review; preview again')
 
 
 def compile_review(review: Review) -> dict[Path, bytes]:
     trace = data_files.Trace()
     host = compile_inputs(review.recipe, trace=trace)
     if {n: digest(v) for n, v in host.setups.items()} != review.host:
-        raise ValueError('compiled inputs changed since review; preview again')
+        raise SyncError('compiled inputs changed since review; preview again')
     expected = {n: canonical(v) for n, v in host.setups.items()}
     documents: dict[Path, MutableMapping[str, object]] = {}
     for c in review.changes:
         if c.choice != Choice.pedal:
             continue
         if c.destination is None:
-            raise ValueError(f'{c.setup}: {c.path}: manual source placement required')
+            raise SyncError(f'{c.setup}: {c.path}: manual source placement required')
         if c.scope != 'device-global' and any(n not in host.setups for n in c.affects):
-            raise ValueError(
+            raise SyncError(
                 f'{c.destination.file}: include every affected setup in a new '
                 f'preview: {c.affects}'
             )
         f = c.destination.file
         if f not in documents:
+            with sync_files():
+                present = f.exists()
             documents[f] = (
-                tomlkit.parse(f.read_bytes().decode())
-                if f.exists()
-                else tomlkit.document()
+                parse_record(f, read_sync_file(f)) if present else tomlkit.document()
             )
         apply_change(documents[f], c)
         if c.scope != 'device-global' and c.setting_override != 'inherit':
@@ -649,7 +658,10 @@ def compile_review(review: Review) -> dict[Path, bytes]:
             and change.destination is not None
             and change.destination.file in candidates
         ):
-            device_globals.load(candidates[change.destination.file])
+            try:
+                device_globals.load(candidates[change.destination.file])
+            except (ParseError, UnicodeDecodeError, ValidationError) as error:
+                raise SyncError(f'{change.destination.file}: {error}') from error
     compiled = compile_inputs(review.recipe, overrides=candidates)
     for change in review.changes:
         if change.choice != Choice.pedal or change.setting_field is None:
@@ -658,7 +670,7 @@ def compile_review(review: Review) -> dict[Path, bytes]:
         if bool(mask & (1 << change.setting_field)) != (
             change.setting_override == 'set'
         ):
-            raise ValueError(
+            raise SyncError(
                 'candidate setting inheritance differs from the reviewed result'
             )
         if change.setting_override == 'inherit':
@@ -700,7 +712,7 @@ def compile_review(review: Review) -> dict[Path, bytes]:
             ):
                 assign(expected[n], delta.path, delta.pedal)
     if {n: canonical(v) for n, v in compiled.setups.items()} != expected:
-        raise ValueError(
+        raise SyncError(
             'candidate compilation differs from the reviewed result; '
             'check shared or derived patches and preview again'
         )
@@ -709,11 +721,11 @@ def compile_review(review: Review) -> dict[Path, bytes]:
 
 def run(command: Sync) -> None:
     if command.apply is not None and command.recover is not None:
-        raise ValueError('choose either --apply or --recover')
+        raise SyncError('choose either --apply or --recover')
     if (command.apply is not None or command.recover is not None) and (
         command.document or command.target or command.port is not None
     ):
-        raise ValueError(
+        raise SyncError(
             '--apply and --recover use stored inputs; omit documents, target and port'
         )
     if command.recover is not None:
@@ -722,7 +734,7 @@ def run(command: Sync) -> None:
         apply_review(command.apply)
     else:
         if command.port is None:
-            raise ValueError('--port is required for preview')
+            raise SyncError('--port is required for preview')
         with transport.SerialConnection(command.port) as connection:
             preview(command, transport.SetupClient(connection))
 
@@ -752,12 +764,12 @@ def prepare_upload(
         if n in existing and existing[n].startswith(binary_format.MAGIC):
             if binary_format.has_opaque(existing[n]):
                 if binary_format.core(existing[n]) != binary_format.core(prepared[n]):
-                    raise ValueError(
+                    raise SyncError(
                         f'{n}: cannot recompile opaque metadata. Backup: {folder}'
                     )
                 prepared[n] = existing[n]
         if n in existing and n in bases and not same_saved_setup(existing[n], bases[n]):
-            raise ValueError(
+            raise SyncError(
                 f'{n}: unreconciled pedal edits; run cntrl setup sync first. '
                 f'Backup: {folder}'
             )
@@ -766,7 +778,7 @@ def prepare_upload(
             and n not in bases
             and not same_saved_setup(existing[n], bundle.setups[n])
         ):
-            raise ValueError(
+            raise SyncError(
                 f'{n}: no synchronization baseline; run cntrl setup sync and '
                 f'review the differences before uploading. Backup: {folder}'
             )
@@ -793,7 +805,7 @@ def check_upload(client: transport.SetupClient, folder: Path) -> None:
     """Refuse to replace a collection that changed while preparing an upload."""
     paths = {p.stem: p for p in folder.glob('*.bin')}
     if set(paths) != {e.name for e in client.catalogue()}:
-        raise ValueError('pedal collection changed during upload preparation')
+        raise SyncError('pedal collection changed during upload preparation')
     for n, path in paths.items():
         if client.download(n) != path.read_bytes():
-            raise ValueError(f'{n}: pedal setup changed during upload preparation')
+            raise SyncError(f'{n}: pedal setup changed during upload preparation')
