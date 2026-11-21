@@ -37,6 +37,7 @@ struct TextLine {
 #ifdef CNTRL_EMULATOR
     uint16_t translation_id = 0; // Catalogue index plus one, or zero for other text.
     bool translation_short = false;
+    uint8_t translation_literals[17][2] = {}; // Byte ranges between format arguments.
 #endif
 };
 

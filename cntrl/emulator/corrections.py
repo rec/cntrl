@@ -1,5 +1,6 @@
 """Translation fields and report serialization for Correction mode."""
 
+import re
 from functools import cache
 from typing import Literal
 from urllib.parse import urlencode
@@ -32,17 +33,39 @@ class TranslationRegion(TranslationField, frozen=True):
     bottom: int
     short_length: int = 0
     glyphs: list[list[int]] = Field(default_factory=list)
+    literal: int | None = None
+
+    def editor_text(self, template: str) -> str:
+        if self.literal is None:
+            return template
+        return re.split(r'(\{[^{}]+\})', template)[2 * self.literal].strip()
+
+    def replace_literal(self, template: str, replacement: str) -> str:
+        if self.literal is None:
+            return replacement
+        pieces = re.split(r'(\{[^{}]+\})', template)
+        index = 2 * self.literal
+        literal = pieces[index]
+        left = len(literal) - len(literal.lstrip())
+        right = len(literal.rstrip())
+        pieces[index] = literal[:left] + replacement + literal[right:]
+        return ''.join(pieces)
 
     def valid_replacement(self, text: str) -> bool:
         if not text.strip() or not text.isprintable():
             return False
         length = len(text.encode())
         if length >= 512 or (
-            length > 63 and (self.field == 'short' or not 1 <= self.short_length <= 63)
+            self.literal is None
+            and length > 63
+            and (self.field == 'short' or not 1 <= self.short_length <= 63)
         ):
             return False
         try:
-            return not catalogue.fields(text) and set(text) <= correction_characters()
+            return (
+                catalogue.fields(text) == catalogue.fields(self.original)
+                and set(text) <= correction_characters()
+            )
         except ValueError:
             return False
 

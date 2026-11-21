@@ -373,12 +373,26 @@ public:
             pane.circles[0].ring_color = settings_[R::ring_color];
         } else {
             char rows[5][64] = {};
-            i18n::format(rows[0], sizeof(rows[0]), i18n::Message::cycles_patches, status.cycles, status.patches);
+#ifdef CNTRL_EMULATOR
+            TextLine captions[9];
+#endif
+            auto format_status = [&](auto &out, [[maybe_unused]] unsigned index, i18n::Message id, const auto &...args) {
+#ifdef CNTRL_EMULATOR
+                auto &caption = captions[index];
+                caption.translation_id = uint16_t(unsigned(id) + 1);
+                const i18n::Argument values[] = {i18n::Argument(args)..., i18n::Argument()};
+                i18n::render(out, sizeof(out), i18n::definitions[unsigned(id)], i18n::text(id),
+                    values, sizeof...(args), caption.translation_literals);
+#else
+                i18n::format(out, sizeof(out), id, args...);
+#endif
+            };
+            format_status(rows[0], 1, i18n::Message::cycles_patches, status.cycles, status.patches);
             char tap[24], clock[24], tap_label[32], uptime[32], git[16] = {};
             number_text(tap, sizeof(tap), status_snapshot ? status_snapshot->tap_period_ms : tap_.period(), false, true);
             number_text(clock, sizeof(clock), status_snapshot ? status_snapshot->clock_period_us : observed_clock().period_us(), true, true);
-            i18n::format(rows[1], sizeof(rows[1]), i18n::Message::clock_value, clock + std::strspn(clock," "));
-            std::snprintf(rows[2], sizeof(rows[2]), "RAM:%lu/%luk %lu/%luk",
+            format_status(rows[1], 2, i18n::Message::clock_value, clock + std::strspn(clock," "));
+            format_status(rows[2], 4, i18n::Message::ram_value,
                 (unsigned long)(status.ram_used[0] / 1024),
                 (unsigned long)((status.ram_used[0] + status.ram_free[0]) / 1024),
                 (unsigned long)(status.ram_used[1] / 1024),
@@ -388,22 +402,34 @@ public:
                 uint64_t tenths = (status.disk_used * 10 + gibibyte / 2) / gibibyte;
                 const bool integer = tenths >= 100;
                 const auto whole = integer ? (status.disk_used + gibibyte / 2) / gibibyte : tenths / 10;
-                i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_value, (unsigned long)whole, (unsigned long)(integer ? 0 : tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
+                format_status(rows[3], 5, i18n::Message::disk_value, (unsigned long)whole, (unsigned long)(integer ? 0 : tenths % 10), (unsigned long)((status.disk_used + status.disk_free + gibibyte / 2) / gibibyte));
                 // Retain the translated label while omitting its fixed fractional field.
-                if (integer) if (char *fraction = std::strstr(rows[3], ".0/"))
+                if (integer) if (char *fraction = std::strstr(rows[3], ".0/")) {
+#ifdef CNTRL_EMULATOR
+                    const unsigned at = unsigned(fraction - rows[3]);
+                    for (auto &span : captions[5].translation_literals)
+                        for (auto &edge : span) if (edge > at) edge -= std::min(2u, unsigned(edge) - at);
+#endif
                     std::memmove(fraction, fraction + 2, std::strlen(fraction + 2) + 1);
-            } else i18n::format(rows[3], sizeof(rows[3]), i18n::Message::disk_unknown);
+                }
+            } else format_status(rows[3], 5, i18n::Message::disk_unknown);
             uint64_t seconds = (status_snapshot ? status_snapshot->uptime_ms : uptime_) / 1000;
-            i18n::format(uptime, sizeof(uptime), i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
+            format_status(uptime, 7, i18n::Message::uptime_value, (unsigned long)(seconds / 3600), unsigned(seconds / 60 % 60), unsigned(seconds % 60));
+#ifdef CNTRL_EMULATOR
+            const auto leading = std::strspn(uptime, " ");
+            for (auto &span : captions[7].translation_literals)
+                for (auto &edge : span) edge -= std::min(size_t(edge), leading);
+#endif
             if (status.starts_status == StartsStatus::ready) {
                 char number[21]; *std::to_chars(number, number + 20, status.starts).ptr = 0;
-                i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, number);
+                format_status(rows[4], 6, i18n::Message::starts_value, number);
             }
-            else i18n::format(rows[4], sizeof(rows[4]), i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
+            else format_status(rows[4], 6, i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
 #ifdef CNTRL_GIT_COMMIT
-            std::snprintf(git, sizeof(git), "Git:%07x", unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
+            format_status(git, 8, i18n::Message::git_value,
+                unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
 #endif
-            i18n::format(tap_label, sizeof(tap_label), i18n::Message::tap_value, tap + std::strspn(tap," "));
+            format_status(tap_label, 3, i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
             const unsigned body_height = viewport_.height - pad - body_top;
             auto body = [&](unsigned maximum_size) {
@@ -433,6 +459,10 @@ public:
             body(shared_size);
             for (unsigned i = 1; i <= 8; ++i) {
                 auto &l = pane.lines[i];
+#ifdef CNTRL_EMULATOR
+                l.translation_id = captions[i].translation_id;
+                std::memcpy(l.translation_literals, captions[i].translation_literals, sizeof(l.translation_literals));
+#endif
                 l.graphics.foreground = 0x0011; // Dark blue, #00008B.
                 l.alternate_color = 0x0400; // Green, #008000.
                 bool value = false;

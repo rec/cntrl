@@ -655,6 +655,7 @@ public:
                     integer(field, unsigned(coordinate), 2);
                 const auto message = ui::i18n::Message(region.id - 1);
                 integer(field, std::strlen(ui::i18n::short_text(message)), 2);
+                field.push_back(region.literal);
                 field.push_back(uint8_t(region.glyphs.size()));
                 for (const auto &glyph : region.glyphs)
                     for (int coordinate : {glyph.left, glyph.top, glyph.right, glyph.bottom})
@@ -823,9 +824,10 @@ void Session::command(const std::vector<uint8_t> &bytes) {
             const auto message = ui::i18n::Message(id);
             const std::string replacement(bytes.begin() + 4, bytes.end());
             const auto short_length = std::strlen(ui::i18n::short_text(message));
-            if (id >= ui::i18n::message_count || ui::i18n::definitions[id].count
+            if (id >= ui::i18n::message_count
                 || replacement.size() >= 512
-                || (replacement.size() > 63 && (p[3] || !short_length || short_length > 63))
+                || (!ui::i18n::definitions[id].count && replacement.size() > 63
+                    && (p[3] || !short_length || short_length > 63))
                 || replacement.find('\0') != std::string::npos
                 || !utf8_valid(p + 4, length - 4)
                 || (!replacement.empty() && !ui::i18n::valid_template(message, replacement.c_str())))

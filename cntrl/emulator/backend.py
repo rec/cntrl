@@ -504,12 +504,13 @@ class Session:
             elif payload[0] == 12:
                 regions = []
                 language_name = payload[1:].decode()
-            elif payload[0] == 13 and len(payload) >= 16 and regions is not None:
+            elif payload[0] == 13 and len(payload) >= 17 and regions is not None:
                 screen, short, index, left, top, right, bottom, short_length = (
                     struct.unpack_from('<BBHHHHHH', payload, 1)
                 )
                 names = translation_message_ids()
-                text_offset = 16 + payload[15] * 8
+                literal = payload[15]
+                text_offset = 17 + payload[16] * 8
                 if (
                     index >= len(names)
                     or screen >= len(self.target.displays)
@@ -529,10 +530,11 @@ class Session:
                         right=right,
                         bottom=bottom,
                         short_length=short_length,
+                        literal=None if literal == 255 else literal,
                         glyphs=[
                             list(g)
                             for g in struct.iter_unpack(
-                                '<HHHH', payload[16:text_offset]
+                                '<HHHH', payload[17:text_offset]
                             )
                         ],
                     )

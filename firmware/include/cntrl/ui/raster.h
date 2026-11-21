@@ -94,11 +94,12 @@ public:
         return {origin_x, origin_y, origin_x + int(glyph.width), origin_y + int(glyph.height)};
     }
 #ifdef CNTRL_EMULATOR
-    Region text_region(const TextLine &line, int y, std::vector<Region> &glyphs) const {
+    Region text_region(const TextLine &line, int y, std::vector<Region> &glyphs,
+                       unsigned first = 0, unsigned end = UINT_MAX) const {
         Region result{};
         Glyph glyph;
         const int pad = settings_.pad;
-        for (unsigned index = 0; fonts_.glyph(line.graphics.font, line.graphics.size,
+        for (unsigned index = first; index < end && fonts_.glyph(line.graphics.font, line.graphics.size,
                 line.graphics.asset, line.text, index, glyph); ++index) {
             const auto ink = glyph_region(line, glyph, index, y);
             const int left = std::max(pad, ink.left), top = std::max(pad, ink.top);

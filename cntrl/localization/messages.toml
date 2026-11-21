@@ -1437,3 +1437,11 @@ context = 'Active expression calibration instruction'
 en = 'Missed keys'
 context = 'Warning that the name editor lost some typed keystrokes'
 
+[messages.ram_value]
+en = 'RAM:{used_a:lu}/{total_a:lu}k {used_b:lu}/{total_b:lu}k'
+context = 'Status page memory use and totals in kilobytes for both memory banks'
+
+[messages.git_value]
+en = 'Git:{commit:07x}'
+context = 'Status page firmware Git commit'
+

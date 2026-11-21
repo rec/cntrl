@@ -703,8 +703,8 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.correction_initial = accepted.replacement if accepted else region.original
         self.correction_region = region
         self.correction_position = self.canvas.caption_rect(region).toAlignedRect()
-        self.correction_editor.setText(self.correction_initial)
-        self.correction_editor.setAccessibleName(region.original)
+        self.correction_editor.setText(region.editor_text(self.correction_initial))
+        self.correction_editor.setAccessibleName(region.editor_text(region.original))
         self.position_correction()
         QtWidgets.QToolTip.hideText()
         self.correction_editor.show()
@@ -719,7 +719,11 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             return
         # A longer draft can change the bounds or select the short form.
         for visible in self.correction_regions:
-            if visible.screen == region.screen and visible.message == region.message:
+            if (
+                visible.screen == region.screen
+                and visible.message == region.message
+                and visible.literal == region.literal
+            ):
                 region = visible
                 break
         rectangle = self.canvas.caption_rect(region).toAlignedRect()
@@ -752,8 +756,12 @@ class EmulatorWindow(QtWidgets.QMainWindow):
 
     def correction_draft(self) -> Correction | None:
         region = self.correction_region
-        replacement = self.correction_editor.text()
-        if region is None or replacement == self.correction_initial:
+        if region is None:
+            return None
+        replacement = region.replace_literal(
+            self.correction_initial, self.correction_editor.text()
+        )
+        if replacement == self.correction_initial:
             return None
         return Correction(
             message=region.message,
@@ -766,14 +774,21 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.correction_preview_timer.start()
         region = self.correction_region
         self.correction_accept.setEnabled(
-            region is not None and region.valid_replacement(text)
+            bool(text.strip())
+            and region is not None
+            and region.valid_replacement(
+                region.replace_literal(self.correction_initial, text)
+            )
         )
 
     def send_correction_preview(self) -> None:
         region = self.correction_region
-        text = self.correction_editor.text()
-        if region is not None and region.valid_replacement(text):
-            self.submit(partial(self.session.preview_correction, region, text))
+        if region is None:
+            return
+        edited = self.correction_editor.text()
+        replacement = region.replace_literal(self.correction_initial, edited)
+        if edited.strip() and region.valid_replacement(replacement):
+            self.submit(partial(self.session.preview_correction, region, replacement))
 
     def close_correction_editor(self) -> None:
         self.correction_preview_timer.stop()
@@ -788,8 +803,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         region, batch = self.correction_region, self.correction_batch
         if region is None or batch is None:
             return
-        text = self.correction_editor.text()
-        if region.valid_replacement(text):
+        edited = self.correction_editor.text()
+        text = region.replace_literal(self.correction_initial, edited)
+        if edited.strip() and region.valid_replacement(text):
             self.send_correction_preview()
             batch.accept(region, text)
             self.close_correction_editor()
@@ -886,7 +902,10 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         if (
             draft is not None
             and region is not None
-            and not region.valid_replacement(draft.replacement)
+            and (
+                not self.correction_editor.text().strip()
+                or not region.valid_replacement(draft.replacement)
+            )
         ):
             self.correction_error(self.text('invalid_correction'))
             return False

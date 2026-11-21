@@ -135,9 +135,10 @@ public:
         Region bounds;
         uint16_t id = 0;
         bool short_form = false;
+        uint8_t literal = 255;
         std::vector<Region> glyphs;
     };
-    using TranslationRegions = std::array<TranslationRegion, max_lines>;
+    using TranslationRegions = std::vector<TranslationRegion>;
     void capture_translations(bool enabled) {
         if (enabled) translation_regions_.resize(screens_.size());
         else translation_regions_.clear();
@@ -277,7 +278,8 @@ private:
                 || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color;
 #ifdef CNTRL_EMULATOR
             if (!translation_regions_.empty())
-                full = full || a.translation_id != b.translation_id || a.translation_short != b.translation_short;
+                full = full || a.translation_id != b.translation_id || a.translation_short != b.translation_short
+                    || std::memcmp(a.translation_literals, b.translation_literals, sizeof(a.translation_literals));
 #endif
         }
         if (full) {
@@ -318,14 +320,35 @@ private:
 #ifdef CNTRL_EMULATOR
         if (!translation_regions_.empty()) {
             auto &regions = translation_regions_[screen];
+            regions.clear();
             for (unsigned i = 0; i < max_lines; ++i) {
                 const auto &line = painting_.lines[i];
-                regions[i] = {};
-                if (line.translation_id && !i18n::definitions[line.translation_id - 1].count) {
-                    auto &region = regions[i];
+                if (!line.translation_id) continue;
+                auto add = [&](uint8_t literal, unsigned first, unsigned end) {
+                    TranslationRegion region;
                     region.id = line.translation_id;
                     region.short_form = line.translation_short;
-                    region.bounds = raster_.text_region(line, text_y(i), region.glyphs);
+                    region.literal = literal;
+                    region.bounds = raster_.text_region(line, text_y(i), region.glyphs, first, end);
+                    if (!region.bounds.empty()) regions.push_back(std::move(region));
+                };
+                const unsigned count = i18n::definitions[line.translation_id - 1].count;
+                if (!count) { add(255, 0, UINT_MAX); continue; }
+                const unsigned length = unsigned(std::strlen(line.text));
+                for (unsigned literal = 0; literal <= count; ++literal) {
+                    unsigned begin = std::min(length, unsigned(line.translation_literals[literal][0]));
+                    unsigned end = std::min(length, unsigned(line.translation_literals[literal][1]));
+                    while (begin < end && line.text[begin] == ' ') ++begin;
+                    while (end > begin && line.text[end - 1] == ' ') --end;
+                    if (begin == end) continue;
+                    unsigned first = 0, last = 0;
+                    const char *cursor = line.text;
+                    for (uint32_t code; cursor < line.text + end;) {
+                        if (cursor < line.text + begin) ++first;
+                        if (!utf8::next(cursor, code)) break;
+                        ++last;
+                    }
+                    add(uint8_t(literal), first, last);
                 }
             }
         }
