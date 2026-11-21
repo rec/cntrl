@@ -26,6 +26,7 @@ from cntrl.patch_chooser import (
     setup_sync,
     transport,
 )
+from cntrl.patch_chooser.setup_compiler import compile_inputs
 from scripts import native_tests
 
 if TYPE_CHECKING:
@@ -257,7 +258,7 @@ def test_device_globals_sync_and_recovery_preserve_compiled_defaults(
     device.mkdir()
     with NativePeer([str(bundle_peer), str(device)]) as port:
         cli.run_setup(
-            cli.Copy(
+            cli.SetupCopy(
                 document=[*inputs.document, f'Locked={locked}'],
                 target=inputs.target,
                 port=Path(port),
@@ -322,7 +323,9 @@ def test_language_installation_recovery_sync_and_restart_preserve_setup_sources(
     device.mkdir()
     with NativePeer([str(bundle_peer), str(device)]) as port:
         cli.run_setup(
-            cli.Copy(document=inputs.document, target=inputs.target, port=Path(port))
+            cli.SetupCopy(
+                document=inputs.document, target=inputs.target, port=Path(port)
+            )
         )
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
@@ -397,7 +400,7 @@ def test_sync_preserves_mask_only_local_settings_edits_and_restored_inheritance(
     device = tmp_path / 'device'
     device.mkdir()
     with NativePeer([str(bundle_peer), str(device)]) as port:
-        cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
+        cli.run_setup(cli.SetupCopy(**inputs.model_dump(), port=Path(port)))
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             original = client.download('Show')
@@ -407,7 +410,7 @@ def test_sync_preserves_mask_only_local_settings_edits_and_restored_inheritance(
             client.copy('Show', local, True)
             client.ok('CNTRL SETUP FINISH')
             trace = data_files.Trace()
-            compiled = cli.compile_inputs(inputs, trace=trace)
+            compiled = compile_inputs(inputs, trace=trace)
             with pytest.raises(ValueError, match='unreconciled pedal edits'):
                 setup_sync.prepare_upload(inputs, compiled, trace, client)
             report = setup_sync.preview(inputs, client)
@@ -534,7 +537,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
     inputs = data_files.Sources(document=[f'Show={source}'], target=target)
     with NativePeer([str(bundle_peer)]) as port:
         cli.run_setup(
-            cli.Copy(
+            cli.SetupCopy(
                 document=[f'Show={source}', f'Other={other}'],
                 target=target,
                 port=Path(port),
@@ -569,7 +572,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
             client.select('Other')
         with pytest.raises(ValueError, match='unreconciled pedal edits'):
             cli.run_setup(
-                cli.Copy(
+                cli.SetupCopy(
                     document=inputs.document,
                     target=target,
                     port=Path(port),
@@ -599,7 +602,7 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
         assert tomlkit.parse(repeated.read_text())['changes'] == []
         setup_sync.apply_review(repeated)
         cli.run_setup(
-            cli.Copy(
+            cli.SetupCopy(
                 document=inputs.document, target=target, port=Path(port), overwrite=True
             )
         )
@@ -639,7 +642,7 @@ def test_source_sync_keeps_inherited_edits_local_and_checks_shared_defaults(
     )
     with NativePeer([str(bundle_peer)]) as port:
         cli.run_setup(
-            cli.Copy(
+            cli.SetupCopy(
                 **inputs.model_dump(exclude={'document'}),
                 document=[*inputs.document, f'Other={other}'],
                 port=Path(port),
@@ -696,7 +699,7 @@ def test_source_sync_keeps_inherited_edits_local_and_checks_shared_defaults(
             else:
                 assert authored == {'brightness': 75}
             assert setup_sync.canonical(
-                cli.compile_inputs(inputs).setups['Show']
+                compile_inputs(inputs).setups['Show']
             ) == setup_sync.canonical(bytes(edited))
 
 
@@ -775,7 +778,7 @@ def test_source_sync_retains_pedal_editable_fields(
         target=[str(ROOT / 'firmware/test/target.json'), '+', str(roles)],
     )
     with NativePeer([str(bundle_peer)]) as port:
-        cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
+        cli.run_setup(cli.SetupCopy(**inputs.model_dump(), port=Path(port)))
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             original = binary_format.core(client.download('Show'))
@@ -817,7 +820,7 @@ def test_source_sync_retains_pedal_editable_fields(
         report.write_text(tomlkit.dumps(review))
         setup_sync.apply_review(report)
         assert setup_sync.canonical(
-            cli.compile_inputs(inputs).setups['Show']
+            compile_inputs(inputs).setups['Show']
         ) == setup_sync.canonical(bytes(edited))
         if field in ('program', 'bank', 'volume'):
             # Clearing an inherited value requires replacing the derived parent.
@@ -837,7 +840,7 @@ def test_shared_sync_requires_review_and_recovers_interrupted_apply(
         target=[str(ROOT / 'firmware/test/target.json')],
     )
     with NativePeer([str(bundle_peer)]) as port:
-        cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
+        cli.run_setup(cli.SetupCopy(**inputs.model_dump(), port=Path(port)))
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             original = binary_format.core(client.download('One'))
@@ -885,7 +888,7 @@ def test_shared_sync_requires_review_and_recovers_interrupted_apply(
         setup_sync.recover(setup_sync.store(inputs) / 'pending.toml')
         assert first.read_text() == 'brightness=100\n'
         setup_sync.apply_review(report)
-        compiled = cli.compile_inputs(inputs)
+        compiled = compile_inputs(inputs)
         assert all(
             setup_sync.canonical(v)['brightness'] == 75
             for v in compiled.setups.values()
@@ -904,7 +907,7 @@ def test_shared_sync_refuses_incompatible_accepted_values(
         target=[str(ROOT / 'firmware/test/target.json')],
     )
     with NativePeer([str(bundle_peer)]) as port:
-        cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
+        cli.run_setup(cli.SetupCopy(**inputs.model_dump(), port=Path(port)))
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             for name, brightness in [('One', 75), ('Two', 25)]:
@@ -936,7 +939,7 @@ def test_sync_materializes_an_integer_patch_without_rewriting_other_fields(
         document=[str(source)], target=[str(ROOT / 'firmware/test/target.json')]
     )
     with NativePeer([str(bundle_peer)]) as port:
-        cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port)))
+        cli.run_setup(cli.SetupCopy(**inputs.model_dump(), port=Path(port)))
         with transport.SerialConnection(Path(port)) as connection:
             client = transport.SetupClient(connection)
             edited = bytearray(binary_format.core(client.download('show')))
@@ -957,7 +960,7 @@ def test_sync_materializes_an_integer_patch_without_rewriting_other_fields(
         setup_sync.apply_review(report)
         assert source.read_text().startswith('# shorthand\n')
         assert setup_sync.canonical(
-            cli.compile_inputs(inputs).setups['show']
+            compile_inputs(inputs).setups['show']
         ) == setup_sync.canonical(bytes(edited))
 
 
@@ -969,7 +972,7 @@ def test_sync_without_baseline_requires_explicit_two_way_choices(
     inputs = data_files.Sources(
         document=[str(source)], target=[str(ROOT / 'firmware/test/target.json')]
     )
-    bundle = cli.compile_inputs(inputs)
+    bundle = compile_inputs(inputs)
     original = binary_format.core(bundle.setups['setup'])
     edited = bytearray(original)
     edited[18] = 75
@@ -994,7 +997,9 @@ def test_sync_without_baseline_requires_explicit_two_way_choices(
         setup_sync.apply_review(report)
         assert source.read_text() == 'brightness=100\n'
         assert setup_sync.baseline(setup_sync.store(inputs))['setup'] == bytes(edited)
-        cli.run_setup(cli.Copy(**inputs.model_dump(), port=Path(port), overwrite=True))
+        cli.run_setup(
+            cli.SetupCopy(**inputs.model_dump(), port=Path(port), overwrite=True)
+        )
 
 
 def test_setup_copy_transfers_playback_and_looper_dependencies(
@@ -1024,7 +1029,7 @@ def test_setup_copy_transfers_playback_and_looper_dependencies(
     (host / 'unused.mid').write_bytes(b'not referenced')
     target = [str(ROOT / 'firmware/test/target.json')]
     with NativePeer([str(bundle_peer), str(device)]) as port:
-        command = cli.Copy(document=[str(source)], target=target, port=Path(port))
+        command = cli.SetupCopy(document=[str(source)], target=target, port=Path(port))
         cli.run_setup(command)
         assert (device / 'cntrl/midi/intro.mid').read_bytes() == intro
         assert (device / 'cntrl/midi/loop.mid').read_bytes() == loop
@@ -1071,9 +1076,11 @@ def test_download_collects_setups_companions_and_midi_before_writing(
     (host / 'song.mid').write_bytes(midi)
     target = [str(ROOT / 'firmware/test/target.json')]
     with NativePeer([str(bundle_peer), str(device)]) as port:
-        cli.run_setup(cli.Copy(document=[str(source)], target=target, port=Path(port)))
+        cli.run_setup(
+            cli.SetupCopy(document=[str(source)], target=target, port=Path(port))
+        )
         output = tmp_path / 'download'
-        cli.run_setup(cli.Download(output=output, port=Path(port)))
+        cli.run_setup(cli.SetupDownload(output=output, port=Path(port)))
         assert sorted(p.name for p in output.iterdir()) == [
             'Other.toml',
             'Show.toml',
@@ -1090,7 +1097,7 @@ def test_download_collects_setups_companions_and_midi_before_writing(
             (manifests[0].parent / p).is_file() for p in manifest['baselines'].values()
         )
         assert (output / 'song.mid').read_bytes() == midi
-        rebuilt = cli.compile_inputs(
+        rebuilt = compile_inputs(
             data_files.Sources(document=[str(output / 'Show.toml')], target=target)
         )
         assert rebuilt.names == ['Other', 'Show']
@@ -1099,7 +1106,9 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         ) == {'song.mid': midi}
         # Selecting only Show still downloads its live companion and assets.
         selected = tmp_path / 'selected'
-        cli.run_setup(cli.Download(names=['Show'], output=selected, port=Path(port)))
+        cli.run_setup(
+            cli.SetupDownload(names=['Show'], output=selected, port=Path(port))
+        )
         assert sorted(p.name for p in selected.iterdir()) == [
             'Other.toml',
             'Show.toml',
@@ -1110,7 +1119,7 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         blocked = tmp_path / 'blocked'
         blocked.mkdir()
         (blocked / 'song.mid').write_bytes(b'existing MIDI')
-        command = cli.Download(names=['Show'], output=blocked, port=Path(port))
+        command = cli.SetupDownload(names=['Show'], output=blocked, port=Path(port))
         with pytest.raises(compiler.CompilationError, match='--force/-f'):
             cli.run_setup(command)
         assert [p.name for p in blocked.iterdir()] == ['song.mid']
@@ -1121,7 +1130,7 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         (device / 'cntrl/midi/song.mid').unlink()
         missing = tmp_path / 'missing'
         with pytest.raises(FileNotFoundError):
-            cli.run_setup(cli.Download(output=missing, port=Path(port)))
+            cli.run_setup(cli.SetupDownload(output=missing, port=Path(port)))
         assert not missing.exists()
 
 

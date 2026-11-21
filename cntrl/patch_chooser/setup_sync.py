@@ -30,6 +30,7 @@ from . import (
     source_archive,
     transport,
 )
+from .setup_compiler import compile_inputs
 
 
 class Choice(StrEnum):
@@ -695,7 +696,6 @@ def preview(inputs: data_files.Sources, client: transport.SetupClient) -> Path:
 def preview_locked(
     inputs: data_files.Sources, client: transport.SetupClient, root: Path
 ) -> Path:
-    from .cli import compile_inputs
     from .source_archive import recovered_baselines
 
     check_pending(root)
@@ -988,8 +988,6 @@ def apply_review(path: Path) -> None:
 
 
 def apply_locked(path: Path, review: Review) -> None:
-    from .cli import compile_inputs
-
     proposal = Review.model_validate(
         tomlkit.parse((path.parent / 'proposal.toml').read_bytes().decode()).unwrap()
     )

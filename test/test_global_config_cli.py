@@ -15,6 +15,7 @@ from cntrl.patch_chooser import (
     setup_sync,
     source_archive,
 )
+from cntrl.patch_chooser.setup_compiler import compile_inputs
 
 
 class ArchivedSource:
@@ -69,7 +70,7 @@ main = ['sound', 'play']
     )
     trace = data_files.Trace()
     movies: dict[int, bytes] = {}
-    original = cli.compile_inputs(inputs, movies=movies, trace=trace)
+    original = compile_inputs(inputs, movies=movies, trace=trace)
     assert midi_assets.collect(original.setups, trace.files) == {'intro.mid': midi}
     assert trace.files[rig / 'intro.cnsa'] == movie
     assert instruments / 'synth.toml' in trace.files
@@ -87,7 +88,7 @@ main = ['sound', 'play']
     monkeypatch.setattr(global_config, 'user_path', lambda: different)
     session = next((recovered / 'sessions').iterdir())
     restored_trace = data_files.Trace()
-    restored = cli.compile_inputs(
+    restored = compile_inputs(
         data_files.Sources(document=[str(session / 'Live.toml')]),
         movies={},
         trace=restored_trace,

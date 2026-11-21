@@ -496,7 +496,7 @@ def prepare(profile: Profile, root: Path, evidence: Evidence) -> None:
     fixture = Path(__file__).parent / 'qualification/dynamic-memory-thru.toml'
     with RecordedConnection(profile.port, evidence) as connection:
         cli.run_setup(
-            cli.Copy(
+            cli.SetupCopy(
                 document=[f'{n}={fixture}' for n in SETUPS],
                 target=[str(profile.target_export / 'target.toml')],
                 port=profile.port,

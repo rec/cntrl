@@ -70,12 +70,12 @@ def test_unwritable_directory_shape_is_detected_before_any_file_is_written(
 
 
 def test_download_options_default_to_all_setups_and_current_directory() -> None:
-    command = tyro.cli(cli.Download, args=['--port', 'device'])
+    command = tyro.cli(cli.SetupDownload, args=['--port', 'device'])
     assert command.names == []
     assert command.output == Path('.')
     assert command.force is False
     command = tyro.cli(
-        cli.Download, args=['Show', '-o', 'destination', '-f', '--port', 'device']
+        cli.SetupDownload, args=['Show', '-o', 'destination', '-f', '--port', 'device']
     )
     assert command.names == ['Show']
     assert command.output == Path('destination')

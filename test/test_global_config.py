@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import cli, compiler, data_files, global_config, resolved
+from cntrl.patch_chooser import compiler, data_files, global_config, resolved
+from cntrl.patch_chooser.setup_compiler import compile_inputs
 
 
 def test_defaults_merge_named_fields_and_replace_lists_without_mutation() -> None:
@@ -354,7 +355,7 @@ def test_compilation_inherits_a_rig_and_keeps_explicit_builtin_values(
         '[instruments.synth]\nchannel = 2\n'
         '[patches.sound]\nprogram = 12\n'
     )
-    bundle = cli.compile_inputs(
+    bundle = compile_inputs(
         data_files.Sources(
             document=[f'Live={path}'], target=['firmware/test/target.json']
         )

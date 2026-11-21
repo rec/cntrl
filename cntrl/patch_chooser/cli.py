@@ -26,7 +26,6 @@ from . import (
     device_globals,
     devices,
     disk_speed,
-    global_config,
     history,
     languages,
     midi_assets,
@@ -39,6 +38,7 @@ from . import (
     source_archive,
     transport,
 )
+from .setup_compiler import compile_inputs, document_references
 
 
 class Compile(data_files.Sources, frozen=True):
@@ -47,27 +47,27 @@ class Compile(data_files.Sources, frozen=True):
     output: Path
 
 
-class Copy(data_files.Sources, frozen=True):
+class SetupCopy(data_files.Sources, frozen=True):
     """Compile, copy and verify named setups on the pedal's SD card."""
 
     port: Path
     overwrite: Annotated[bool, tyro.conf.arg(aliases=['-o'])] = False
 
 
-class Set(BaseModel, frozen=True):
+class SetupSet(BaseModel, frozen=True):
     """Print the persistent selection, or select a named setup."""
 
     port: Path
     name: Annotated[str | None, tyro.conf.Positional] = None
 
 
-class List(BaseModel, frozen=True):
+class SetupList(BaseModel, frozen=True):
     """List setups and commit dates, one per line."""
 
     port: Path
 
 
-class Delete(BaseModel, frozen=True):
+class SetupDelete(BaseModel, frozen=True):
     """Delete named setups after confirmation."""
 
     names: Annotated[list[str], tyro.conf.Positional]
@@ -75,14 +75,14 @@ class Delete(BaseModel, frozen=True):
     yes: Annotated[bool, tyro.conf.arg(aliases=['-y'])] = False
 
 
-class Rotate(BaseModel, frozen=True):
+class SetupRotate(BaseModel, frozen=True):
     """Select the next setup, wrapping alphabetically."""
 
     port: Path
     backward: Annotated[bool, tyro.conf.arg(aliases=['-b'])] = False
 
 
-class Download(BaseModel, frozen=True):
+class SetupDownload(BaseModel, frozen=True):
     """Download editable setups and their files; omit names to download all setups."""
 
     names: Annotated[list[str], tyro.conf.Positional] = Field(default_factory=list)
@@ -96,12 +96,12 @@ class SetupCLI(BaseModel, frozen=True):
         Annotated[setup_create.Create, tyro.conf.subcommand(name='create')]
         | Annotated[setup_sync.Sync, tyro.conf.subcommand(name='sync')]
         | Annotated[history.History, tyro.conf.subcommand(name='history')]
-        | Annotated[Copy, tyro.conf.subcommand(name='copy')]
-        | Annotated[Set, tyro.conf.subcommand(name='set')]
-        | Annotated[List, tyro.conf.subcommand(name='list')]
-        | Annotated[Delete, tyro.conf.subcommand(name='del')]
-        | Annotated[Rotate, tyro.conf.subcommand(name='rotate')]
-        | Annotated[Download, tyro.conf.subcommand(name='download')]
+        | Annotated[SetupCopy, tyro.conf.subcommand(name='copy')]
+        | Annotated[SetupSet, tyro.conf.subcommand(name='set')]
+        | Annotated[SetupList, tyro.conf.subcommand(name='list')]
+        | Annotated[SetupDelete, tyro.conf.subcommand(name='del')]
+        | Annotated[SetupRotate, tyro.conf.subcommand(name='rotate')]
+        | Annotated[SetupDownload, tyro.conf.subcommand(name='download')]
         | Annotated[backups.Backup, tyro.conf.subcommand(name='backup')]
         | Annotated[backups.Restore, tyro.conf.subcommand(name='restore')]
         | Annotated[backups.Verify, tyro.conf.subcommand(name='verify')]
@@ -140,191 +140,13 @@ class Status(BaseModel, frozen=True):
     ] = None
 
 
-def compile_inputs(
-    command: data_files.Sources,
-    assets: dict[str, dict[int, bytes]] | None = None,
-    movies: dict[int, bytes] | None = None,
-    *,
-    trace: data_files.Trace | None = None,
-    overrides: dict[Path, bytes] | None = None,
-) -> setup_bundle.SetupBundle:
-    errors: list[str] = []
-    if trace is None:
-        trace = data_files.Trace()
-    command = global_config.resolve_inputs(command, trace=trace, overrides=overrides)
-
-    documents = data_files.expressions(command.document, errors)
-    targets = data_files.expressions(command.target, errors)
-    definitions = data_files.expressions(command.definitions, errors)
-    tables = [e for t in command.table for e in data_files.expressions(t, errors)]
-    _, relocations = (
-        source_archive.session_context(documents[0]) if documents else ({}, {})
-    )
-    target_data = [
-        data_files.load_target(
-            e,
-            command.avoid_confict,
-            errors,
-            trace=trace,
-            overrides=overrides,
-            relocations=relocations,
-        )
-        for e in targets
-    ]
-    definition_data = [
-        data_files.load(
-            e,
-            command.avoid_confict,
-            errors,
-            trace=trace,
-            overrides=overrides,
-            relocations=relocations,
-        )
-        for e in definitions
-    ]
-    table_data: list[object] = [
-        data_files.load(
-            e,
-            command.avoid_confict,
-            errors,
-            trace=trace,
-            overrides=overrides,
-            relocations=relocations,
-        )
-        for e in tables
-    ]
-    if len(target_data) != 1:
-        errors.append('expected one target expression; use + to combine target files')
-    if len(definition_data) > 1:
-        errors.append(
-            'expected one definitions expression; use + to combine definition files'
-        )
-    target: models.Target | None = None
-    if len(target_data) == 1:
-        try:
-            target = models.Target.model_validate(target_data[0])
-        except ValueError as error:
-            errors.append(f'target: {error}')
-    if not documents:
-        errors.append('at least one setup data-file expression is required')
-    result: dict[str, bytes] = {}
-    seen: set[str] = set()
-    sources: dict[str, object] = {}
-    # Companion documents use the same logical names on the host and SD card.
-    # Load the whole dependency graph before compiling or opening a transport.
-    for e in documents:
-        sources[e.name] = global_config.load_setup(
-            e,
-            command.avoid_confict,
-            errors,
-            trace=trace,
-            overrides=overrides,
-            defaults=command.global_defaults,
-        )
-    index = 0
-    while index < len(documents):
-        expression = documents[index]
-        index += 1
-        for name in document_references(sources[expression.name]):
-            if any(n.lower() == name.lower() for n in sources):
-                continue
-            try:
-                data_files.validate_name(name)
-            except ValueError as error:
-                errors.append(f'{expression.paths[0]}: {error}')
-                continue
-            companion = data_files.DataFile(
-                name=name, paths=[expression.paths[0].parent / f'{name}.toml']
-            )
-            if (expression.paths[0].resolve().parent / 'cntrl-session.toml').exists():
-                recovered = source_archive.recovered_recipe(
-                    expression.paths[0].resolve().parent
-                )
-                companion = next(
-                    (
-                        e
-                        for e in data_files.expressions(recovered.document)
-                        if e.name == name
-                    ),
-                    companion,
-                )
-            sources[name] = global_config.load_setup(
-                companion,
-                command.avoid_confict,
-                errors,
-                trace=trace,
-                overrides=overrides,
-                defaults=command.global_defaults,
-            )
-            documents.append(companion)
-    for e in documents:
-        document = sources[e.name]
-        try:
-            data_files.validate_name(e.name)
-        except ValueError as error:
-            errors.append(str(error))
-        if e.name.lower() in seen:
-            errors.append(f'{e.name}: duplicate destination name')
-        seen.add(e.name.lower())
-        if target is not None:
-            try:
-                fonts: dict[int, bytes] = {}
-                result[e.name] = compiler.compile_show(
-                    document,
-                    definition_data[0] if definition_data else {'profiles': []},
-                    table_data,
-                    target,
-                    fonts,
-                    sources,
-                    movies,
-                    source_snapshots=trace.files,
-                    setting_overrides=trace.setting_overrides.get(e.name),
-                )
-                if assets is not None:
-                    assets[e.name] = fonts
-            except compiler.CompilationError as error:
-                errors.extend(f'{e.paths[0]} ({e.name}): {x}' for x in error.errors)
-    if trace is not None:
-        global_names = {e.name for e in [*targets, *definitions, *tables]}
-        for consumers in trace.consumers.values():
-            if any(n in global_names for n in consumers):
-                consumers[:] = list(
-                    dict.fromkeys(
-                        [n for n in consumers if n not in global_names]
-                        + [e.name for e in documents]
-                    )
-                )
-    if errors:
-        raise compiler.CompilationError(errors)
-    try:
-        assert target is not None
-        return setup_bundle.build(result, sources, target.memory, command.memory_margin)
-    except ValueError as error:
-        raise compiler.CompilationError([str(error)]) from error
-
-
-def document_references(document: object) -> list[str]:
-    result: list[str] = []
-    pending = [document]
-    while pending:
-        value = pending.pop()
-        if isinstance(value, dict):
-            if 'patch' in value and isinstance(name := value.get('document'), str):
-                if name not in result:
-                    result.append(name)
-            pending.extend(value.values())
-        elif isinstance(value, list):
-            pending.extend(value)
-    return result
-
-
 def run_setup(
-    command: Copy
-    | Set
-    | List
-    | Delete
-    | Rotate
-    | Download
+    command: SetupCopy
+    | SetupSet
+    | SetupList
+    | SetupDelete
+    | SetupRotate
+    | SetupDownload
     | history.History
     | backups.Backup
     | backups.Restore
@@ -336,8 +158,8 @@ def run_setup(
     *,
     connection: transport.SerialConnection | None = None,
 ) -> None:
-    if connection is not None and not isinstance(command, Copy):
-        raise ValueError('a supplied setup connection is supported for Copy only')
+    if connection is not None and not isinstance(command, SetupCopy):
+        raise ValueError('a supplied setup connection is supported for setup copy only')
     if isinstance(command, setup_create.Create):
         setup_create.run(command)
         return
@@ -384,7 +206,7 @@ def run_setup(
         return
     lock = (
         writer_lock(setup_sync.store(command), operation='setup sync operation')
-        if isinstance(command, Copy)
+        if isinstance(command, SetupCopy)
         else nullcontext()
     )
     with lock:
@@ -392,7 +214,12 @@ def run_setup(
 
 
 def setup_transfer(
-    command: Set | Rotate | List | Copy | Download | Delete,
+    command: SetupSet
+    | SetupRotate
+    | SetupList
+    | SetupCopy
+    | SetupDownload
+    | SetupDelete,
     connection: transport.SerialConnection | None,
 ) -> None:
     assets: dict[str, dict[int, bytes]] = {}
@@ -400,7 +227,7 @@ def setup_transfer(
     trace = data_files.Trace()
     bundle = (
         compile_inputs(command, assets, movies, trace=trace)
-        if isinstance(command, Copy)
+        if isinstance(command, SetupCopy)
         else None
     )
     midi = midi_assets.collect(bundle.setups, trace.files) if bundle is not None else {}
@@ -410,16 +237,16 @@ def setup_transfer(
         else transport.SerialConnection(command.port) as connection
     ):
         client = transport.SetupClient(connection)
-        if isinstance(command, Set):
+        if isinstance(command, SetupSet):
             if command.name is not None:
                 client.select(command.name)
             else:
                 print(client.current())
-        elif isinstance(command, Rotate):
+        elif isinstance(command, SetupRotate):
             client.ok(
                 'CNTRL SETUP BACKWARD' if command.backward else 'CNTRL SETUP FORWARD'
             )
-        elif isinstance(command, List):
+        elif isinstance(command, SetupList):
             for e in client.catalogue():
                 stamp = (
                     datetime.fromtimestamp(e.modified).strftime('%Y-%m-%d %H:%M:%S')
@@ -427,7 +254,7 @@ def setup_transfer(
                     else 'unknown'
                 )
                 print(f'{e.name}  {stamp}' + ('' if e.valid else ' (invalid setup)'))
-        elif isinstance(command, Copy):
+        elif isinstance(command, SetupCopy):
             assert bundle is not None
             compiled = bundle.setups
             existing = {e.name.lower(): e.name for e in client.catalogue()}
@@ -498,7 +325,7 @@ def setup_transfer(
             errors: list[str] = []
             names: list[str] = []
             requested = command.names
-            if isinstance(command, Download) and not requested:
+            if isinstance(command, SetupDownload) and not requested:
                 requested = list(entries.values())
             for n in requested:
                 try:
@@ -515,7 +342,7 @@ def setup_transfer(
                 errors.append('at least one setup name is required')
             if errors:
                 raise compiler.CompilationError(errors)
-            if isinstance(command, Delete):
+            if isinstance(command, SetupDelete):
                 if not command.yes:
                     if not sys.stdin.isatty():
                         raise ValueError(

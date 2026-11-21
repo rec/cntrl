@@ -7,6 +7,7 @@ import pytest
 import tomlkit
 
 from cntrl.patch_chooser import cli, compiler, data_files, global_config, setup_create
+from cntrl.patch_chooser.setup_compiler import compile_inputs
 
 
 def answer(monkeypatch: pytest.MonkeyPatch, values: list[str]) -> list[str]:
@@ -40,7 +41,7 @@ def test_bare_cli_creates_compilable_commented_project(
         document=['setup.toml'],
         target=[str(ROOT / 'firmware/test/target.json')],
     )
-    bundle = cli.compile_inputs(source)
+    bundle = compile_inputs(source)
     assert bundle.names == ['setup']
     assert 'cntrl compile setup=setup.toml --target' in capsys.readouterr().out
 
@@ -120,7 +121,7 @@ Live = ['sound']
         'instruments': {'synth': {}}
     }
     trace = data_files.Trace()
-    cli.compile_inputs(
+    compile_inputs(
         data_files.Sources(
             document=[str(output / 'Live.toml')],
             target=[str(ROOT / 'firmware/test/target.json')],
