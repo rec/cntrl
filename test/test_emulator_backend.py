@@ -3,6 +3,7 @@
 import struct
 from collections.abc import Callable
 from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 from time import monotonic
 
@@ -694,6 +695,33 @@ def test_screenshots_preserve_rgb565_primary_colours(
     with Image.open(tmp_path / 'screenshots/lcd-1.png') as image:
         assert image.mode == 'RGB'
         assert image.tobytes()[:9] == b'\xff\0\0\0\xff\0\0\0\xff'
+
+
+def test_display_response_composes_rectangles_in_order(
+    backend_files: BackendFiles, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files = backend_files
+    display = files.target.displays[0]
+    y = display.height - 2
+    replies = [
+        struct.pack('<B5H', 1, 0, 2, y, 3, 2) + struct.pack('>6H', 1, 2, 3, 4, 5, 6),
+        struct.pack('<B5H', 1, 0, 3, y, 1, 2) + struct.pack('>2H', 7, 8),
+        b'\0',
+    ]
+    wire = BytesIO(b''.join(struct.pack('<I', len(r)) + r for r in replies))
+    with backend.Session(
+        files.layout, files.target, files.executable, tmp_path, files.setup
+    ) as session:
+        before = dict(session.frames)
+        expected = bytearray(before[display.id])
+        first = 2 * (y * display.width + 2)
+        second = first + 2 * display.width
+        expected[first : first + 6] = struct.pack('>3H', 1, 7, 5)
+        expected[second : second + 6] = struct.pack('>3H', 2, 8, 6)
+        with monkeypatch.context() as patch:
+            patch.setattr(session, 'read', wire.read)
+            session.receive()
+        assert session.frames == {**before, display.id: bytes(expected)}
 
 
 def test_invalid_scenario_targets_do_not_apply_earlier_events(
