@@ -9,14 +9,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 ## P2 | Reliability, correctness and recoverability
 
-5. **USB timeout does not bound a complete command (code finding).**
-   [Exchange](../cntrl/patch_chooser/transport.py#L94) can retry transport
-   failures indefinitely. Even with retries disabled, [reply readers](../cntrl/patch_chooser/transport.py#L283)
-   can poll without an overall deadline if the peer keeps replying with
-   waits or empty acknowledgements. Interactive reconnect behavior makes
-   sense, but automated invocations need an operation deadline and a
-   distinct result when a write may already have reached the device.
-
 7. **Native I/O stalls block the emulator window (code finding).**
    [The GUI timer](../cntrl/emulator/gui.py#L585) calls session operations
    synchronously, with a [ten-second request watchdog](../cntrl/emulator/backend.py#L146).
