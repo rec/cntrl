@@ -339,6 +339,7 @@ class Session:
 
     def receive(self) -> None:
         self.deadline = time.monotonic() + self.response_timeout
+        updated: dict[str, bytearray] = {}
         rejection = None
         while True:
             (size,) = struct.unpack('<I', self.read(4))
@@ -346,11 +347,13 @@ class Session:
                 raise ValueError('invalid native emulator frame size')
             payload = self.read(size)
             if payload == b'\0':
+                for display, pixels in updated.items():
+                    self.frames[display] = bytes(pixels)
                 if rejection is not None:
                     raise RequestRejected(rejection)
                 return
             if payload[0] == 1:
-                self.rectangle(payload[1:])
+                self.rectangle(payload[1:], updated)
             elif payload[0] == 2 and len(payload) >= 10:
                 timestamp, endpoint = struct.unpack_from('<QB', payload, 1)
                 connections = {e.route: e.name for e in self.target.midi_endpoints}
@@ -422,7 +425,7 @@ class Session:
             else:
                 raise ValueError('unknown native emulator response')
 
-    def rectangle(self, payload: bytes) -> None:
+    def rectangle(self, payload: bytes, updated: dict[str, bytearray]) -> None:
         if len(payload) < 10:
             raise ValueError('truncated display rectangle')
         screen, x, y, width, height = struct.unpack_from('<5H', payload)
@@ -437,13 +440,19 @@ class Session:
             or len(payload) != 10 + width * height * 2
         ):
             raise ValueError('invalid native display rectangle')
-        frame = bytearray(self.frames[display.id])
-        for col in range(width):
-            for row in range(height):
-                source = 10 + 2 * (col * height + row)
-                destination = 2 * ((y + row) * display.width + x + col)
-                frame[destination : destination + 2] = payload[source : source + 2]
-        self.frames[display.id] = bytes(frame)
+        if display.id not in updated:
+            updated[display.id] = bytearray(self.frames[display.id])
+        # Match the byte order on both sides by copying each RGB565 pixel as a unit.
+        frame = memoryview(updated[display.id]).cast('H')
+        pixels = memoryview(payload)[10:].cast('H')
+        start = y * display.width + x
+        if width == 1:
+            frame[start : start + height * display.width : display.width] = pixels
+            return
+        # The device streams columns, while the host display expects rows.
+        for row in range(height):
+            frame[start : start + width] = pixels[row::height]
+            start += display.width
 
     def advance(self, time_us: int) -> None:
         if not self.time_us <= time_us <= 0xFFFFFFFFFFFFFFFF:

@@ -91,13 +91,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
     file size. Isolate boundaries as behavior changes, starting with review
     publication and recovery because they share critical invariants.
 
-20. **Emulator drawing copies whole frames for partial updates
-    (code finding).** [Rectangle handling](../cntrl/emulator/backend.py#L399)
-    copies a full display before and after each rectangle and transposes
-    pixels in Python. Many small updates can spend more time on copying than
-    drawing. Profile a scroll and a full redraw before choosing a mutable
-    framebuffer or a more efficient conversion.
-
 21. **Historical snapshots and native builds can consume disk unchecked
     (risk to verify).** [Sync snapshots](../cntrl/patch_chooser/setup_sync.py#L342)
     create new directories with source and setup copies, and the [native cache](../cntrl/firmware/native_cache.py#L49)
