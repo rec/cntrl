@@ -17,15 +17,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
    sense, but automated invocations need an operation deadline and a
    distinct result when a write may already have reached the device.
 
-6. **Native request errors can appear as successful replay runs
-   (code finding).** [The native command loop](../firmware/emulator/main.cpp#L753)
-   sends an error frame and then acknowledges. [The Python receiver](../cntrl/emulator/backend.py#L345)
-   records it as an event, and [replay](../cntrl/emulator/replay.py#L81)
-   keeps advancing. Startup checks the error events explicitly.
-   Define which frames mean request rejection and which are recoverable
-   runtime notifications. Give replay callers a reliable failure result
-   for rejected input without treating every runtime warning as fatal.
-
 7. **Native I/O stalls block the emulator window (code finding).**
    [The GUI timer](../cntrl/emulator/gui.py#L585) calls session operations
    synchronously, with a [ten-second request watchdog](../cntrl/emulator/backend.py#L146).

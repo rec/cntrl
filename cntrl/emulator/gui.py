@@ -10,7 +10,7 @@ import tomlkit
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import models
-from .backend import Session
+from .backend import RequestRejected, Session
 from .host_midi import MIDI_ERRORS, HostMidi
 from .layout import Canvas, Placement
 from .localization import dialog_messages, messages
@@ -605,7 +605,10 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             for n, c in list(self.host.items()):
                 try:
                     for p in c.receive():
-                        self.session.midi(n, p)
+                        try:
+                            self.session.midi(n, p)
+                        except RequestRejected as error:
+                            self.log.appendPlainText(str(error))
                 except MIDI_ERRORS as error:
                     if self.session.failed:
                         self.runtime_failed(error)

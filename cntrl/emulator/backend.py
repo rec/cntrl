@@ -27,6 +27,10 @@ from .layout import EmulatorLayout
 from .replay import Event, validate_name_key
 
 
+class RequestRejected(ValueError):
+    """The native engine declined an input and remains available."""
+
+
 class OutputEvent(BaseModel, frozen=True):
     kind: Literal['midi', 'error', 'relay', 'keyboard', 'firmware']
     endpoint: str = ''
@@ -325,6 +329,8 @@ class Session:
             self.process.stdin.write(struct.pack('<I', len(payload)) + payload)
             self.process.stdin.flush()
             self.receive()
+        except RequestRejected:
+            raise
         except (OSError, ValueError):
             self.failed = True
             raise
@@ -333,12 +339,15 @@ class Session:
 
     def receive(self) -> None:
         self.deadline = time.monotonic() + self.response_timeout
+        rejection = None
         while True:
             (size,) = struct.unpack('<I', self.read(4))
             if not 1 <= size <= 65536:
                 raise ValueError('invalid native emulator frame size')
             payload = self.read(size)
             if payload == b'\0':
+                if rejection is not None:
+                    raise RequestRejected(rejection)
                 return
             if payload[0] == 1:
                 self.rectangle(payload[1:])
@@ -408,6 +417,8 @@ class Session:
                 self.editing_name = bool(payload[1])
             elif payload[0] == 9:
                 self.language = payload[1:].decode()
+            elif payload[0] == 10:
+                rejection = payload[1:].decode()
             else:
                 raise ValueError('unknown native emulator response')
 

@@ -684,7 +684,8 @@ void Session::command(const std::vector<uint8_t> &bytes) {
     else if (p[0] == 2 && length == 3 && p[1] < target::button_count && p[2] <= 1) {
         board.held = uint8_t((board.held & ~(1u << p[1])) | (unsigned(p[2]) << p[1]));
         tick(); settle();
-    } else if (p[0] == 3 && length >= 3 && p[1] < target::endpoints.size() && target::midi_connections.route(p[1])->input && board.midi_endpoint_connected(p[1])) {
+    } else if (p[0] == 3 && length >= 3 && p[1] < target::endpoints.size() && target::midi_connections.route(p[1])->input) {
+        if (!board.midi_endpoint_connected(p[1])) throw std::runtime_error("MIDI input is disconnected");
         if (board.incoming[p[1]].size() + length - 2 > 65536) throw std::runtime_error("emulated MIDI input queue is full");
         for (unsigned i = 2; i < length; ++i) { midi::InputEvent event; event.input = p[1]; event.byte = p[i]; event.clock_source = p[1]; board.incoming[p[1]].push_back(event); }
         // A one-byte real-time message can require its own queued output poll.
@@ -752,7 +753,7 @@ int main(int argc,char **argv) {
         std::vector<uint8_t> bytes;
         while (cntrl::emulator::request(bytes)) {
             try { session.command(bytes); }
-            catch (const std::runtime_error &error) { cntrl::emulator::error(error.what()); }
+            catch (const std::runtime_error &error) { cntrl::emulator::error(error.what(), 10); }
             session.input_state();
             cntrl::emulator::ack();
         }

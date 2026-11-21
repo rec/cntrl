@@ -14,8 +14,8 @@ inline void frame(const std::vector<uint8_t> &bytes) {
     std::cout.write(reinterpret_cast<const char *>(length), 4);
     std::cout.write(reinterpret_cast<const char *>(bytes.data()), std::streamsize(bytes.size()));
 }
-inline void error(const char *message) {
-    std::vector<uint8_t> bytes{3}; bytes.insert(bytes.end(), message, message + std::min(std::strlen(message),size_t(65535))); frame(bytes);
+inline void error(const char *message, uint8_t kind = 3) {
+    std::vector<uint8_t> bytes{kind}; bytes.insert(bytes.end(), message, message + std::min(std::strlen(message),size_t(65535))); frame(bytes);
 }
 inline void ack() { frame({0}); std::cout.flush(); }
 inline bool request(std::vector<uint8_t> &bytes) {
