@@ -26,6 +26,8 @@ from . import font_comparison
 from .layout import EmulatorLayout
 from .replay import Event, validate_name_key
 
+MAX_REPLAY_ADVANCE_US = 10_000_000
+
 
 class RequestRejected(ValueError):
     """The native engine declined an input and remains available."""
@@ -454,10 +456,26 @@ class Session:
             frame[start : start + width] = pixels[row::height]
             start += display.width
 
-    def advance(self, time_us: int) -> None:
+    def advance(self, time_us: int, *, replay: bool = False) -> None:
         if not self.time_us <= time_us <= 0xFFFFFFFFFFFFFFFF:
             raise ValueError('virtual time must advance monotonically within uint64')
+        cursor = self.time_us
         self.time_us = time_us
+        # Whole-millisecond segments preserve the native tick phase. Intermediate
+        # acknowledgements give each segment its own watchdog without settling.
+        while (
+            replay
+            and not self.stock_firmware
+            and time_us - cursor > MAX_REPLAY_ADVANCE_US
+        ):
+            cursor += MAX_REPLAY_ADVANCE_US
+            try:
+                self.request(b'\x01' + struct.pack('<Q', cursor) + b'\x00')
+            except RequestRejected as error:
+                # Alternate --source-root checkouts may use the older wire format.
+                if str(error) != 'unsupported or malformed emulator command':
+                    raise
+                break
         self.request(b'\x01' + struct.pack('<Q', time_us))
 
     def memory(self) -> dict[str, int]:
