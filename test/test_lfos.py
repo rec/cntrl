@@ -9,6 +9,7 @@ from pytest_regressions.file_regression import FileRegressionFixture
 
 from cntrl.patch_chooser import (
     compiler,
+    compiler_inputs,
     lfos,
     midi_messages,
     midi_processing,
@@ -218,7 +219,7 @@ def test_full_setup_and_parameter_patches_round_trip(
     message: dict[str, object], runner: Path, tmp_path: Path
 ) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     show = {
         'midi': {'sweep': {'generate': {'lfo': configuration()}, 'to': 'trs'}},

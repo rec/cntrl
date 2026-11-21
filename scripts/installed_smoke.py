@@ -10,7 +10,14 @@ import cntrl
 from cntrl.animation import asset
 from cntrl.fonts import assets
 from cntrl.fonts.outline import Outline
-from cntrl.patch_chooser import binary_format, compiler, models, resolved, setup_bundle
+from cntrl.patch_chooser import (
+    binary_format,
+    compiler,
+    compiler_inputs,
+    models,
+    resolved,
+    setup_bundle,
+)
 
 
 class Smoke(BaseModel, frozen=True):
@@ -26,10 +33,10 @@ def run(options: Smoke) -> None:
     )
     options.output.mkdir(parents=True, exist_ok=True)
     target = models.Target.model_validate(
-        compiler.read_document(options.fixtures / 'target.json')
+        compiler_inputs.read_document(options.fixtures / 'target.json')
     )
-    source = compiler.read_document(options.fixtures / 'show.json')
-    definitions = compiler.read_document(options.fixtures / 'definitions.json')
+    source = compiler_inputs.read_document(options.fixtures / 'show.json')
+    definitions = compiler_inputs.read_document(options.fixtures / 'definitions.json')
     data = compiler.compile_show(source, definitions, [], target)
     document = options.output / 'show.bin'
     document.write_bytes(data)

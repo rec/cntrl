@@ -2,7 +2,15 @@
 
 from pathlib import Path
 
-from . import compiler, data_files, global_config, models, setup_bundle, source_archive
+from . import (
+    compiler,
+    compiler_errors,
+    data_files,
+    global_config,
+    models,
+    setup_bundle,
+    source_archive,
+)
 
 
 def compile_inputs(
@@ -147,7 +155,7 @@ def compile_inputs(
                 )
                 if assets is not None:
                     assets[e.name] = fonts
-            except compiler.CompilationError as error:
+            except compiler_errors.CompilationError as error:
                 errors.extend(f'{e.paths[0]} ({e.name}): {x}' for x in error.errors)
     if trace is not None:
         global_names = {e.name for e in [*targets, *definitions, *tables]}
@@ -160,12 +168,12 @@ def compile_inputs(
                     )
                 )
     if errors:
-        raise compiler.CompilationError(errors)
+        raise compiler_errors.CompilationError(errors)
     try:
         assert target is not None
         return setup_bundle.build(result, sources, target.memory, command.memory_margin)
     except ValueError as error:
-        raise compiler.CompilationError([str(error)]) from error
+        raise compiler_errors.CompilationError([str(error)]) from error
 
 
 def document_references(document: object) -> list[str]:

@@ -21,6 +21,9 @@ from pydantic import (
 from . import (
     binary_format,
     compiler,
+    compiler_errors,
+    compiler_inputs,
+    compiler_wire,
     data_files,
     device_settings,
     display,
@@ -259,7 +262,7 @@ def encode(
                 relocations=relocations,
             )
             if errors:
-                raise compiler.CompilationError(errors)
+                raise compiler_errors.CompilationError(errors)
         port_modes = cast(dict[str, models.TrsMode], context['trs_ports'])
         auxiliary_switches = cast(dict[str, str], context['auxiliary_switches'])
         scopes = [
@@ -299,19 +302,19 @@ def encode(
                 source_snapshots=trace.files if trace is not None else None,
                 binding_scopes=scopes,
             )
-        except compiler.CompilationError as error:
+        except compiler_errors.CompilationError as error:
             messages = error.errors
             for index, path in enumerate(paths):
                 messages = [
                     m.replace(f'patch_cycles.Songs[{index}]', path) for m in messages
                 ]
-            raise compiler.CompilationError(messages) from error
+            raise compiler_errors.CompilationError(messages) from error
         graph = resolved.graph_offset(source)
-        _, _, count, _, _, _ = compiler.GRAPH.unpack_from(source, graph)
-        offset = graph + compiler.GRAPH.size + count * 4
+        _, _, count, _, _, _ = compiler_wire.GRAPH.unpack_from(source, graph)
+        offset = graph + compiler_wire.GRAPH.size + count * 4
         first = 0
         if values_for_source:
-            instruments, cycles = compiler.HEADER.unpack_from(source)[4:6]
+            instruments, cycles = compiler_wire.HEADER.unpack_from(source)[4:6]
             for index in range(cycles):
                 at = 76 + instruments * 68 + index * 68
                 if source[at : at + 64].split(b'\0')[0] == b'Songs':
@@ -355,7 +358,7 @@ def encode(
                 0,
                 roots[position],
             )
-            header = compiler.HEADER.unpack_from(source)
+            header = compiler_wire.HEADER.unpack_from(source)
             label_offset = (
                 76 + header[4] * 68 + header[5] * 68 + (first + position) * 82 + 12
             )
@@ -960,14 +963,16 @@ def run(command: Copy | Download) -> None:
             authoring = data_files.expressions(recorded.document)[0]
         bindings, relocations = source_archive.session_context(authoring)
         library = Library.model_validate(
-            compiler.read_document(path, snapshots=trace.files, relocations=relocations)
+            compiler_inputs.read_document(
+                path, snapshots=trace.files, relocations=relocations
+            )
         )
         target_path = command.target
         if target_path is None and recorded is not None:
             target_path = data_files.expressions(recorded.target)[0].paths[0]
         target = (
             models.Target.model_validate(
-                compiler.read_document(
+                compiler_inputs.read_document(
                     target_path, snapshots=trace.files, relocations=relocations
                 )
             )
@@ -1034,7 +1039,7 @@ def run(command: Copy | Download) -> None:
                     companion_names.append(reference)
             index += 1
         if errors:
-            raise compiler.CompilationError(errors)
+            raise compiler_errors.CompilationError(errors)
         assets: dict[int, bytes] = {}
         movies: dict[int, bytes] = {}
         if companion_names and target is None:

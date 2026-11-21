@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, midi_endpoints, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    midi_endpoints,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
@@ -61,7 +68,9 @@ def test_file_and_clock_operations_use_declared_names_and_routes(
     path = tmp_path / 'setup.bin'
     path.write_bytes(data)
     native_tests.run_native([str(executable), str(path)], check=True)
-    with pytest.raises(compiler.CompilationError, match='unavailable MIDI file output'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='unavailable MIDI file output'
+    ):
         compiler.compile_show(
             {
                 'usb_device_midi': False,
@@ -86,7 +95,7 @@ def test_target_routes_must_be_dense_and_names_unambiguous() -> None:
 def base_target() -> models.Target:
     root = Path(__file__).resolve().parents[1]
     return models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
 
 

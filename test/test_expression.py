@@ -5,12 +5,18 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    models,
+    resolved,
+)
 
 
 @pytest.fixture
 def target() -> models.Target:
-    data = compiler.read_document(Path('firmware/test/target.json'))
+    data = compiler_inputs.read_document(Path('firmware/test/target.json'))
     return models.Target.model_validate(data).model_copy(
         update={'trs_ports': {'configurable-2': ['expression']}}
     )
@@ -61,7 +67,7 @@ def test_expression_requires_the_configured_input_role(target: models.Target) ->
     source = setup()
     source['trs_ports'] = {}
     with pytest.raises(
-        compiler.CompilationError, match='requires the expression TRS role'
+        compiler_errors.CompilationError, match='requires the expression TRS role'
     ):
         compiler.compile_show(source, {}, [], target)
 
@@ -80,5 +86,5 @@ def test_invalid_expression_assignment_is_rejected(
     target: models.Target, fields: dict[str, object]
 ) -> None:
     source = setup(**fields)
-    with pytest.raises(compiler.CompilationError):
+    with pytest.raises(compiler_errors.CompilationError):
         compiler.compile_show(source, {}, [], target)

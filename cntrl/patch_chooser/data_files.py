@@ -9,7 +9,8 @@ import tyro
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 from reccy.configuration import units
 
-from .compiler import CompilationError, read_document, source_reference
+from .compiler_errors import CompilationError
+from .compiler_inputs import read_document, source_reference
 
 
 class DataFile(BaseModel, frozen=True):

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tyro
 
-from cntrl.patch_chooser import cli, compiler
+from cntrl.patch_chooser import cli, compiler_errors
 
 
 @pytest.mark.parametrize(
@@ -24,7 +24,7 @@ def test_any_existing_file_prevents_all_writes(tmp_path: Path, existing: str) ->
     # Matching bytes are still an existing file and require explicit force.
     destination.write_bytes(files[Path(existing)])
     before = sorted(str(p.relative_to(tmp_path)) for p in tmp_path.rglob('*'))
-    with pytest.raises(compiler.CompilationError, match='--force/-f'):
+    with pytest.raises(compiler_errors.CompilationError, match='--force/-f'):
         cli.publish_download(files, tmp_path)
     assert sorted(str(p.relative_to(tmp_path)) for p in tmp_path.rglob('*')) == before
     assert destination.read_bytes() == files[Path(existing)]
@@ -59,7 +59,7 @@ def test_unwritable_directory_shape_is_detected_before_any_file_is_written(
     tmp_path: Path,
 ) -> None:
     (tmp_path / 'fonts').write_bytes(b'not a directory')
-    with pytest.raises(compiler.CompilationError, match='not a directory'):
+    with pytest.raises(compiler_errors.CompilationError, match='not a directory'):
         cli.publish_download(
             {Path('Show.toml'): b'new', Path('fonts/font.cfont'): b'font'},
             tmp_path,

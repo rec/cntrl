@@ -14,7 +14,13 @@ from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
 from cntrl.maker.morningstar.mc.import_backup import ImportBackup, convert, run
-from cntrl.patch_chooser import compiler, models, resolved, setup_bundle
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    models,
+    resolved,
+    setup_bundle,
+)
 
 
 def test_saved_vl70_bank_converts_to_editable_toml(
@@ -135,7 +141,9 @@ def test_latched_switch_cannot_enter_a_banked_patch(tmp_path: Path) -> None:
             'off': {'patches': []},
         }
     }
-    with pytest.raises(compiler.CompilationError, match='leaves the switch context'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='leaves the switch context'
+    ):
         compiler.compile_show(show, {}, [], target)
 
 

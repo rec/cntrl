@@ -14,6 +14,7 @@ from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,
+    compiler_inputs,
     data_files,
     device_settings,
     display,
@@ -35,7 +36,7 @@ def bitmap() -> bytes:
 
 
 def test_switch_statuses_have_prepared_runs_and_unicode_labels() -> None:
-    source = compiler.read_document(ROOT / 'firmware/test/show.json')
+    source = compiler_inputs.read_document(ROOT / 'firmware/test/show.json')
     assert isinstance(source, dict)
     source['switches'] = {
         'sustain': {
@@ -71,7 +72,7 @@ def test_switch_statuses_have_prepared_runs_and_unicode_labels() -> None:
     )
     data = compiler.compile_show(
         source,
-        compiler.read_document(ROOT / 'firmware/test/definitions.json'),
+        compiler_inputs.read_document(ROOT / 'firmware/test/definitions.json'),
         [],
         target,
         font_data,
@@ -92,7 +93,7 @@ def test_autoformatting_prepares_every_bundled_outline_family() -> None:
             [],
         )
     )
-    source = compiler.read_document(ROOT / 'firmware/test/show.json')
+    source = compiler_inputs.read_document(ROOT / 'firmware/test/show.json')
     assert isinstance(source, dict)
     source['fill_in_styles'] = True
     source['patch_cycles'] = {
@@ -109,7 +110,7 @@ def test_autoformatting_prepares_every_bundled_outline_family() -> None:
     font_data: dict[int, bytes] = {}
     data = compiler.compile_show(
         source,
-        compiler.read_document(ROOT / 'firmware/test/definitions.json'),
+        compiler_inputs.read_document(ROOT / 'firmware/test/definitions.json'),
         [],
         target,
         font_data,
@@ -155,7 +156,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     tmp_path: Path,
 ) -> None:
     outline = ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf'
-    source = compiler.read_document(ROOT / 'firmware/test/display.toml')
+    source = compiler_inputs.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
     source['fonts'] = {'Handwriting': 'custom.ttf'}
     source['style'] = {'font_name': 'Handwriting'}
@@ -229,16 +230,16 @@ def test_asset_transfer_and_failed_load_preserve_active_fonts(
 def test_show_activation_requires_assets_and_releases_previous_fonts(
     peer: Path, bitmap: bytes, tmp_path: Path
 ) -> None:
-    source = compiler.read_document(ROOT / 'firmware/test/display.toml')
+    source = compiler_inputs.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
     source['fonts'] = {
         'Custom': str(ROOT / 'cntrl/fonts/courier-prime/CourierPrime-Regular.ttf')
     }
     source['style'] = {'font_name': 'Custom'}
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
-    definitions = compiler.read_document(ROOT / 'firmware/test/definitions.json')
+    definitions = compiler_inputs.read_document(ROOT / 'firmware/test/definitions.json')
     font_data: dict[int, bytes] = {}
     data = compiler.compile_show(source, definitions, [], target, font_data)
     key, bitmap = next(iter(font_data.items()))
@@ -278,7 +279,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_unicode_labels_compile_transfer_and_export(
     peer: Path, tmp_path: Path, function: bool
 ) -> None:
-    source = compiler.read_document(ROOT / 'firmware/test/display.toml')
+    source = compiler_inputs.read_document(ROOT / 'firmware/test/display.toml')
     assert isinstance(source, dict)
     source['patch_cycles'] = {
         'Été': [
@@ -295,7 +296,7 @@ def test_unicode_labels_compile_transfer_and_export(
     }
     source['style'] = {'font_name': 'Custom'}
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     if function:
         source['patch_cycles']['Été'].append(
@@ -311,7 +312,7 @@ def test_unicode_labels_compile_transfer_and_export(
     font_data: dict[int, bytes] = {}
     data = compiler.compile_show(
         source,
-        compiler.read_document(ROOT / 'firmware/test/definitions.json'),
+        compiler_inputs.read_document(ROOT / 'firmware/test/definitions.json'),
         [],
         target,
         font_data,
@@ -372,7 +373,7 @@ def test_bundled_outline_fonts_use_sparse_unicode_assets() -> None:
     ],
 )
 def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> None:
-    source = compiler.read_document(ROOT / 'firmware/test/show.json')
+    source = compiler_inputs.read_document(ROOT / 'firmware/test/show.json')
     assert isinstance(source, dict)
     source['fill_in_styles'] = False
     source['style'] = {'font_name': family, 'horizontal_scale': 1.25}
@@ -391,7 +392,7 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
             [],
         )
     )
-    definitions = compiler.read_document(ROOT / 'firmware/test/definitions.json')
+    definitions = compiler_inputs.read_document(ROOT / 'firmware/test/definitions.json')
     font_data: dict[int, bytes] = {}
     data = compiler.compile_show(source, definitions, [], target, font_data)
     exported = tomlkit.parse(resolved.export(data)).unwrap()

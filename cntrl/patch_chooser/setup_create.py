@@ -12,7 +12,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel
 
-from . import compiler, data_files, global_config, models
+from . import compiler_errors, data_files, global_config, models
 
 
 class Create(BaseModel, frozen=True):
@@ -36,7 +36,7 @@ def run(command: Create) -> None:
         {}, data_files.DataFile(name=name, paths=[root]), errors
     )
     if errors:
-        raise compiler.CompilationError(errors)
+        raise compiler_errors.CompilationError(errors)
     settings = models.Setup.model_validate(inherited)
     defaults = global_config.user_path()
     print(

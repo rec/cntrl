@@ -4,7 +4,7 @@ from pathlib import Path
 
 import tomlkit
 
-from cntrl.patch_chooser import compiler, history, models, resolved
+from cntrl.patch_chooser import compiler, compiler_inputs, history, models, resolved
 
 
 def test_reserved_revisions_follow_the_selected_storage_root(tmp_path: Path) -> None:
@@ -40,7 +40,9 @@ def test_comparison_reports_configuration_paths_and_preserves_order() -> None:
     source = tomlkit.parse(resolved.export(before)).unwrap()
     source['brightness'] = 23
     source['patch_cycles']['wind'].reverse()
-    target = models.Target.model_validate(compiler.read_document(root / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(root / 'target.json')
+    )
     after = compiler.compile_show(source, {}, [], target)
     changes = history.compare(before, after)
     assert any(c.path == 'brightness' and c.after == 23 for c in changes)

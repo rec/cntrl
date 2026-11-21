@@ -7,7 +7,14 @@ from zlib import crc32
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, layout, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_inputs,
+    compiler_wire,
+    layout,
+    models,
+    resolved,
+)
 
 
 @pytest.fixture
@@ -24,7 +31,7 @@ def test_unchanged_record_format_upgrade_preserves_the_entire_body(
     assert struct.unpack_from('<H', original, 4)[0] == version
     upgraded = resolved.upgrade(original)
     assert upgraded[6:] == original[6:]
-    assert struct.unpack_from('<H', upgraded, 4)[0] == compiler.DOCUMENT_VERSION
+    assert struct.unpack_from('<H', upgraded, 4)[0] == compiler_wire.DOCUMENT_VERSION
     assert resolved.export(original) == resolved.export(upgraded)
 
 
@@ -37,7 +44,7 @@ def test_historical_setup_preserves_graph_assets_and_page_order(
     assert struct.unpack_from('<H', original, 4)[0] == version
     upgraded = resolved.upgrade(original)
     assert resolved.export(original) == resolved.export(upgraded)
-    assert struct.unpack_from('<H', upgraded, 4)[0] == compiler.DOCUMENT_VERSION
+    assert struct.unpack_from('<H', upgraded, 4)[0] == compiler_wire.DOCUMENT_VERSION
     assert struct.unpack_from('<I', upgraded, 8)[0] == len(upgraded)
     assert struct.unpack_from('<I', upgraded, 20)[0] == crc32(upgraded[28:])
     old_page, new_page = original.index(b'CPAG'), upgraded.index(b'CPAG')
@@ -45,8 +52,8 @@ def test_historical_setup_preserves_graph_assets_and_page_order(
         layout.section_end(original, old_page),
         layout.section_end(upgraded, new_page),
     )
-    ni, nc, np = compiler.HEADER.unpack_from(original)[4:7]
-    settings = 76 + ni * 68 + nc * 68 + np * 82 + compiler.METADATA.size - 10
+    ni, nc, np = compiler_wire.HEADER.unpack_from(original)[4:7]
+    settings = 76 + ni * 68 + nc * 68 + np * 82 + compiler_wire.METADATA.size - 10
     assert upgraded[28:settings] == original[28:settings]
     assert upgraded[settings : settings + 2] == bytes([1, 1])
     assert upgraded[settings + 2 : new_page] == original[settings:old_page]
@@ -162,11 +169,18 @@ def test_current_setup_is_returned_unchanged(current_setup: bytes) -> None:
 def test_memory_refresh_matches_compiler_and_changes_only_estimate_and_crc(
     source: dict[str, object],
 ) -> None:
-    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
     compiled = compiler.compile_show(source, {}, [], target)
-    instruments, cycles, patches = compiler.HEADER.unpack_from(compiled)[4:7]
+    instruments, cycles, patches = compiler_wire.HEADER.unpack_from(compiled)[4:7]
     address = (
-        76 + instruments * 68 + cycles * 68 + patches * 82 + compiler.METADATA.size - 8
+        76
+        + instruments * 68
+        + cycles * 68
+        + patches * 82
+        + compiler_wire.METADATA.size
+        - 8
     )
     stale = bytearray(compiled)
     struct.pack_into('<I', stale, address, 0)
@@ -179,13 +193,15 @@ def test_memory_refresh_matches_compiler_and_changes_only_estimate_and_crc(
 def test_historical_memory_estimate_uses_migrated_layout(
     legacy_setups: dict[int, bytes],
 ) -> None:
-    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
     old = legacy_setups[36]
     upgraded = resolved.upgrade(old)
     current_source = tomlkit.parse(resolved.export(upgraded)).unwrap()
     rebuilt = compiler.compile_show(current_source, {}, [], target)
-    ni, nc, np = compiler.HEADER.unpack_from(upgraded)[4:7]
-    address = 76 + ni * 68 + nc * 68 + np * 82 + compiler.METADATA.size - 8
+    ni, nc, np = compiler_wire.HEADER.unpack_from(upgraded)[4:7]
+    address = 76 + ni * 68 + nc * 68 + np * 82 + compiler_wire.METADATA.size - 8
     assert struct.unpack_from('<I', old, address - 2)[0] == 0
     refreshed = resolved.refresh_memory(upgraded, {}, target=target)
     assert (
@@ -201,7 +217,9 @@ def test_historical_memory_estimate_uses_migrated_layout(
 def test_legacy_page_memory_allowance_survives_layout_source_normalization(
     legacy_setups: dict[int, bytes],
 ) -> None:
-    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
     old = legacy_setups[36]
     annotated = bytearray(old)
     position = old.index(b'ram2_bytes = 0') + len(b'ram2_bytes = ')
@@ -214,8 +232,8 @@ def test_legacy_page_memory_allowance_survives_layout_source_normalization(
     assert sum(p.ram2_bytes for p in source.pages.values()) == 7
     baseline = resolved.refresh_memory(resolved.upgrade(old), {}, target=target)
     refreshed = resolved.refresh_memory(upgraded, {}, target=target)
-    ni, nc, np = compiler.HEADER.unpack_from(upgraded)[4:7]
-    address = 76 + ni * 68 + nc * 68 + np * 82 + compiler.METADATA.size - 8
+    ni, nc, np = compiler_wire.HEADER.unpack_from(upgraded)[4:7]
+    address = 76 + ni * 68 + nc * 68 + np * 82 + compiler_wire.METADATA.size - 8
     assert (
         struct.unpack_from('<I', refreshed, address)[0]
         == struct.unpack_from('<I', baseline, address)[0] + 7
@@ -230,28 +248,30 @@ def test_legacy_gestures_shifted_actions_and_bound_nodes_keep_their_references(
     original = legacy_setups[version]
     page = original.index(b'CPAG')
     graph = resolved.graph_offset(original)
-    magic, size, count, switches, roots, named = compiler.GRAPH.unpack_from(
+    magic, size, count, switches, roots, named = compiler_wire.GRAPH.unpack_from(
         original, graph
     )
     flags = struct.unpack_from('<H', original, 18)[0]
-    assert not flags & compiler.GESTURES_FLAG
+    assert not flags & compiler_wire.GESTURES_FLAG
     events = 6 if version < 40 else 8
     gesture = struct.pack(f'<{events + 4}H', *([0] * events), 20, 500, 300, 100)
     shifted = struct.pack(f'<{events + 6}H', *([0] * (events + 2)), 20, 500, 300, 100)
-    record = compiler.SWITCH.pack(0, 1, 0, 0, b'Legacy action', 0)
-    record += gesture + compiler.SWITCH_HOOKS.pack(0, 0, False) + shifted
+    record = compiler_wire.SWITCH.pack(0, 1, 0, 0, b'Legacy action', 0)
+    record += gesture + compiler_wire.SWITCH_HOOKS.pack(0, 0, False) + shifted
     assert len(record) == (121 if version < 40 else 129)
     payload = bytearray(220)
     payload[2:66] = b'Legacy bindings'.ljust(64, b'\0')
     payload[66] = 1
     binding = struct.pack('<BBH', 10, 0, 220 + len(record)) + payload + record
-    offsets = struct.unpack_from(f'<{count}I', original, graph + compiler.GRAPH.size)
-    expanded = compiler.GRAPH.pack(
+    offsets = struct.unpack_from(
+        f'<{count}I', original, graph + compiler_wire.GRAPH.size
+    )
+    expanded = compiler_wire.GRAPH.pack(
         magic, size + 4 + len(binding), count + 1, switches, roots, named
     )
     expanded += struct.pack(f'<{count + 1}I', *(i + 4 for i in offsets), size + 4)
     expanded += (
-        original[graph + compiler.GRAPH.size + count * 4 : graph + size] + binding
+        original[graph + compiler_wire.GRAPH.size + count * 4 : graph + size] + binding
     )
     legacy = bytearray(
         original[:page]
@@ -262,13 +282,13 @@ def test_legacy_gestures_shifted_actions_and_bound_nodes_keep_their_references(
         + expanded
         + original[graph + size :]
     )
-    struct.pack_into('<H', legacy, 18, flags | compiler.GESTURES_FLAG)
+    struct.pack_into('<H', legacy, 18, flags | compiler_wire.GESTURES_FLAG)
     struct.pack_into('<I', legacy, 8, len(legacy))
     struct.pack_into('<I', legacy, 20, crc32(legacy[28:]))
     old = bytes(legacy)
     upgraded = resolved.upgrade(old)
     new_graph = resolved.graph_offset(upgraded)
-    assert compiler.GRAPH.unpack_from(upgraded, new_graph)[2:] == (
+    assert compiler_wire.GRAPH.unpack_from(upgraded, new_graph)[2:] == (
         count + 1,
         switches,
         roots,
@@ -280,13 +300,13 @@ def test_legacy_gestures_shifted_actions_and_bound_nodes_keep_their_references(
         before = (
             old_graph
             + struct.unpack_from(
-                '<I', old, old_graph + compiler.GRAPH.size + index * 4
+                '<I', old, old_graph + compiler_wire.GRAPH.size + index * 4
             )[0]
         )
         after = (
             new_graph
             + struct.unpack_from(
-                '<I', upgraded, new_graph + compiler.GRAPH.size + index * 4
+                '<I', upgraded, new_graph + compiler_wire.GRAPH.size + index * 4
             )[0]
         )
         length = struct.unpack_from('<H', old, before + 2)[0] + 4
@@ -294,35 +314,40 @@ def test_legacy_gestures_shifted_actions_and_bound_nodes_keep_their_references(
     node = (
         new_graph
         + struct.unpack_from(
-            '<I', upgraded, new_graph + compiler.GRAPH.size + count * 4
+            '<I', upgraded, new_graph + compiler_wire.GRAPH.size + count * 4
         )[0]
     )
     address = node + 4 + 220
-    fields = compiler.GESTURES.unpack_from(upgraded, address + compiler.SWITCH.size)
-    absent = [65535] * (len(compiler.GESTURE_EVENTS) - events)
+    fields = compiler_wire.GESTURES.unpack_from(
+        upgraded, address + compiler_wire.SWITCH.size
+    )
+    absent = [65535] * (len(compiler_wire.GESTURE_EVENTS) - events)
     assert fields == (*([0] * events), *absent, 20, 500, 300, 100)
-    assert compiler.SWITCH_HOOKS.unpack_from(
-        upgraded, address + compiler.BINDING_HOOKS_OFFSET
+    assert compiler_wire.SWITCH_HOOKS.unpack_from(
+        upgraded, address + compiler_wire.BINDING_HOOKS_OFFSET
     ) == (0, 0, False)
-    shifted_fields = compiler.SHIFTED_ACTIONS.unpack_from(
-        upgraded, address + compiler.BINDING_SHIFTED_OFFSET
+    shifted_fields = compiler_wire.SHIFTED_ACTIONS.unpack_from(
+        upgraded, address + compiler_wire.BINDING_SHIFTED_OFFSET
     )
     assert shifted_fields == (*([0] * (events + 2)), *absent, 20, 500, 300, 100)
     decoded = resolved.patch(old, count)
     assert decoded['bindings']
-    for event in compiler.GESTURE_EVENTS[events:]:
+    for event in compiler_wire.GESTURE_EVENTS[events:]:
         assert event not in str(decoded)
     new_page = upgraded.index(b'CPAG')
-    shifted_offset = new_page - 5 * compiler.SHIFTED_ACTIONS.size
+    shifted_offset = new_page - 5 * compiler_wire.SHIFTED_ACTIONS.size
     assert upgraded[shifted_offset - 4 : shifted_offset] == b'CSHF'
     assert (
-        compiler.SHIFTED_ACTIONS.unpack_from(upgraded, shifted_offset) == shifted_fields
+        compiler_wire.SHIFTED_ACTIONS.unpack_from(upgraded, shifted_offset)
+        == shifted_fields
     )
-    gesture_offset = shifted_offset - 4 - 5 * compiler.GESTURES.size
-    assert compiler.GESTURES.unpack_from(upgraded, gesture_offset) == fields
+    gesture_offset = shifted_offset - 4 - 5 * compiler_wire.GESTURES.size
+    assert compiler_wire.GESTURES.unpack_from(upgraded, gesture_offset) == fields
 
 
-@pytest.mark.parametrize('version', [0, 35, 37, compiler.DOCUMENT_VERSION + 1, 65535])
+@pytest.mark.parametrize(
+    'version', [0, 35, 37, compiler_wire.DOCUMENT_VERSION + 1, 65535]
+)
 def test_unsupported_setup_versions_are_rejected(
     current_setup: bytes, version: int
 ) -> None:

@@ -5,13 +5,19 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
 def test_keyboard_actions_round_trip_and_require_capability() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     setup = {
         'page_settings': {'clock_outputs': ['din']},
@@ -30,7 +36,7 @@ def test_keyboard_actions_round_trip_and_require_capability() -> None:
             }
         },
     }
-    with pytest.raises(compiler.CompilationError, match='unavailable'):
+    with pytest.raises(compiler_errors.CompilationError, match='unavailable'):
         compiler.compile_show(setup, {}, [], target)
     target = target.model_copy(update={'functions': ['usb-hid-keyboard']})
     data = compiler.compile_show(setup, {}, [], target)
@@ -85,7 +91,7 @@ def test_keyboard_holds_release_and_reconnect(tmp_path: Path) -> None:
         check=True,
     )
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     ).model_copy(update={'functions': ['usb-hid-keyboard']})
     data = compiler.compile_show(
         {

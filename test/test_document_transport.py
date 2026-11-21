@@ -16,6 +16,9 @@ from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,
+    compiler_errors,
+    compiler_inputs,
+    compiler_wire,
     data_files,
     device_globals,
     device_settings,
@@ -88,7 +91,7 @@ def test_named_setup_lifecycle_against_cpp_receiver(
     with NativePeer([str(peer)]) as port:
         assert (
             transport.device_status(port)
-            == f'CNTRL READY {compiler.DOCUMENT_VERSION} 0 00000000'
+            == f'CNTRL READY {compiler_wire.DOCUMENT_VERSION} 0 00000000'
         )
         with transport.SerialConnection(port) as connection:
             assert connection.usb_block_size == usb_block_size
@@ -124,7 +127,8 @@ def test_named_setup_lifecycle_against_cpp_receiver(
             assert client.current() == 'Again'
         assert (
             transport.device_status(port)
-            == f'CNTRL READY {compiler.DOCUMENT_VERSION} {len(data)} {crc32(data):08x}'
+            == f'CNTRL READY {compiler_wire.DOCUMENT_VERSION} '
+            f'{len(data)} {crc32(data):08x}'
         )
 
 
@@ -137,7 +141,7 @@ def test_cpp_receiver_rejects_corrupt_document(peer: Path) -> None:
                 transport.SetupClient(connection).copy('Bad', bytes(data), False)
         assert (
             transport.device_status(port)
-            == f'CNTRL READY {compiler.DOCUMENT_VERSION} 0 00000000'
+            == f'CNTRL READY {compiler_wire.DOCUMENT_VERSION} 0 00000000'
         )
 
 
@@ -179,7 +183,7 @@ def test_cpp_receiver_preserves_optional_records_and_rejects_required_ones(
 
 def test_large_setup_uses_the_shared_document_budget(peer: Path) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
 
     def setup(size: int, value: int = 1) -> bytes:
@@ -396,7 +400,7 @@ def test_sync_preserves_mask_only_local_settings_edits_and_restored_inheritance(
         document=[f'Show={source}'], target=[str(ROOT / 'firmware/test/target.json')]
     )
     target = models.Target.model_validate(
-        compiler.read_document(Path(inputs.target[0]))
+        compiler_inputs.read_document(Path(inputs.target[0]))
     )
     device = tmp_path / 'device'
     device.mkdir()
@@ -433,7 +437,7 @@ def test_resolved_export_recompiles_without_original_sources() -> None:
 
     data = bytes.fromhex((ROOT / 'firmware/test/show.golden').read_text())
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
@@ -459,7 +463,9 @@ def test_setup_cli_copy_download_and_delete(
 
         fixture = ROOT / 'firmware/test'
         source = tmp_path / 'show.toml'
-        source.write_text(tomlkit.dumps(compiler.read_document(fixture / 'show.json')))
+        source.write_text(
+            tomlkit.dumps(compiler_inputs.read_document(fixture / 'show.json'))
+        )
         run(
             [
                 'copy',
@@ -558,7 +564,9 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
             graph = resolved.graph_offset(original)
             node = (
                 graph
-                + struct.unpack_from('<I', edited, graph + compiler.GRAPH.size + 4)[0]
+                + struct.unpack_from(
+                    '<I', edited, graph + compiler_wire.GRAPH.size + 4
+                )[0]
             )
             edited[node + 4 + 5] = 110
             edited[76 + 68 + 68 + 82 + 7] = 110
@@ -654,14 +662,14 @@ def test_source_sync_keeps_inherited_edits_local_and_checks_shared_defaults(
             edited = bytearray(binary_format.core(client.download('Show')))
             if field == 'clear-volume':
                 graph = resolved.graph_offset(edited)
-                count = compiler.GRAPH.unpack_from(edited, graph)[2]
+                count = compiler_wire.GRAPH.unpack_from(edited, graph)[2]
                 node = next(
                     n + 4
                     for i in range(count)
                     if edited[
                         n := graph
                         + struct.unpack_from(
-                            '<I', edited, graph + compiler.GRAPH.size + i * 4
+                            '<I', edited, graph + compiler_wire.GRAPH.size + i * 4
                         )[0]
                     ]
                     == 1
@@ -787,7 +795,9 @@ def test_source_sync_retains_pedal_editable_fields(
             graph = resolved.graph_offset(original)
             node = (
                 graph
-                + struct.unpack_from('<I', edited, graph + compiler.GRAPH.size + 4)[0]
+                + struct.unpack_from(
+                    '<I', edited, graph + compiler_wire.GRAPH.size + 4
+                )[0]
                 + 4
             )
             cache = 76 + 68 + 68
@@ -798,7 +808,7 @@ def test_source_sync_retains_pedal_editable_fields(
                 edited[node + 3] = edited[cache + 5] = 2
                 struct.pack_into('<I', edited, node + 7, 1)
                 struct.pack_into(
-                    '<I', edited, meta + compiler.METADATA.size + 64 + 8, 1
+                    '<I', edited, meta + compiler_wire.METADATA.size + 64 + 8, 1
                 )
             elif field in ('volume', 'pan'):
                 position = 5 if field == 'volume' else 6
@@ -808,7 +818,7 @@ def test_source_sync_retains_pedal_editable_fields(
             elif field == 'midi':
                 edited[19] ^= 2
             else:
-                edited[meta + compiler.METADATA.size - 20] = 1
+                edited[meta + compiler_wire.METADATA.size - 20] = 1
             struct.pack_into('<I', edited, 20, crc32(edited[28:]))
             client.copy('Show', bytes(edited), True)
             client.ok('CNTRL SETUP FINISH')
@@ -950,7 +960,8 @@ def test_sync_materializes_an_integer_patch_without_rewriting_other_fields(
             edited = bytearray(binary_format.core(client.download('show')))
             graph = resolved.graph_offset(bytes(edited))
             node = (
-                graph + struct.unpack_from('<I', edited, graph + compiler.GRAPH.size)[0]
+                graph
+                + struct.unpack_from('<I', edited, graph + compiler_wire.GRAPH.size)[0]
             )
             edited[node + 4 + 5] = edited[76 + 68 + 68 + 7] = 100
             struct.pack_into('<I', edited, 20, crc32(edited[28:]))
@@ -1051,7 +1062,8 @@ def test_setup_copy_transfers_playback_and_looper_dependencies(
         # unless the same overwrite flag has been explicitly provided.
         another = command.model_copy(update={'document': [f'Another={source}']})
         with pytest.raises(
-            compiler.CompilationError, match='MIDI file exists with different contents'
+            compiler_errors.CompilationError,
+            match='MIDI file exists with different contents',
         ):
             cli.run_setup(another)
         assert (device / 'cntrl/midi/intro.mid').read_bytes() == intro
@@ -1127,7 +1139,7 @@ def test_download_collects_setups_companions_and_midi_before_writing(
         blocked.mkdir()
         (blocked / 'song.mid').write_bytes(b'existing MIDI')
         command = cli.SetupDownload(names=['Show'], output=blocked, port=Path(port))
-        with pytest.raises(compiler.CompilationError, match='--force/-f'):
+        with pytest.raises(compiler_errors.CompilationError, match='--force/-f'):
             cli.run_setup(command)
         assert [p.name for p in blocked.iterdir()] == ['song.mid']
         assert (blocked / 'song.mid').read_bytes() == b'existing MIDI'
@@ -1342,7 +1354,7 @@ def test_protocol_error_during_a_command_does_not_retry_session_cleanup(
 
 def test_midi_file_operations_survive_cpp_storage(peer: Path) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     data = compiler.compile_show(
         {
@@ -1378,7 +1390,7 @@ def test_history_import_preserves_metadata_and_refuses_conflicting_retries(
     from cntrl.patch_chooser import history
 
     target = models.Target.model_validate(
-        compiler.read_document(ROOT / 'firmware/test/target.json')
+        compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
     data = compiler.compile_show({}, {}, [], target)
     if enveloped:

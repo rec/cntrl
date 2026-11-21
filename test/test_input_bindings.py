@@ -5,13 +5,20 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, inputs, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    inputs,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
 def target() -> models.Target:
     root = Path(__file__).parents[1]
-    source = compiler.read_document(root / 'firmware/test/target.json')
+    source = compiler_inputs.read_document(root / 'firmware/test/target.json')
     assert isinstance(source, dict)
     source.update(
         buttons=['Less', 'More', 'Yes', 'Back', 'Top', 'Side', 'Aux', 'Spare'],
@@ -81,7 +88,7 @@ def test_declared_labels_and_high_input_bits_round_trip_and_execute(
 
 def test_back_control_remains_reserved_and_unknown_labels_are_rejected() -> None:
     for button in ('Back', 'Unknown'):
-        with pytest.raises(compiler.CompilationError, match='button'):
+        with pytest.raises(compiler_errors.CompilationError, match='button'):
             compiler.compile_show(
                 {
                     'switches': {
@@ -95,7 +102,9 @@ def test_back_control_remains_reserved_and_unknown_labels_are_rejected() -> None
                 [],
                 target(),
             )
-    with pytest.raises(compiler.CompilationError, match='exit buttons unavailable'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='exit buttons unavailable'
+    ):
         compiler.compile_show(
             {'patches': {'stock': {'operation': 'stock-firmware'}}},
             {},

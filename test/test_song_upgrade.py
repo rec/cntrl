@@ -5,12 +5,21 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_chooser import binary_format, compiler, models, resolved, songs
+from cntrl.patch_chooser import (
+    binary_format,
+    compiler_inputs,
+    compiler_wire,
+    models,
+    resolved,
+    songs,
+)
 
 
 @pytest.fixture
 def target() -> models.Target:
-    return models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    return models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
 
 
 @pytest.mark.parametrize('version', [36, 38])
@@ -26,10 +35,10 @@ def test_embedded_legacy_setup_upgrade_keeps_song_bytes_and_node_ids(
     struct.pack_into('<H', original, 4, version)
     source = bytes(original)
     graph = resolved.graph_offset(source)
-    count = compiler.GRAPH.unpack_from(source, graph)[2]
-    assert compiler.HEADER.unpack_from(source)[6] >= 2
+    count = compiler_wire.GRAPH.unpack_from(source, graph)[2]
+    assert compiler_wire.HEADER.unpack_from(source)[6] >= 2
     node = struct.unpack_from(
-        '<H', source, graph + compiler.GRAPH.size + count * 4 + 2
+        '<H', source, graph + compiler_wire.GRAPH.size + count * 4 + 2
     )[0]
     assert node > 0
     first = songs.SELECTION.pack(
@@ -142,7 +151,9 @@ def test_upgrade_rejects_truncated_embedded_sources(target: models.Target) -> No
 
 
 def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
-    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
     source = songs.encode(
         songs.Library(
             songs=[
@@ -160,7 +171,9 @@ def test_current_song_sources_keep_their_calculated_memory_and_bytes() -> None:
 
 
 def test_captured_references_follow_the_reordered_deployed_bundle() -> None:
-    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
     document = {
         'patches': {
             'p': {
@@ -188,10 +201,12 @@ def test_captured_references_follow_the_reordered_deployed_bundle() -> None:
     graph = resolved.graph_offset(captured)
     core_source = binary_format.core(captured)
     graph -= binary_format.core_offset(captured)
-    count = compiler.GRAPH.unpack_from(core_source, graph)[2]
+    count = compiler_wire.GRAPH.unpack_from(core_source, graph)[2]
     references = [
         graph
-        + struct.unpack_from('<I', core_source, graph + compiler.GRAPH.size + i * 4)[0]
+        + struct.unpack_from(
+            '<I', core_source, graph + compiler_wire.GRAPH.size + i * 4
+        )[0]
         for i in range(count)
     ]
     assert [

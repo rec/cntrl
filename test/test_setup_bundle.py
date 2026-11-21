@@ -11,6 +11,7 @@ import tomlkit
 from cntrl.patch_chooser import (
     binary_format,
     compiler,
+    compiler_inputs,
     data_files,
     models,
     resolved,
@@ -104,7 +105,7 @@ def test_native_table_and_lru_preserve_pinned_views(
 ) -> None:
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
     sources = {n: {'brightness': 100 + i} for i, n in enumerate(('a', 'b', 'c'))}
     setups = {
@@ -148,7 +149,7 @@ def test_history_translates_indices_after_the_bundle_name_table_changes(
 ) -> None:
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
     sources: dict[str, object] = {
         'a': {

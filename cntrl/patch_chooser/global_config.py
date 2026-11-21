@@ -5,7 +5,7 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
-from . import compiler, data_files
+from . import compiler_errors, compiler_inputs, data_files
 
 
 def user_path() -> Path:
@@ -50,7 +50,7 @@ def resolve_inputs(
         ]
         exact = [e for e in candidates if e.name == expression.name]
         if len(exact or candidates) != 1:
-            raise compiler.CompilationError(
+            raise compiler_errors.CompilationError(
                 [f'{expression.paths[0]}: ambiguous or missing recorded root setup']
             )
         chosen = (exact or candidates)[0]
@@ -73,7 +73,7 @@ def resolve_inputs(
             continue
         candidates = [getattr(r, field) for r in recipes]
         if any(c != candidates[0] for c in candidates[1:]):
-            raise compiler.CompilationError(
+            raise compiler_errors.CompilationError(
                 [
                     f'recovered setups use different {field} sources; '
                     'specify shared inputs'
@@ -84,7 +84,7 @@ def resolve_inputs(
         if field not in command.model_fields_set:
             candidates = [getattr(r, field) for r in recipes]
             if any(c != candidates[0] for c in candidates[1:]):
-                raise compiler.CompilationError(
+                raise compiler_errors.CompilationError(
                     [f'recovered setups use different {field}; specify a shared value']
                 )
             updates[field] = candidates[0]
@@ -211,7 +211,7 @@ def resolve_setup(
     try:
         result = overlay(inherited, document)
         reads: dict[Path, bytes] = {}
-        compiler.normalize_references(
+        compiler_inputs.normalize_references(
             result,
             root,
             relocations=relocations,
@@ -219,7 +219,7 @@ def resolve_setup(
                 k: v.file for k, v in trace.locations.get(expression.name, {}).items()
             },
         )
-        compiler.expand_catalogues(
+        compiler_inputs.expand_catalogues(
             result,
             root,
             snapshots=reads,

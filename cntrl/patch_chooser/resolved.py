@@ -27,7 +27,7 @@ from . import (
     pickup,
     relay_outputs,
 )
-from .compiler import (
+from .compiler_wire import (
     BINDING_HOOKS_OFFSET,
     BINDING_RECORD_SIZE,
     BINDING_SHIFTED_OFFSET,

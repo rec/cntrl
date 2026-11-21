@@ -18,7 +18,7 @@ from tomlkit.exceptions import ParseError
 
 from . import (
     binary_format,
-    compiler,
+    compiler_wire,
     data_files,
     device_globals,
     history,
@@ -864,10 +864,11 @@ def verify_after_flashing(
         if len(parts) < 5 or parts[:3] != [
             'CNTRL',
             'READY',
-            str(compiler.DOCUMENT_VERSION),
+            str(compiler_wire.DOCUMENT_VERSION),
         ]:
             raise ValueError(
-                f'expected READY format {compiler.DOCUMENT_VERSION}; received {status}'
+                f'expected READY format {compiler_wire.DOCUMENT_VERSION}; '
+                f'received {status}'
             )
         actual = client.current()
         if actual != selected:
@@ -1134,7 +1135,7 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
                 'name': name,
                 'number': str(revision.number),
                 'length': len(data),
-                'version': compiler.DOCUMENT_VERSION,
+                'version': compiler_wire.DOCUMENT_VERSION,
             }
         )
     (destination / 'history.toml').write_bytes(

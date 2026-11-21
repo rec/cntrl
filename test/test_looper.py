@@ -8,6 +8,9 @@ import tomlkit
 
 from cntrl.patch_chooser import (
     compiler,
+    compiler_errors,
+    compiler_inputs,
+    compiler_wire,
     display,
     layout,
     looper,
@@ -20,7 +23,9 @@ from cntrl.patch_chooser import (
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+        compiler_inputs.read_document(
+            Path(__file__).parents[1] / 'firmware/test/target.json'
+        )
     )
 
 
@@ -63,7 +68,7 @@ def test_looper_views_share_one_budget_and_round_trip(target: models.Target) -> 
     instruments, cycles, patches = struct.unpack_from('<HHH', data, 12)
     metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
     assert (
-        struct.unpack_from('<I', data, metadata + compiler.METADATA.size - 8)[0]
+        struct.unpack_from('<I', data, metadata + compiler_wire.METADATA.size - 8)[0]
         == expected
     )
     source['pages']['other'] = {'type': 'midi-looper'}
@@ -83,7 +88,7 @@ def test_looper_views_share_one_budget_and_round_trip(target: models.Target) -> 
         regions=1,
     )
     assert (
-        struct.unpack_from('<I', second, metadata + compiler.METADATA.size - 8)[0]
+        struct.unpack_from('<I', second, metadata + compiler_wire.METADATA.size - 8)[0]
         == expected + additional_page
     )
 
@@ -92,7 +97,7 @@ def test_looper_views_share_one_budget_and_round_trip(target: models.Target) -> 
 def test_unavailable_looper_endpoints_are_rejected(
     target: models.Target, field: str
 ) -> None:
-    with pytest.raises(compiler.CompilationError, match='unavailable'):
+    with pytest.raises(compiler_errors.CompilationError, match='unavailable'):
         compiler.compile_show(
             {'page_settings': {'looper': {field: ['missing']}}}, {}, [], target
         )
@@ -119,7 +124,7 @@ def test_all_looper_actions_round_trip_with_and_without_a_view(
     target: models.Target,
 ) -> None:
     root = Path(__file__).parents[1] / 'firmware/test'
-    source = compiler.read_document(root / 'looper.toml')
+    source = compiler_inputs.read_document(root / 'looper.toml')
     assert isinstance(source, dict)
     data = compiler.compile_show(source, {}, [], target)
     assert data.hex() == (root / 'looper.golden').read_text().strip()

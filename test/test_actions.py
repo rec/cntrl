@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved
 from scripts import regenerate_fixtures
 
 
@@ -15,7 +15,9 @@ def test_switches_round_trip_and_native_fixture() -> None:
     )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     root = Path(__file__).parents[1] / 'firmware/test'
-    target = models.Target.model_validate(compiler.read_document(root / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(root / 'target.json')
+    )
     assert compiler.compile_show(exported, {}, [], target) == data
     assert data.hex() == (root / 'actions.golden').read_text().strip()
 
@@ -97,7 +99,7 @@ def test_stock_reference_is_rejected_inside_persistent_sequence() -> None:
         },
     }
     target = models.Target.model_validate(
-        compiler.read_document(root / 'target.json')
+        compiler_inputs.read_document(root / 'target.json')
     ).model_copy(update={'functions': ['stock-firmware'], 'buttons': list('ABCDEF')})
     with pytest.raises(ValueError, match='only press assignments'):
         compiler.compile_show(show, {}, [], target)

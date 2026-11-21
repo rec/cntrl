@@ -5,12 +5,21 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, layout, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    layout,
+    models,
+    resolved,
+)
 from scripts import native_tests
 
 
 def target() -> models.Target:
-    return models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    return models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
 
 
 @pytest.mark.parametrize(
@@ -55,7 +64,7 @@ def test_two_window_page_reserves_two_windows_and_round_trips(
 @pytest.mark.parametrize('kind', ['language', 'time'])
 def test_two_window_page_requires_two_displays(kind: str) -> None:
     device = target().model_copy(update={'displays': target().displays[:1]})
-    with pytest.raises(compiler.CompilationError, match='target display count'):
+    with pytest.raises(compiler_errors.CompilationError, match='target display count'):
         compiler.compile_show({'pages': {'languages': {'type': kind}}}, {}, [], device)
 
 
@@ -103,7 +112,7 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
 
 @pytest.mark.parametrize('kind', ['trs-ports', 'expression'])
 def test_removed_utility_pages_cannot_be_authored(kind: str) -> None:
-    with pytest.raises(compiler.CompilationError, match='type'):
+    with pytest.raises(compiler_errors.CompilationError, match='type'):
         compiler.compile_show({'pages': {'removed': {'type': kind}}}, {}, [], target())
 
 
@@ -129,12 +138,12 @@ def test_default_tools_honor_explicit_performance_focus() -> None:
 
 def test_explicit_pong_needs_three_displays() -> None:
     device = target().model_copy(update={'displays': target().displays[:2]})
-    with pytest.raises(compiler.CompilationError, match='target display count'):
+    with pytest.raises(compiler_errors.CompilationError, match='target display count'):
         compiler.compile_show({'pages': {'game': {'type': 'pong'}}}, {}, [], device)
 
 
 def test_named_instances_and_order_survive_compilation() -> None:
-    source = compiler.read_document(ROOT / 'pages.toml')
+    source = compiler_inputs.read_document(ROOT / 'pages.toml')
     data = compiler.compile_show(source, {}, [], target())
     assert data.hex() == (ROOT / 'pages.golden').read_text().strip()
     exported = tomlkit.parse(resolved.export(data)).unwrap()

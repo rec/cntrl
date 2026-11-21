@@ -13,6 +13,7 @@ from cntrl.patch_chooser import (
     data_files,
     global_config,
     setup_sync,
+    setup_sync_sources,
     setup_sync_store,
 )
 
@@ -166,7 +167,7 @@ def test_recovery_restores_sources_and_base_after_partial_publication(
 def test_targeted_toml_change_keeps_comments_and_relative_paths() -> None:
     original = '# setup\nbrightness = 10 # dim\n[fonts]\nsmall = "fonts/source.ttf"\n'
     document = tomlkit.parse(original)
-    setup_sync.assign(
+    setup_sync_sources.assign(
         document, ['brightness'], setup_sync_store.Value(present=True, value=20)
     )
     assert tomlkit.dumps(document) == original.replace('10 # dim', '20 # dim')
@@ -240,11 +241,11 @@ def test_inherited_page_cycle_edit_writes_a_complete_local_list(
         'Show',
         *[setup_sync_store.Value(present=True, value=v) for v in (host, host, after)],
     )
-    change = setup_sync.destination(changes[0], trace, host, after)
+    change = setup_sync_sources.destination(changes[0], trace, host, after)
     assert change.path == ['patch_cycles', 'main']
     assert change.choice == 'pedal' and change.affects == ['Show']
     document = tomlkit.parse(local.read_text())
-    setup_sync.apply_change(document, change)
+    setup_sync_sources.apply_change(document, change)
     assert document.unwrap() == {'patch_cycles': {'main': pedal}}
     assert tomlkit.dumps(document).startswith('# local changes only')
     assert global_file.read_text() == '[patch_cycles]\nmain=[1,2]\n'
@@ -276,7 +277,7 @@ def test_deleting_an_inherited_value_records_a_local_removal(
         'patches': {'sound': {'program': 10, 'volume': 90 if local_override else 80}}
     }
     pedal = {'patches': {'sound': {'program': 10}}}
-    change = setup_sync.destination(
+    change = setup_sync_sources.destination(
         setup_sync.merge_changes(
             'Show',
             *[
@@ -290,7 +291,7 @@ def test_deleting_an_inherited_value_records_a_local_removal(
     )
     assert change.remove_inherited and change.destination.file == local
     document = tomlkit.parse(local.read_text())
-    setup_sync.apply_change(document, change)
+    setup_sync_sources.apply_change(document, change)
     assert document['inheritance']['remove'] == [path]
     assert 'volume' not in document['patches']['sound']
     assert global_file.read_text().endswith('volume=80\n')
@@ -330,7 +331,7 @@ def test_materializing_an_inherited_patch_removes_its_derived_parent(
         consumers={local: ['Show'], defaults: ['Show', 'Other']},
     )
     program = {'type': 'program-change', 'instrument': 'synth', 'program': 7}
-    change = setup_sync.destination(
+    change = setup_sync_sources.destination(
         setup_sync_store.Change(
             setup='Show',
             path=path,
@@ -349,7 +350,7 @@ def test_materializing_an_inherited_patch_removes_its_derived_parent(
         {},
     )
     document = tomlkit.parse(local.read_text())
-    setup_sync.apply_change(document, change)
+    setup_sync_sources.apply_change(document, change)
     resolved = global_config.overlay(
         tomlkit.parse(defaults.read_text()).unwrap(), document.unwrap()
     )

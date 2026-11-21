@@ -15,6 +15,8 @@ from cntrl.patch_chooser import (
     binary_format,
     cli,
     compiler,
+    compiler_inputs,
+    compiler_wire,
     device_globals,
     display,
     graphics,
@@ -31,7 +33,9 @@ from cntrl.patch_chooser import (
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+        compiler_inputs.read_document(
+            Path(__file__).parents[1] / 'firmware/test/target.json'
+        )
     )
 
 
@@ -64,7 +68,7 @@ def test_restore_replaces_removed_ui_fonts_without_changing_originals(
         target,
     )
     original = bytearray(current)
-    ni, nc, np = compiler.HEADER.unpack_from(current)[4:7]
+    ni, nc, np = compiler_wire.HEADER.unpack_from(current)[4:7]
     settings = 76 + ni * 68 + nc * 68 + np * 82 + 16
     original[28] = font
     for index in (14, 15, 22):
@@ -86,7 +90,7 @@ def test_restore_replaces_removed_ui_fonts_without_changing_originals(
 
 def test_unknown_ui_font_is_reported_as_invalid_data(target: models.Target) -> None:
     data = bytearray(compiler.compile_show({}, {}, [], target))
-    ni, nc, np = compiler.HEADER.unpack_from(data)[4:7]
+    ni, nc, np = compiler_wire.HEADER.unpack_from(data)[4:7]
     status_font = 76 + ni * 68 + nc * 68 + np * 82 + 16 + 15 * 2
     struct.pack_into('<H', data, status_font, 99)
     struct.pack_into('<I', data, 20, crc32(data[28:]))
@@ -107,7 +111,7 @@ def test_restore_replaces_retired_fonts_in_compiled_display_styles(
         target,
     )
     graph = resolved.graph_offset(current)
-    presentation = graph + compiler.GRAPH.unpack_from(current, graph)[1]
+    presentation = graph + compiler_wire.GRAPH.unpack_from(current, graph)[1]
     styles = display.HEADER.unpack_from(current, presentation)[1]
     assert styles
     original = bytearray(current)
@@ -184,7 +188,7 @@ def test_song_restore_preserves_recorded_source_memory_estimates(
     offset = library.index(b'CSP9') + 8
     original = bytes(library[offset:])
     source = bytearray(binary_format.core(original))
-    metadata = source.index(b'CMTA') + compiler.METADATA.size - 8
+    metadata = source.index(b'CMTA') + compiler_wire.METADATA.size - 8
     struct.pack_into('<I', source, metadata, 1)
     struct.pack_into('<I', source, 20, crc32(source[28:]))
     library[offset:] = binary_format.replace_core(original, bytes(source))
@@ -554,7 +558,9 @@ def test_restore_uploads_saved_data_before_restoring_selection(
     from cntrl.patch_chooser import global_overlay, models, songs, transport
 
     target = models.Target.model_validate(
-        compiler.read_document(Path(__file__).parents[1] / 'firmware/test/target.json')
+        compiler_inputs.read_document(
+            Path(__file__).parents[1] / 'firmware/test/target.json'
+        )
     )
     if overlay is not None:
         (tmp_path / 'device-globals.toml').write_bytes(
@@ -591,7 +597,7 @@ def test_restore_uploads_saved_data_before_restoring_selection(
             backup_sources['Evening'], {}, [], target, documents=backup_sources
         )
     )
-    metadata = recorded.index(b'CMTA') + compiler.METADATA.size - 8
+    metadata = recorded.index(b'CMTA') + compiler_wire.METADATA.size - 8
     struct.pack_into('<I', recorded, metadata, 1)
     struct.pack_into('<I', recorded, 20, crc32(recorded[28:]))
     compiled = {
@@ -618,7 +624,7 @@ def test_restore_uploads_saved_data_before_restoring_selection(
                     | {
                         'name': 'Evening',
                         'number': '3',
-                        'version': compiler.DOCUMENT_VERSION,
+                        'version': compiler_wire.DOCUMENT_VERSION,
                     }
                 ]
             }
@@ -860,7 +866,7 @@ class SavedPedal(transport.SetupClient):
         self, setup: bytes, revision: history.Revision, library: bytes
     ) -> None:
         super().__init__(transport.SerialConnection(Path('/unused')))
-        self.status = f'CNTRL READY {compiler.DOCUMENT_VERSION} 0 00000000'
+        self.status = f'CNTRL READY {compiler_wire.DOCUMENT_VERSION} 0 00000000'
         self.selected = 'Evening'
         self.valid = True
         self.revision = revision
@@ -976,7 +982,7 @@ def saved_pedal(
                     | {
                         'name': 'Evening',
                         'number': '3',
-                        'version': compiler.DOCUMENT_VERSION,
+                        'version': compiler_wire.DOCUMENT_VERSION,
                     }
                 ]
             }
@@ -1117,7 +1123,9 @@ def test_post_flash_verification_identifies_each_isolated_mismatch(
     expected: str,
 ) -> None:
     if mismatch == 'status':
-        saved_pedal.status = f'CNTRL READY {compiler.DOCUMENT_VERSION - 1} 0 00000000'
+        saved_pedal.status = (
+            f'CNTRL READY {compiler_wire.DOCUMENT_VERSION - 1} 0 00000000'
+        )
     elif mismatch == 'selection':
         saved_pedal.selected = 'Other'
     elif mismatch == 'catalogue':

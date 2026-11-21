@@ -6,13 +6,20 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, data_files, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    data_files,
+    models,
+    resolved,
+)
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
 
 
@@ -64,7 +71,7 @@ def test_keyed_bank_uses_configured_controller_mapping(target: models.Target) ->
     data = compiler.compile_show(show, definitions, [], target)
     assert resolved.patch(data, 0)['bank'] == 3
     assert data[76 + 68 + 68 + 5 : 76 + 68 + 68 + 7] == b'\xff\x03'
-    with pytest.raises(compiler.CompilationError, match='no mapping'):
+    with pytest.raises(compiler_errors.CompilationError, match='no mapping'):
         compiler.compile_show(show, {}, [], target)
 
 
@@ -76,13 +83,13 @@ def test_name_lookup_is_exact_and_qualifies_ambiguous_instruments(
         'channel': 2,
         'programs': ['Flute', 'Flute II'],
     }
-    with pytest.raises(compiler.CompilationError, match='found 2'):
+    with pytest.raises(compiler_errors.CompilationError, match='found 2'):
         compiler.compile_show(show, {}, [], target)
     show['patch_cycles'] = {'Live': [{'name': 'Flute', 'instrument': 'other'}]}
     data = compiler.compile_show(show, {}, [], target)
     assert resolved.patch(data, 0)['instrument'] == 'other'
     show['patch_cycles'] = {'Live': [{'name': 'Flut'}]}
-    with pytest.raises(compiler.CompilationError, match='found 0'):
+    with pytest.raises(compiler_errors.CompilationError, match='found 0'):
         compiler.compile_show(show, {}, [], target)
 
 
@@ -93,7 +100,7 @@ def test_invalid_catalogues_are_rejected(
     show: dict[str, object], target: models.Target, programs: object
 ) -> None:
     show['instruments']['synth']['programs'] = programs
-    with pytest.raises(compiler.CompilationError, match='programs'):
+    with pytest.raises(compiler_errors.CompilationError, match='programs'):
         compiler.compile_show(show, {}, [], target)
 
 
@@ -132,7 +139,7 @@ def test_compact_catalogue_can_be_loaded_as_an_external_table(
             {'instrument': 'patchman', 'name': 'default', 'banks': {'3': {'lsb': 3}}}
         ]
     }
-    table = compiler.read_document(Path('instruments/patchman-internal.toml'))
+    table = compiler_inputs.read_document(Path('instruments/patchman-internal.toml'))
     data = compiler.compile_show(show, definitions, [table], target)
     patch = resolved.patch(data, 0)
     assert (patch['bank'], patch['program']) == (3, 1)
@@ -157,7 +164,9 @@ def test_preset_and_internal_catalogues_merge_by_bank() -> None:
 
 
 def test_flat_example_compiles(target: models.Target) -> None:
-    show = compiler.read_document(Path('examples/patch-chooser/program-changes.toml'))
+    show = compiler_inputs.read_document(
+        Path('examples/patch-chooser/program-changes.toml')
+    )
     compiler.compile_show(show, {}, [], target)
 
 
@@ -165,12 +174,14 @@ def test_flat_example_compiles(target: models.Target) -> None:
 def test_personal_tags_join_without_modifying_documented_catalogues(
     instrument: str, target: models.Target
 ) -> None:
-    catalogue = compiler.read_document(Path('instruments') / f'{instrument}.toml')
+    catalogue = compiler_inputs.read_document(
+        Path('instruments') / f'{instrument}.toml'
+    )
     programs = catalogue['instruments'][instrument]['programs']
     assert all(
         not isinstance(p, dict) or 'tags' not in p for v in programs.values() for p in v
     )
-    tags = compiler.read_document(Path('instruments/tags.toml'))
+    tags = compiler_inputs.read_document(Path('instruments/tags.toml'))
     groups = tags['instruments'][instrument]['tags']
     show = {
         'instruments': {instrument: {'channel': 1, 'output': 'din'}},
@@ -187,7 +198,7 @@ def test_personal_tags_join_without_modifying_documented_catalogues(
             ]
         },
     }
-    definitions = compiler.read_document(Path('instruments/definitions.toml'))
+    definitions = compiler_inputs.read_document(Path('instruments/definitions.toml'))
     data = compiler.compile_show(show, definitions, [catalogue, tags], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     for p in exported['definitions']['programs']:
@@ -199,7 +210,7 @@ def test_tag_groups_reject_unknown_names_and_invalid_lists(
     show: dict[str, object], target: models.Target, tags: object
 ) -> None:
     show['instruments']['synth']['tags'] = tags
-    with pytest.raises(compiler.CompilationError, match='tags'):
+    with pytest.raises(compiler_errors.CompilationError, match='tags'):
         compiler.compile_show(show, {}, [], target)
 
 

@@ -8,7 +8,15 @@ import pytest
 import tomlkit
 from pydantic import ValidationError
 
-from cntrl.patch_chooser import binary_format, compiler, models, resolved, setup_bundle
+from cntrl.patch_chooser import (
+    binary_format,
+    compiler,
+    compiler_inputs,
+    compiler_wire,
+    models,
+    resolved,
+    setup_bundle,
+)
 
 
 @pytest.mark.parametrize('frame_buffers', [0, 1, 2])
@@ -16,7 +24,9 @@ from cntrl.patch_chooser import binary_format, compiler, models, resolved, setup
 def test_display_memory_options_round_trip_and_refresh_the_same_budget(
     frame_buffers: int, use_animations: bool
 ) -> None:
-    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
     source = {
         'frame_buffers': frame_buffers,
         'use_animations': use_animations,
@@ -50,7 +60,9 @@ def test_display_memory_options_require_the_declared_types_and_range(
 
 
 def test_fewer_frame_buffers_leave_more_capacity_for_midi_storage() -> None:
-    target = models.Target.model_validate(compiler.read_document(ROOT / 'target.json'))
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
     free = []
     for count in range(3):
         source = {'frame_buffers': count, 'fill_in_styles': False}
@@ -85,7 +97,7 @@ def test_previous_development_setup_requires_upgrade_and_keeps_defaults(
     assert binary_format.core(upgraded) == resolved.upgrade(core)
     assert (
         struct.unpack_from('<H', binary_format.core(upgraded), 4)[0]
-        == compiler.DOCUMENT_VERSION
+        == compiler_wire.DOCUMENT_VERSION
     )
     previous[-1] ^= 1
     with pytest.raises(ValueError, match='checksum mismatch'):

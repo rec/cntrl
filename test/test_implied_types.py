@@ -5,7 +5,15 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved, songs
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    models,
+    patch_graph,
+    resolved,
+    songs,
+)
 
 
 @pytest.mark.parametrize(
@@ -28,7 +36,7 @@ def test_implied_type_compiles_and_round_trips_like_explicit_type(
     kind: str, fields: dict[str, object]
 ) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     route: dict[str, object] = {'output': 'din'}
     if kind not in (
@@ -40,7 +48,7 @@ def test_implied_type_compiles_and_round_trips_like_explicit_type(
         route['channel'] = 2
     implied = fields | route | {'name': 'Example'}
     explicit = implied | {'type': kind}
-    assert compiler.normalize_patch(implied) == compiler.normalize_patch(explicit)
+    assert patch_graph.normalize_patch(implied) == patch_graph.normalize_patch(explicit)
 
     def setup(patch: dict[str, object]) -> dict[str, object]:
         return {
@@ -82,15 +90,15 @@ def test_implied_type_compiles_and_round_trips_like_explicit_type(
 
 def test_instrument_program_and_derived_overrides_keep_their_meaning() -> None:
     assert isinstance(
-        compiler.normalize_patch({'instrument': 'piano', 'program': 7}),
+        patch_graph.normalize_patch({'instrument': 'piano', 'program': 7}),
         models.ProgramChange,
     )
     assert isinstance(
-        compiler.normalize_patch({'parent': 'A', 'program': 8, 'value': 1}),
+        patch_graph.normalize_patch({'parent': 'A', 'program': 8, 'value': 1}),
         models.Derived,
     )
     assert (
-        compiler.normalize_patch(
+        patch_graph.normalize_patch(
             {
                 'type': 'note-off',
                 'output': 'din',
@@ -117,12 +125,12 @@ def test_invalid_or_ambiguous_implied_message_is_rejected(
     fields: dict[str, object],
 ) -> None:
     with pytest.raises(ValueError):
-        compiler.normalize_patch(fields | {'output': 'din', 'channel': 1})
+        patch_graph.normalize_patch(fields | {'output': 'din', 'channel': 1})
 
 
 def test_sole_instrument_is_inferred_everywhere_programs_are_used() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     instruments = {'piano': {'output': 'din', 'channel': 2}}
 
@@ -157,7 +165,7 @@ def test_program_requires_an_instrument_when_no_unique_choice_exists(
     count: int,
 ) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     setup = {
         'instruments': {
@@ -165,13 +173,15 @@ def test_program_requires_an_instrument_when_no_unique_choice_exists(
         },
         'patches': {'A': {'program': 7}},
     }
-    with pytest.raises(compiler.CompilationError, match='exactly one instrument'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='exactly one instrument'
+    ):
         compiler.compile_show(setup, {}, [], target)
 
 
 def test_explicit_program_routing_takes_precedence_over_the_sole_instrument() -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     setup = {'instruments': {'piano': {'output': 'din', 'channel': 2}}}
     explicit = {'program': 7, 'output': 'din', 'channel': 3}
@@ -179,7 +189,7 @@ def test_explicit_program_routing_takes_precedence_over_the_sole_instrument() ->
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['patches']['A']['channel'] == 3
     with pytest.raises(
-        compiler.CompilationError, match='unknown or invalid instrument'
+        compiler_errors.CompilationError, match='unknown or invalid instrument'
     ):
         compiler.compile_show(
             setup | {'patches': {'A': {'program': 7, 'instrument': 'missing'}}},
@@ -192,7 +202,7 @@ def test_explicit_program_routing_takes_precedence_over_the_sole_instrument() ->
 @pytest.mark.parametrize('patch', [{'program': 7}, {'controller': 7, 'value': 100}])
 def test_companion_patch_uses_its_own_sole_instrument(patch: dict[str, object]) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     local = {
         'instruments': {'local': {'output': 'din', 'channel': 1}},
@@ -221,7 +231,7 @@ def test_midi_inference_preserves_explicit_routing_fields(
     route: dict[str, object],
 ) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     patch = {'controller': 7, 'value': 100} | route
     setup = {
@@ -243,7 +253,7 @@ def test_midi_routing_requires_a_unique_instrument(
     count: int, patch: dict[str, object]
 ) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     setup = {
         'instruments': {
@@ -251,7 +261,9 @@ def test_midi_routing_requires_a_unique_instrument(
         },
         'patches': {'A': patch},
     }
-    with pytest.raises(compiler.CompilationError, match='exactly one instrument'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='exactly one instrument'
+    ):
         compiler.compile_show(setup, {}, [], target)
 
 
@@ -270,7 +282,7 @@ def test_midi_routing_requires_a_unique_instrument(
 )
 def test_explicit_midi_types_also_inherit_routing(kind: str) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     patch: dict[str, object] = {'type': kind}
     route: dict[str, object] = {'output': 'din'}

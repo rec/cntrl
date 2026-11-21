@@ -11,6 +11,7 @@ from test_display_format import lines
 
 from cntrl.patch_chooser import (
     compiler,
+    compiler_inputs,
     display,
     formatting,
     graphics,
@@ -22,7 +23,7 @@ from cntrl.patch_chooser import (
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(FIXTURES / 'target.json')
+        compiler_inputs.read_document(FIXTURES / 'target.json')
     )
 
 
@@ -136,11 +137,11 @@ def test_invalid_background_is_reported(target: models.Target) -> None:
 def test_generated_formatting_survives_export(
     seed: int | None, target: models.Target
 ) -> None:
-    show = compiler.read_document(FIXTURES / 'show.json')
+    show = compiler_inputs.read_document(FIXTURES / 'show.json')
     assert isinstance(show, dict)
     show.update(fill_in_styles=True, seed=seed)
     data = compiler.compile_show(
-        show, compiler.read_document(FIXTURES / 'definitions.json'), [], target
+        show, compiler_inputs.read_document(FIXTURES / 'definitions.json'), [], target
     )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert isinstance(exported['seed'], int)

@@ -12,7 +12,8 @@ from native_peer import NativePeer
 
 from cntrl.patch_chooser import (
     binary_format,
-    compiler,
+    compiler_errors,
+    compiler_inputs,
     data_files,
     formatting,
     global_config,
@@ -65,7 +66,7 @@ def library() -> songs.Library:
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(
+        compiler_inputs.read_document(
             Path(__file__).resolve().parents[1] / 'firmware/test/target.json'
         )
     )
@@ -180,7 +181,7 @@ def test_song_authoring_inherits_the_rig_without_selecting_an_inherited_cycle(
         '[[songs]]\nname="Live"\n'
         'patches=[{instrument="piano",program=34,display_name="Chosen"}]\n'
     )
-    value = songs.Library.model_validate(compiler.read_document(source))
+    value = songs.Library.model_validate(compiler_inputs.read_document(source))
     result = songs.decode(
         songs.encode(
             value,
@@ -195,7 +196,7 @@ def test_song_authoring_inherits_the_rig_without_selecting_an_inherited_cycle(
     assert result.instruments['piano']['channel'] == 3
     # Low-level encoding of an already resolved library must not read host defaults.
     with pytest.raises(
-        compiler.CompilationError, match='unknown or invalid instrument'
+        compiler_errors.CompilationError, match='unknown or invalid instrument'
     ):
         songs.encode(value, target)
 
@@ -555,4 +556,4 @@ def test_downloaded_song_source_preserves_unicode(
     songs.run(songs.Download(directory=tmp_path, port=Path('unused')))
     path = tmp_path / 'songs.toml'
     assert 'Café А'.encode() in path.read_bytes()
-    assert songs.Library.model_validate(compiler.read_document(path)) == value
+    assert songs.Library.model_validate(compiler_inputs.read_document(path)) == value

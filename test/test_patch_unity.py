@@ -7,13 +7,21 @@ from zlib import crc32
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    compiler_wire,
+    models,
+    patch_graph,
+    resolved,
+)
 
 
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     ).model_copy(update={'functions': ['stock-firmware'], 'buttons': list('ABCDEF')})
 
 
@@ -118,7 +126,7 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
         }
     }
     data = compiler.compile_show(show, {}, [], target)
-    assert compiler.HEADER.unpack_from(data)[4:7] == (0, 0, 0)
+    assert compiler_wire.HEADER.unpack_from(data)[4:7] == (0, 0, 0)
     assert (
         compiler.compile_show(
             tomlkit.parse(resolved.export(data)).unwrap(), {}, [], target
@@ -154,7 +162,7 @@ def test_switch_only_setup_needs_no_catalogue(target: models.Target) -> None:
 )
 def test_invalid_patch_fields_are_rejected(value: object) -> None:
     with pytest.raises(ValueError):
-        compiler.normalize_patch(value)
+        patch_graph.normalize_patch(value)
 
 
 def test_reference_errors_are_aggregated_and_cycles_name_the_chain(
@@ -174,7 +182,7 @@ def test_reference_errors_are_aggregated_and_cycles_name_the_chain(
             },
         }
     }
-    with pytest.raises(compiler.CompilationError) as failure:
+    with pytest.raises(compiler_errors.CompilationError) as failure:
         compiler.compile_show(show, {}, [], target)
     text = str(failure.value)
     assert 'patches.a -> patches.b -> patches.a' in text
@@ -189,11 +197,11 @@ def test_external_dependencies_use_stable_keys_and_detect_cross_document_cycles(
     other = {'patches': {'b': {'type': 'start', 'output': 'din'}}}
     assert compiler.compile_show(local, {}, [], target, documents={'other': other})
     other['patches']['b'] = {'document': 'local', 'patch': 'a'}
-    with pytest.raises(compiler.CompilationError, match='reference cycle'):
+    with pytest.raises(compiler_errors.CompilationError, match='reference cycle'):
         compiler.compile_show(
             local, {}, [], target, documents={'local': local, 'other': other}
         )
-    with pytest.raises(compiler.CompilationError, match='companion document'):
+    with pytest.raises(compiler_errors.CompilationError, match='companion document'):
         compiler.compile_show(local, {}, [], target)
 
 
@@ -226,7 +234,9 @@ def test_external_patches_can_be_embedded_or_resolved_at_runtime(
         assert compiler.compile_show(exported, {}, [], target)
     else:
         assert exported['patches']['borrowed']['document'] == 'other'
-        with pytest.raises(compiler.CompilationError, match='companion document'):
+        with pytest.raises(
+            compiler_errors.CompilationError, match='companion document'
+        ):
             compiler.compile_show(exported, {}, [], target)
 
 
@@ -298,7 +308,7 @@ def test_persistent_switch_reserves_entire_raw_output_through_references(
             },
         },
     }
-    with pytest.raises(compiler.CompilationError, match='ownership conflicts'):
+    with pytest.raises(compiler_errors.CompilationError, match='ownership conflicts'):
         compiler.compile_show(show, {}, [], target)
 
 
@@ -330,7 +340,9 @@ def test_momentary_and_latched_off_can_target_different_controls(
     show['switches']['test']['off'] = {
         'patches': [{'operation': 'stock-firmware', 'exit_buttons': 'A+F'}],
     }
-    with pytest.raises(compiler.CompilationError, match='only press assignments'):
+    with pytest.raises(
+        compiler_errors.CompilationError, match='only press assignments'
+    ):
         compiler.compile_show(show, {}, [], target)
 
 
@@ -352,7 +364,7 @@ def test_nrpn_compiles_as_one_ordered_group(target: models.Target) -> None:
         target,
     )
     offset = resolved.graph_offset(data)
-    node = offset + struct.unpack_from('<I', data, offset + compiler.GRAPH.size)[0]
+    node = offset + struct.unpack_from('<I', data, offset + compiler_wire.GRAPH.size)[0]
     assert data[node + 4 + 32 : node + 4 + 32 + 12] == bytes(
         [0xB2, 99, 1, 0xB2, 98, 2, 0xB2, 6, 3, 0xB2, 38, 4]
     )
@@ -470,7 +482,8 @@ def test_external_terminal_validation_uses_the_source_context(
         }
     }
     with pytest.raises(
-        compiler.CompilationError, match='other:patches.bad.output: unavailable output'
+        compiler_errors.CompilationError,
+        match='other:patches.bad.output: unavailable output',
     ):
         compiler.compile_show(local, {}, [], target, documents={'other': other})
 
@@ -480,8 +493,8 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
     target: models.Target,
     reference_override: bool,
 ) -> None:
-    source = compiler.read_document(Path('firmware/test/show.json'))
-    definitions = compiler.read_document(Path('firmware/test/definitions.json'))
+    source = compiler_inputs.read_document(Path('firmware/test/show.json'))
+    definitions = compiler_inputs.read_document(Path('firmware/test/definitions.json'))
     assert isinstance(source, dict)
     if reference_override:
         source['patches'] = {'clean': source['patch_cycles']['wind'][0]}
@@ -491,22 +504,29 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
         }
     data = bytearray(compiler.compile_show(source, definitions, [], target))
     offset = resolved.graph_offset(data)
-    _, _, count, _, _, _ = compiler.GRAPH.unpack_from(data, offset)
-    root = struct.unpack_from('<H', data, offset + compiler.GRAPH.size + count * 4)[0]
+    _, _, count, _, _, _ = compiler_wire.GRAPH.unpack_from(data, offset)
+    root = struct.unpack_from(
+        '<H', data, offset + compiler_wire.GRAPH.size + count * 4
+    )[0]
     node = (
         offset
-        + struct.unpack_from('<I', data, offset + compiler.GRAPH.size + root * 4)[0]
+        + struct.unpack_from('<I', data, offset + compiler_wire.GRAPH.size + root * 4)[
+            0
+        ]
     )
     if reference_override:
         root = 0
-        node = offset + struct.unpack_from('<I', data, offset + compiler.GRAPH.size)[0]
+        node = (
+            offset
+            + struct.unpack_from('<I', data, offset + compiler_wire.GRAPH.size)[0]
+        )
     _, _, _, _, instruments, patch_cycles, patches, _, _, _ = (
-        compiler.HEADER.unpack_from(data)
+        compiler_wire.HEADER.unpack_from(data)
     )
     cache = 76 + instruments * 68 + patch_cycles * 68
     meta = cache + patches * 82
     mappings = struct.unpack_from('<H', data, meta + 4)[0]
-    bank = meta + compiler.METADATA.size + instruments * 64 + mappings * 8
+    bank = meta + compiler_wire.METADATA.size + instruments * 64 + mappings * 8
     # These are the same authoritative graph/cache edits as selecting PC 2 and
     # clearing the bank in the pedal editor. The authored display label stays Flute.
     data[node + 6 : node + 9] = bytes((1, 255, 255))
@@ -521,7 +541,7 @@ def test_edited_program_does_not_move_its_old_synthesizer_name(
     recompiled_node = (
         recompiled_offset
         + struct.unpack_from(
-            '<I', recompiled, recompiled_offset + compiler.GRAPH.size + root * 4
+            '<I', recompiled, recompiled_offset + compiler_wire.GRAPH.size + root * 4
         )[0]
     )
     assert (
@@ -573,7 +593,7 @@ def test_named_message_wire_encoding_and_export(
     patch = message | {'output': 'din'}
     data = compiler.compile_show({'patches': {'event': patch}}, {}, [], target)
     graph = resolved.graph_offset(data)
-    node = graph + struct.unpack_from('<I', data, graph + compiler.GRAPH.size)[0]
+    node = graph + struct.unpack_from('<I', data, graph + compiler_wire.GRAPH.size)[0]
     kind, flags, size = struct.unpack_from('<BBH', data, node)
     assert (kind, flags) == (2, 1)
     assert data[node + 36 : node + 4 + size] == bytes.fromhex(wire)
@@ -597,7 +617,9 @@ def test_compiled_raw_message_exports_as_its_named_type(
     compiled = compiler.compile_show({'patches': {'event': patch}}, {}, [], target)
     legacy = bytearray(compiled)
     graph = resolved.graph_offset(compiled)
-    node = graph + struct.unpack_from('<I', compiled, graph + compiler.GRAPH.size)[0]
+    node = (
+        graph + struct.unpack_from('<I', compiled, graph + compiler_wire.GRAPH.size)[0]
+    )
     legacy[node + 1] = 1  # The former raw node carried the same MIDI bytes.
     struct.pack_into('<I', legacy, 20, crc32(legacy[28:]))
     exported = tomlkit.parse(resolved.export(bytes(legacy))).unwrap()
@@ -624,7 +646,7 @@ def test_compiled_raw_message_exports_as_its_named_type(
 def test_invalid_derivation_is_rejected(
     target: models.Target, definitions: dict[str, object], error: str
 ) -> None:
-    with pytest.raises(compiler.CompilationError, match=error):
+    with pytest.raises(compiler_errors.CompilationError, match=error):
         compiler.compile_show({'patches': definitions}, {}, [], target)
 
 
@@ -678,7 +700,8 @@ def test_download_keeps_a_pedal_volume_edit_as_an_override(
     edited = bytearray(compiled)
     graph = resolved.graph_offset(compiled)
     node = (
-        graph + struct.unpack_from('<I', compiled, graph + compiler.GRAPH.size + 4)[0]
+        graph
+        + struct.unpack_from('<I', compiled, graph + compiler_wire.GRAPH.size + 4)[0]
     )
     edited[node + 4 + 5] = 105
     struct.pack_into('<I', edited, 20, crc32(edited[28:]))

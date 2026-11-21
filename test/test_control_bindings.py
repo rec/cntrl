@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved, songs
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved, songs
 from scripts import native_tests
 
 
@@ -288,7 +288,7 @@ def test_long_double_actions_round_trip_in_each_control_layer(
 
 def binding_target() -> models.Target:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     return target.model_copy(
         update={

@@ -5,14 +5,22 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved, songs
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_errors,
+    compiler_inputs,
+    models,
+    patch_graph,
+    resolved,
+    songs,
+)
 from scripts import native_tests
 
 
 def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     ).model_copy(update={'functions': ['stock-firmware'], 'buttons': list('ABCDEF')})
     show = {
         'instruments': {},
@@ -31,7 +39,7 @@ def test_function_patch_round_trip_and_controller_activation(tmp_path: Path) -> 
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['patch_cycles']['Functions'][0]['exit_buttons'] == 'A+F'
     assert compiler.compile_show(exported, {'profiles': []}, [], target) == data
-    with pytest.raises(compiler.CompilationError, match='unavailable'):
+    with pytest.raises(compiler_errors.CompilationError, match='unavailable'):
         compiler.compile_show(
             show, {'profiles': []}, [], target.model_copy(update={'functions': []})
         )
@@ -64,12 +72,12 @@ def test_invalid_exit_combinations_are_rejected(pair: str) -> None:
 
 def test_stock_firmware_requires_operation_instead_of_type() -> None:
     with pytest.raises(ValueError):
-        compiler.normalize_patch({'type': 'stock-firmware', 'exit_buttons': 'A+F'})
+        patch_graph.normalize_patch({'type': 'stock-firmware', 'exit_buttons': 'A+F'})
 
 
 def test_function_patches_cannot_contain_midi_properties() -> None:
     with pytest.raises(ValueError):
-        compiler.normalize_patch(
+        patch_graph.normalize_patch(
             {'exit_buttons': 'A+F', 'program': 1, 'operation': 'stock-firmware'}
         )
 
@@ -77,7 +85,7 @@ def test_function_patches_cannot_contain_midi_properties() -> None:
 def test_song_with_function_and_repeated_patches_preserves_occurrences() -> None:
     root = Path(__file__).resolve().parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     ).model_copy(update={'functions': ['stock-firmware'], 'buttons': list('ABCDEF')})
     library = songs.Library(
         songs=[

@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, models, resolved
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved
 from scripts import native_tests
 
 
 def test_shared_state_and_selection_hooks(tmp_path: Path) -> None:
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
-        compiler.read_document(root / 'firmware/test/target.json')
+        compiler_inputs.read_document(root / 'firmware/test/target.json')
     )
 
     def cc(control: int, value: int) -> dict[str, object]:
@@ -107,7 +107,7 @@ def test_shared_state_and_selection_hooks(tmp_path: Path) -> None:
 )
 def test_invalid_selection_hooks_are_rejected(hook: dict[str, object]) -> None:
     target = models.Target.model_validate(
-        compiler.read_document(Path('firmware/test/target.json'))
+        compiler_inputs.read_document(Path('firmware/test/target.json'))
     )
     show = {
         'switches': {

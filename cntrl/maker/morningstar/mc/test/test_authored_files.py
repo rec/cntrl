@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cntrl.patch_chooser import compiler, models, resolved, songs
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved, songs
 from cntrl.patch_chooser.cli import save_asset
 
 
@@ -39,13 +39,13 @@ from cntrl.patch_chooser.cli import save_asset
 def test_authored_setups_compile_and_round_trip(
     path: str, definitions: str | None, tables: list[str], tmp_path: Path
 ) -> None:
-    target = models.Target.model_validate(compiler.read_document(TARGET))
+    target = models.Target.model_validate(compiler_inputs.read_document(TARGET))
     assets: dict[int, bytes] = {}
     movies: dict[int, bytes] = {}
     data = compiler.compile_show(
-        compiler.read_document(Path(path)),
-        compiler.read_document(Path(definitions)) if definitions else {},
-        [compiler.read_document(Path(p)) for p in tables],
+        compiler_inputs.read_document(Path(path)),
+        compiler_inputs.read_document(Path(definitions)) if definitions else {},
+        [compiler_inputs.read_document(Path(p)) for p in tables],
         target,
         assets,
         movie_assets=movies,
@@ -56,7 +56,7 @@ def test_authored_setups_compile_and_round_trip(
         save_asset(tmp_path / 'movies' / f'{key:08x}.cnsa', movie)
     exported_path = tmp_path / 'exported.toml'
     exported_path.write_text(resolved.export(data))
-    exported = compiler.read_document(exported_path)
+    exported = compiler_inputs.read_document(exported_path)
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
@@ -68,8 +68,8 @@ def test_authored_setups_compile_and_round_trip(
     ],
 )
 def test_authored_song_library_compiles_and_round_trips(path: str) -> None:
-    library = songs.Library.model_validate(compiler.read_document(Path(path)))
-    target = models.Target.model_validate(compiler.read_document(TARGET))
+    library = songs.Library.model_validate(compiler_inputs.read_document(Path(path)))
+    target = models.Target.model_validate(compiler_inputs.read_document(TARGET))
     data = songs.encode(library, target)
     assert songs.encode(songs.decode(data), target) == data
 
@@ -77,9 +77,9 @@ def test_authored_song_library_compiles_and_round_trips(path: str) -> None:
 @pytest.mark.parametrize('instrument', ['patchman', 'vl70m'])
 def test_instrument_catalogues_match_declared_profiles(instrument: str) -> None:
     definitions = models.Definitions.model_validate(
-        compiler.read_document(Path('instruments/definitions.toml'))
+        compiler_inputs.read_document(Path('instruments/definitions.toml'))
     )
-    table = compiler.read_document(Path('instruments') / f'{instrument}.toml')
+    table = compiler_inputs.read_document(Path('instruments') / f'{instrument}.toml')
     assert isinstance(table, dict)
     patches = [
         models.TablePatch.model_validate(

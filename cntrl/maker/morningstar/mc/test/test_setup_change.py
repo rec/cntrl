@@ -7,13 +7,13 @@ import tomlkit
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_chooser import compiler, setup_bundle
+from cntrl.patch_chooser import compiler, compiler_inputs, setup_bundle
 
 
 def test_setup_change_stops_looping_file_and_lfo(tmp_path: Path) -> None:
     target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
     sources = {
-        n: compiler.read_document(BASE / 'emulator/setup-change' / f'{n}.toml')
+        n: compiler_inputs.read_document(BASE / 'emulator/setup-change' / f'{n}.toml')
         for n in ('active', 'quiet')
     }
     compiled = setup_bundle.reindex(

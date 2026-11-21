@@ -10,7 +10,7 @@ import pytest
 
 from cntrl.emulator import backend
 from cntrl.fonts import catalogue, ui
-from cntrl.patch_chooser import compiler, models
+from cntrl.patch_chooser import compiler_inputs, models
 
 
 class BuildFiles:
@@ -30,7 +30,7 @@ class BuildFiles:
         shutil.copyfile(sys.executable, self.compiler)
         self.compiler.chmod(0o755)
         monkeypatch.setenv('CXX', str(self.compiler))
-        data = compiler.read_document(
+        data = compiler_inputs.read_document(
             Path(__file__).parents[1] / 'firmware/test/target.json'
         )
         self.target = models.Target.model_validate(data)
