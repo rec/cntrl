@@ -259,6 +259,9 @@ class Session:
             self.process.stdout.close()
         self.reader.join(timeout=3)
 
+    def poll_exit(self) -> int | None:
+        return self.process.poll()
+
     def read_stdout(self) -> None:
         assert self.process.stdout is not None
         pending: bytes | None = None

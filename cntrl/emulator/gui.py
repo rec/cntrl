@@ -7,12 +7,11 @@ from time import monotonic_ns
 from types import TracebackType
 
 import tomlkit
-from middy import midi
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import models
 from .backend import Session
-from .host_midi import HostMidi
+from .host_midi import MIDI_ERRORS, HostMidi
 from .layout import Canvas, Placement
 from .localization import dialog_messages, messages
 from .replay import Scenario
@@ -546,12 +545,13 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.display_updates()
 
     def connect_host(self, endpoint: str) -> None:
+        if self.session.failed:
+            return
         if endpoint in self.host:
             self.release_inputs()
             self.session.cleanup()
             self.display_updates()
-            if connection := self.host.pop(endpoint, None):
-                connection.close()
+            self.close_host(endpoint)
             self.log.appendPlainText(self.text('host_disconnected', endpoint=endpoint))
             return
         declaration = next(
@@ -577,7 +577,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 self.log.appendPlainText(self.text('host_connected', endpoint=endpoint))
             else:
                 connection.close()
-        except (midi.MidiError, ValueError, TypeError, OSError) as error:
+        except MIDI_ERRORS as error:
             connection.close()
             self.log.appendPlainText(str(error))
 
@@ -585,6 +585,13 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         if self.session.failed:
             self.timer.stop()
             self.running.setChecked(False)
+            self.close_host_connections()
+            return
+        if (status := self.session.poll_exit()) is not None:
+            self.session.failed = True
+            self.runtime_failed(
+                ValueError(f'native emulator disconnected (exit {status})')
+            )
             return
         if self.running.isChecked():
             try:
@@ -599,19 +606,26 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 try:
                     for p in c.receive():
                         self.session.midi(n, p)
-                except (midi.MidiError, ValueError, TypeError, OSError) as error:
+                except MIDI_ERRORS as error:
+                    if self.session.failed:
+                        self.runtime_failed(error)
+                        return
                     self.host_failed(n, error)
         self.display_updates()
 
-    def runtime_failed(self, error: OSError | ValueError) -> None:
+    def runtime_failed(self, error: Exception) -> None:
         self.timer.stop()
         self.running.setChecked(False)
         self.running.setEnabled(False)
+        self.close_host_connections()
         self.release_inputs()
         self.canvas.setEnabled(False)
         self.log.appendPlainText(self.text('stopped', error=error))
 
     def display_updates(self) -> None:
+        if self.session.failed:
+            self.close_host_connections()
+            return
         if self.language != self.session.language:
             self.language = self.session.language
             self.setLocale(QtCore.QLocale(self.language))
@@ -639,7 +653,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                     connection = self.host[e.endpoint]
                     try:
                         connection.send(e.data)
-                    except (midi.MidiError, ValueError, TypeError, OSError) as error:
+                    except MIDI_ERRORS as error:
                         self.host_failed(e.endpoint, error)
             elif e.kind == 'relay' and e.endpoint in self.relay_labels:
                 self.relay_values[e.endpoint] = e.value
@@ -668,13 +682,25 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.canvas.update()
 
     def host_failed(self, endpoint: str, error: BaseException) -> None:
-        connection = self.host.pop(endpoint)
+        self.close_host(endpoint)
         self.connected[endpoint].setChecked(False)
-        connection.close()
         self.session.cleanup()
         self.log.appendPlainText(
             self.text('host_failed', endpoint=endpoint, error=error)
         )
+
+    def close_host(self, endpoint: str) -> None:
+        if connection := self.host.pop(endpoint, None):
+            try:
+                connection.close()
+            except MIDI_ERRORS as error:
+                self.log.appendPlainText(
+                    self.text('host_failed', endpoint=endpoint, error=error)
+                )
+
+    def close_host_connections(self) -> None:
+        for endpoint in list(self.host):
+            self.close_host(endpoint)
 
     def host_choice(
         self, title: str, endpoint: str, names: list[str]
@@ -738,9 +764,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 self.session.release_all()
         except (OSError, ValueError) as error:
             self.runtime_failed(error)
-        for c in self.host.values():
-            c.close()
-        self.host.clear()
+        self.close_host_connections()
         self.session.close()
         QtWidgets.QApplication.removeTranslator(self.dialog_translator)
         event.accept()
@@ -821,6 +845,7 @@ def run_window(session: Session) -> None:
         reporting = True
         if window is not None:
             window.timer.stop()
+            window.close_host_connections()
         try:
             previous_hook(kind, error, trace)
         finally:

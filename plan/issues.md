@@ -7,17 +7,6 @@ its consequences have not been reproduced unless stated. A **risk to verify**
 has an additional dependency or evidence gap. Priorities reflect impact and
 likely exposure. Deliberately deferred pedal navigation is outside scope.
 
-## P1 | Memory integrity, data loss and disclosure
-
-4. **Engine failure can leave notes or pedals held on real MIDI devices
-   (risk to verify).** [The emulator forwards MIDI to external ports](../cntrl/emulator/gui.py#L631),
-   but [session exit skips native cleanup on failure](../cntrl/emulator/backend.py#L225)
-   and [request timeouts can kill the child](../cntrl/emulator/backend.py#L300).
-   The failed core may be the only component with the note ownership state
-   needed to send releases. Verify with a held note and sustain pedal on a
-   loopback destination, then decide what host-side cleanup is safe when
-   a destination is shared with another source.
-
 ## P2 | Reliability, correctness and recoverability
 
 5. **USB timeout does not bound a complete command (code finding).**
