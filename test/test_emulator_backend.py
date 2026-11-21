@@ -1001,6 +1001,7 @@ def test_large_sysex_keeps_its_message_across_transport_chunks(
         files.layout, files.target, files.executable, tmp_path, files.setup
     ) as session:
         session.midi('din', message)
+        assert bytes(session.events[0].data) == message
         session.advance(10000)
         captured = b''.join(
             e.data for e in session.messages if e.kind == 'midi' and e.endpoint == 'trs'
@@ -1044,24 +1045,30 @@ def test_recorded_inputs_replay_the_same_midi_and_pixels(
         files.layout, files.target, files.executable, tmp_path / 'original', files.setup
     ) as session:
         session.advance(20001)
+        session.midi('din', b'\x90\x3c')
         session.button('a', True)
+        session.midi('trs', b'\xf8')
+        session.midi('din', b'\x64')
         session.advance(40001)
         session.button('a', False)
         session.advance(80000)
-        scenario = Scenario(
-            seed=session.random_seed,
-            until=session.time_us / 1000000,
-            events=session.events,
-        )
         expected_messages = list(session.messages)
         expected_frames = dict(session.frames)
         path = tmp_path / 'recording.toml'
-        path.write_text(tomlkit.dumps(scenario.model_dump(mode='json')))
+        session.write_replay(path)
+    scenario = Scenario.load(path)
+    assert [(e.at, e.kind, e.target, bytes(e.data)) for e in scenario.events] == [
+        (0.020001, 'midi', 'din', b'\x90\x3c'),
+        (0.020001, 'button', 'a', b''),
+        (0.020001, 'midi', 'trs', b'\xf8'),
+        (0.020001, 'midi', 'din', b'\x64'),
+        (0.040001, 'button', 'a', b''),
+    ]
     monkeypatch.setattr(backend, 'MAX_REPLAY_ADVANCE_US', segment_us)
     with backend.Session(
         files.layout, files.target, files.executable, tmp_path / 'replayed', files.setup
     ) as session:
-        Scenario.load(path).run(session)
+        scenario.run(session)
         assert session.messages == expected_messages
         assert session.frames == expected_frames
 

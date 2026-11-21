@@ -9,7 +9,6 @@ from pathlib import Path
 from time import monotonic_ns
 from types import TracebackType
 
-import tomlkit
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import models
@@ -17,7 +16,6 @@ from .backend import Session
 from .host_midi import MIDI_ERRORS, HostMidi
 from .layout import Canvas, Placement
 from .localization import dialog_messages, messages
-from .replay import Scenario
 
 
 def display_rectangle(
@@ -817,19 +815,11 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         if path:
             if self.stopped:
                 try:
-                    self.write_replay(Path(path))
+                    self.session.write_replay(Path(path))
                 except OSError as error:
                     self.log.appendPlainText(str(error))
             else:
-                self.submit(partial(self.write_replay, Path(path)))
-
-    def write_replay(self, path: Path) -> None:
-        scenario = Scenario(
-            seed=self.session.random_seed,
-            until=self.session.time_us / 1_000_000,
-            events=self.session.events,
-        )
-        path.write_text(tomlkit.dumps(scenario.model_dump(mode='json')))
+                self.submit(partial(self.session.write_replay, Path(path)))
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self.session_closed:
