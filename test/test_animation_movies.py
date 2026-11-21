@@ -18,6 +18,7 @@ from cntrl.patch_chooser import (
     models,
     resolved,
 )
+from cntrl.patch_chooser.setup_compiler import compile_inputs
 from scripts import native_tests
 
 
@@ -118,7 +119,7 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     geometry.write_text(tomlkit.dumps({'animation': GEOMETRY.model_dump()}))
     target_expression = [str(target), '+', str(geometry)]
     assets: dict[int, bytes] = {}
-    bundle = cli.compile_inputs(
+    bundle = compile_inputs(
         data_files.Sources(document=[str(source)], target=target_expression),
         movies=assets,
     )
@@ -129,7 +130,7 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     assert bundle.prefill == [0]
     plain = tmp_path / 'plain.toml'
     plain.write_text('')
-    baseline = cli.compile_inputs(
+    baseline = compile_inputs(
         data_files.Sources(document=[str(plain)], target=target_expression)
     )
     assert bundle.total_ram2_needs() == baseline.total_ram2_needs()
@@ -140,7 +141,7 @@ def test_setup_assets_round_trip_without_reserving_movie_pixels_in_ram2(
     )
     cli.save_asset(tmp_path / f'movies/{key:08x}.cnsa', movie)
     source.write_text(exported)
-    rebuilt = cli.compile_inputs(
+    rebuilt = compile_inputs(
         data_files.Sources(document=[str(source)], target=target_expression)
     )
     assert binary_format.core(rebuilt.setups['setup']) == binary_format.core(

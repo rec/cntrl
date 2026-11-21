@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import cli, data_files, midi_assets
+from cntrl.patch_chooser import data_files, midi_assets
+from cntrl.patch_chooser.setup_compiler import compile_inputs
 
 
 def test_referenced_files_use_the_declaring_document_not_the_working_directory(
@@ -25,7 +26,7 @@ def test_referenced_files_use_the_declaring_document_not_the_working_directory(
         target=[str(ROOT / 'firmware/test/target.json')],
     )
     trace = data_files.Trace()
-    bundle = cli.compile_inputs(inputs, trace=trace)
+    bundle = compile_inputs(inputs, trace=trace)
     assert midi_assets.collect(bundle.setups, trace.files) == {
         'intro.mid': b'MThd from the library'
     }
@@ -46,7 +47,7 @@ def test_companion_and_nested_references_are_included_without_unused_files(
     source = tmp_path / 'show.toml'
     source.write_text('[patch_cycles]\nmain=[{document="Other",patch="play"}]\n')
     trace = data_files.Trace()
-    bundle = cli.compile_inputs(
+    bundle = compile_inputs(
         data_files.Sources(
             document=[str(source)], target=[str(ROOT / 'firmware/test/target.json')]
         ),
@@ -70,7 +71,7 @@ def test_shared_pedal_filenames_require_identical_bytes(tmp_path: Path) -> None:
         (folder / 'shared.mid').write_bytes(data)
         documents.append(f'{name}={path}')
         sources[path] = path.read_bytes()
-    bundle = cli.compile_inputs(
+    bundle = compile_inputs(
         data_files.Sources(
             document=documents, target=[str(ROOT / 'firmware/test/target.json')]
         )
@@ -101,7 +102,7 @@ def test_a_patch_named_filename_is_not_a_file_dependency(tmp_path: Path) -> None
     source = tmp_path / 'show.toml'
     source.write_text('[patches]\nfilename="A"\nA={operation="play-midi-file"}\n')
     trace = data_files.Trace()
-    bundle = cli.compile_inputs(
+    bundle = compile_inputs(
         data_files.Sources(
             document=[str(source)], target=[str(ROOT / 'firmware/test/target.json')]
         ),
@@ -122,7 +123,7 @@ def test_derived_file_overrides_and_stream_generators_are_uploaded(
     for name in ('base.mid', 'fast.mid', 'backing.mid'):
         (tmp_path / name).write_bytes(name.encode())
     trace = data_files.Trace()
-    bundle = cli.compile_inputs(
+    bundle = compile_inputs(
         data_files.Sources(
             document=[str(source)], target=[str(ROOT / 'firmware/test/target.json')]
         ),

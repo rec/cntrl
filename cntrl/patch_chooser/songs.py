@@ -948,6 +948,7 @@ def upload(client: transport.SetupClient, data: bytes, overwrite: bool) -> None:
 
 def run(command: Copy | Download) -> None:
     from . import cli
+    from .setup_compiler import document_references
 
     if isinstance(command, Copy):
         trace = data_files.Trace()
@@ -987,7 +988,7 @@ def run(command: Copy | Download) -> None:
                 relocations=relocations,
             )
         companion_names = list(
-            dict.fromkeys([*references(library), *cli.document_references(context)])
+            dict.fromkeys([*references(library), *document_references(context)])
         )
         original_name = authoring.name
         index = 1
@@ -1027,7 +1028,7 @@ def run(command: Copy | Download) -> None:
                 overrides=trace.files,
                 defaults={name: bindings.get(name, trace.defaults[authoring.name])},
             )
-            for reference in cli.document_references(companions[name]):
+            for reference in document_references(companions[name]):
                 if reference not in companion_names:
                     validate_name(reference)
                     companion_names.append(reference)

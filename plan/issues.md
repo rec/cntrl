@@ -90,15 +90,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 ## P3 | Maintenance and performance
 
-18. **Command names double as generic Python type names and the CLI owns
-    reusable compiler orchestration.** [The CLI](../cntrl/patch_chooser/cli.py#L43)
-    defines `Set`, `List`, `Copy` and `Download`; their domain is apparent
-    only from the enclosing command. Setup sync imports `compile_inputs`
-    from the CLI inside [the apply operation](../cntrl/patch_chooser/setup_sync.py#L975),
-    while the CLI imports setup sync. Give the models domain-specific Python
-    names without changing the user-facing commands, and put shared
-    orchestration below the entry point when touching that boundary.
-
 19. **Setup sync and the compiler are hard to review by responsibility.**
     [compiler.py](../cntrl/patch_chooser/compiler.py#L282) has about 2,800
     lines and mixes catalogue expansion, patch graph validation, display

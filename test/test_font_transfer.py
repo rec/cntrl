@@ -22,6 +22,7 @@ from cntrl.patch_chooser import (
     setup_bundle,
     transport,
 )
+from cntrl.patch_chooser.setup_compiler import compile_inputs
 from scripts import native_tests
 
 
@@ -167,7 +168,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
         definitions=[str(ROOT / 'firmware/test/definitions.json')],
     )
     font_data: dict[str, dict[int, bytes]] = {}
-    data = cli.compile_inputs(command, font_data).setups['show']
+    data = compile_inputs(command, font_data).setups['show']
     assert font_data['show']
     key, bitmap = next(iter(font_data['show'].items()))
     assert binary_format.core(data)[28] == 17  # Window records only paint backgrounds.
@@ -179,7 +180,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     (tmp_path / 'fonts').mkdir()
     (tmp_path / 'fonts' / f'{key:08x}.cfont').write_bytes(bitmap)
     document.write_text(exported)
-    rebuilt = cli.compile_inputs(command).setups['show']
+    rebuilt = compile_inputs(command).setups['show']
     assert binary_format.core(rebuilt) == binary_format.core(data)
     assert device_settings.override_mask(data) == 0
     assert device_settings.override_mask(rebuilt) & 1
@@ -405,7 +406,7 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
         document=[str(path)], target=[str(ROOT / 'test/data/font-target.toml')]
     )
     assert (
-        binary_format.core(cli.compile_inputs(command).setups['exported'])
+        binary_format.core(compile_inputs(command).setups['exported'])
         == setup_bundle.reindex({'exported': data})['exported']
     )
 
