@@ -1,12 +1,14 @@
 """Build an explicitly selected implementation through its executable contract."""
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
 import tomlkit
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+from tomlkit.exceptions import ParseError
+
+from . import target_process
 
 
 class Build(BaseModel, frozen=True):
@@ -27,46 +29,55 @@ class Artifacts(BaseModel, frozen=True):
 
 def read_artifacts(output: Path) -> Artifacts:
     """Validate an existing export and its files inside the output directory."""
-    output = output.resolve()
-    artifacts = Artifacts.model_validate(
-        tomlkit.parse((output / 'build.toml').read_bytes().decode()).unwrap()
-    )
-    for name in (artifacts.image, artifacts.target):
-        path = (output / name).resolve()
-        if (
-            Path(name).is_absolute()
-            or not path.is_relative_to(output)
-            or not path.is_file()
-        ):
-            raise ValueError(
-                f'{name}: build artifact must be a file inside the output directory'
-            )
+    try:
+        output = output.resolve()
+        artifacts = Artifacts.model_validate(
+            tomlkit.parse((output / 'build.toml').read_bytes().decode()).unwrap()
+        )
+        for name in (artifacts.image, artifacts.target):
+            path = (output / name).resolve()
+            if (
+                Path(name).is_absolute()
+                or not path.is_relative_to(output)
+                or not path.is_file()
+            ):
+                raise target_process.TargetAdapterError(
+                    f'{name}: build artifact must be a file inside the output directory'
+                )
+    except (OSError, ParseError, UnicodeDecodeError, ValidationError) as error:
+        raise target_process.TargetAdapterError(str(error)) from error
     return artifacts
 
 
 def run(command: Build) -> Artifacts:
-    output = command.output.resolve()
-    temporary = output / 'tmp'
-    temporary.mkdir(parents=True, exist_ok=True)
-    executable = command.target_dir.resolve() / 'build_entry.py'
+    executable = target_process.entry_point(
+        command.target_dir, 'build_entry.py', 'a build entry point'
+    )
+    try:
+        output = command.output.resolve()
+        source_root = command.source_root.resolve()
+        temporary = output / 'tmp'
+        temporary.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise target_process.TargetAdapterError(str(error)) from error
     environment = dict(
         os.environ,
         TMPDIR=str(temporary),
         TMP=str(temporary),
         TEMP=str(temporary),
-        PYTHONPATH=str(command.source_root.resolve())
+        PYTHONPATH=str(source_root)
         + (
             os.pathsep + os.environ['PYTHONPATH']
             if os.environ.get('PYTHONPATH')
             else ''
         ),
     )
-    subprocess.run(
+    target_process.run(
         [
             sys.executable,
             str(executable),
             '--source-root',
-            str(command.source_root.resolve()),
+            str(source_root),
             '--output',
             str(output),
             *(['--diagnostics'] if command.diagnostics else []),

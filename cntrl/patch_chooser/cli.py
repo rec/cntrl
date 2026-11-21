@@ -14,7 +14,7 @@ import tomlkit
 import tyro
 from pydantic import BaseModel, Field
 
-from .. import build, flash, importing, qualify, upload
+from .. import build, flash, importing, qualify, target_process, upload
 from ..emulator.cli import Emulate, emulate
 from ..file_lock import writer_lock
 from ..maker.morningstar.mc import font_coverage
@@ -624,13 +624,26 @@ def main() -> None:
         CompileOutputError,
         devices.DeviceSelectionError,
         source_archive.RecoveredSourceError,
+        subprocess.CalledProcessError,
+        target_process.TargetAdapterError,
         transport.UsbCommandTimeout,
         transport.UsbProtocolError,
         transport.UsbReplyError,
     ) as error:
         sys.exit(str(error))
-    except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        if isinstance(command, (Compile, Status)):
+    except (OSError, ValueError) as error:
+        if isinstance(
+            command,
+            (
+                Compile,
+                Status,
+                build.Build,
+                flash.Flash,
+                importing.Import,
+                qualify.Qualify,
+                upload.Helper,
+            ),
+        ):
             raise
         sys.exit(str(error))
 

@@ -1,13 +1,13 @@
 """Prepare packaged firmware and flash through its physical target adapter."""
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from . import target_process
 from .firmware.distribution import controller_directory
 
 
@@ -30,10 +30,13 @@ class Flash(BaseModel, frozen=True):
 
 def run(command: Flash) -> None:
     resources = controller_directory(command.controller)
-    entry = resources.parent / 'flash_entry.py'
-    if not entry.is_file():
-        raise ValueError(f'{entry}: target does not provide a flash entry point')
-    output = (command.output or Path('.cntrl-install') / uuid4().hex).resolve()
+    entry = target_process.entry_point(
+        resources.parent, 'flash_entry.py', 'a flash entry point'
+    )
+    try:
+        output = (command.output or Path('.cntrl-install') / uuid4().hex).resolve()
+    except OSError as error:
+        raise target_process.TargetAdapterError(str(error)) from error
     arguments = [
         sys.executable,
         str(entry),
@@ -56,7 +59,7 @@ def run(command: Flash) -> None:
     ):
         if enabled:
             arguments.append(f'--{name}')
-    subprocess.run(
+    target_process.run(
         arguments,
         check=True,
         env=dict(

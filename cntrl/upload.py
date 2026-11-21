@@ -1,7 +1,6 @@
 """Expose the selected target's upload helper through the common CLI."""
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -9,6 +8,7 @@ from typing import Annotated
 import tyro
 from pydantic import BaseModel, ConfigDict, Field
 
+from . import target_process
 from .firmware.distribution import controller_directory
 
 
@@ -49,11 +49,11 @@ class Helper(BaseModel, frozen=True):
 
 
 def run(command: Helper) -> None:
-    entry = controller_directory(command.controller).parent / 'upload_helper_entry.py'
-    if not entry.is_file():
-        raise ValueError(
-            f'{entry}: target does not provide an upload helper entry point'
-        )
+    entry = target_process.entry_point(
+        controller_directory(command.controller).parent,
+        'upload_helper_entry.py',
+        'an upload helper entry point',
+    )
     options = command.command
     arguments = (
         ['serve', '--serial', options.serial]
@@ -72,7 +72,7 @@ def run(command: Helper) -> None:
             options.serial,
         ]
     )
-    result = subprocess.run(
+    result = target_process.run(
         [sys.executable, str(entry), *arguments],
         check=False,
         env=dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent.parent)),
