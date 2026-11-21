@@ -10,9 +10,13 @@ from typing import Annotated
 
 import tomlkit
 import tyro
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from . import compiler_errors, data_files, global_config, models
+
+
+class SetupCreationCancelled(EOFError):
+    """Input ended at a setup creation prompt."""
 
 
 class Create(BaseModel, frozen=True):
@@ -37,11 +41,20 @@ def run(command: Create) -> None:
     )
     if errors:
         raise compiler_errors.CompilationError(errors)
-    settings = models.Setup.model_validate(inherited)
+    try:
+        settings = models.Setup.model_validate(inherited)
+    except ValidationError as error:
+        raise compiler_errors.CompilationError(
+            compiler_errors.validation_errors('setup', error)
+        ) from error
     defaults = global_config.user_path()
+    try:
+        has_defaults = defaults.exists()
+    except OSError as error:
+        raise compiler_errors.CompilationError([str(error)]) from error
     print(
         f'Using system defaults: {defaults}'
-        if defaults.exists()
+        if has_defaults
         else 'No user system defaults found; using built-in defaults.'
     )
     print('System defaults will not be changed.')
@@ -143,7 +156,13 @@ def run(command: Create) -> None:
 
 def ask(prompt: str, default: str = '') -> str:
     suffix = f' [{default}]' if default else ''
-    return input(f'{prompt}{suffix}: ').strip() or default
+    try:
+        answer = input(f'{prompt}{suffix}: ')
+    except EOFError as error:
+        raise SetupCreationCancelled(
+            'Input ended; setup creation cancelled.'
+        ) from error
+    return answer.strip() or default
 
 
 def instrument_text(alias: str, routing: dict[str, object]) -> str:
@@ -184,5 +203,5 @@ def ask_name(prompt: str, default: str = '', *, allow_empty: bool = False) -> st
             return name
         try:
             return data_files.validate_name(name)
-        except ValueError as error:
+        except data_files.InvalidSetupName as error:
             print(error)

@@ -117,6 +117,23 @@ def test_history_cli_preserves_unexpected_failures(
     assert caught.value is failure
 
 
+def test_end_of_input_cancels_history_deletion_before_usb(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connect = Mock(side_effect=AssertionError('unexpected USB open'))
+    monkeypatch.setattr(transport, 'SerialConnection', connect)
+    monkeypatch.setattr(sys.stdin, 'isatty', lambda: True)
+    monkeypatch.setattr('builtins.input', Mock(side_effect=EOFError))
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        ['cntrl', 'setup', 'history', 'Example', 'clear', '--port', '/unused'],
+    )
+    with pytest.raises(SystemExit, match='Input ended; history deletion cancelled'):
+        cli.main()
+    connect.assert_not_called()
+
+
 @pytest.mark.parametrize(
     'reply',
     [

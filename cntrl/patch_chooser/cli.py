@@ -390,10 +390,11 @@ def setup_transfer(
             if isinstance(command, SetupDelete):
                 if not command.yes:
                     print('Delete: ' + ', '.join(names))
-                    if input('Are you sure? [y/N] ').strip().lower() not in (
-                        'y',
-                        'yes',
-                    ):
+                    try:
+                        answer = input('Are you sure? [y/N] ')
+                    except EOFError:
+                        sys.exit('Input ended; setup deletion cancelled.')
+                    if answer.strip().lower() not in ('y', 'yes'):
                         return
                 try:
                     client.delete(names)
@@ -677,8 +678,6 @@ def main() -> None:
             )
     except KeyboardInterrupt:
         sys.exit(130)
-    except EOFError:
-        sys.exit('Input ended; setup creation cancelled.')
     except (
         binary_format.DocumentFormatError,
         catalogue.CatalogueError,
@@ -693,6 +692,7 @@ def main() -> None:
         font_coverage.ReportError,
         history.HistoryError,
         midi_assets.MidiAssetMissingError,
+        setup_create.SetupCreationCancelled,
         setup_sync_store.SyncError,
         setup_sync_store.SyncFileError,
         source_archive.RecoveredSourceError,
@@ -721,6 +721,7 @@ def main() -> None:
                     SetupDelete,
                     SetupCopy,
                     SetupDownload,
+                    setup_create.Create,
                 ),
             ):
                 raise

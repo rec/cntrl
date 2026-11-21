@@ -1303,6 +1303,25 @@ def test_unrepresentable_commit_date_is_reported_as_a_pedal_reply_error(
         cli.main()
 
 
+def test_end_of_input_cancels_setup_deletion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = Mock()
+    client.catalogue.return_value = [
+        transport.SetupEntry(name='Show', modified=0, length=116, checksum=0)
+    ]
+    monkeypatch.setattr(transport, 'SetupClient', Mock(return_value=client))
+    monkeypatch.setattr(transport, 'SerialConnection', Mock(return_value=nullcontext()))
+    monkeypatch.setattr(sys.stdin, 'isatty', lambda: True)
+    monkeypatch.setattr('builtins.input', Mock(side_effect=EOFError))
+    monkeypatch.setattr(
+        sys, 'argv', ['cntrl', 'setup', 'del', 'Show', '--port', '/unused']
+    )
+    with pytest.raises(SystemExit, match='Input ended; setup deletion cancelled'):
+        cli.main()
+    client.delete.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ('failure_type', 'verification_error'),
     [
