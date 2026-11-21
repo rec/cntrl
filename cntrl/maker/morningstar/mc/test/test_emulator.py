@@ -273,6 +273,31 @@ def test_exported_profiles_build_without_the_physical_sdk(
         ]
 
 
+def test_starter_status_heading_remains_editable_with_the_real_time_clock(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[5]
+    command = cli.Emulate(
+        setup=Path(__file__).parents[1] / 'starter.toml',
+        controller='mc6-pro',
+        storage=tmp_path / 'starter-session',
+    )
+    layout, target, setup, storage = cli.prepare(command, compile_to_file)
+    executable = backend.build(target, tmp_path / 'native', root)
+    with backend.Session(layout, target, executable, storage, setup) as session:
+        session.advance(4_000_000, replay=True)
+        session.capture_corrections(True)
+        for time_us in range(4_010_000, 4_060_000, 10_000):
+            session.advance(time_us, replay=True)
+            heading = next(
+                r for r in session.correction_regions if r.message == 'status'
+            )
+            assert heading.screen == 0
+        original = session.frames.copy()
+        session.preview_correction(heading, 'Device status')
+        assert session.frames['lcd-1'] != original['lcd-1']
+
+
 def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
     tmp_path: Path,
 ) -> None:

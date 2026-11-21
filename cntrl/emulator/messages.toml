@@ -1,7 +1,7 @@
 # Desktop-only captions. Locale tags must match localization.catalogue.locales().
 # Controller labels, port names, MIDI bytes and recorded input data stay verbatim.
 [en]
-correction_mode = "Correction"
+correction_mode = "Correction Mode"
 contribute_corrections = "Contribute Corrections..."
 save_corrections = "Save Corrections..."
 discard_corrections = "Discard Corrections..."

@@ -11,7 +11,7 @@ pytest.importorskip('middy')
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from cntrl.emulator.backend import Session
-from cntrl.emulator.gui import ControllerCanvas
+from cntrl.emulator.gui import ControllerCanvas, display_rectangle
 from cntrl.emulator.layout import Canvas, EmulatorLayout
 from cntrl.patch_chooser.models import Target, TargetDisplay
 
@@ -63,6 +63,29 @@ def test_mc6_faceplate_keeps_display_and_switch_positions(
         ):
             point = canvas.placement_rect(session.layout.displays[n]).center().toPoint()
             assert image.pixelColor(point).name() == color
+        # These are the canvas sizes from the Status clipping report.
+        session.frames['lcd-1'] = (
+            b'\xf8\x00' * 4 + b'\xff\xff' * 152 + b'\x00\x1f' * 4
+        ) * 128
+        canvas.frames = session.frames.copy()
+        for height in (439, 420):
+            canvas.resize(976, height)
+            image = canvas.grab().toImage()
+            bezel = canvas.placement_rect(session.layout.displays['lcd-1'])
+            ratio = canvas.devicePixelRatioF()
+            destination = display_rectangle(bezel, 160, 128, ratio)
+            middle = round(destination.center().y() * ratio)
+            assert bezel.contains(destination)
+            assert (
+                image.pixelColor(round(destination.left() * ratio), middle).name()
+                == '#ff0000'
+            )
+            assert (
+                image.pixelColor(round(destination.right() * ratio) - 1, middle).name()
+                == '#0000ff'
+            )
+        canvas.resize(1200, 640)
+        image = canvas.grab().toImage()
         for n in session.layout.controls:
             point = canvas.placement_rect(session.layout.controls[n]).center()
             assert Canvas(session.layout, 1200, 640).control(point.x(), point.y()) == n
