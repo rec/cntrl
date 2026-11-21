@@ -12,6 +12,7 @@ pytest.importorskip('PySide6')
 pytest.importorskip('middy')
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from cntrl import crashes
 from cntrl.emulator import gui
 from cntrl.emulator.backend import OutputEvent, Session
 from cntrl.emulator.gui import ControllerCanvas, EmulatorWindow, display_rectangle
@@ -146,6 +147,49 @@ def test_unhandled_callback_reports_once_and_exits(
     assert len(reported) == 1
     assert str(reported[0]) == 'unexpected callback failure'
     assert sys.excepthook is report
+
+
+@pytest.mark.parametrize('approve', [False, True])
+def test_crash_dialog_shows_report_before_opening_browser(
+    application: QtWidgets.QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    approve: bool,
+) -> None:
+    previews: list[tuple[str, bool]] = []
+    urls: list[str] = []
+    monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
+
+    def open_browser(url: str) -> bool:
+        urls.append(url)
+        return True
+
+    def choose() -> None:
+        dialog = application.activeModalWidget()
+        if not isinstance(dialog, QtWidgets.QDialog):
+            return
+        preview = dialog.findChild(QtWidgets.QPlainTextEdit)
+        if preview is not None:
+            previews.append((preview.toPlainText(), bool(urls)))
+        button = next(
+            (
+                b
+                for b in dialog.findChildren(QtWidgets.QPushButton)
+                if b.text() == 'Report Issue'
+            ),
+            None,
+        )
+        if approve and button is not None:
+            button.click()
+        else:
+            dialog.reject()
+
+    monkeypatch.setattr(crashes.webbrowser, 'open', open_browser)
+    QtCore.QTimer.singleShot(0, choose)
+    crashes.report('emulator', RuntimeError('previewed locally'), None)
+    ((preview, browser_already_open),) = previews
+    assert 'RuntimeError: previewed locally' in preview
+    assert not browser_already_open
+    assert len(urls) == int(approve)
 
 
 def click(

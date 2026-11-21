@@ -808,10 +808,19 @@ def port_description(
 def run_window(session: Session) -> None:
     application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     previous_hook = sys.excepthook
+    window: EmulatorWindow | None = None
+    reporting = False
 
     def unhandled(
         kind: type[BaseException], error: BaseException, trace: TracebackType | None
     ) -> None:
+        nonlocal reporting
+        if reporting:
+            sys.__excepthook__(kind, error, trace)
+            return
+        reporting = True
+        if window is not None:
+            window.timer.stop()
         try:
             previous_hook(kind, error, trace)
         finally:

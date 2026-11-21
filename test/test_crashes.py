@@ -53,15 +53,25 @@ def test_report_contains_build_platform_and_complete_traceback(
 
 @pytest.mark.parametrize('binary', ['cntrl', 'emulator'])
 def test_report_opens_prefilled_issue_form(
-    monkeypatch: pytest.MonkeyPatch, binary: str
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], binary: str
 ) -> None:
     monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
+    monkeypatch.setattr(sys.stdin, 'isatty', lambda: True)
+    monkeypatch.setattr(sys.stderr, 'isatty', lambda: True)
     urls: list[str] = []
+
+    def approve() -> str:
+        assert not urls
+        preview = capsys.readouterr().err
+        assert f'Stack trace in {binary}' in preview
+        assert 'Échec & détails #1?' in preview
+        return 'yes'
 
     def open_browser(url: str) -> bool:
         urls.append(url)
         return True
 
+    monkeypatch.setattr('builtins.input', approve)
     monkeypatch.setattr(crashes.webbrowser, 'open', open_browser)
     error = chained_error()
     error.add_note('Échec & détails #1?')
@@ -81,6 +91,29 @@ def test_report_opens_prefilled_issue_form(
     assert body.endswith('    Échec & détails #1?\n')
 
 
+@pytest.mark.parametrize('interactive', [True, False])
+def test_terminal_report_stays_local_without_approval(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    interactive: bool,
+) -> None:
+    monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
+    monkeypatch.setattr(sys.stdin, 'isatty', lambda: interactive)
+    monkeypatch.setattr(sys.stderr, 'isatty', lambda: interactive)
+    monkeypatch.setattr(
+        'builtins.input',
+        (lambda: '')
+        if interactive
+        else (lambda: pytest.fail('prompted without a terminal')),
+    )
+    monkeypatch.setattr(
+        crashes.webbrowser, 'open', lambda url: pytest.fail('opened without approval')
+    )
+    error = chained_error()
+    crashes.report('cntrl', error, error.__traceback__)
+    assert 'RuntimeError: outer failure' in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     'failure',
     [None, crashes.webbrowser.Error('browser launch failed')],
@@ -91,6 +124,7 @@ def test_reporting_failure_preserves_original_traceback(
     failure: Exception | None,
 ) -> None:
     monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
+    monkeypatch.setattr(crashes, 'review_report', lambda *args: True)
 
     def open_browser(url: str) -> bool:
         if failure is not None:

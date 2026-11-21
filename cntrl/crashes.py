@@ -35,18 +35,74 @@ def install(binary: Literal['cntrl', 'emulator']) -> None:
 
 
 def report(binary: str, error: BaseException, trace: TracebackType | None) -> None:
-    """Open a browser draft with the complete traceback for review."""
+    """Review a crash report locally before opening its GitHub form."""
     try:
-        query = urlencode(
-            {
-                'title': f'Stack trace in {binary}',
-                'body': issue_body(binary, error, trace),
-            }
-        )
+        title = f'Stack trace in {binary}'
+        body = issue_body(binary, error, trace)
+        if not review_report(binary, title, body):
+            return
+        query = urlencode({'title': title, 'body': body})
         if not webbrowser.open(f'https://github.com/rec/cntrl/issues/new?{query}'):
             print('Could not open the crash report in a browser.', file=sys.stderr)
     except (OSError, subprocess.CalledProcessError, webbrowser.Error) as failure:
         print(f'Could not open the crash report: {failure}', file=sys.stderr)
+
+
+def review_report(binary: str, title: str, body: str) -> bool:
+    if binary == 'emulator' and threading.current_thread() is threading.main_thread():
+        try:
+            from PySide6 import QtWidgets
+        except ImportError:
+            pass
+        else:
+            if isinstance(QtWidgets.QApplication.instance(), QtWidgets.QApplication):
+                dialog = QtWidgets.QDialog()
+                dialog.setWindowTitle(title)
+                dialog.resize(720, 480)
+                layout = QtWidgets.QVBoxLayout(dialog)
+                notice = QtWidgets.QLabel(
+                    'Review the report below. Opening the form shares these details '
+                    'with GitHub. You can edit the issue before clicking Create.'
+                )
+                notice.setWordWrap(True)
+                layout.addWidget(notice)
+                preview = QtWidgets.QPlainTextEdit(body)
+                preview.setReadOnly(True)
+                layout.addWidget(preview)
+                buttons = QtWidgets.QDialogButtonBox()
+                report_button = buttons.addButton(
+                    'Report Issue', QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole
+                )
+                close_button = buttons.addButton(
+                    QtWidgets.QDialogButtonBox.StandardButton.Close
+                )
+                report_button.setAutoDefault(False)
+                close_button.setDefault(True)
+                buttons.accepted.connect(dialog.accept)
+                buttons.rejected.connect(dialog.reject)
+                layout.addWidget(buttons)
+                close_button.setFocus()
+                return dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
+
+    print(f'{title}\n\n{body}', file=sys.stderr)
+    if (
+        threading.current_thread() is not threading.main_thread()
+        or sys.stdin is None
+        or sys.stderr is None
+        or not sys.stdin.isatty()
+        or not sys.stderr.isatty()
+    ):
+        return False
+    print(
+        'Share these details with GitHub and open the issue form? [y/N] ',
+        end='',
+        file=sys.stderr,
+        flush=True,
+    )
+    try:
+        return input().strip().casefold() in ('y', 'yes')
+    except (EOFError, KeyboardInterrupt):
+        return False
 
 
 def issue_body(binary: str, error: BaseException, trace: TracebackType | None) -> str:
