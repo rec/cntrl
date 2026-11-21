@@ -631,6 +631,36 @@ def test_replay_stops_on_native_rejection_and_session_can_continue(
         assert any(e.kind == 'midi' and e.endpoint == 'trs' for e in session.messages)
 
 
+def test_tooltip_context_uses_native_display_regions_and_focus(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    show = control_setup(100)
+    screens = len(files.target.displays)
+    if screens > 1:
+        show.update(
+            pages={
+                'patches': {'type': 'patch-chooser'},
+                'status': {'type': 'status'},
+            },
+            regions={
+                'performance': {'pages': ['patches']},
+                'utility': {'pages': ['status']},
+            },
+            layout={'order': ['performance', 'utility'], 'focus': 'utility'},
+        )
+    setup = tmp_path / 'tooltip-setup.bin'
+    write_bundle({'hover': show}, files.target, setup)
+    with backend.Session(
+        files.layout, files.target, files.executable, tmp_path / 'storage', setup
+    ) as session:
+        expected = tuple(('patch-chooser', i + 1) for i in range(screens - 1))
+        if screens > 1:
+            assert session.tooltip_context == ('status', (*expected, ('status', 1)))
+        else:
+            assert session.tooltip_context == ('patch-chooser', (('patch-chooser', 1),))
+
+
 def test_replay_drives_real_button_actions_and_draws_pages(
     backend_files: BackendFiles, tmp_path: Path
 ) -> None:

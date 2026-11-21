@@ -37,6 +37,8 @@ class FaceplateSession(Session):
             )
         }
         self.editing_name = False
+        self.language = 'en'
+        self.tooltip_context = ('', ())
         self.inputs: list[tuple[str, bool]] = []
 
     def button(self, control_id: str, pressed: bool) -> None:

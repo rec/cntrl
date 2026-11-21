@@ -553,6 +553,7 @@ public:
         }
     }
     int hardware_brightness() const { return applied_brightness_; }
+    bool showing_splash() const { return splash_visible_; }
     Pages pages_;
     Keyboard keyboard_;
 private:

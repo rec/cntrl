@@ -595,6 +595,37 @@ public:
         std::vector<uint8_t> state{9};
         state.insert(state.end(), language, language + std::strlen(language));
         frame(state);
+        // The focused page owns button help. Each screen has its own page and
+        // one-based window number because the layout can show several pages.
+        enum : uint8_t { no_overlay = 0, main_menu = 21, setups, songs, switch_editor };
+        std::vector<uint8_t> help(2 + 2 * target::display_count, 0);
+        help[0] = 11;
+        if (!board.stock_firmware && !board.stock_pending && !host.showing_splash()) {
+            const uint8_t overlay = board.switch_editor_open() ? switch_editor
+                : application.song_ui.open() ? songs : application.setups.open() ? setups
+                : application.menu.open() ? main_menu : no_overlay;
+            if (overlay) {
+                help[1] = overlay;
+                for (unsigned i = 0; i < target::display_count; ++i) {
+                    help[2 + 2 * i] = overlay;
+                    help[3 + 2 * i] = uint8_t(i + 1);
+                }
+            } else {
+                const auto &layout = application.layout;
+                const auto &allocation = application.allocation;
+                if (allocation.selected() < layout.pages())
+                    help[1] = layout.page(allocation.selected())[0];
+                for (unsigned r = 0; r < layout.regions(); ++r) {
+                    const auto &region = allocation.region(r);
+                    for (unsigned i = 0; i < region.count && region.first + i < target::display_count; ++i) {
+                        const unsigned screen = region.first + i;
+                        help[2 + 2 * screen] = layout.page(region.selected)[0];
+                        help[3 + 2 * screen] = uint8_t(i + 1);
+                    }
+                }
+            }
+        }
+        frame(help);
     }
 private:
     void import_movies() {

@@ -63,6 +63,7 @@ class CapturedSession(Session):
         self.stock_firmware = False
         self.editing_name = False
         self.language = 'en'
+        self.tooltip_context = ('', ())
         self.keys: list[int] = []
         self.mode = 'setup preview'
 
@@ -783,6 +784,52 @@ def test_desktop_starts_in_the_mirrored_pedals_language(
         assert messages(language).keys() == messages('en').keys()
         assert dialog_messages(language).keys() == dialog_messages('en').keys()
     wait_for(window.close)
+
+
+def test_hover_uses_screen_page_button_focus_and_active_language(
+    application: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = CapturedSession()
+    session.tooltip_context = ('status', (('patch-chooser', 1),))
+    canvas = ControllerCanvas(session, lambda action: action())
+    shown: list[str] = []
+    monkeypatch.setattr(
+        QtWidgets.QToolTip, 'showText', lambda position, text, *args: shown.append(text)
+    )
+    screen = canvas.placement_rect(session.layout.displays['screen']).center().toPoint()
+    button = canvas.placement_rect(session.layout.controls['a']).center().toPoint()
+
+    def hover(point: QtCore.QPoint) -> None:
+        event = QtGui.QHelpEvent(
+            QtCore.QEvent.Type.ToolTip, point, canvas.mapToGlobal(point)
+        )
+        application.sendEvent(canvas, event)
+
+    hover(screen)
+    hover(button)
+    assert shown == []
+    monkeypatch.setattr(
+        gui,
+        'tooltip_messages',
+        lambda language: {
+            'patch-chooser': {'window-1': f'{language} screen'},
+            'status': {'button-a': f'{language} button'},
+            'time': {'button-a': f'{language} time'},
+        },
+    )
+    hover(screen)
+    hover(button)
+    session.language = 'fr'
+    session.tooltip_context = ('time', (('patch-chooser', 1),))
+    canvas.update_tooltip_context()
+    hover(screen)
+    hover(button)
+    assert shown == [
+        '<p>en screen</p>',
+        '<p>en button</p>',
+        '<p>fr screen</p>',
+        '<p>fr time</p>',
+    ]
 
 
 def test_save_and_host_dialogs_use_the_pedals_language(

@@ -185,6 +185,18 @@ physical-input, five assignable switch-slot and sixteen-route limits. Numeric
 and character-display backends and built-in relative/absolute control bindings
 require additional application support; they are not silently mapped to buttons.
 
+### Page tooltips
+
+The internal [tooltip catalogue](../cntrl/emulator/tooltips.toml) has blank
+slots for display windows and pedal buttons on each page. Fill in a slot to
+show its text when the pointer hovers over that area. Windows are numbered
+from left to right within their page's visible region. A button uses the
+focused page's entry and its control ID, such as `button-a`.
+
+The emulator uses the pedal's active language. Add a table such as
+`[status.fr]` with the same slot keys to provide French text. Missing or
+blank translations use the English entry. The table affects the emulator only.
+
 ## Deterministic replay
 
 The same native process and input path serve interactive and headless operation.
