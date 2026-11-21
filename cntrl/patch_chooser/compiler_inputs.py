@@ -14,6 +14,10 @@ from . import models
 from .compiler_errors import validation_errors
 
 
+class DocumentSourceError(ValueError):
+    """A source document has invalid catalogue references or a wrong format."""
+
+
 def read_document(
     path: Path,
     *,
@@ -31,7 +35,7 @@ def read_document(
         path,
     )
     if resolved in _ancestors:
-        raise ValueError(f'{path}: catalogue reference cycle')
+        raise DocumentSourceError(f'{path}: catalogue reference cycle')
     content = (
         overrides[resolved]
         if overrides is not None and resolved in overrides
@@ -45,7 +49,7 @@ def read_document(
     elif resolved.suffix == '.toml':
         document = tomlkit.parse(source).unwrap()
     else:
-        raise ValueError(f'{path}: expected .toml or .json')
+        raise DocumentSourceError(f'{path}: expected .toml or .json')
     if isinstance(document, dict) and isinstance(
         patches := document.get('patches'), list
     ):
@@ -128,7 +132,7 @@ def expand_catalogues(
             if not isinstance(instrument, dict) or 'catalogues' not in instrument:
                 continue
             if 'programs' in instrument:
-                raise ValueError(
+                raise DocumentSourceError(
                     f'instruments.{alias}: specify catalogues or programs, not both'
                 )
             instrument['programs'] = _shared_programs(
@@ -350,7 +354,9 @@ def _shared_programs(
         or not references
         or any(not isinstance(p, str) for p in references)
     ):
-        raise ValueError(f'{source}: catalogues must be a nonempty list of file paths')
+        raise DocumentSourceError(
+            f'{source}: catalogues must be a nonempty list of file paths'
+        )
     catalogues: dict[str, list[object]] = {}
     for reference in references:
         path = source.parent / reference
@@ -366,26 +372,28 @@ def _shared_programs(
             or not isinstance(instruments := document.get('instruments'), dict)
             or len(instruments) != 1
         ):
-            raise ValueError(
+            raise DocumentSourceError(
                 f'{path}: a shared catalogue must describe exactly one instrument'
             )
         alias, instrument = next(iter(instruments.items()))
         if not isinstance(instrument, dict):
-            raise ValueError(f'{path}: invalid instrument catalogue')
+            raise DocumentSourceError(f'{path}: invalid instrument catalogue')
         identity = instrument.get('instrument', alias)
         if not isinstance(identity, str) or identity in catalogues:
-            raise ValueError(f'{path}: catalogue instrument names must be distinct')
+            raise DocumentSourceError(
+                f'{path}: catalogue instrument names must be distinct'
+            )
         programs = instrument.get('programs')
         if isinstance(programs, dict) and len(programs) == 1:
             programs = next(iter(programs.values()))
         if not isinstance(programs, list) or not 1 <= len(programs) <= 128:
-            raise ValueError(
+            raise DocumentSourceError(
                 f'{path}: select a single nonempty bank of at most 128 programs'
             )
         catalogues[identity] = programs
     counts = {len(v) for v in catalogues.values()}
     if len(counts) != 1:
-        raise ValueError(
+        raise DocumentSourceError(
             f'{source}: shared catalogues must have the same program count'
         )
     combined: list[object] = []
@@ -395,7 +403,7 @@ def _shared_programs(
             entry = programs[number]
             name = entry.get('name') if isinstance(entry, dict) else entry
             if not isinstance(name, str) or not name:
-                raise ValueError(
+                raise DocumentSourceError(
                     f'{source}: {identity} program {number + 1} needs a name'
                 )
             names[identity] = name

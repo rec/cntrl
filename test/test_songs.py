@@ -2,6 +2,7 @@
 
 import io
 import struct
+import sys
 from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import Mock
@@ -12,6 +13,7 @@ from native_peer import NativePeer
 
 from cntrl.patch_chooser import (
     binary_format,
+    cli,
     compiler_errors,
     compiler_inputs,
     data_files,
@@ -525,6 +527,48 @@ def test_empty_song_library_downloads() -> None:
     client.request_data.return_value = data
     assert songs.download(client) == data
     assert not songs.decode(data).songs
+
+
+@pytest.mark.parametrize(
+    'reply', ['CNTRL SONGS n/a 0', 'CNTRL SONGS 64 xx', 'CNTRL SONGS 64 -1']
+)
+def test_bad_song_library_header_stops_before_reading_payload(reply: str) -> None:
+    client = Mock(spec=transport.SetupClient)
+    client.request.return_value = reply
+    with pytest.raises(transport.UsbReplyError, match='invalid song library response'):
+        songs.download(client)
+    client.request_data.assert_not_called()
+
+
+@pytest.mark.parametrize('bad_document', [None, '[invalid'])
+def test_song_copy_reports_a_bad_source_before_opening_usb(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad_document: str | None
+) -> None:
+    path = tmp_path / 'library.toml'
+    if bad_document is not None:
+        path.write_text(bad_document)
+    connect = Mock(side_effect=AssertionError('unexpected USB open'))
+    monkeypatch.setattr(transport, 'SerialConnection', connect)
+    monkeypatch.setattr(
+        sys, 'argv', ['cntrl', 'songs', 'copy', str(path), '--port', '/unused']
+    )
+    with pytest.raises(SystemExit, match='library.toml'):
+        cli.main()
+    connect.assert_not_called()
+
+
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_song_cli_preserves_unexpected_failures(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected song library failure')
+    monkeypatch.setattr(songs, 'run', Mock(side_effect=failure))
+    monkeypatch.setattr(
+        sys, 'argv', ['cntrl', 'songs', 'download', 'output', '--port', '/unused']
+    )
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
 
 
 def test_downloaded_song_source_preserves_unicode(
