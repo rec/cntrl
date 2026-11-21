@@ -16,6 +16,7 @@ from cntrl import crashes
 from cntrl.emulator import gui
 from cntrl.emulator.backend import OutputEvent, Session
 from cntrl.emulator.gui import ControllerCanvas, EmulatorWindow, display_rectangle
+from cntrl.emulator.host_midi import HostMidi
 from cntrl.emulator.layout import EmulatorLayout, Placement
 from cntrl.emulator.localization import dialog_messages, messages
 from cntrl.localization import catalogue
@@ -56,6 +57,7 @@ class CapturedSession(Session):
         self.held: set[str] = set()
         self.closed = False
         self.failed = False
+        self.exit_code: int | None = None
         self.stock_firmware = False
         self.editing_name = False
         self.language = 'en'
@@ -89,6 +91,9 @@ class CapturedSession(Session):
 
     def cleanup(self) -> None:
         pass
+
+    def poll_exit(self) -> int | None:
+        return self.exit_code
 
 
 class FailedSession(CapturedSession):
@@ -494,24 +499,69 @@ def test_auxiliary_contacts_share_a_port_mask_and_release_on_focus_loss(
     window.close()
 
 
-@pytest.mark.parametrize('manual', [False, True])
+@pytest.mark.parametrize('mode', ['manual', 'realtime', 'paused'])
 def test_failed_runtime_stops_polling_and_closes_without_failed_requests(
-    application: QtWidgets.QApplication, manual: bool
+    application: QtWidgets.QApplication, mode: str
 ) -> None:
+    class Output:
+        def __init__(self) -> None:
+            self.packets: list[bytes] = []
+            self.closed = False
+
+        def send(self, packet: bytes) -> None:
+            assert not self.closed
+            self.packets.append(packet)
+
+        def close(self) -> None:
+            self.closed = True
+
     session = FailedSession()
     window = EmulatorWindow(session)
+    output = Output()
+    connection = HostMidi(False, True)
+    connection.output = output
+    connection.output_connected = True
+    window.host['synth'] = connection
+    # Two strikes of the held note, one already released, and a held sustain.
+    # The other channel's note and pedal were both released normally.
+    played = [
+        b'\x90\x3c\x64',
+        b'\x90\x3c\x64',
+        b'\x90\x3c\x00',
+        b'\xb0\x40\x7f',
+        b'\x91\x40\x64',
+        b'\x81\x40\x00',
+        b'\xb1\x40\x7f',
+        b'\xb1\x40\x00',
+    ]
+    session.messages.extend(
+        OutputEvent(kind='midi', endpoint='synth', data=p, time_us=0) for p in played
+    )
+    window.display_updates()
+    assert output.packets == played
+    window.log.clear()
     window.canvas.keyboard.add('a')
     window.canvas.synchronize()
-    if manual:
+    if mode == 'manual':
         window.advance()
     else:
+        if mode == 'paused':
+            window.running.setChecked(False)
+            session.exit_code = 1
         window.tick()
     window.tick()
     window.advance()
-    assert session.advance_calls == 1
+    assert session.advance_calls == (0 if mode == 'paused' else 1)
     assert not window.timer.isActive() and not window.running.isChecked()
-    assert window.log.toPlainText() == 'Native emulator stopped: backend timed out'
+    reason = (
+        'native emulator disconnected (exit 1)'
+        if mode == 'paused'
+        else 'backend timed out'
+    )
+    assert window.log.toPlainText() == f'Native emulator stopped: {reason}'
     assert window.canvas.active == set()
+    assert output.closed
+    assert output.packets == played + [b'\x80\x3c\x00', b'\xb0\x40\x00']
     window.close()
     assert session.closed
 

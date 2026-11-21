@@ -2,6 +2,8 @@
 
 from middy import codecs, events, midi
 
+MIDI_ERRORS = (midi.MidiError, OSError, TypeError, ValueError)
+
 
 class HostMidi:
     def __init__(self, input_enabled: bool, output_enabled: bool) -> None:
@@ -14,6 +16,8 @@ class HostMidi:
         self.input_connected = False
         self.output_connected = False
         self.decoder = codecs.Decoder(sysex_limit=65536)
+        self.held_notes: dict[tuple[int, int], int] = {}
+        self.held_pedals: set[tuple[int, int]] = set()
 
     def refresh(self) -> None:
         if self.input_enabled:
@@ -59,6 +63,38 @@ class HostMidi:
         if self.output is not None and self.output_connected:
             for packet in self.packets(data):
                 self.output.send(packet)
+                self.track_output(packet)
+
+    def track_output(self, packet: bytes) -> None:
+        status = packet[0]
+        if status == 0xFF:
+            self.held_notes.clear()
+            self.held_pedals.clear()
+        if len(packet) != 3:
+            return
+        kind, channel = status & 0xF0, status & 0x0F
+        number, value = packet[1:]
+        key = (channel, number)
+        if kind in (0x80, 0x90):
+            count = self.held_notes.get(key, 0)
+            if kind == 0x90 and value:
+                self.held_notes[key] = count + 1
+            elif count > 1:
+                self.held_notes[key] = count - 1
+            else:
+                self.held_notes.pop(key, None)
+        elif kind == 0xB0:
+            if 64 <= number <= 69:
+                if value >= 64:
+                    self.held_pedals.add(key)
+                else:
+                    self.held_pedals.discard(key)
+            elif number == 121:
+                self.held_pedals = {p for p in self.held_pedals if p[0] != channel}
+            elif number == 120 or number >= 123:
+                self.held_notes = {
+                    n: c for n, c in self.held_notes.items() if n[0] != channel
+                }
 
     def packets(self, data: bytes) -> list[bytes]:
         decoded = self.decoder.feed(data)
@@ -71,13 +107,41 @@ class HostMidi:
         ]
 
     def close(self) -> None:
+        input_port, output_port = self.input, self.output
+        connected = self.output_connected
+        self.input = self.output = None
         self.decoder.reset()
-        if self.input is not None:
-            self.input.close()
-            self.input = None
-        if self.output is not None:
-            self.output.close()
-            self.output = None
         self.input_connected = self.output_connected = False
         self.input_ports.clear()
         self.output_ports.clear()
+        try:
+            if output_port is not None:
+                try:
+                    if connected:
+                        self.release_output(output_port)
+                finally:
+                    output_port.close()
+        finally:
+            self.held_notes.clear()
+            self.held_pedals.clear()
+            if input_port is not None:
+                input_port.close()
+
+    def release_output(self, output: midi.Output) -> None:
+        releases = [
+            (bytes((0x80 | channel, note, 0)), count)
+            for (channel, note), count in self.held_notes.items()
+        ] + [
+            (bytes((0xB0 | channel, pedal, 0)), 1)
+            for channel, pedal in sorted(self.held_pedals)
+        ]
+        failure: Exception | None = None
+        for packet, count in releases:
+            for _ in range(count):
+                try:
+                    output.send(packet)
+                except MIDI_ERRORS as error:
+                    failure = failure or error
+                    break
+        if failure is not None:
+            raise failure
