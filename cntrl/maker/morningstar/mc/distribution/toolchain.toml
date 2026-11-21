@@ -13,4 +13,4 @@ flex-serial-release = "2b2ec9fe74415a65679b20e9120d3775e0f5e518b6f8e3b4dcc531c02
 serial-rx-diagnostics = "9a0256fec18366f1af1c93c58c1b2c272bb5b621bd59b489e8676cc03438b7cc"
 usb-midi-interface = "f541df349aee8f9c3f63ca0c2492a45c70f0028db7c5d361f3fa09f4eaeabd91"
 usb-host-forward = "9b647570f2fd032bcea1c446db63a131cbbdb223050b333418524e54cde21479"
-fonts-in-flash = "2117a8cf92a3e1734fc940f78e6ff281044ae1e2c4c6415cffde0e592a256cfb"
+fonts-in-flash = "89ce96b9da13f3928e3fba2f752a3ccbac340dcd9696fa7d098d423b12ec653f"
