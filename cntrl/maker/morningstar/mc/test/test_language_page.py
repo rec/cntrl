@@ -100,8 +100,28 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         assert session.frames['lcd-2'] != first
         assert session.frames['lcd-1'] == performance
         assert session.frames['lcd-3'] == english
+        session.capture_corrections(True)
+        caption = next(r for r in session.correction_regions if r.message == 'language')
+        session.preview_correction(caption, 'Language selection')
         press('c')
+        assert session.requested_correction_language == 'fr'
+        assert session.language == 'en'
+        session.resolve_correction_language(False)
+        assert session.requested_correction_language == ''
+        assert session.language == 'en'
+        press('c')
+        session.clear_corrections()
+        session.resolve_correction_language(True)
         advance(500000)
+        assert session.language == 'fr'
+        assert session.correction_language_name == 'Français'
+        assert (
+            next(
+                r for r in session.correction_regions if r.message == 'language'
+            ).original
+            == 'Langue'
+        )
+        session.capture_corrections(False)
         french = session.frames['lcd-3']
         assert french != english
         snapshot(1)

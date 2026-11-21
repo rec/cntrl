@@ -208,11 +208,11 @@ private:
         style(0, songs_.song(songs_.current_name()));
         if (mode_ == song_actions || mode_ == patches || mode_ == patch_actions || (mode_ == naming && !naming_set_)) style(1, songs_.song(song_name_));
         if (songs_.busy()) {
-            ui::utf8::copy(panes[1].lines[0].text, sizeof(panes[1].lines[0].text), ui::i18n::text(ui::i18n::Message::saving_wait));
+            ui::copy_caption(panes[1].lines[0], ui::i18n::text(ui::i18n::Message::saving_wait));
             ui::present(hardware_, panes, 1);
             return;
         }
-        auto text = [&](unsigned pane, unsigned line, const char *s) { auto &destination = panes[pane].lines[line].text; ui::utf8::copy(destination, sizeof(destination), s); };
+        auto text = [&](unsigned pane, unsigned line, const char *s) { ui::copy_caption(panes[pane].lines[line], s); };
         text(0, 0, songs_.removed() ? ui::i18n::text(ui::i18n::Message::current_removed) : ui::i18n::text(ui::i18n::Message::current)); text(0, 1, songs_.current_name());
         SongSelection current_patch;
         if (songs_.current_patch(current_patch)) {

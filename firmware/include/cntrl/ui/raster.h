@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cstring>
 #include <climits>
+#ifdef CNTRL_EMULATOR
+#include <vector>
+#endif
 
 namespace cntrl::ui {
 // Half-open pixel bounds. An empty region contributes no damage.
@@ -80,17 +83,39 @@ public:
         }
         return result;
     }
-    bool letter(const TextLine &line, unsigned index, int y) {
-        Glyph glyph;
-        if (!fonts_.glyph(line.graphics.font, line.graphics.size, line.graphics.asset, line.text, index, glyph)) return false;
+    Region glyph_region(const TextLine &line, const Glyph &glyph, unsigned index, int y) const {
         int x = line.x;
         if (line.centered) {
             const auto b = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);
             x = (int(viewport_.width) - b.width) / 2 - b.left;
         }
         if (line.wrap) { const auto p = position(line, index); x += p.x - glyph.x; y += p.row * line.graphics.line_height; }
-        const auto color = index < 64 && (line.color_mask & (uint64_t(1) << index)) ? line.alternate_color : line.graphics.foreground;
         const int origin_x = x + glyph.x, origin_y = y + glyph.y;
+        return {origin_x, origin_y, origin_x + int(glyph.width), origin_y + int(glyph.height)};
+    }
+#ifdef CNTRL_EMULATOR
+    Region text_region(const TextLine &line, int y, std::vector<Region> &glyphs) const {
+        Region result{};
+        Glyph glyph;
+        const int pad = settings_.pad;
+        for (unsigned index = 0; fonts_.glyph(line.graphics.font, line.graphics.size,
+                line.graphics.asset, line.text, index, glyph); ++index) {
+            const auto ink = glyph_region(line, glyph, index, y);
+            const int left = std::max(pad, ink.left), top = std::max(pad, ink.top);
+            const int right = std::min(int(viewport_.width) - pad, ink.right);
+            const int bottom = std::min(int(viewport_.height) - pad, ink.bottom);
+            glyphs.push_back({left, top, std::max(left, right), std::max(top, bottom)});
+            if (right > left && bottom > top) result.include(left, top, right - left, bottom - top);
+        }
+        return result;
+    }
+#endif
+    bool letter(const TextLine &line, unsigned index, int y) {
+        Glyph glyph;
+        if (!fonts_.glyph(line.graphics.font, line.graphics.size, line.graphics.asset, line.text, index, glyph)) return false;
+        const auto region = glyph_region(line, glyph, index, y);
+        const auto color = index < 64 && (line.color_mask & (uint64_t(1) << index)) ? line.alternate_color : line.graphics.foreground;
+        const int origin_x = region.left, origin_y = region.top;
         const int first_x = std::max(0, std::max(int(settings_.pad), clip_.left) - origin_x), first_y = std::max(0, std::max(int(settings_.pad), clip_.top) - origin_y);
         const int end_x = std::min(int(glyph.width), std::min(int(viewport_.width) - int(settings_.pad), clip_.right) - origin_x);
         const int end_y = std::min(int(glyph.height), std::min(int(viewport_.height) - int(settings_.pad), clip_.bottom) - origin_y);

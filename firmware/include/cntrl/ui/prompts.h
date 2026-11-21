@@ -6,6 +6,14 @@
 #include <cstring>
 
 namespace cntrl::ui {
+inline void copy_caption(TextLine &line, const char *text) {
+#ifdef CNTRL_EMULATOR
+    line.translation_id = uint16_t(i18n::identity(text));
+    line.translation_short = false;
+#endif
+    utf8::copy(line.text, sizeof(line.text), text);
+}
+
 class Prompt {
 public:
     explicit Prompt(const Hardware &hardware) : hardware_(hardware) {}

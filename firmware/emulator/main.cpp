@@ -96,7 +96,14 @@ public:
         languages->finish(commit);
         if (commit) { app->language_changed(); host->language_changed(); switches->language_changed(); }
     }
-    bool request_language(const char *tag) override { return globals->request_language(tag); }
+    bool capture_corrections = false;
+    std::string requested_language;
+    bool request_language(const char *tag) override {
+        if (!capture_corrections || !std::strcmp(tag, languages->current()))
+            return globals->request_language(tag);
+        requested_language = tag;
+        return true;
+    }
     bool language_available(const char *tag) const override { return languages->available(tag); }
     const char *current_language() const override { return languages->current(); }
     unsigned language_count() const override { return languages->count(); }
@@ -626,6 +633,37 @@ public:
             }
         }
         frame(help);
+        if (!board.requested_language.empty()) {
+            std::vector<uint8_t> request{14};
+            request.insert(request.end(), board.requested_language.begin(), board.requested_language.end());
+            frame(request);
+        }
+        const auto &regions = renderer.translation_regions();
+        if (regions.empty()) return;
+        const char *name = languages.current_name();
+        std::vector<uint8_t> batch{12};
+        batch.insert(batch.end(), name, name + std::strlen(name));
+        frame(batch);
+        if (board.stock_firmware || board.stock_pending || host.showing_splash()
+            || movie_player.active() || !renderer.ready()) return;
+        for (unsigned screen = 0; screen < regions.size(); ++screen) {
+            for (const auto &region : regions[screen]) {
+                if (!region.id || region.bounds.empty()) continue;
+                std::vector<uint8_t> field{13, uint8_t(screen), uint8_t(region.short_form)};
+                integer(field, region.id - 1, 2);
+                for (int coordinate : {region.bounds.left, region.bounds.top, region.bounds.right, region.bounds.bottom})
+                    integer(field, unsigned(coordinate), 2);
+                const auto message = ui::i18n::Message(region.id - 1);
+                integer(field, std::strlen(ui::i18n::short_text(message)), 2);
+                field.push_back(uint8_t(region.glyphs.size()));
+                for (const auto &glyph : region.glyphs)
+                    for (int coordinate : {glyph.left, glyph.top, glyph.right, glyph.bottom})
+                        integer(field, unsigned(std::clamp(coordinate, 0, 65535)), 2);
+                const char *value = ui::Languages::original(message, region.short_form);
+                field.insert(field.end(), value, value + std::strlen(value));
+                frame(field);
+            }
+        }
     }
 private:
     void import_movies() {
@@ -765,6 +803,41 @@ void Session::command(const std::vector<uint8_t> &bytes) {
         renderer.invalidate(); settle();
     }
     else if (p[0] == 15 && length == 2) { application.song_ui.key(p[1]); settle(); }
+    else if (p[0] == 18 && length == 2 && p[1] <= 1) {
+        board.capture_corrections = p[1];
+        renderer.capture_translations(p[1]);
+        settle();
+    }
+    else if (p[0] == 19 && length == 2 && p[1] <= 1) {
+        auto language = std::move(board.requested_language);
+        board.requested_language.clear();
+        if (p[1] && !language.empty()) board.globals->request_language(language.c_str());
+        settle();
+    }
+    else if ((p[0] == 16 && length == 1) || (p[0] == 17 && length >= 4 && p[3] <= 1)) {
+        if (p[0] == 16) {
+            host.invalidate_language();
+            languages.clear_corrections();
+        } else {
+            const unsigned id = u16(p + 1);
+            const auto message = ui::i18n::Message(id);
+            const std::string replacement(bytes.begin() + 4, bytes.end());
+            const auto short_length = std::strlen(ui::i18n::short_text(message));
+            if (id >= ui::i18n::message_count || ui::i18n::definitions[id].count
+                || replacement.size() >= 512
+                || (replacement.size() > 63 && (p[3] || !short_length || short_length > 63))
+                || replacement.find('\0') != std::string::npos
+                || !utf8_valid(p + 4, length - 4)
+                || (!replacement.empty() && !ui::i18n::valid_template(message, replacement.c_str())))
+                throw std::runtime_error("invalid translation correction");
+            host.invalidate_language();
+            languages.correction(message, p[3], replacement);
+        }
+        application.language_changed();
+        host.language_changed();
+        switches.language_changed();
+        settle();
+    }
     else throw std::runtime_error("unsupported or malformed emulator command");
 }
 } // namespace cntrl::emulator

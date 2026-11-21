@@ -48,6 +48,9 @@ public:
         return active_;
     }
     bool set_color_cycle(bool enabled) { return colors_.enable(enabled); }
+#ifdef CNTRL_EMULATOR
+    bool active() const { return active_; }
+#endif
     void stop() { active_ = false; }
     bool frame_ready() const { return row_ == height_ * streams_ && output_.ready(); }
     Step poll(uint32_t now, bool pressed) {

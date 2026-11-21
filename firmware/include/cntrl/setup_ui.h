@@ -218,15 +218,15 @@ private:
         std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::ok)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
         if (mode_ == Mode::value) std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
         if (mode_ == Mode::catalogue) {
-            ui::i18n::format(views[1].lines[0].text, 64, ui::i18n::Message::setups);
+            ui::copy_caption(views[1].lines[0], ui::i18n::text(ui::i18n::Message::setups));
             std::snprintf(views[1].lines[1].text, 64, "%s", value);
-            ui::i18n::format(views[2].lines[0].text, 64, ui::i18n::Message::setup_menu);
-            ui::i18n::format(views[2].lines[1].text, 64, ui::i18n::Message::no_midi_sent);
+            ui::copy_caption(views[2].lines[0], ui::i18n::text(ui::i18n::Message::setup_menu));
+            ui::copy_caption(views[2].lines[1], ui::i18n::text(ui::i18n::Message::no_midi_sent));
         } else {
-            std::snprintf(views[1].lines[0].text, 64, "%s", mode_ == Mode::action ? ui::i18n::text(ui::i18n::Message::setup) : mode_ == Mode::patch ? ui::i18n::text(ui::i18n::Message::patch_cycle) : ui::i18n::text(ui::i18n::Message::field));
-            std::snprintf(views[1].lines[1].text, 64, "%s", title);
-            std::snprintf(views[2].lines[0].text, 64, "%s", value_label);
-            std::snprintf(views[2].lines[1].text, 64, "%s", value);
+            ui::copy_caption(views[1].lines[0], ui::i18n::text(mode_ == Mode::action ? ui::i18n::Message::setup : mode_ == Mode::patch ? ui::i18n::Message::patch_cycle : ui::i18n::Message::field));
+            ui::copy_caption(views[1].lines[1], title);
+            ui::copy_caption(views[2].lines[0], value_label);
+            ui::copy_caption(views[2].lines[1], value);
         }
         ui::present(hardware_, views, 1);
     }

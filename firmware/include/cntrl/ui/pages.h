@@ -675,6 +675,9 @@ private:
         if (!preview && i18n::translated_ui && face != status_face) face = localized_face;
         l.graphics = pane.graphics; l.graphics.font = uint8_t(face);
         l.graphics.asset = preview ? 0 : i18n::identity(text);
+#ifdef CNTRL_EMULATOR
+        l.translation_id = uint16_t(l.graphics.asset);
+#endif
         int left = 0, top = 0, width = 0, ink_height = 0;
         const char *fitting = sample ? sample : l.text;
         if (!right_edge) right_edge = viewport_.width;
@@ -698,7 +701,12 @@ private:
             } else if (!sample && width > available) {
                 if (l.graphics.asset) {
                     const char *short_form = i18n::short_text(i18n::Message(l.graphics.asset - 1));
-                    if (*short_form) { utf8::copy(l.text, sizeof(l.text), short_form); measure(l.text); }
+                    if (*short_form) {
+                        utf8::copy(l.text, sizeof(l.text), short_form); measure(l.text);
+#ifdef CNTRL_EMULATOR
+                        l.translation_short = true;
+#endif
+                    }
                 }
                 while (l.text[0] && width > available) {
                     utf8::erase_last(l.text);

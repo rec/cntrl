@@ -14,6 +14,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import models
 from .backend import Session
+from .corrections import Correction, CorrectionBatch, TranslationRegion, issue_body
 from .host_midi import MIDI_ERRORS, HostMidi
 from .layout import Canvas, Placement
 from .localization import dialog_messages, messages, tooltip_messages
@@ -43,6 +44,71 @@ def display_rectangle(
     )
 
 
+class CaptionEditor(QtWidgets.QLineEdit):
+    """Use Qt for input while leaving the firmware glyphs visible underneath."""
+
+    def __init__(self, parent: QtWidgets.QWidget) -> None:
+        super().__init__(parent)
+        self.glyphs: list[QtCore.QRectF] = []
+        self.drag_anchor: int | None = None
+        self.cursorPositionChanged.connect(lambda _old, _new: self.update())
+        self.selectionChanged.connect(self.update)
+
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        painter = QtGui.QPainter(self)
+        painter.setPen(QtGui.QColor('#939ba9'))
+        painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        if self.hasSelectedText():
+            start = self.selectionStart()
+            end = self.selectionEnd()
+            for glyph in self.glyphs[start:end]:
+                painter.fillRect(glyph, QtGui.QColor(66, 122, 224, 85))
+        elif self.hasFocus() and self.glyphs:
+            position = self.cursorPosition()
+            glyph = self.glyphs[min(position, len(self.glyphs) - 1)]
+            x = glyph.left() if position < len(self.glyphs) else glyph.right()
+            painter.setPen(QtGui.QColor('#467de6'))
+            painter.drawLine(QtCore.QLineF(x, glyph.top(), x, glyph.bottom()))
+        painter.end()
+
+    def index_at(self, point: QtCore.QPointF) -> int:
+        if not self.glyphs:
+            return self.cursorPosition()
+        index = min(
+            range(len(self.glyphs)),
+            key=lambda i: (
+                max(
+                    self.glyphs[i].top() - point.y(),
+                    point.y() - self.glyphs[i].bottom(),
+                    0,
+                ),
+                abs(self.glyphs[i].center().x() - point.x()),
+            ),
+        )
+        return index + int(point.x() >= self.glyphs[index].center().x())
+
+    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        if event.button() == QtCore.Qt.MouseButton.LeftButton:
+            self.drag_anchor = self.index_at(event.position())
+            self.setCursorPosition(self.drag_anchor)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
+        if self.drag_anchor is not None:
+            self.setSelection(
+                self.drag_anchor, self.index_at(event.position()) - self.drag_anchor
+            )
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
+        self.drag_anchor = None
+        super().mouseReleaseEvent(event)
+
+
 class ControllerCanvas(QtWidgets.QWidget):
     def __init__(
         self, session: Session, submit: Callable[[Callable[[], None]], None]
@@ -52,6 +118,8 @@ class ControllerCanvas(QtWidgets.QWidget):
         self.submit = submit
         self.frames = session.frames.copy()
         self.editing_name = session.editing_name
+        self.edit_caption: Callable[[QtCore.QPointF], bool] | None = None
+        self.caption_geometry_changed: Callable[[], None] | None = None
         self.tooltip_context = session.tooltip_context, session.language
         self.pointer: set[str] = set()
         self.keyboard: set[str] = set()
@@ -150,6 +218,30 @@ class ControllerCanvas(QtWidgets.QWidget):
         super().resizeEvent(event)
         for n, w in self.widgets.items():
             w.setGeometry(self.placement_rect(self.session.layout.controls[n]).toRect())
+        if self.caption_geometry_changed is not None:
+            self.caption_geometry_changed()
+
+    def caption_rect(self, region: TranslationRegion) -> QtCore.QRectF:
+        display = self.session.target.displays[region.screen]
+        return self.caption_pixel_rect(
+            region.screen, region.left, region.top, region.right, region.bottom
+        ).intersected(self.placement_rect(self.session.layout.displays[display.id]))
+
+    def caption_pixel_rect(
+        self, screen: int, left: int, top: int, right: int, bottom: int
+    ) -> QtCore.QRectF:
+        display = self.session.target.displays[screen]
+        placement = self.placement_rect(self.session.layout.displays[display.id])
+        image = display_rectangle(
+            placement, display.width, display.height, self.devicePixelRatioF()
+        )
+        scale = image.width() / display.width
+        return QtCore.QRectF(
+            image.left() + left * scale,
+            image.top() + top * scale,
+            (right - left) * scale,
+            (bottom - top) * scale,
+        )
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         painter = QtGui.QPainter(self)
@@ -236,6 +328,13 @@ class ControllerCanvas(QtWidgets.QWidget):
         self.update()
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        if (
+            self.edit_caption is not None
+            and event.button() == QtCore.Qt.MouseButton.LeftButton
+            and self.edit_caption(event.position())
+        ):
+            event.accept()
+            return
         self.setFocus()
         identity = Canvas(self.session.layout, self.width(), self.height()).control(
             event.position().x(), event.position().y()
@@ -397,6 +496,44 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.log.setReadOnly(True)
         self.log.document().setMaximumBlockCount(2000)
         self.canvas = ControllerCanvas(session, self.submit)
+        self.canvas.edit_caption = self.open_correction
+        self.canvas.caption_geometry_changed = self.position_correction
+        self.correction_batch: CorrectionBatch | None = None
+        self.correction_regions: list[TranslationRegion] = []
+        self.correction_language_name = ''
+        self.correction_region: TranslationRegion | None = None
+        self.correction_initial = ''
+        self.correction_position = QtCore.QRect()
+        self.correction_dialog_open = False
+        self.correction_language_prompt = False
+        self.correction_editor = CaptionEditor(self.canvas)
+        self.correction_editor.setFrame(False)
+        self.correction_editor.setStyleSheet(
+            'QLineEdit { background: transparent; color: transparent; '
+            'selection-color: transparent; selection-background-color: #40609060; '
+            'border: 1px solid #939ba9; }'
+        )
+        self.correction_editor.hide()
+        self.correction_editor.returnPressed.connect(self.accept_correction)
+        self.correction_editor.textEdited.connect(self.preview_correction)
+        self.correction_cancel = QtWidgets.QPushButton('×', self.canvas)
+        self.correction_accept = QtWidgets.QPushButton('■', self.canvas)
+        for button, key, color, callback in (
+            (self.correction_cancel, 'cancel', '#d73737', self.cancel_correction),
+            (self.correction_accept, 'ok', '#148b3f', self.accept_correction),
+        ):
+            button.setAccessibleName(self.text(key))
+            self.captions.append((button.setAccessibleName, key, {}))
+            button.setStyleSheet(f'color: {color}; font-weight: bold;')
+            button.setFixedSize(24, 22)
+            button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+            button.clicked.connect(callback)
+            button.hide()
+        self.correction_editor.installEventFilter(self)
+        self.correction_preview_timer = QtCore.QTimer(self)
+        self.correction_preview_timer.setSingleShot(True)
+        self.correction_preview_timer.setInterval(45)
+        self.correction_preview_timer.timeout.connect(self.send_correction_preview)
         self.auxiliary_contacts: dict[int, list[AuxiliaryContact]] = {}
         self.auxiliary_masks: dict[int, int] = {}
         central = QtWidgets.QWidget()
@@ -433,6 +570,38 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.clock_label = QtWidgets.QLabel()
         time_controls.addWidget(self.clock_label)
         column.addLayout(time_controls)
+        correction_controls = QtWidgets.QHBoxLayout()
+        self.correction_mode = self.caption(QtWidgets.QCheckBox(), 'correction_mode')
+        self.correction_mode.toggled.connect(self.toggle_correction)
+        correction_controls.addWidget(self.correction_mode)
+        self.correction_actions = QtWidgets.QWidget()
+        actions = QtWidgets.QHBoxLayout(self.correction_actions)
+        actions.setContentsMargins(0, 0, 0, 0)
+        self.correction_count = QtWidgets.QLabel()
+        self.correction_buttons = [
+            self.caption(QtWidgets.QPushButton(), key)
+            for key in (
+                'contribute_corrections',
+                'save_corrections',
+                'discard_corrections',
+            )
+        ]
+        for button, callback in zip(
+            self.correction_buttons,
+            (
+                self.contribute_corrections,
+                self.save_corrections,
+                self.discard_corrections,
+            ),
+            strict=True,
+        ):
+            actions.addWidget(button)
+            button.clicked.connect(callback)
+        actions.addWidget(self.correction_count)
+        correction_controls.addWidget(self.correction_actions)
+        correction_controls.addStretch()
+        column.addLayout(correction_controls)
+        self.update_correction_controls()
         inspector = QtWidgets.QTabWidget()
         self.blocked: dict[str, QtWidgets.QCheckBox] = {}
         self.connected: dict[str, QtWidgets.QCheckBox] = {}
@@ -460,6 +629,274 @@ class EmulatorWindow(QtWidgets.QMainWindow):
 
     def text(self, key: str, **fields: object) -> str:
         return self.translations[key].format(**fields)
+
+    def update_correction_controls(self) -> None:
+        count = len(self.correction_batch.entries) if self.correction_batch else 0
+        self.correction_actions.setVisible(self.correction_mode.isChecked())
+        self.correction_count.setText(self.text('corrections_count', count=count))
+        for button in self.correction_buttons:
+            button.setEnabled(bool(count))
+
+    def toggle_correction(self, enabled: bool) -> None:
+        if enabled:
+            self.submit(partial(self.session.capture_corrections, True))
+        elif self.resolve_corrections():
+            self.leave_corrections()
+        else:
+            with QtCore.QSignalBlocker(self.correction_mode):
+                self.correction_mode.setChecked(True)
+            if self.correction_region is not None:
+                self.correction_editor.setFocus()
+        self.update_correction_controls()
+
+    def open_correction(self, point: QtCore.QPointF) -> bool:
+        if not self.correction_mode.isChecked():
+            return False
+        for region in reversed(self.correction_regions):
+            rectangle = self.canvas.caption_rect(region)
+            if not rectangle.contains(point):
+                continue
+            if self.correction_region is not None:
+                self.correction_editor.setFocus()
+                return True
+            if self.correction_batch is None:
+                self.correction_batch = CorrectionBatch(
+                    self.language, self.correction_language_name
+                )
+            accepted = self.correction_batch.entries.get((region.message, region.field))
+            self.correction_initial = (
+                accepted.replacement if accepted else region.original
+            )
+            self.correction_region = region
+            self.correction_position = rectangle.toAlignedRect()
+            self.correction_editor.setText(self.correction_initial)
+            self.correction_editor.setAccessibleName(region.original)
+            self.position_correction()
+            QtWidgets.QToolTip.hideText()
+            self.correction_editor.show()
+            self.correction_cancel.show()
+            self.correction_accept.show()
+            self.correction_editor.setFocus()
+            return True
+        return False
+
+    def position_correction(self) -> None:
+        region = self.correction_region
+        if region is None:
+            return
+        # A longer draft can change the bounds or select the short form.
+        for visible in self.correction_regions:
+            if visible.screen == region.screen and visible.message == region.message:
+                region = visible
+                break
+        rectangle = self.canvas.caption_rect(region).toAlignedRect()
+        if rectangle.isValid():
+            self.correction_position = rectangle
+        self.correction_editor.setGeometry(
+            self.correction_position.adjusted(-1, -1, 1, 1)
+        )
+        offset = self.correction_editor.geometry().topLeft()
+        self.correction_editor.glyphs = [
+            self.canvas.caption_pixel_rect(region.screen, *g).translated(-offset)
+            for g in region.glyphs
+        ]
+        self.correction_editor.update()
+        x = self.correction_position.left()
+        y = max(0, self.correction_position.top() - self.correction_cancel.height() - 3)
+        self.correction_cancel.move(x, y)
+        self.correction_accept.move(x + self.correction_cancel.width() + 3, y)
+
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if (
+            watched is self.correction_editor
+            and isinstance(event, QtGui.QKeyEvent)
+            and event.type() == QtCore.QEvent.Type.KeyPress
+            and event.key() == QtCore.Qt.Key.Key_Escape
+        ):
+            self.cancel_correction()
+            return True
+        return super().eventFilter(watched, event)
+
+    def correction_draft(self) -> Correction | None:
+        region = self.correction_region
+        replacement = self.correction_editor.text()
+        if region is None or replacement == self.correction_initial:
+            return None
+        return Correction(
+            message=region.message,
+            field=region.field,
+            original=region.original,
+            replacement=replacement,
+        )
+
+    def preview_correction(self, text: str) -> None:
+        self.correction_preview_timer.start()
+        region = self.correction_region
+        self.correction_accept.setEnabled(
+            region is not None and region.valid_replacement(text)
+        )
+
+    def send_correction_preview(self) -> None:
+        region = self.correction_region
+        text = self.correction_editor.text()
+        if region is not None and region.valid_replacement(text):
+            self.submit(partial(self.session.preview_correction, region, text))
+
+    def close_correction_editor(self) -> None:
+        self.correction_preview_timer.stop()
+        self.correction_region = None
+        self.correction_editor.hide()
+        self.correction_cancel.hide()
+        self.correction_accept.hide()
+        self.correction_accept.setEnabled(True)
+        self.canvas.setFocus()
+
+    def accept_correction(self) -> None:
+        region, batch = self.correction_region, self.correction_batch
+        if region is None or batch is None:
+            return
+        text = self.correction_editor.text()
+        if region.valid_replacement(text):
+            self.send_correction_preview()
+            batch.accept(region, text)
+            self.close_correction_editor()
+            self.update_correction_controls()
+        else:
+            self.correction_error(self.text('invalid_correction'))
+
+    def cancel_correction(self) -> None:
+        if self.correction_region is not None:
+            self.submit(
+                partial(
+                    self.session.preview_correction,
+                    self.correction_region,
+                    self.correction_initial,
+                )
+            )
+        self.close_correction_editor()
+
+    def discard_corrections(self) -> None:
+        self.close_correction_editor()
+        self.correction_batch = None
+        self.submit(self.session.clear_corrections)
+        self.update_correction_controls()
+
+    def leave_corrections(self) -> None:
+        self.discard_corrections()
+        with QtCore.QSignalBlocker(self.correction_mode):
+            self.correction_mode.setChecked(False)
+        self.correction_regions = []
+        self.submit(partial(self.session.capture_corrections, False))
+        self.update_correction_controls()
+
+    def resolve_corrections(self) -> bool:
+        if self.correction_dialog_open:
+            return False
+        if (
+            not (self.correction_batch and self.correction_batch.entries)
+            and self.correction_draft() is None
+        ):
+            return True
+        self.correction_dialog_open = True
+        try:
+            dialog = QtWidgets.QMessageBox(self)
+            dialog.setText(self.text('unsaved_corrections'))
+            role = QtWidgets.QMessageBox.ButtonRole
+            keep = dialog.addButton(self.text('continue_editing'), role.RejectRole)
+            discard = dialog.addButton(self.text('discard'), role.DestructiveRole)
+            save = dialog.addButton(self.text('save_more'), role.ActionRole)
+            contribute = dialog.addButton(self.text('contribute_more'), role.ActionRole)
+            dialog.setDefaultButton(keep)
+            dialog.setEscapeButton(keep)
+            dialog.exec()
+            chosen = dialog.clickedButton()
+            if chosen == discard:
+                return True
+            if chosen == save:
+                return self.export_corrections(contribute=False)
+            if chosen == contribute:
+                return self.export_corrections(contribute=True)
+            return False
+        finally:
+            self.correction_dialog_open = False
+
+    def resolve_correction_language(self) -> None:
+        dirty = bool(self.correction_batch and self.correction_batch.entries)
+        dirty = dirty or self.correction_draft() is not None
+        apply = self.resolve_corrections()
+        if apply:
+            if dirty:
+                self.leave_corrections()
+            else:
+                self.discard_corrections()
+        self.submit(
+            partial(self.session.resolve_correction_language, apply),
+            complete=self.finish_correction_language,
+        )
+
+    def finish_correction_language(self) -> None:
+        self.correction_language_prompt = False
+
+    def save_corrections(self) -> None:
+        if self.export_corrections(contribute=False):
+            self.leave_corrections()
+
+    def contribute_corrections(self) -> None:
+        if self.export_corrections(contribute=True):
+            self.leave_corrections()
+
+    def export_corrections(self, *, contribute: bool) -> bool:
+        batch, draft = self.correction_batch, self.correction_draft()
+        if batch is None:
+            return False
+        region = self.correction_region
+        if (
+            draft is not None
+            and region is not None
+            and not region.valid_replacement(draft.replacement)
+        ):
+            self.correction_error(self.text('invalid_correction'))
+            return False
+        report = batch.report(draft)
+        if contribute:
+            body = issue_body(report)
+            url = batch.issue_url(body)
+            if len(url) > 8000:
+                QtWidgets.QMessageBox.information(
+                    self,
+                    self.text('correction_mode'),
+                    self.text('corrections_clipboard'),
+                )
+                clipboard = QtWidgets.QApplication.clipboard()
+                clipboard.setText(body)
+                if clipboard.text() != body:
+                    self.correction_error(self.text('correction_export_failed'))
+                    return False
+                url = batch.issue_url()
+            if QtGui.QDesktopServices.openUrl(QtCore.QUrl(url)):
+                return True
+            self.correction_error(self.text('correction_export_failed'))
+            return False
+        path = self.save_path(
+            'save_corrections', f'corrections-{batch.language}.toml', 'toml'
+        )
+        if not path:
+            return False
+        if Path(path).suffix.lower() != '.toml':
+            path += '.toml'
+        output = QtCore.QSaveFile(path)
+        data = report.encode()
+        if (
+            output.open(QtCore.QIODevice.OpenModeFlag.WriteOnly)
+            and output.write(data) == len(data)
+            and output.commit()
+        ):
+            return True
+        self.correction_error(output.errorString())
+        return False
+
+    def correction_error(self, message: str) -> None:
+        QtWidgets.QMessageBox.warning(self, self.text('correction_mode'), message)
 
     def caption[T: QtWidgets.QLabel | QtWidgets.QAbstractButton](
         self, widget: T, key: str, **fields: object
@@ -748,6 +1185,16 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         elapsed_us = (monotonic_ns() - self.origin) // 1000
         self.origin_us = max(self.origin_us, self.time_us - elapsed_us)
         self.canvas.frames = self.session.frames.copy()
+        if self.correction_mode.isChecked():
+            self.correction_regions = self.session.correction_regions
+            self.correction_language_name = self.session.correction_language_name
+            self.position_correction()
+            if (
+                self.session.requested_correction_language
+                and not self.correction_language_prompt
+            ):
+                self.correction_language_prompt = True
+                QtCore.QTimer.singleShot(0, self.resolve_correction_language)
         self.canvas.editing_name = self.session.editing_name
         self.canvas.update_tooltip_context()
         if self.language != self.session.language:
@@ -756,6 +1203,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.translations = messages(self.language)
             for setter, key, fields in self.captions:
                 setter(self.text(key, **fields))
+            self.update_correction_controls()
         mode = self.text('mirror' if self.session.mode == 'pedal mirror' else 'preview')
         self.setWindowTitle(
             self.session.controller.name
@@ -893,6 +1341,12 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         event.ignore()
         if self.closing:
             return
+        if self.correction_mode.isChecked():
+            if not self.resolve_corrections():
+                if self.correction_region is not None:
+                    self.correction_editor.setFocus()
+                return
+            self.leave_corrections()
         self.timer.stop()
         self.release_inputs()
         self.closing = True

@@ -753,7 +753,7 @@ private:
         if (ui::i18n::translated_ui) back.graphics.font = 253;
         back.y = int16_t(hardware_.display_height() - 12);
         std::snprintf(back.text, 64, "%s%.52s", closing_ ? ui::i18n::text(ui::i18n::Message::closing_prefix) : shifted_ ? ui::i18n::text(ui::i18n::Message::shifted_prefix) : "", prompt.add(Role::back, closing_ ? ui::i18n::text(ui::i18n::Message::abandon) : ui::i18n::text(ui::i18n::Message::back_title)).text());
-        if (!count_) ui::i18n::format(panes[1].lines[0].text, 64, ui::i18n::Message::no_switches);
+        if (!count_) ui::copy_caption(panes[1].lines[0], ui::i18n::text(ui::i18n::Message::no_switches));
         present(panes);
         dirty_ = false;
     }

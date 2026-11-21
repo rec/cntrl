@@ -34,6 +34,10 @@ struct TextLine {
     bool stippled = false;
     uint64_t color_mask = 0; // Characters using alternate_color instead of foreground.
     uint16_t alternate_color = 0;
+#ifdef CNTRL_EMULATOR
+    uint16_t translation_id = 0; // Catalogue index plus one, or zero for other text.
+    bool translation_short = false;
+#endif
 };
 
 struct Circle {

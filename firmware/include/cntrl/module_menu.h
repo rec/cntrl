@@ -55,9 +55,9 @@ private:
         std::snprintf(views[0].lines[0].text, 64, "%s", prompt.pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::browse)).text());
         std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::ok)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
         const auto heading = ui::i18n::Message::pages_and_tools;
-        ui::utf8::copy(views[1].lines[0].text, 64, ui::i18n::text(heading));
+        ui::copy_caption(views[1].lines[0], ui::i18n::text(heading));
         views[1].lines[0].graphics.asset = unsigned(heading) + 1;
-        if (count_) ui::utf8::copy(views[1].lines[1].text, 64, names_[selected_]);
+        if (count_) ui::copy_caption(views[1].lines[1], names_[selected_]);
         for (unsigned i = 0; i < 3; ++i) {
             for (auto &line : views[i].lines) line.wrap = true;
         }
