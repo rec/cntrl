@@ -9,15 +9,6 @@ likely exposure. Deliberately deferred pedal navigation is outside scope.
 
 ## P1 | Memory integrity, data loss and disclosure
 
-1. **Translated song messages can overrun fixed buffers (code finding).**
-   [Songs UI](../firmware/include/cntrl/songs_ui.h#L163) copies translated
-   messages with `strcpy` into a 64-byte feedback buffer and similarly copies
-   the saving label into a display line. The [language pack validator](../firmware/include/cntrl/ui/languages.h#L192)
-   accepts strings up to 511 bytes, and template validation checks formatting
-   rather than the destination's size. An otherwise valid long translation
-   can overwrite adjacent state on the pedal or in the native emulator.
-   Use capacity-aware UTF-8 copies and exercise long, multibyte messages.
-
 2. **Crash report drafts can contain private data (remaining risk).**
    [The reporter](../cntrl/crashes.py#L37) now shows the report locally and
    opens a prefilled GitHub form only if the user chooses to report it.
