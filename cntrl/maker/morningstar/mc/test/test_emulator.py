@@ -3,11 +3,13 @@
 from pathlib import Path
 
 import pytest
+import tomlkit
 
 from cntrl.animation import asset
 from cntrl.emulator import backend, cli
 from cntrl.emulator.backend import bind_target
 from cntrl.emulator.layout import EmulatorLayout
+from cntrl.emulator.replay import Scenario
 from cntrl.maker.morningstar.mc.emulator.profiles import adapt, export
 from cntrl.patch_chooser import compiler, data_files, models, setup_bundle
 from cntrl.patch_chooser.cli import compile_to_file
@@ -443,6 +445,28 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
         press('c')
         assert session.editing_name and session.frames == expected
         assert not [e.message for e in session.messages if e.kind == 'error']
+
+        scenario = Scenario(
+            seed=session.random_seed,
+            until=session.time_us / 1000000,
+            events=session.events,
+        )
+        replay_file = tmp_path / 'names.toml'
+        replay_file.write_text(tomlkit.dumps(scenario.model_dump(mode='json')))
+        expected_library = {
+            p.name: p.read_bytes() for p in (storage / 'cntrl/songs').glob('*.bin')
+        }
+        assert expected_library
+
+    replay_storage = tmp_path / 'replay'
+    with backend.Session(layout, target, executable, replay_storage, bundle) as session:
+        Scenario.load(replay_file).run(session)
+        assert session.editing_name and session.frames == expected
+        assert not [e.message for e in session.messages if e.kind == 'error']
+        assert {
+            p.name: p.read_bytes()
+            for p in (replay_storage / 'cntrl/songs').glob('*.bin')
+        } == expected_library
 
 
 def test_mirrored_movies_preserve_physical_stream_geometry(tmp_path: Path) -> None:

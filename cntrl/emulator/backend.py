@@ -23,7 +23,7 @@ from ..fonts.catalogue import FONT_IDS
 from ..patch_chooser.models import Target
 from . import font_comparison
 from .layout import EmulatorLayout
-from .replay import Event
+from .replay import Event, validate_name_key
 
 
 class OutputEvent(BaseModel, frozen=True):
@@ -434,9 +434,9 @@ class Session:
         return self.memory_usage
 
     def key(self, key: int) -> None:
-        if key not in (8, 10, 27) and not 32 <= key <= 126:
-            raise ValueError('name input requires printable ASCII or an editing key')
+        validate_name_key(key)
         self.request(b'\x0f' + bytes([key]))
+        self.events.append(Event(at=self.time_us / 1000000, kind='key', value=key))
 
     def button(self, control_id: str, pressed: bool) -> None:
         if control_id not in self.target.buttons:
