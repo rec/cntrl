@@ -424,9 +424,33 @@ def test_correction_editor_overlays_native_pixels_and_consumes_keys(
         assert window.canvas.cursor().shape() == QtCore.Qt.CursorShape.IBeamCursor
         QtTest.QTest.mouseClick(window.canvas, button, pos=area.center())
         edited = window.canvas.grab().toImage()
+        assert window.correction_cancel.font().pointSizeF() == pytest.approx(
+            1.25 * window.correction_accept.font().pointSizeF()
+        )
+        assert (
+            window.correction_accept.x()
+            == window.correction_cancel.x() + window.correction_cancel.width()
+        )
         assert original.copy(area.adjusted(1, 1, -1, -1)) == edited.copy(
             area.adjusted(1, 1, -1, -1)
         )
+        painted_centres: list[float] = []
+        for action in (window.correction_cancel, window.correction_accept):
+            bounds = action.geometry()
+            ring = QtGui.QRegion(bounds).subtracted(
+                QtGui.QRegion(bounds.adjusted(0, 3, 0, -3))
+            )
+            for edge in ring:
+                assert original.copy(edge) == edited.copy(edge)
+            painted_columns = [
+                x
+                for x in range(bounds.left(), bounds.right() + 1)
+                if original.copy(x, bounds.top(), 1, bounds.height())
+                != edited.copy(x, bounds.top(), 1, bounds.height())
+            ]
+            assert painted_columns
+            painted_centres.append((painted_columns[0] + painted_columns[-1]) / 2)
+        assert painted_centres[1] - painted_centres[0] == pytest.approx(10, abs=1)
         QtTest.QTest.keyClick(window.correction_editor, QtCore.Qt.Key.Key_Escape)
         assert not window.correction_editor.isVisible()
     QtTest.QTest.mouseClick(window.canvas, button, pos=area.center())

@@ -560,17 +560,33 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.correction_editor.textEdited.connect(self.preview_correction)
         self.correction_cancel = QtWidgets.QPushButton('×', self.canvas)
         self.correction_accept = QtWidgets.QPushButton('■', self.canvas)
-        for button, key, color, callback in (
-            (self.correction_cancel, 'cancel', '#d73737', self.cancel_correction),
-            (self.correction_accept, 'ok', '#148b3f', self.accept_correction),
+        for button, key, color, padding_side, callback in (
+            (
+                self.correction_cancel,
+                'cancel',
+                '#d73737',
+                'left',
+                self.cancel_correction,
+            ),
+            (self.correction_accept, 'ok', '#148b3f', 'right', self.accept_correction),
         ):
             button.setAccessibleName(self.text(key))
             self.captions.append((button.setAccessibleName, key, {}))
-            button.setStyleSheet(f'color: {color}; font-weight: bold;')
-            button.setFixedSize(24, 22)
+            button.setStyleSheet(
+                'QPushButton { background: transparent; border: none; '
+                f'color: {color}; font-weight: bold; padding-{padding_side}: 12px; }}'
+                'QPushButton:disabled { color: palette(mid); }'
+            )
+            button.setFixedSize(22, 22)
             button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
             button.clicked.connect(callback)
             button.hide()
+        cancel_font = self.correction_cancel.font()
+        if cancel_font.pixelSize() > 0:
+            cancel_font.setPixelSize(round(cancel_font.pixelSize() * 1.25))
+        else:
+            cancel_font.setPointSizeF(cancel_font.pointSizeF() * 1.25)
+        self.correction_cancel.setFont(cancel_font)
         self.correction_editor.installEventFilter(self)
         self.correction_preview_timer = QtCore.QTimer(self)
         self.correction_preview_timer.setSingleShot(True)
@@ -759,7 +775,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         x = self.correction_position.left()
         y = max(0, self.correction_position.top() - self.correction_cancel.height() - 3)
         self.correction_cancel.move(x, y)
-        self.correction_accept.move(x + self.correction_cancel.width() + 3, y)
+        self.correction_accept.move(x + self.correction_cancel.width(), y)
 
     def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
         if (
