@@ -24,6 +24,10 @@ class UsbReplyError(ValueError):
     """The pedal rejected the command or returned an unexpected result."""
 
 
+class UsbTransferInputError(ValueError):
+    """Local input cannot be represented in a USB transfer."""
+
+
 class UsbFileMissing(FileNotFoundError):
     """The pedal reported that the requested file does not exist."""
 
@@ -743,7 +747,9 @@ class SetupClient:
     def delete(self, names: list[str]) -> None:
         payload = b''.join(validate_name(n).encode('ascii') + b'\0' for n in names)
         if not payload or len(payload) > 0xFFFFFFFF - 100:
-            raise ValueError('deletion batch must fit a nonempty 32-bit storage record')
+            raise UsbTransferInputError(
+                'deletion batch must fit a nonempty 32-bit storage record'
+            )
         response = self.request(
             f'CNTRL SETUP DELETE {len(payload)} {crc32(payload):08x}'
         )
@@ -760,12 +766,12 @@ class SetupClient:
             or name.lower().startswith('.cntrl-')
             or not 0 < len(data) <= 0xFFFFFFFF
         ):
-            raise ValueError('invalid MIDI file name or size')
+            raise UsbTransferInputError('invalid MIDI file name or size')
         self._copy_asset('MIDI_FILE', Kind.midi_file, name, data, overwrite)
 
     def copy_source(self, snapshot: str, data: bytes) -> None:
         if sha256(data).hexdigest() != snapshot or not 0 < len(data) <= 0xFFFFFFFF:
-            raise ValueError('invalid source snapshot checksum or size')
+            raise UsbTransferInputError('invalid source snapshot checksum or size')
         self._copy_asset('SOURCE', Kind.source, snapshot + '.bin', data, False)
 
     def copy_language(self, tag: str, data: bytes) -> None:
@@ -787,7 +793,7 @@ class SetupClient:
 
     def download_source(self, snapshot: str) -> bytes:
         if len(snapshot) != 64 or any(c not in '0123456789abcdef' for c in snapshot):
-            raise ValueError('invalid source snapshot identifier')
+            raise UsbTransferInputError('invalid source snapshot identifier')
         content = self._download_asset('SOURCE', snapshot + '.bin')
         if sha256(content).hexdigest() != snapshot:
             raise UsbReplyError('source archive checksum mismatch')
@@ -837,7 +843,7 @@ class SetupClient:
     def download_midi(self, name: str) -> bytes:
         PlayMidiFile.basename(name)
         if not 1 <= len(name) <= 95 or name.lower().startswith('.cntrl-'):
-            raise ValueError('invalid MIDI file name')
+            raise UsbTransferInputError('invalid MIDI file name')
         return self._download_asset('MIDI_FILE', name)
 
     def _download_asset(self, protocol: str, name: str) -> bytes:
@@ -866,7 +872,7 @@ class SetupClient:
 
     def copy_font(self, key: int, data: bytes) -> None:
         if not 8 <= len(data) <= 262144 or not key or crc32(data) != key:
-            raise ValueError('invalid font asset size/checksum')
+            raise UsbTransferInputError('invalid font asset size/checksum')
         response = self.request(f'CNTRL FONT BEGIN {key:08x} {len(data)}')
         if response not in ('CNTRL SEND', 'CNTRL EXISTS'):
             raise UsbReplyError(response)
@@ -967,3 +973,13 @@ def _reply_hex_text(text: str, message: str) -> str:
         return bytes.fromhex(text).decode('ascii')
     except ValueError as error:
         raise UsbReplyError(message) from error
+
+
+USB_ERRORS = (
+    UsbCommandTimeout,
+    UsbConnectionError,
+    UsbFileMissing,
+    UsbProtocolError,
+    UsbReplyError,
+    UsbSerialTimeout,
+)

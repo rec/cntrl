@@ -3,9 +3,11 @@
 import struct
 import sys
 from collections.abc import Iterator
+from contextlib import nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
+from unittest.mock import Mock
 from zlib import crc32
 
 import pytest
@@ -1210,6 +1212,77 @@ def test_progress_reply_is_not_returned_as_the_command_result() -> None:
         for x in (b'CNTRL WAIT\n', b'CNTRL WAIT\n', b'CNTRL OK\n')
     )
     assert connection.line() == 'CNTRL OK'
+
+
+def test_unconfirmed_batch_deletion_stops_before_usb(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connect = Mock(side_effect=AssertionError('unexpected USB open'))
+    monkeypatch.setattr(transport, 'SerialConnection', connect)
+    monkeypatch.setattr(sys.stdin, 'isatty', lambda: False)
+    monkeypatch.setattr(
+        sys, 'argv', ['cntrl', 'setup', 'del', 'Show', '--port', '/unused']
+    )
+    with pytest.raises(SystemExit, match='interactive confirmation or --yes'):
+        cli.main()
+    connect.assert_not_called()
+
+
+def test_unrepresentable_commit_date_is_reported_as_a_pedal_reply_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry = transport.SetupEntry(name='Show', modified=2**80, length=116, checksum=0)
+    client = Mock()
+    client.catalogue.return_value = [entry]
+    monkeypatch.setattr(transport, 'SetupClient', Mock(return_value=client))
+    monkeypatch.setattr(transport, 'SerialConnection', Mock(return_value=nullcontext()))
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'setup', 'list', '--port', '/unused'])
+    with pytest.raises(SystemExit, match='Show: invalid commit timestamp'):
+        cli.main()
+
+
+@pytest.mark.parametrize(
+    ('failure_type', 'verification_error'),
+    [
+        (transport.UsbReplyError, False),
+        (transport.UsbReplyError, True),
+        (ValueError, False),
+    ],
+)
+def test_deletion_reports_partial_results_for_usb_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure_type: type[ValueError],
+    verification_error: bool,
+) -> None:
+    failure = failure_type('deletion failed')
+    client = Mock()
+    client.delete.side_effect = failure
+    entry = transport.SetupEntry(name='Show', modified=0, length=116, checksum=0)
+    client.catalogue.side_effect = [
+        [entry],
+        transport.UsbReplyError('catalogue unavailable') if verification_error else [],
+    ]
+    monkeypatch.setattr(transport, 'SetupClient', Mock(return_value=client))
+    monkeypatch.setattr(transport, 'SerialConnection', Mock(return_value=nullcontext()))
+    monkeypatch.setattr(
+        sys, 'argv', ['cntrl', 'setup', 'del', 'Show', '--port', '/unused', '--yes']
+    )
+    if isinstance(failure, transport.UsbReplyError):
+        with pytest.raises(SystemExit, match='deletion failed'):
+            cli.main()
+        assert client.catalogue.call_count == 2
+        message = (
+            'Unable to verify partial deletion results: catalogue unavailable'
+            if verification_error
+            else 'Show: deleted before batch failure'
+        )
+        assert message in capsys.readouterr().err
+    else:
+        with pytest.raises(ValueError) as caught:
+            cli.main()
+        assert caught.value is failure
+        client.catalogue.assert_called_once()
 
 
 def test_reconnect_does_not_repeat_rotation_or_transfer_bytes(
