@@ -926,6 +926,67 @@ def test_cli_does_not_write_binary_when_patches_have_errors(
     assert not output.exists()
 
 
+@pytest.mark.parametrize('error_type', [ValueError, OSError])
+def test_cli_preserves_unexpected_compile_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+) -> None:
+    failure = error_type('unexpected bundle failure')
+
+    def fail(*args: object, **kwargs: object) -> None:
+        raise failure
+
+    monkeypatch.setattr(setup_bundle, 'build', fail)
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'cntrl',
+            'compile',
+            str(FIXTURES / 'show.json'),
+            '--definitions',
+            str(FIXTURES / 'definitions.json'),
+            '--target',
+            str(FIXTURES / 'target.json'),
+            '--output',
+            str(tmp_path / 'show.bin'),
+        ],
+    )
+    with pytest.raises(error_type) as caught:
+        cli.main()
+    assert caught.value is failure
+
+
+@pytest.mark.parametrize('bad_manifest', [False, True])
+def test_cli_reports_expected_compile_file_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad_manifest: bool
+) -> None:
+    document = tmp_path / 'show.json'
+    document.write_bytes((FIXTURES / 'show.json').read_bytes())
+    manifest = tmp_path / 'cntrl-session.toml'
+    if bad_manifest:
+        manifest.write_text('[invalid')
+    output = tmp_path / 'missing' / 'show.bin'
+    monkeypatch.setattr(
+        sys,
+        'argv',
+        [
+            'cntrl',
+            'compile',
+            str(document),
+            '--definitions',
+            str(FIXTURES / 'definitions.json'),
+            '--target',
+            str(FIXTURES / 'target.json'),
+            '--output',
+            str(output),
+        ],
+    )
+    with pytest.raises(SystemExit) as caught:
+        cli.main()
+    assert str(manifest if bad_manifest else output) in str(caught.value)
+    assert not output.exists()
+
+
 def test_cli_preserves_repeated_table_inputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

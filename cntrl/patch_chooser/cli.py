@@ -50,6 +50,10 @@ class Compile(data_files.Sources, frozen=True):
     output: Path
 
 
+class CompileOutputError(ValueError):
+    """The compiled setup or an asset could not be published."""
+
+
 class SetupCopy(data_files.Sources, frozen=True):
     """Compile, copy and verify named setups on the pedal's SD card."""
 
@@ -485,7 +489,7 @@ def save_asset(destination: Path, data: bytes) -> None:
     destination.parent.mkdir(exist_ok=True)
     if destination.exists():
         if destination.read_bytes() != data:
-            raise ValueError(f'{destination}: asset checksum collision')
+            raise CompileOutputError(f'{destination}: asset checksum collision')
         return
     with NamedTemporaryFile(
         dir=destination.parent, prefix='.cntrl-', delete=False
@@ -542,12 +546,16 @@ def compile_to_file(
     assets: dict[str, dict[int, bytes]] = {}
     movies: dict[int, bytes] = {}
     bundle = compile_inputs(command, assets, movies)
-    for fonts in assets.values():
-        for key, font in fonts.items():
-            save_asset(output.parent / 'fonts' / f'{key:08x}.cfont', font)
-    for key, movie in movies.items():
-        save_asset(output.parent / 'movies' / f'{key:08x}.cnsa', movie)
-    output.write_bytes(bundle.pack())
+    data = bundle.pack()
+    try:
+        for fonts in assets.values():
+            for key, font in fonts.items():
+                save_asset(output.parent / 'fonts' / f'{key:08x}.cfont', font)
+        for key, movie in movies.items():
+            save_asset(output.parent / 'movies' / f'{key:08x}.cnsa', movie)
+        output.write_bytes(data)
+    except OSError as error:
+        raise CompileOutputError(str(error)) from error
     return bundle
 
 
@@ -611,7 +619,15 @@ def main() -> None:
         sys.exit(130)
     except EOFError:
         sys.exit('Input ended; setup creation cancelled.')
+    except (
+        compiler_errors.CompilationError,
+        CompileOutputError,
+        source_archive.RecoveredSourceError,
+    ) as error:
+        sys.exit(str(error))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        if isinstance(command, Compile):
+            raise
         sys.exit(str(error))
 
 
