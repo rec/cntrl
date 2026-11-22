@@ -23,6 +23,10 @@ class CatalogueError(ValueError):
     """A language catalogue, pack or generated output could not be used."""
 
 
+class IncompatibleCatalogueError(CatalogueError):
+    """An intact pack was built against a different message catalogue."""
+
+
 class Message(BaseModel, frozen=True):
     en: str
     context: str
@@ -156,8 +160,6 @@ def inspect(data: bytes) -> Pack:
         or version != 3
         or length != len(data)
         or crc32(data[:12] + bytes(4) + data[16:]) != checksum
-        or count != len(catalogue.messages)
-        or abi != schema(catalogue)
         or font_start < HEADER.size + count * 8
         or font_start + font_size != len(data)
         or font_size
@@ -166,6 +168,8 @@ def inspect(data: bytes) -> Pack:
         or b'\0' not in name
     ):
         raise CatalogueError('invalid or incompatible language pack')
+    if count != len(catalogue.messages) or abi != schema(catalogue):
+        raise IncompatibleCatalogueError('language pack uses another message catalogue')
     try:
         language = tag.split(b'\0', 1)[0].decode()
         display_name = name.split(b'\0', 1)[0].decode()

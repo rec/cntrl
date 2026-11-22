@@ -120,7 +120,7 @@ def prepare_restore(
     preserve_memory_estimates: bool = False,
 ) -> bytes:
     """Prepare a backup for current firmware or retain same-format accounting."""
-    upgraded = _replace_removed_ui_fonts(upgrade(data))
+    upgraded = _replace_removed_ui_fonts(upgrade(data, migrate_retired_pages=True))
     if preserve_memory_estimates:
         if upgraded != data:
             raise binary_format.DocumentFormatError(
@@ -130,30 +130,25 @@ def prepare_restore(
     return refresh_memory(upgraded, fonts, target=target)
 
 
-def upgrade(data: bytes) -> bytes:
+def upgrade(data: bytes, *, migrate_retired_pages: bool = False) -> bytes:
     """Decode a supported setup and upgrade its format without recompilation.
 
-    Preserve graph node IDs and all existing records. Add display-memory defaults
-    and extend legacy page layout and gesture records, then update lengths and CRC.
+    Preserve graph node IDs. Add display-memory defaults and update legacy page
+    layouts and gesture records, then update lengths and CRC.
     """
     if data.startswith(binary_format.MAGIC):
         data = binary_format.wrap(data)
         original = binary_format.core(data)
-        converted = upgrade(original)
+        converted = upgrade(original, migrate_retired_pages=migrate_retired_pages)
         if converted != original:
             binary_format.require_structural_edit(data)
         return binary_format.replace_core(data, converted)
     graph = graph_offset(data)
     version = struct.unpack_from('<H', data, 4)[0]
-    if version == DOCUMENT_VERSION:
-        export(data)
-        return data
-    if version in (46, 47):
-        converted = bytearray(data)
-        struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
-        result = bytes(converted)
-        export(result)
-        return result
+    if version in (46, 47, DOCUMENT_VERSION):
+        return _upgrade_current_layout(
+            data, migrate_retired_pages=migrate_retired_pages
+        )
     _, _, _, _, instruments, cycles, patches, *_ = HEADER.unpack_from(data)
     presentation_settings = (
         76 + instruments * 68 + cycles * 68 + patches * 82 + METADATA.size - 10
@@ -172,15 +167,19 @@ def upgrade(data: bytes) -> bytes:
         struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
         struct.pack_into('<I', converted, 8, len(converted))
         struct.pack_into('<I', converted, 20, crc32(converted[28:]))
-        result = bytes(converted)
-        export(result)
-        return result
+        return _upgrade_current_layout(
+            bytes(converted), migrate_retired_pages=migrate_retired_pages
+        )
     page, gestures, shifted = _page_offsets(data)
     gesture_size = _gesture_size(version)
     shifted_size = gesture_size + 4
     edits = [
         (presentation_settings, presentation_settings, bytes([1, 1])),
-        (page, layout.section_end(data, page), layout.upgrade(data, page)),
+        (
+            page,
+            layout.section_end(data, page),
+            layout.upgrade(data, page, migrate_retired_pages=migrate_retired_pages),
+        ),
     ]
     if gestures is not None:
         edits.append(
@@ -209,6 +208,20 @@ def upgrade(data: bytes) -> bytes:
     converted = bytearray(data)
     for start, end, replacement in sorted(edits, reverse=True):
         converted[start:end] = replacement
+    struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
+    struct.pack_into('<I', converted, 8, len(converted))
+    struct.pack_into('<I', converted, 20, crc32(converted[28:]))
+    result = bytes(converted)
+    export(result)
+    return result
+
+
+def _upgrade_current_layout(data: bytes, *, migrate_retired_pages: bool) -> bytes:
+    page, _, _ = _page_offsets(data)
+    end = layout.section_end(data, page)
+    pages = layout.upgrade(data, page, migrate_retired_pages=migrate_retired_pages)
+    converted = bytearray(data)
+    converted[page:end] = pages
     struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)
     struct.pack_into('<I', converted, 8, len(converted))
     struct.pack_into('<I', converted, 20, crc32(converted[28:]))

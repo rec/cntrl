@@ -124,11 +124,12 @@ def section_end(data: bytes, offset: int) -> int:
     return end
 
 
-def upgrade(data: bytes, offset: int) -> bytes:
-    """Keep the legacy single-chooser view beside its independently cycling tools."""
+def upgrade(data: bytes, offset: int, *, migrate_retired_pages: bool = False) -> bytes:
+    """Upgrade layout records and migrate retired tools to the current page set."""
     end = section_end(data, offset)
     if data[offset + 6] == 2:
-        return data[offset:end]
+        section = data[offset:end]
+        return _replace_retired_pages(section) if migrate_retired_pages else section
     count, windows = data[offset + 4 : offset + 6]
     converted = (
         b'CPAG'
@@ -140,10 +141,12 @@ def upgrade(data: bytes, offset: int) -> bytes:
             else b''
         )
     )
+    if migrate_retired_pages:
+        converted = _replace_retired_pages(converted)
     settings = models.Setup.model_validate(unpack(converted, 0))
     choosers = [n for n, p in settings.pages.items() if p.type == 'patch-chooser']
     if len(choosers) == 1 and windows >= 2:
-        if count == 255:
+        if len(settings.pages) == 255:
             raise DocumentFormatError(
                 'legacy page layout has no room for the full-performance page'
             )
@@ -180,6 +183,61 @@ def upgrade(data: bytes, offset: int) -> bytes:
         ]
         return pack(settings, names)
     return converted
+
+
+def _replace_retired_pages(data: bytes) -> bytes:
+    count, windows, _, regions, left_wins, focus = data[4:10]
+    start = 12 + windows * 32
+    stride = 34 + windows
+    end = start + count * stride
+    records = [data[i : i + stride] for i in range(start, end, stride)]
+    if not any(r[32] in RETIRED_PAGES for r in records):
+        return data
+
+    keep: dict[int, int] = {}
+    pages = bytearray()
+    time_available = windows >= 2 and not any(r[32] == 19 for r in records)
+    for index, record in enumerate(records):
+        kind = record[32]
+        if kind in RETIRED_PAGES:
+            if not time_available or kind not in RETIRED_CLOCK_PAGES:
+                continue
+            time_available = False
+            record = record[:32] + bytes((19, 2)) + record[34:]
+        keep[index] = len(keep)
+        pages.extend(record)
+
+    region_records = bytearray()
+    cycles = bytearray()
+    surviving_regions = []
+    old_cycles = end + regions * 34
+    assigned: list[int] = []
+    for index in range(regions):
+        position = end + index * 34
+        first, length = data[position + 32 : position + 34]
+        references = data[old_cycles + first : old_cycles + first + length]
+        assigned.extend(references)
+        if first != len(assigned) - length or len(references) != length or not length:
+            raise DocumentFormatError('invalid legacy region cycle')
+        migrated = bytes(keep[p] for p in references if p in keep)
+        if migrated:
+            surviving_regions.append(index)
+            region_records.extend(data[position : position + 32])
+            region_records.extend((len(cycles), len(migrated)))
+            cycles.extend(migrated)
+    if sorted(assigned) != list(range(count)):
+        raise DocumentFormatError('legacy layout must assign each page to one region')
+    focus = surviving_regions.index(focus) if focus in surviving_regions else 0
+    result = (
+        b'CPAG'
+        + bytes((len(keep), windows, 2, len(surviving_regions), left_wins, focus, 0, 0))
+        + data[12:start]
+        + pages
+        + region_records
+        + cycles
+    )
+    unpack(result, 0)
+    return result
 
 
 def estimate_ram(
@@ -324,3 +382,6 @@ PAGE_TYPES = (
     'time',
     'calibrate',
 )
+
+RETIRED_CLOCK_PAGES = (0, 7, 8)
+RETIRED_PAGES = (*RETIRED_CLOCK_PAGES, 2, 5, 6, 9)

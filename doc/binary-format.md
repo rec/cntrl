@@ -214,6 +214,10 @@ current setups, the complete bundle, history, active/undo libraries and captured
 song sources without recompiling musical
 operations from current authoring defaults. Assets and original raw journals are
 copied unchanged. `conversion.toml` records digests of every resulting file.
+Conversion combines retired clock and tap-tempo pages into one Time page when
+the layout has room for it. It removes the retired Firmware, TRS Ports,
+Expression and Keyboard pages from the page cycles. Packs built for older
+message catalogues stay in the raw backup for recovery.
 New backups retain `bundle.bin` alongside individual authoritative setup files;
 conversion refuses disagreement between them. Restore relinks captured setup
 references against the final merged setup table. Upload synchronization retains

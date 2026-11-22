@@ -148,6 +148,51 @@ def test_current_setup_is_returned_unchanged(current_setup: bytes) -> None:
     assert resolved.upgrade(current_setup) == current_setup
 
 
+def test_upgrade_replaces_retired_tools_and_preserves_compiled_patches() -> None:
+    target = models.Target.model_validate(
+        compiler_inputs.read_document(ROOT / 'target.json')
+    )
+    compiled = compiler.compile_show(
+        {
+            'pages': {
+                'live': {'type': 'patch-chooser'},
+                'tempo': {'type': 'status'},
+                'transport': {'type': 'status'},
+                'firmware': {'type': 'status'},
+                'status': {'type': 'status'},
+            },
+            'regions': {
+                'performance': {'pages': ['live']},
+                'tools': {'pages': ['tempo', 'firmware', 'transport', 'status']},
+            },
+            'layout': {'focus': 'tools'},
+        },
+        {},
+        [],
+        target,
+    )
+    old = bytearray(compiled)
+    offset = old.index(b'CPAG')
+    windows = old[offset + 5]
+    first_type = offset + 12 + windows * 32 + 32
+    stride = 34 + windows
+    for index, kind in enumerate((0, 7, 2), 1):
+        old[first_type + index * stride] = kind
+    struct.pack_into('<I', old, 20, crc32(old[28:]))
+
+    upgraded = resolved.upgrade(bytes(old), migrate_retired_pages=True)
+    source = tomlkit.parse(resolved.export(upgraded)).unwrap()
+    assert list(source['pages']) == ['live', 'tempo', 'status']
+    assert source['pages']['tempo']['type'] == 'time'
+    assert source['pages']['tempo']['min_windows'] == 2
+    assert source['regions']['tools']['pages'] == ['tempo', 'status']
+    assert source['layout']['focus'] == 'tools'
+    assert (
+        upgraded[resolved.graph_offset(upgraded) :] == old[resolved.graph_offset(old) :]
+    )
+    assert resolved.upgrade(upgraded) == upgraded
+
+
 @pytest.mark.parametrize(
     'source',
     [

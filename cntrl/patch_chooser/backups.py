@@ -246,6 +246,7 @@ def backup_pedal(
             _write_file(directory / 'starts.toml', client.download_starts())
         backup_stored_assets(client, directory)
         languages_valid = True
+        archived_languages: list[Path] = []
         if 'language=1' in status.split():
             report = _read_model(directory / 'storage.toml', storage_info.StorageInfo)
             language_root = (persistent_prefix(status) or '/cntrl/') + 'languages'
@@ -260,6 +261,12 @@ def backup_pedal(
                 tag = stored.stem
                 try:
                     pack = client.download_language(tag)
+                except catalogue.IncompatibleCatalogueError as error:
+                    archived_languages.append(
+                        directory / 'raw' / entry.path.lstrip('/')
+                    )
+                    print(f'Archiving language pack {tag}: {error}', file=sys.stderr)
+                    continue
                 except (*transport.USB_ERRORS, catalogue.CatalogueError) as error:
                     languages_valid = False
                     print(f'Retained raw language pack {tag}: {error}', file=sys.stderr)
@@ -269,6 +276,9 @@ def backup_pedal(
                     path.parent.mkdir(parents=True, exist_ok=True)
                 _write_file(path, pack)
         raw_state = backup_state(client, directory, status)
+        languages_valid = languages_valid and all(
+            _is_file(p) for p in archived_languages
+        )
         if recovery_only:
             write_backup_manifest(directory, complete=False, raw_state=raw_state)
             print(
@@ -303,7 +313,7 @@ def backup_pedal(
                     source_snapshots.add(source)
                 _write_file(setups / f'{name}.bin', data)
                 try:
-                    readable = resolved.upgrade(data)
+                    readable = resolved.upgrade(data, migrate_retired_pages=True)
                     text = resolved.export(readable)
                     _write_file(setups / f'{name}.toml', text.encode())
                     backup_assets(client, readable, setups, fonts, movies)
@@ -351,7 +361,7 @@ def backup_pedal(
                     tomlkit.dumps({'revisions': snapshots}).encode(),
                 )
                 if version in binary_format.SETUP_VERSIONS:
-                    readable = resolved.upgrade(data)
+                    readable = resolved.upgrade(data, migrate_retired_pages=True)
                     _write_file(
                         folder / f'{revision.number}.toml',
                         resolved.export(readable).encode(),
@@ -1069,7 +1079,7 @@ def read_setup_binaries(directory: Path) -> dict[str, bytes]:
     setups = {s.stem: read_sync_file(s) for s in _glob(folder, '*.bin')}
     for name, data in setups.items():
         try:
-            resolved.graph_offset(resolved.upgrade(data))
+            resolved.graph_offset(resolved.upgrade(data, migrate_retired_pages=True))
         except binary_format.DocumentFormatError as error:
             raise BackupError(f'{folder / name}: {error}') from error
     return setups
@@ -1332,6 +1342,6 @@ def read_history_binaries(directory: Path) -> list[tuple[str, history.Revision, 
             raise BackupError(
                 f'{name}/{revision.number}: history backup length differs'
             )
-        resolved.graph_offset(resolved.upgrade(data))
+        resolved.graph_offset(resolved.upgrade(data, migrate_retired_pages=True))
         result.append((name, revision, data))
     return result
