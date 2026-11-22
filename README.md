@@ -139,7 +139,8 @@ we can make it work for you. It is all designed to be hardware agnostic.
 
 There are two stages.
 
-In stage one, you upload new firmware in parallel to the stock firmware.
+In stage one, you upload new firmware to the pedal in parallel to the stock firmware. By
+default, you can switch back to the stock firmware anytime you like.
 
 
 You represent your setups in easy-to-edit and read .toml files with things like program
