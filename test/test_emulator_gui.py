@@ -497,6 +497,34 @@ def test_correction_caret_blinks_and_reappears_when_moved(
     with_window.close()
 
 
+def test_correction_selection_fills_the_gaps_on_each_selected_row(
+    application: QtWidgets.QApplication,
+) -> None:
+    window = QtWidgets.QWidget()
+    editor = gui.CaptionEditor(window, 500)
+    editor.resize(68, 40)
+    editor.glyphs = [
+        QtCore.QRectF(4, 4, 6, 10),
+        QtCore.QRectF(13, 9, 0, 0),
+        QtCore.QRectF(21, 8, 6, 6),
+        QtCore.QRectF(4, 23, 8, 10),
+        QtCore.QRectF(29, 23, 8, 10),
+    ]
+    editor.setText('A bcD')
+    window.show()
+    window.setFocus()
+    before = editor.grab().toImage()
+    editor.setSelection(0, 4)
+    after = editor.grab().toImage()
+    # The space and the height above the shorter glyph fill continuously.
+    for point in (QtCore.QPoint(13, 6), QtCore.QPoint(24, 6), QtCore.QPoint(8, 30)):
+        assert after.pixelColor(point) != before.pixelColor(point)
+    # The line gap and the unselected letter on the second row remain clear.
+    for point in (QtCore.QPoint(8, 18), QtCore.QPoint(32, 30)):
+        assert after.pixelColor(point) == before.pixelColor(point)
+    window.close()
+
+
 def test_failed_export_preserves_a_quit_draft(
     application: QtWidgets.QApplication,
     monkeypatch: pytest.MonkeyPatch,

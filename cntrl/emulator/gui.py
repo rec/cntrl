@@ -92,10 +92,7 @@ class CaptionEditor(QtWidgets.QLineEdit):
         painter.setPen(QtGui.QColor('#939ba9'))
         painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
         if self.hasSelectedText():
-            start = self.selectionStart()
-            end = self.selectionEnd()
-            for glyph in self.glyphs[start:end]:
-                painter.fillRect(glyph, QtGui.QColor(66, 122, 224, 85))
+            self.paint_selection(painter)
         elif self.hasFocus() and self.caret_visible:
             x = 1
             if self.glyphs:
@@ -108,6 +105,24 @@ class CaptionEditor(QtWidgets.QLineEdit):
             painter.setPen(QtGui.QColor('#d73737'))
             painter.drawLine(x, 1, x, self.height() - 2)
         painter.end()
+
+    def paint_selection(self, painter: QtGui.QPainter) -> None:
+        selected = self.glyphs[self.selectionStart() : self.selectionEnd()]
+        if not selected:
+            return
+        fill = QtGui.QColor(66, 122, 224, 85)
+        painter.setClipRect(self.rect().adjusted(1, 1, -1, -1))
+        bounds = selected[0]
+        previous = selected[0]
+        for glyph in selected[1:]:
+            # Wrapped text moves back toward the left edge on the next row.
+            if glyph.left() <= previous.left() and glyph.top() >= previous.bottom():
+                painter.fillRect(bounds, fill)
+                bounds = glyph
+            else:
+                bounds = bounds.united(glyph)
+            previous = glyph
+        painter.fillRect(bounds, fill)
 
     def index_at(self, point: QtCore.QPointF) -> int:
         if not self.glyphs:
