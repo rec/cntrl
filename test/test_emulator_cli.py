@@ -21,6 +21,21 @@ def test_short_invocation_parses_the_setup_as_a_positional_argument() -> None:
     assert command.setup == Path('performance.toml')
     assert command.controller == 'example'
     assert command.storage is None
+    assert command.caret_blink_interval == 500
+
+
+def test_caret_period_accepts_a_duration_with_units() -> None:
+    command = tyro.cli(
+        Emulate,
+        args=[
+            'setup.toml',
+            '--controller',
+            'example',
+            '--caret-blink-period',
+            '750 ms',
+        ],
+    )
+    assert command.caret_blink_interval == 375
 
 
 @pytest.mark.parametrize(

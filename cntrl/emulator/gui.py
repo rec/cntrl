@@ -57,12 +57,35 @@ def display_rectangle(
 class CaptionEditor(QtWidgets.QLineEdit):
     """Use Qt for input while leaving the firmware glyphs visible underneath."""
 
-    def __init__(self, parent: QtWidgets.QWidget) -> None:
+    def __init__(self, parent: QtWidgets.QWidget, blink_interval: int) -> None:
         super().__init__(parent)
         self.glyphs: list[QtCore.QRectF] = []
         self.drag_anchor: int | None = None
-        self.cursorPositionChanged.connect(lambda _old, _new: self.update())
-        self.selectionChanged.connect(self.update)
+        self.caret_visible = True
+        self.blink_timer = QtCore.QTimer(self)
+        self.blink_timer.setInterval(blink_interval)
+        self.blink_timer.timeout.connect(self.blink_caret)
+        self.cursorPositionChanged.connect(lambda _old, _new: self.reset_caret())
+        self.selectionChanged.connect(self.reset_caret)
+
+    def blink_caret(self) -> None:
+        self.caret_visible = not self.caret_visible
+        self.update()
+
+    def reset_caret(self) -> None:
+        self.caret_visible = True
+        if self.hasFocus():
+            self.blink_timer.start()
+        self.update()
+
+    def focusInEvent(self, event: QtGui.QFocusEvent) -> None:
+        super().focusInEvent(event)
+        self.reset_caret()
+
+    def focusOutEvent(self, event: QtGui.QFocusEvent) -> None:
+        super().focusOutEvent(event)
+        self.blink_timer.stop()
+        self.update()
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         painter = QtGui.QPainter(self)
@@ -73,7 +96,7 @@ class CaptionEditor(QtWidgets.QLineEdit):
             end = self.selectionEnd()
             for glyph in self.glyphs[start:end]:
                 painter.fillRect(glyph, QtGui.QColor(66, 122, 224, 85))
-        elif self.hasFocus():
+        elif self.hasFocus() and self.caret_visible:
             x = 1
             if self.glyphs:
                 position = self.cursorPosition()
@@ -512,7 +535,7 @@ class AuxiliaryContact(QtWidgets.QPushButton):
 class EmulatorWindow(QtWidgets.QMainWindow):
     request_done = QtCore.Signal()
 
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, *, caret_blink_interval: int = 500) -> None:
         super().__init__()
         self.session = session
         self.worker = ThreadPoolExecutor(
@@ -553,7 +576,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.correction_position = QtCore.QRect()
         self.correction_dialog_open = False
         self.correction_language_prompt = False
-        self.correction_editor = CaptionEditor(self.canvas)
+        self.correction_editor = CaptionEditor(self.canvas, caret_blink_interval)
         self.correction_editor.setFrame(False)
         self.correction_editor.setStyleSheet(
             'QLineEdit { background: transparent; color: transparent; '
@@ -579,7 +602,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.captions.append((button.setAccessibleName, key, {}))
             button.setStyleSheet(
                 'QPushButton { background: transparent; border: none; '
-                f'color: {color}; font-weight: bold; padding-{padding_side}: 12px; }}'
+                f'color: {color}; font-weight: bold; padding-{padding_side}: 8px; }}'
                 'QPushButton:disabled { color: palette(mid); }'
             )
             button.setFixedSize(22, 22)
@@ -1516,7 +1539,7 @@ def port_description(
     return str(port)
 
 
-def run_window(session: Session) -> None:
+def run_window(session: Session, *, caret_blink_interval: int = 500) -> None:
     application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     previous_hook = sys.excepthook
     window: EmulatorWindow | None = None
@@ -1540,7 +1563,7 @@ def run_window(session: Session) -> None:
 
     sys.excepthook = unhandled
     try:
-        window = EmulatorWindow(session)
+        window = EmulatorWindow(session, caret_blink_interval=caret_blink_interval)
         window.show()
         result = application.exec()
     finally:

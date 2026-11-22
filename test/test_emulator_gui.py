@@ -459,7 +459,7 @@ def test_correction_editor_overlays_native_pixels_and_consumes_keys(
             ]
             assert painted_columns
             painted_centres.append((painted_columns[0] + painted_columns[-1]) / 2)
-        assert painted_centres[1] - painted_centres[0] == pytest.approx(10, abs=1)
+        assert painted_centres[1] - painted_centres[0] == pytest.approx(14, abs=1)
         QtTest.QTest.keyClick(window.correction_editor, QtCore.Qt.Key.Key_Escape)
         assert not window.correction_editor.isVisible()
     QtTest.QTest.mouseClick(window.canvas, button, pos=area.center())
@@ -472,6 +472,29 @@ def test_correction_editor_overlays_native_pixels_and_consumes_keys(
     assert window.correction_mode.isChecked()
     assert window.correction_count.text() == 'Corrections: 0'
     wait_for(window.close)
+
+
+def test_correction_caret_blinks_and_reappears_when_moved(
+    application: QtWidgets.QApplication,
+) -> None:
+    with_window = QtWidgets.QWidget()
+    editor = gui.CaptionEditor(with_window, 50)
+    editor.resize(24, 22)
+    editor.setText('ABC')
+    with_window.show()
+    editor.setFocus()
+    wait_for(editor.hasFocus)
+
+    def caret_is_red() -> bool:
+        return editor.grab().toImage().pixelColor(1, 1).name() == '#d73737'
+
+    assert caret_is_red()
+    wait_for(lambda: not caret_is_red())
+    wait_for(caret_is_red)
+    wait_for(lambda: not caret_is_red())
+    QtTest.QTest.keyClick(editor, QtCore.Qt.Key.Key_Left)
+    assert caret_is_red()
+    with_window.close()
 
 
 def test_failed_export_preserves_a_quit_draft(

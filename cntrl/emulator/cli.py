@@ -2,15 +2,17 @@
 
 from collections.abc import Callable
 from contextlib import nullcontext
+from functools import cached_property
 from importlib import import_module
 from pathlib import Path
 from shutil import copyfile
 from typing import Annotated, Self
 
+import pint
 import tomlkit
 import tyro
 from PIL import Image
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from tomlkit.exceptions import ParseError
 
 from ..file_lock import writer_lock
@@ -55,6 +57,20 @@ class Emulate(BaseModel, frozen=True):
         default=False,
         description='Open the window after replaying the optional startup scenario',
     )
+    caret_blink_period: str = Field(
+        default='1 second',
+        description='Full correction caret blink cycle with units, e.g. "750 ms"',
+    )
+
+    @field_validator('caret_blink_period')
+    @classmethod
+    def valid_caret_blink_period(cls, value: str) -> str:
+        caret_blink_interval_ms(value)
+        return value
+
+    @cached_property
+    def caret_blink_interval(self) -> int:
+        return caret_blink_interval_ms(self.caret_blink_period)
 
     @model_validator(mode='after')
     def profile_selection(self) -> Self:
@@ -70,6 +86,17 @@ class Emulate(BaseModel, frozen=True):
         elif self.port is None and (self.layout is None or self.target is None):
             raise ValueError('choose --controller or supply both --layout and --target')
         return self
+
+
+def caret_blink_interval_ms(period: str) -> int:
+    try:
+        duration = pint.get_application_registry().Quantity(period)
+        milliseconds = float(duration.to('millisecond').magnitude)
+    except (pint.PintError, TypeError, ValueError) as error:
+        raise ValueError('caret blink period must be a duration with units') from error
+    if not 2 <= milliseconds <= 2 * (2**31 - 1):
+        raise ValueError('caret blink period is outside the timer range')
+    return round(milliseconds / 2)
 
 
 def prepare(
@@ -270,4 +297,4 @@ def emulate_locked(
         if command.scenario is None or command.interactive:
             from .gui import run_window
 
-            run_window(session)
+            run_window(session, caret_blink_interval=command.caret_blink_interval)
