@@ -4,8 +4,8 @@ name = 'Română'
 [messages]
 patch_chooser = { text = 'Selector de sunete' }
 time = { text = 'Timp' }
-time_toggle_send = { text = '{send:s} comută trimiterea' }
-time_cycle_source = { text = '{source:s} schimbă sursa' }
+time_toggle_send = { text = '{send:s} comută' }
+time_cycle_source = { text = '{source:s} schimbă' }
 panic = { text = 'Panică' }
 language_scroll = { text = '{up:s} și {down:s} pentru derulare' }
 language_select = { text = '{button:s} pentru selectare' }

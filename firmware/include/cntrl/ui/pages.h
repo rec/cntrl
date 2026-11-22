@@ -502,31 +502,53 @@ private:
     void time_view(cntrl::Pane &pane) {
         using R = cntrl::PageSettings;
         page_heading(pane, i18n::text(i18n::Message::time));
-        char help[96];
+        char help[64];
+        const unsigned middle = viewport_.width / 2;
         i18n::format(help, sizeof(help), i18n::Message::time_toggle_send, label(controls_.next));
-        line(pane, 1, help, vertical(99), vertical(14), localized_face, true, nullptr, 0, 0, 14);
+        line(pane, 1, help, vertical(90), vertical(16), localized_face, false, nullptr, 0, middle, 14);
         i18n::format(help, sizeof(help), i18n::Message::time_cycle_source, label(controls_.next_section));
-        line(pane, 5, help, vertical(114), vertical(14), localized_face, true, nullptr, 0, 0, 14);
-        const char *names[] = {"Tap", "DIN", "TRS"};
+        line(pane, 5, help, vertical(90), vertical(16), localized_face, false, nullptr, middle, viewport_.width, 14, true);
+        pane.lines[5].y = pane.lines[1].y;
+        const char *names[] = {"Tap:", "DIN:", "TRS:"};
+        char numbers[3][24];
+        for (unsigned i = 0; i < 3; ++i)
+            number_text(numbers[i], sizeof(numbers[i]), source_period(i), true, true);
+        const unsigned height = vertical(16), column = horizontal(55);
+        auto rows = [&](unsigned maximum_size) {
+            for (unsigned i = 0; i < 3; ++i) {
+                const unsigned y = vertical(27 + 18 * i);
+                line(pane, 2 + i, names[i], y, height, settings_[R::status_font], false, nullptr, horizontal(8), column, maximum_size);
+                line(pane, 6 + i, numbers[i] + std::strspn(numbers[i], " "), y, height, settings_[R::status_font], false, nullptr, column, viewport_.width, maximum_size);
+            }
+        };
+        rows(96);
+        unsigned shared_size = pane.lines[2].graphics.size;
+        for (unsigned i = 0; i < 3; ++i)
+            shared_size = std::min({shared_size, unsigned(pane.lines[2 + i].graphics.size), unsigned(pane.lines[6 + i].graphics.size)});
+        rows(shared_size);
         for (unsigned i = 0; i < 3; ++i) {
-            char number[24], text[64];
-            number_text(number, sizeof(number), source_period(i), true, true);
-            std::snprintf(text, sizeof(text), "%s: %s", names[i], number + std::strspn(number, " "));
-            unsigned y = vertical(27 + 18 * i), height = vertical(16);
-            line(pane, 2 + i, text, y, height, settings_[R::status_font], true);
+            auto &name = pane.lines[2 + i], &tempo = pane.lines[6 + i];
+            const auto name_bounds = fonts_.bounds(name.graphics.font, shared_size, 0, name.text);
+            const auto tempo_bounds = fonts_.bounds(tempo.graphics.font, shared_size, 0, tempo.text);
+            name.x -= name_bounds.left;
+            tempo.x -= tempo_bounds.left;
+            tempo.y = name.y;
             if (i == selected_clock_) {
-                const auto &text_line = pane.lines[2 + i];
-                const auto bounds = fonts_.bounds(text_line.graphics.font, text_line.graphics.size, 0, text_line.text);
-                const int padding = (int(height) - bounds.height) / 2 + int(vertical(2));
-                int x = text_line.x + bounds.left - padding, top = text_line.y + bounds.top - padding;
-                unsigned width = unsigned(bounds.width + 2 * padding), box_height = unsigned(bounds.height + 2 * padding);
+                const int ink_top = std::min(name_bounds.top, tempo_bounds.top);
+                const int ink_bottom = std::max(name_bounds.top + name_bounds.height, tempo_bounds.top + tempo_bounds.height);
+                const int ink_height = ink_bottom - ink_top;
+                const int padding = std::max(0, (int(height) - ink_height) / 2) + int(vertical(2));
+                const int left = name.x + name_bounds.left, right = tempo.x + tempo_bounds.left + tempo_bounds.width;
+                const int x = left - padding, top = name.y + ink_top - padding;
+                const unsigned width = unsigned(right - left + 2 * padding), box_height = unsigned(ink_height + 2 * padding);
                 pane.rectangles[0] = {int16_t(x), int16_t(top), uint16_t(width), 1, 0x07e0, false};
                 pane.rectangles[1] = {int16_t(x), int16_t(top + box_height - 1), uint16_t(width), 1, 0x07e0, false};
                 pane.rectangles[2] = {int16_t(x), int16_t(top), 1, uint16_t(box_height), 0x07e0, false};
                 pane.rectangles[3] = {int16_t(x + width - 1), int16_t(top), 1, uint16_t(box_height), 0x07e0, false};
             }
         }
-        pane.toggle = {uint16_t(viewport_.width / 2), uint16_t(vertical(84)), true, sending_clock_, false};
+        const unsigned toggle_width = std::max(4u, vertical(14)) * 13 / 7;
+        pane.toggle = {uint16_t((viewport_.width - toggle_width) / 2), uint16_t(vertical(109)), true, sending_clock_, false};
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pong_view)

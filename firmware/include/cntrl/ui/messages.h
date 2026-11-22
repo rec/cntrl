@@ -454,14 +454,14 @@ inline const char tap_tempo_text[] CNTRL_I18N_STORAGE = "Tap Tempo";
 inline const char tap_tempo_short[] CNTRL_I18N_STORAGE = "";
 inline const char time_text[] CNTRL_I18N_STORAGE = "Time";
 inline const char time_short[] CNTRL_I18N_STORAGE = "";
-inline const char time_toggle_send_text[] CNTRL_I18N_STORAGE = "{send:s} toggles send";
+inline const char time_toggle_send_text[] CNTRL_I18N_STORAGE = "{send:s} toggles";
 inline const char time_toggle_send_short[] CNTRL_I18N_STORAGE = "";
 inline const char time_toggle_send_send_name[] CNTRL_I18N_STORAGE = "send";
 inline const char time_toggle_send_send_spec[] CNTRL_I18N_STORAGE = "s";
 inline const Field time_toggle_send_fields[] CNTRL_I18N_STORAGE = {
     {time_toggle_send_send_name, time_toggle_send_send_spec},
 };
-inline const char time_cycle_source_text[] CNTRL_I18N_STORAGE = "{source:s} cycles source";
+inline const char time_cycle_source_text[] CNTRL_I18N_STORAGE = "{source:s} cycles";
 inline const char time_cycle_source_short[] CNTRL_I18N_STORAGE = "";
 inline const char time_cycle_source_source_name[] CNTRL_I18N_STORAGE = "source";
 inline const char time_cycle_source_source_spec[] CNTRL_I18N_STORAGE = "s";

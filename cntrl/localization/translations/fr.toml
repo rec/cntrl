@@ -121,10 +121,10 @@ text = 'Tempo frappé'
 text = 'Temps'
 
 [messages.time_toggle_send]
-text = '{send:s} active l’envoi'
+text = '{send:s} bascule'
 
 [messages.time_cycle_source]
-text = '{source:s} change de source'
+text = '{source:s} change'
 
 [messages.status]
 text = 'État'

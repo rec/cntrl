@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
     status.cycles = 10; status.patches = 59; status.starts = 111; status.starts_status = cntrl::ui::StartsStatus::ready;
     status.ram_used[0] = 310240; status.ram_free[0] = 17440; status.ram_used[1] = 91008; status.ram_free[1] = 433280;
     using Page = cntrl::ui::Pages::Page;
-    const Page types[] = {Page::status, Page::cable, Page::panic, Page::pong, Page::menu};
+    const Page types[] = {Page::status, Page::cable, Page::panic, Page::pong, Page::menu, Page::time};
     std::vector<uint16_t> sheet(5 * 160 * 2 * 128);
     bool valid = true;
     for (unsigned page = 0; page < sizeof(types) / sizeof(types[0]); ++page) {
@@ -68,7 +68,16 @@ int main(int argc, char **argv) {
             assert(legend.x + bounds.left >= 0 && legend.x + bounds.left + bounds.width <= 160);
             assert(legend.y + bounds.top >= 115 && legend.y + bounds.top + bounds.height <= 128);
         }
-        if (types[page] != Page::status && types[page] != Page::cable && types[page] != Page::pong)
+        if (types[page] == Page::time) {
+            const auto &left = pane.lines[1], &right = pane.lines[5];
+            assert(!std::strcmp(left.text, "B toggles") && !std::strcmp(right.text, "E cycles"));
+            const auto left_bounds = fonts.bounds(left.graphics.font, left.graphics.size, 0, left.text);
+            const auto right_bounds = fonts.bounds(right.graphics.font, right.graphics.size, 0, right.text);
+            assert(left.y == right.y && left.x + left_bounds.left + left_bounds.width <= 80);
+            assert(right.x + right_bounds.left >= 80 && right.x + right_bounds.left + right_bounds.width == 158);
+            assert(std::max(left.y + left_bounds.top + left_bounds.height, right.y + right_bounds.top + right_bounds.height) < pane.toggle.y);
+        }
+        if (types[page] != Page::status && types[page] != Page::cable && types[page] != Page::pong && types[page] != Page::time)
             for (unsigned i = 1; i < cntrl::max_lines; ++i) if (pane.lines[i].text[0])
                 assert(pane.lines[i].graphics.font == 17 && (types[page] == Page::panic ? pane.lines[i].graphics.size <= 24 : pane.lines[i].graphics.size == 12));
         if (!lines) { std::cerr << "page " << page << ": no text\n"; valid = false; }

@@ -4,8 +4,8 @@ name = 'Suomi'
 [messages]
 patch_chooser = { text = 'Soundinvalitsin' }
 time = { text = 'Aika' }
-time_toggle_send = { text = '{send:s} vaihtaa lähetystä' }
-time_cycle_source = { text = '{source:s} vaihtaa lähdettä' }
+time_toggle_send = { text = '{send:s} kytkee' }
+time_cycle_source = { text = '{source:s} vaihtaa' }
 panic = { text = 'Paniikki' }
 language_scroll = { text = '{up:s} ja {down:s}: selaa' }
 language_select = { text = '{button:s}: valitse' }

@@ -4,8 +4,8 @@ name = 'Norsk bokmål'
 [messages]
 patch_chooser = { text = 'Lydvelger' }
 time = { text = 'Tid' }
-time_toggle_send = { text = '{send:s} slår sending av/på' }
-time_cycle_source = { text = '{source:s} bytter kilde' }
+time_toggle_send = { text = '{send:s} slår av/på' }
+time_cycle_source = { text = '{source:s} bytter' }
 panic = { text = 'Panikk' }
 language_scroll = { text = '{up:s} og {down:s} for å bla' }
 language_select = { text = '{button:s} for å velge' }

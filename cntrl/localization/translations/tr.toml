@@ -4,8 +4,8 @@ name = 'Türkçe'
 [messages]
 patch_chooser = { text = 'Ses seçici' }
 time = { text = 'Zaman' }
-time_toggle_send = { text = '{send:s} gönderimi açar/kapatır' }
-time_cycle_source = { text = '{source:s} kaynağı değiştirir' }
+time_toggle_send = { text = '{send:s} açar/kapatır' }
+time_cycle_source = { text = '{source:s} değiştirir' }
 panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} ve {down:s} ile kaydırın' }
 language_select = { text = '{button:s} ile seçin' }

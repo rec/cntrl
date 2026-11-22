@@ -658,15 +658,28 @@ void test_time_sources_and_clock_output() {
     pages.controls(controls);
     auto layout = page_fixture(2,{unsigned(cntrl::ui::Pages::Page::time)},{{0}}); pages.layout({layout.data()});
     auto left = pages.view(0,0,{}, {}, cntrl::Panic::Status::ready,0,2);
-    assert(!std::strcmp(left.lines[0].text,"Time") && !std::strcmp(left.lines[2].text,"Tap: ---.--"));
-    assert(!left.toggle.enabled && left.toggle.x == 80 && left.rectangles[0].color == 0x07e0);
-    assert(!std::strcmp(left.lines[1].text,"Send toggles send") && !std::strcmp(left.lines[5].text,"Source cycles source"));
+    assert(!std::strcmp(left.lines[0].text,"Time"));
+    assert(left.toggle.visible && !left.toggle.enabled && left.toggle.x == 67 && left.rectangles[0].color == 0x07e0);
+    assert(!std::strcmp(left.lines[1].text,"Send toggles") && !std::strcmp(left.lines[5].text,"Source cycles"));
     assert(left.lines[1].graphics.size == 14 && left.lines[5].graphics.size == 14);
-    assert(left.lines[1].y > left.lines[4].y && left.lines[5].y > left.lines[1].y);
+    assert(left.lines[1].y > left.lines[4].y && left.lines[5].y == left.lines[1].y);
+    assert(left.lines[1].x == 4 && left.lines[5].x + 2 * std::strlen(left.lines[5].text) == 156);
+    assert(left.toggle.y > left.lines[5].y + 2 && left.toggle.y + 14 <= 128);
+    const char *names[] = {"Tap:", "DIN:", "TRS:"};
+    for (unsigned i = 0; i < 3; ++i) {
+        const auto &name = left.lines[2 + i], &tempo = left.lines[6 + i];
+        assert(!std::strcmp(name.text,names[i]) && !std::strcmp(tempo.text,"---.--"));
+        assert(name.x == left.lines[2].x && tempo.x == left.lines[6].x && name.x < tempo.x);
+        assert(!name.centered && !tempo.centered && name.y == tempo.y);
+        assert(name.graphics.size == left.lines[2].graphics.size && tempo.graphics.size == name.graphics.size);
+    }
     const auto &selected = left.lines[2];
     const auto bounds = fonts.bounds(selected.graphics.font, selected.graphics.size, 0, selected.text);
     assert(selected.x + bounds.left - left.rectangles[0].x == selected.y + bounds.top - left.rectangles[0].y);
-    assert(int(left.rectangles[0].width) - bounds.width == int(left.rectangles[2].height) - bounds.height);
+    const auto &tempo = left.lines[6];
+    const auto tempo_bounds = fonts.bounds(tempo.graphics.font, tempo.graphics.size, 0, tempo.text);
+    const int row_width = tempo.x + tempo_bounds.width - selected.x;
+    assert(int(left.rectangles[0].width) - row_width == int(left.rectangles[2].height) - bounds.height);
     assert(left.rectangles[0].width < 160 - 2 * settings.words[R::padding]);
     auto right = pages.view(0,0,{}, {}, cntrl::Panic::Status::ready,1,2);
     assert(!std::strcmp(right.lines[0].text,"Tap Tempo") && std::strstr(right.lines[1].text,"---.--"));
@@ -678,6 +691,12 @@ void test_time_sources_and_clock_output() {
         pages.clock_message(0,0xf8,i * 20000); pages.clock_message(1,0xf8,i * 30000);
     }
     assert(pages.source_period(1) == 480000 && pages.source_period(2) == 720000 && pages.clock_selection() == 0);
+    const auto measured = pages.view(0,0,{}, {}, cntrl::Panic::Status::ready,0,2);
+    const char *tempos[] = {"120.00", "125.00", "83.33"};
+    for (unsigned i = 0; i < 3; ++i) {
+        assert(!std::strcmp(measured.lines[6 + i].text,tempos[i]));
+        assert(measured.lines[6 + i].x == measured.lines[6].x);
+    }
     struct Sink : cntrl::midi::Sink {
         std::vector<uint8_t> messages;
         bool write_packet(unsigned, const cntrl::midi::Packet &packet) override { messages.push_back(packet.bytes[0]); return true; }
@@ -697,7 +716,10 @@ void test_time_sources_and_clock_output() {
     assert(pages.clock_selection() == 0);
     pages.toggle_clock(); pages.poll_clock(1500000,1,sink); pages.poll_clock(1521000,1,sink);
     assert(sink.messages == std::vector<uint8_t>{0xf8});
+    const auto enabled = pages.view(0,0,{}, {}, cntrl::Panic::Status::ready,0,2).toggle;
+    assert(enabled.enabled && enabled.x == left.toggle.x && enabled.y == left.toggle.y);
     pages.toggle_clock(); pages.poll_clock(1542000,1,sink); assert(sink.messages.size() == 1);
+    assert(!pages.view(0,0,{}, {}, cntrl::Panic::Status::ready,0,2).toggle.enabled);
     settings.words[R::clock_options] = 2; pages.configure(settings);
     pages.cycle_clock(); pages.poll_clock(2000000,1,sink);
     assert(pages.clock_selection() == 1 && !pages.source_period(1) && !pages.relay_clock_outputs(0));

@@ -4,8 +4,8 @@ name = 'Deutsch'
 [messages]
 patch_chooser = { text = 'Patch-Auswahl' }
 time = { text = 'Zeit' }
-time_toggle_send = { text = '{send:s} schaltet Senden' }
-time_cycle_source = { text = '{source:s} wechselt Quelle' }
+time_toggle_send = { text = '{send:s} schaltet um' }
+time_cycle_source = { text = '{source:s} wechselt' }
 panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} und {down:s} zum Blättern' }
 language_select = { text = '{button:s} zum Auswählen' }
