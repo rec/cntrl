@@ -7,6 +7,7 @@ dependencies = [
     "fonttools>=4.67.0",
     "freetype-py>=2.5.1",
     "pillow>=13.0.0",
+    "pint>=0.26.1",
     "pydantic>=2,<3",
     "pyserial>=3.5",
     "python-bidi>=0.6.12",
