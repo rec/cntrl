@@ -426,7 +426,7 @@ must support the named output; this format adds no output drivers.
 
 | Operation | Fields | Effect |
 | --- | --- | --- |
-| `stock-firmware` | `exit_buttons`, such as `'A+F'` | Switch to stock firmware with the specified return buttons |
+| `stock-firmware` | `exit_buttons`, such as `'A+F'` | Restart into stock firmware for one boot with the specified return buttons |
 | `brightness` | `value`, integer 0..255 | Set active screen brightness |
 | `usb-midi-interface` | `value`, Boolean | Set the active USB MIDI bridge preference |
 | `next-patch`, `previous-patch` | None | Move the preview within its current patch cycle |

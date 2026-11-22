@@ -3,9 +3,25 @@
 
 enum class BootChoice : uint32_t { stock = 0x53544b31, cntrl = 0x43545231 };
 
+// Only our markers are consumed. Teensy's crash reporting also uses this
+// reset-retained register, with a different value.
+constexpr uintptr_t boot_request_register = 0x400f8030;
+constexpr uint32_t request_stock = 0x434e5701, request_cntrl = 0x434e5702, visiting_stock = 0x434e5703;
+inline BootChoice select_boot(BootChoice default_firmware, volatile uint32_t &request) {
+    const uint32_t marker = request;
+    if (marker == request_stock) {
+        request = visiting_stock;
+        return BootChoice::stock;
+    }
+    if (marker == request_cntrl || marker == visiting_stock) request = 0;
+    return marker == request_cntrl ? BootChoice::cntrl : default_firmware;
+}
+
+constexpr unsigned default_exit_pair = 33; // A+F
+
 struct BootSelection {
     BootChoice choice = BootChoice::cntrl;
-    unsigned next = 0, pair = 33, visit = 0, returned = 0;
+    unsigned next = 0, pair = default_exit_pair, visit = 0, returned = 0;
 };
 
 constexpr uint32_t selection_magic = 0x434e4254;
@@ -37,7 +53,7 @@ inline BootSelection inspect_boot_selection(const volatile uint32_t *words) {
     return result;
 }
 
-// Reserve the following record for A+F to return from stock without erasing flash.
+// Reserve config, return and consumption records for a temporary stock visit.
 inline bool can_enter_stock(const BootSelection &selection) {
-    return selection.next && selection.next <= selection_records - 5;
+    return selection.next && selection.next <= selection_records - 3;
 }

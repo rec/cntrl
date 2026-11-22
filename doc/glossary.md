@@ -147,7 +147,7 @@
 | --- | --- |
 | **CNTRL**, **CLI** | CNTRL includes the software on the pedal and tools on the computer. The command-line interface (CLI) is the `cntrl` command you run in a terminal to create, transfer, and manage setups and song libraries. |
 | **Controller**, **pedal** | The device you operate. Its controls, screens, and ports are described by its controller model. |
-| **Firmware**, **Original firmware**, **stock firmware** | Firmware is the software running on the pedal. **Original firmware** switches from CNTRL to the manufacturer's stock software on supported controllers. |
+| **Firmware**, **original firmware**, **stock firmware** | Firmware is the software running on the pedal. The `stock-firmware` patch action switches from CNTRL to the manufacturer's stock firmware for one boot on supported controllers. |
 | **Flash**, **firmware image**, **bootloader** | To flash is to install a firmware image on the controller. The bootloader is the controller's update mode or program that accepts the image. |
 | **Setup** | A saved configuration for a controller, including its pages, patches, control assignments, instrument connections, and playback tool settings. **Setups** is the tool for choosing and managing these configurations. |
 | **Active setup** | The setup currently in use. Switching setups starts the new setup with its own defaults and stops the previous setup's running activities. |

@@ -15,15 +15,14 @@ struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServi
     unsigned blanks = 0, editors = 0;
     bool idle = true, transfer_busy = false, editor = false;
     uint8_t brightness = 0;
-    cntrl::ui::FirmwareSelection selection{7, 0, true, false};
-    unsigned configurations = 0, selections = 0, handoffs = 0, consumed = 0;
+    cntrl::ui::FirmwareSelection selection{7, 0, true};
+    unsigned configurations = 0, handoffs = 0, consumed = 0;
     std::string last_error;
     cntrl::ui::FirmwareSelection firmware_selection() const override { return selection; }
     bool valid_exit(uint8_t pair) const override { return pair == 33; }
     bool storage_available() const override { return true; }
     bool stop_clock() override { return true; }
     bool configure_return(uint8_t pair, uint32_t token) override { assert(pair == 33 && (token == 0 || token == 7)); ++configurations; return true; }
-    bool choose_external_firmware() override { ++selections; return true; }
     bool consume_return(uint32_t token) override { consumed = token; return true; }
     void handoff_firmware() override { ++handoffs; }
     bool switch_invocation(cntrl::PatchExecutor &) const override { return false; }
@@ -582,10 +581,10 @@ static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware 
     const cntrl::SongContinuation continuation{};
     assert(visit.request(33, &continuation)); assert(visit.busy() && !visit.request(33, nullptr));
     for (unsigned i = 0; i < 100 && !hardware.handoffs; ++i) visit.poll(true);
-    assert(hardware.handoffs == 1 && hardware.configurations == 1 && hardware.selections == 1);
+    assert(hardware.handoffs == 1 && hardware.configurations == 1);
     assert(file.bytes.size() == cntrl::ui::FirmwareVisitRecord::header_size + record.initial_navigation.encoded_size() + record.return_navigation.encoded_size() + 4
         && file.maximum_io <= 512 && !file.opened());
-    file.bytes[0] ^= 1; hardware.selection.returned = 7; hardware.selection.returned_to_application = true;
+    file.bytes[0] ^= 1; hardware.selection.returned = 7;
     cntrl::ui::FirmwareVisitRecord returned_record;
     cntrl::ui::FirmwareVisit returned(returned_record, file, hardware, hardware, documents, app, songs, sources, runtime, navigation, execution, restoring);
     const unsigned opens = file.opened_count; returned.poll(false); assert(file.opened_count == opens && !returned.busy());

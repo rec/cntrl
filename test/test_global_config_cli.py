@@ -1,6 +1,7 @@
 """Recover inherited rig sources and binary assets without the original machine."""
 
 import sys
+from contextlib import nullcontext
 from hashlib import sha256
 from pathlib import Path
 
@@ -54,6 +55,44 @@ def test_global_cli_preserves_unexpected_failures(
     with pytest.raises(error_type) as caught:
         cli.main()
     assert caught.value is failure
+
+
+@pytest.mark.parametrize(
+    'arguments, command, reply, output',
+    [
+        (
+            ['list', 'default_firmware'],
+            'CNTRL BOOT DEFAULT',
+            'CNTRL BOOT DEFAULT stock',
+            'default_firmware = stock\n',
+        ),
+        (
+            ['set', 'default_firmware', 'stock'],
+            'CNTRL BOOT DEFAULT stock',
+            'CNTRL OK',
+            '',
+        ),
+        (['clear', 'default_firmware'], 'CNTRL BOOT DEFAULT cntrl', 'CNTRL OK', ''),
+    ],
+)
+def test_default_firmware_uses_the_pedals_boot_setting(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    arguments: list[str],
+    command: str,
+    reply: str,
+    output: str,
+) -> None:
+    def request(client: transport.SetupClient, sent: str) -> str:
+        assert sent == command
+        return reply
+
+    monkeypatch.setattr(transport.SetupClient, 'request', request)
+    monkeypatch.setattr(transport, 'SerialConnection', nullcontext)
+    monkeypatch.setattr(devices, 'select_port', lambda port: Path('/unused'))
+    monkeypatch.setattr(sys, 'argv', ['cntrl', 'global', *arguments])
+    cli.main()
+    assert capsys.readouterr().out == output
 
 
 @pytest.mark.parametrize('reply', ['CNTRL GLOBAL 999=1', 'CNTRL GLOBAL startup_set=zz'])

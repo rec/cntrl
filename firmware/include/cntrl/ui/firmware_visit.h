@@ -54,7 +54,7 @@ struct FirmwareVisitRecord {
         *this = candidate; return true;
     }
 };
-struct FirmwareSelection { uint32_t next = 0, returned = 0; bool can_enter = false, returned_to_application = false; };
+struct FirmwareSelection { uint32_t next = 0, returned = 0; bool can_enter = false; };
 struct FirmwareVisitServices {
     virtual ~FirmwareVisitServices() = default;
     virtual FirmwareSelection firmware_selection() const = 0;
@@ -64,7 +64,6 @@ struct FirmwareVisitServices {
     virtual bool stop_clock() = 0;
     virtual bool song_transfer_busy() const = 0;
     virtual bool configure_return(uint8_t pair, uint32_t token) = 0;
-    virtual bool choose_external_firmware() = 0;
     virtual bool consume_return(uint32_t token) = 0;
     virtual void handoff_firmware() = 0;
     virtual bool switch_invocation(PatchExecutor &) const = 0;
@@ -118,7 +117,7 @@ public:
         case Stage::idle:
             if (resume_checked_ || !released || documents_.busy()) return;
             resume_checked_ = true;
-            if (const auto state = services_.firmware_selection(); state.returned && state.returned_to_application) {
+            if (const auto state = services_.firmware_selection(); state.returned) {
                 record_ = FirmwareVisitRecord(); record_.token = state.returned; stage_ = Stage::open;
             }
             return;
@@ -141,9 +140,6 @@ public:
         }
         case Stage::configure:
             if (!services_.configure_return(exit_pair_, record_.token)) { fail(); return; }
-            stage_ = Stage::select; return;
-        case Stage::select:
-            if (!services_.choose_external_firmware()) { fail(); return; }
             stage_ = Stage::handoff; return;
         case Stage::handoff:
             services_.handoff_firmware(); return;
@@ -178,7 +174,7 @@ public:
     bool &restoring;
     static constexpr const char *path = "/cntrl/firmware-visit.bin";
 private:
-    enum class Stage { idle, create, write, sync, verify, configure, select, handoff, open, read, validate, consume, resume };
+    enum class Stage { idle, create, write, sync, verify, configure, handoff, open, read, validate, consume, resume };
     FirmwareVisitRecord &record_;
     files::File &file_;
     FirmwareVisitServices &services_;

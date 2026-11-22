@@ -69,6 +69,7 @@ class Snapshot(BaseModel, frozen=True):
 
 
 class List(BaseModel, frozen=True):
+    setting: Annotated[Literal['default_firmware'] | None, tyro.conf.Positional] = None
     port: Path | None = None
 
 
@@ -156,10 +157,27 @@ def run(command: List | Set | Clear | Restore) -> None:
         except OSError as error:
             raise GlobalRestoreError(f'{command.file}: {error}') from error
         restore = load_saved(command.file, data)
+    if (
+        isinstance(command, Set)
+        and command.setting == 'default_firmware'
+        and command.value not in ('stock', 'cntrl')
+    ):
+        raise device_settings.DeviceSettingError(
+            'default_firmware must be stock or cntrl'
+        )
     port = devices.select_port(command.port)
     with transport.SerialConnection(port) as connection:
         client = transport.SetupClient(connection)
         if isinstance(command, List):
+            if command.setting == 'default_firmware':
+                response = client.request('CNTRL BOOT DEFAULT')
+                if response not in (
+                    'CNTRL BOOT DEFAULT stock',
+                    'CNTRL BOOT DEFAULT cntrl',
+                ):
+                    raise transport.UsbReplyError(f'unexpected response: {response}')
+                print(f'default_firmware = {response.rsplit(" ", 1)[1]}')
+                return
             values = client.global_settings()
             print(f'language = {values.language or "en (default)"}')
             for field, setting in enumerate(device_settings.SETTINGS):
@@ -178,6 +196,9 @@ def run(command: List | Set | Clear | Restore) -> None:
         elif isinstance(command, Restore):
             assert restore is not None
             client.replace_globals(restore)
+        elif command.setting == 'default_firmware':
+            value = command.value if isinstance(command, Set) else 'cntrl'
+            client.ok(f'CNTRL BOOT DEFAULT {value}')
         elif command.setting == 'language':
             if isinstance(command, Set):
                 client.set_language(command.value)

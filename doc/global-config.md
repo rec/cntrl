@@ -218,3 +218,22 @@ empty position without executing song or patch actions. The preference is saved
 as `startup_set` in version-3 portable snapshots and restored with the other
 device preferences. A missing saved set reports an error rather than choosing a
 different set.
+
+## Default boot firmware
+
+On an MC6 Pro with the combined image installed, connect over USB while CNTRL is
+running to choose the firmware that starts after a reset or power cycle:
+
+```sh
+cntrl global list default_firmware --port PORT
+cntrl global set default_firmware stock --port PORT
+cntrl global set default_firmware cntrl --port PORT
+```
+
+`cntrl global clear default_firmware --port PORT` restores CNTRL as the default.
+The pedal stores this choice in flash independently of its setups and SD-card
+preferences. Installing a fresh combined image restores the CNTRL default.
+
+From stock, press A+F together to enter CNTRL for one boot. From CNTRL, a
+`stock-firmware` patch action enters stock for one boot and specifies the chord
+that returns to CNTRL during that visit. Both switches preserve the boot default.

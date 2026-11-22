@@ -192,16 +192,18 @@ public:
 #if CNTRL_ORIGINAL_FIRMWARE
     cntrl::ui::FirmwareSelection firmware_selection() const override {
         const auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
-        return {state.next, state.returned, can_enter_stock(state), state.choice == BootChoice::cntrl};
+        return {state.next, state.returned, can_enter_stock(state)};
     }
     bool valid_exit(uint8_t pair) const override { return valid_exit_pair(pair); }
     bool storage_available() const override { return midi_storage.filesystem.available(); }
     bool configure_return(uint8_t pair, uint32_t token) override { return append_boot_record(visit_config | pair | (token ? 0x8000 : 0)); }
-    bool choose_external_firmware() override { return append_boot_record(uint32_t(BootChoice::stock)); }
     bool consume_return(uint32_t token) override { return append_boot_record(visit_consumed | token); }
     void handoff_firmware() override {
         USB1_USBCMD = 2; USBPHY1_CTRL_SET = 0x80000000;
-        delay(100); __disable_irq(); SCB_AIRCR = 0x05fa0004;
+        delay(100); __disable_irq();
+        *reinterpret_cast<volatile uint32_t *>(boot_request_register) = request_stock;
+        __asm__ volatile("dsb" ::: "memory");
+        SCB_AIRCR = 0x05fa0004;
         __asm__ volatile("dsb" ::: "memory");
         while (true) __asm__ volatile("wfi");
     }
@@ -1078,6 +1080,27 @@ FLASHMEM bool abort_deployment() {
     return true;
 }
 FLASHMEM bool asset_command(const char *line) {
+#if CNTRL_ORIGINAL_FIRMWARE
+    constexpr char boot_default[] = "CNTRL BOOT DEFAULT";
+    if (!std::strcmp(line, boot_default) || !std::strncmp(line, "CNTRL BOOT DEFAULT ", sizeof(boot_default))) {
+        const auto state = inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000));
+        if (!line[sizeof(boot_default) - 1]) {
+            board.reply(state.choice == BootChoice::stock ? "CNTRL BOOT DEFAULT stock" : "CNTRL BOOT DEFAULT cntrl");
+            return true;
+        }
+        const char *value = line + sizeof(boot_default);
+        BootChoice choice;
+        if (!std::strcmp(value, "stock")) choice = BootChoice::stock;
+        else if (!std::strcmp(value, "cntrl")) choice = BootChoice::cntrl;
+        else { board.reply("CNTRL ERROR invalid-default-firmware"); return true; }
+        if (deployment.pending() || documents.busy() || application.patch_pending()
+            || firmware_visit.busy() || !board.output_idle()) board.reply("CNTRL ERROR busy");
+        else if (choice == state.choice) board.reply("CNTRL OK");
+        else if (!state.next) board.reply("CNTRL ERROR boot-default-journal-unavailable");
+        else board.reply(append_boot_record(uint32_t(choice)) ? "CNTRL OK" : "CNTRL ERROR boot-default-write");
+        return true;
+    }
+#endif
     if (language_transfer.command(line, millis())) return true;
     if (state_transfer.command(line, board)) return true;
     if (global_commands.command(line, deployment.pending())) return true;

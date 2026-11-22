@@ -1,20 +1,18 @@
 # Persistent firmware selection
 
-The combined image starts cntrl patch mode on a fresh installation or when no
-valid choice is stored. Explicit choices persist across resets and power cycles.
+The combined image defaults to CNTRL on a fresh installation. Set
+`cntrl global set default_firmware stock` or `cntrl global set default_firmware cntrl`
+while CNTRL is running to choose what boots after an ordinary reset or power cycle.
 
-From patch mode, open A+D, select **Original firmware**, then press C on its page
-to start stock, or F to go back. The module commits and verifies the stock choice
-in the existing selection journal, disconnects USB and resets. It sends no MIDI.
-While stock is running, release the configured pair once, then press it within
-50 ms (either order, no hold) to commit patch mode and reset back into cntrl.
+A `stock-firmware` patch action disconnects USB and resets into stock for one boot.
+While stock is running, release the return pair once, then press it within
+50 ms (either order, no hold) to reset into CNTRL for one boot.
 The window includes exactly 50 ms and measures presses after 15 ms of stable input.
-Function patches supply the exit pair per visit. The standalone module uses A+F.
+Function patches supply the exit pair per visit. An ordinary stock boot uses A+F.
 
-The gesture hook exists only in stock. cntrl's button reader has no A+F gesture.
-The Original firmware module is target-specific and can be excluded with
+The firmware-switching gesture hook runs in stock. Support can be excluded with
 `ORIGINAL_FIRMWARE=0` when building. Installing a combined image reinitializes
-the journal to the patch-mode default; update preservation remains outside scope.
+the journal to the CNTRL default.
 
 ## Build
 
@@ -46,11 +44,10 @@ unchanged. This avoids delivering the first switch's musical action before
 recognizing the pair. It adds 65 ms to normal actions on these two switches.
 
 If the second recognized press arrives too late, the switches retain their
-ordinary stock behavior. A successful gesture commits and verifies the boot
-choice, then starts USB disconnection and reset, with a 100 ms USB-disconnect
-interval before reset. That interval
-is not an additional hold requirement. Actual time until cntrl is ready also
-includes normal boot and USB reenumeration.
+ordinary stock behavior. A successful gesture requests a single CNTRL boot
+after a 100 ms USB-disconnect interval. The switches can be released as soon
+as the gesture is recognized. Actual time until CNTRL is ready also includes
+normal boot and USB reenumeration.
 
 ## Patch layout
 
@@ -79,8 +76,11 @@ assertions bound it to 256 bytes and the executable hook to one 4 KiB page.
 
 The early boot gate reads the selection sector using flash-only code and a
 stack already initialized by stock startup. It continues stock or enters
-cntrl's linked startup according to the last valid record. It does not erase,
-program flash, initialize SD or use the old one-shot SRC_GPR5 marker.
+cntrl's linked startup according to the last valid default or a one-boot
+request in reset-retained `SRC_GPR5`. It reads flash without programming it
+and clears or replaces only its own request values. A temporary stock boot
+receives a distinct visit marker used by the stock gesture. See section 21.6.9
+of the [NXP i.MX RT1060 Processor Reference Manual](https://www.pjrc.com/teensy/IMXRT1060RM_rev3.pdf).
 
 ## Selection record
 
@@ -94,24 +94,16 @@ inverse. Stock is `0x53544b31`, cntrl is `0x43545231`. Empty, unknown and torn
 records do not change the last valid choice. No valid choice defaults to cntrl patch mode.
 New records go after the last occupied slot, including interrupted writes.
 
-The stock wrapper programs its record from a RAM stack buffer through the
-audited ITCM-resident flash writer at Thumb address `0x4da91`, then reads back
-the selection before resetting. The writer waits for flash completion and
-invalidates the destination data cache. An already selected choice is not
-written again. SD and manufacturer EEPROM are untouched.
+Only the device-wide default setting writes a choice record. CNTRL uses its
+ITCM-resident flash writer and verifies the new record. The previous valid
+default survives an interrupted append. A full or invalid journal prevents
+changing the default. Sector reinitialization happens during image installation.
 
-There is no runtime sector erase or compaction. If the header is invalid, the
-journal is full, or readback fails, the gesture is consumed until release and
-the pedal stays in stock. It does not switch with an uncommitted choice. The
-previous valid record survives an interrupted append. Reinitializing the
-journal is currently a firmware installation operation, not a normal switch.
-
-The Original firmware module uses cntrl's ITCM-resident EEPROM flash writer to
-append a stock record, without touching the manufacturer's EEPROM region. It
-refuses to switch while setup storage is busy, edits are unsaved or performance
-MIDI sends are queued. It also reserves all records for the stock return and its consumption;
-there is no automatic journal erase or compaction. Failure leaves patch mode
-running and displays an error.
+The stock wrapper writes a return record only for a song continuation. It
+programs the record from a RAM stack buffer through the ITCM-resident flash
+writer at Thumb address `0x4da91` and verifies it before resetting. If
+verification fails, the gesture is consumed until release and the pedal stays
+in stock. Ordinary stock-to-CNTRL gestures need no journal space.
 
 Update handling remains outside this implementation.
 Stock's updater and external single-image uploads can replace the installation.
@@ -161,8 +153,8 @@ the visit token. `0x46520000 | token` marks a stock return;
 `0x46580000 | token` consumes it. Unknown or torn records remain ignored. Config
 records reset the preceding visit state. The default pair is A+F.
 
-Entry reserves five slots: config, stock choice, return marker, patch-mode choice
-and consumed marker. The stock hook translates logical A..F to the traced GPIO
+Entry reserves three slots: config, return marker and consumed marker. The stock
+hook translates logical A..F to the traced GPIO
 bits and retains its existing release-to-arm, 15 ms debounce and 50 ms/no-hold
 behavior. No patch-mode A+F handler is installed.
 
