@@ -23,23 +23,23 @@ class ControlRouter {
 public:
     explicit ControlRouter(Controls controls) : controls_(controls) {}
     template<class Services>
-    void route(Services &services, const uint8_t *events, uint64_t held, uint32_t now) const {
+    void route(Services &services, const uint8_t *events, uint64_t held, uint32_t now, bool utility = false, uint8_t assigned_pages = 0) const {
         for (unsigned i = 0; i < controls_.count; ++i) {
             const bool press = events[i] & 1, release = events[i] & 2;
             // Editors must receive release even when navigation locks input.
             if (services.switches_open() && release) services.switch_button(i, false, now);
             if (services.controls_locked()) continue;
-            if (services.menu_open()) {
+            if (!utility && services.menu_open()) {
                 if (press) {
                     if (i == controls_.previous) services.invoke(Operation::menu_previous);
                     else if (i == controls_.next) services.invoke(Operation::menu_next);
                     else if (i == controls_.confirm) services.invoke(Operation::menu_activate);
                     else if (i == controls_.back) services.invoke(Operation::menu_back);
                 }
-            } else if (services.switches_open()) {
+            } else if (!utility && services.switches_open()) {
                 if (press) services.switch_button(i, true, now);
                 if (release) services.switch_button(i, false, now);
-            } else if (services.songs_open()) {
+            } else if (!utility && services.songs_open()) {
                 if (press) {
                     if (i == controls_.previous) services.invoke(Operation::songs_previous);
                     else if (i == controls_.next) services.invoke(Operation::songs_next);
@@ -48,7 +48,7 @@ public:
                     else if (i == controls_.next_section) services.invoke(Operation::songs_next_section);
                     else if (i == controls_.back) services.invoke(Operation::songs_back);
                 }
-            } else if (services.setup_open()) {
+            } else if (!utility && services.setup_open()) {
                 if (press) {
                     if (i == controls_.previous) services.invoke(Operation::setup_previous);
                     else if (i == controls_.next) services.invoke(Operation::setup_next);
@@ -57,16 +57,16 @@ public:
                 }
             } else {
                 if (!services.midi_reserved() && (press || release) && services.looper(i, press)) continue;
-                if (i == controls_.next_page) {
-                    if (press) services.browse(controls_.reverse_page < 64
+                if (i == controls_.next_page && !(assigned_pages & 1)) {
+                    if (press) services.browse(!(assigned_pages & 2) && controls_.reverse_page < 64
                         && (held & (uint64_t(1) << controls_.reverse_page)));
                     continue;
                 }
-                if (i == controls_.previous_page) {
+                if (i == controls_.previous_page && !(assigned_pages & 2)) {
                     if (press) services.browse(true);
                     continue;
                 }
-                if (i == controls_.reverse_page && controls_.next_page < 64
+                if (!(assigned_pages & 2) && i == controls_.reverse_page && controls_.next_page < 64
                     && (held & (uint64_t(1) << controls_.next_page))) {
                     if (press) services.browse(true);
                     continue;
@@ -74,7 +74,7 @@ public:
                 if (services.midi_reserved() && i != controls_.confirm && i != controls_.back) continue;
                 if (services.time(i, events[i], now)) continue;
                 if ((press || release) && services.monitor(i, press)) continue;
-                if (services.has_controller()) {
+                if (!utility && services.has_controller()) {
                     if (press) services.controller(controls_.bindings[i].controller_button, true, now);
                     if (release) services.controller(controls_.bindings[i].controller_button, false, now);
                 } else if (press && i == controls_.tap) services.tap(now);

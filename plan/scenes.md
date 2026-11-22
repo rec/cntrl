@@ -63,8 +63,9 @@ emulator agree.
 | Page forward | Everywhere | Scroll forward through the utility-page list. |
 | Page back | Everywhere | Scroll backward through the utility-page list. |
 
-Give both song combinations priority over song and scene bindings, including
-when a utility page is visible during performance. Preserve the empty
+The setup designates the forward and back controls. A performer presses them
+directly on any scene in song or set mode. Songs and scenes cannot replace
+either action. Preserve the empty
 positions before, between, and after songs. Selecting a page must preserve
 the current song and scene.
 
@@ -105,8 +106,8 @@ creation. Changing a display name affects only the caption.
 - Create and perform the Verse/Chorus example both standalone and in a set.
   Check the top and bottom captions against the physical buttons and check
   the center segments after advancing and going back.
-- Configure all four combinations. Exercise reserved song navigation with
-  competing scene bindings and with a utility page open. Check that pressing
+- Configure dedicated forward and back buttons. Advance and go back directly
+  on each scene, including scenes with competing bindings. Check that pressing
   a combination triggers its action once without firing a member button's
   click action.
 - Override page navigation first in a song, then in one scene. Leave each

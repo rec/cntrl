@@ -289,11 +289,13 @@ class PatchCompiler:
             self.nodes[index] = struct.pack('<BBHH', 12, 0, 2, child)
             self.children[index] = [child]
             return index
-        if value.bindings is not None:
+        if value.bindings is not None or value.navigation is not None:
             if not self.target.max_switches:
                 self.errors.append(f'{path}.bindings: target has no switch engine')
             child = self.add(
-                value.model_copy(update={'bindings': None, 'binding_view': None}),
+                value.model_copy(
+                    update={'bindings': None, 'binding_view': None, 'navigation': None}
+                ),
                 path + '.entry',
                 name,
             )
@@ -616,7 +618,13 @@ class PatchCompiler:
         records: list[bytes] = []
         visuals: list[bytes] = []
         expressions: dict[str, models.ExpressionAssignment] = {}
-        assert value.bindings is not None
+        navigation = (
+            inputs.navigation_masks(
+                value.navigation, self.target, inputs.NAVIGATION[2:]
+            )
+            if value.navigation
+            else b''
+        )
 
         def add_action(
             patch: models.Patch | None,
@@ -647,7 +655,7 @@ class PatchCompiler:
                 *(round(getattr(gesture, t) * 1000) for t in GESTURE_TIMINGS),
             )
 
-        for key, raw in value.bindings.items():
+        for key, raw in (value.bindings or {}).items():
             binding = models.parse_binding(raw)
             context = f'{path}.bindings.{key}'
             if isinstance(binding, models.ExpressionAssignment):
@@ -797,11 +805,14 @@ class PatchCompiler:
                     unicode=True,
                 ),
                 len(records),
-                1
-                if value.binding_view is not None
-                else 2
-                if value.style is not None
-                else 0,
+                (4 if navigation else 0)
+                | (
+                    1
+                    if value.binding_view is not None
+                    else 2
+                    if value.style is not None
+                    else 0
+                ),
             )
             + (expression or bytes(4 * page_settings.EXPRESSION.size))
             + b''.join(records)
@@ -812,6 +823,7 @@ class PatchCompiler:
                 if value.style is not None
                 else b''
             )
+            + navigation
         )
 
     def binding_graphics(

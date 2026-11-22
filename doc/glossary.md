@@ -58,6 +58,8 @@
 | **Binding**, **assignment** | What a control does in a setup, song, or patch. A binding can run a patch on a switch gesture or send MIDI as an expression pedal moves. |
 | **Scene** | A patch that takes over all the pedal's windows and supplies the control bindings for that part of a song. For example, a song can use a verse scene, a chorus scene, then the verse scene again. |
 | **Binding map** | The assignments that determine what the pedal's controls do while a scene is active. |
+| **Song forward / song backward** | The setup's reserved controls for stepping forward or backward directly from any scene in a song or set. |
+| **Page forward / page back** | Combinations for browsing utility pages. Songs and scenes can each supply their own combinations. Returning to the empty page shows the current scene. |
 | **Binding scope**, **inherits** | A scope is where an assignment is defined. Song assignments can override shared ones. A patch's `inherits` setting chooses whether it keeps enclosing switch assignments, expression assignments, both, or neither. |
 | **Control role / control label** | A role is what a switch does in the current view, such as Confirm or Back. A label is what is printed on the pedal, such as C or F. Follow the labels shown in the current view. |
 | **Gesture**, **switch chord** | A gesture is a way of using a switch, such as tapping, double-tapping, holding, or releasing it. A switch chord uses multiple switches together, such as C+F. |

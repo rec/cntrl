@@ -10,6 +10,7 @@ from zlib import crc32
 
 import pytest
 from native_peer import NativePeer
+from PIL import Image
 
 from cntrl.patch_chooser import (
     binary_format,
@@ -25,6 +26,45 @@ from cntrl.patch_chooser import (
     transport,
 )
 from scripts import native_tests
+
+
+def test_new_song_reuses_scene_definitions(
+    tmp_path: Path, target: models.Target
+) -> None:
+    path = tmp_path / 'First Light.toml'
+    command = songs.New(document=path, scenes=['Verse', 'Chorus', 'Verse'])
+    songs.run(command)
+    library = songs.Library.model_validate(compiler_inputs.read_document(path))
+    assert list(library.patches) == ['Verse', 'Chorus']
+    restored = songs.decode(songs.encode(library, target))
+    assert restored.songs[0].patches[0] == restored.songs[0].patches[2]
+    with pytest.raises(songs.SongLibraryError, match='exists'):
+        songs.run(command)
+
+
+def test_repeated_scenes_keep_song_presentation_and_navigation(
+    tmp_path: Path, target: models.Target
+) -> None:
+    source = Path('examples/patch-chooser/scenes.toml')
+    values = compiler_inputs.read_document(source)
+    values['songs'][0].update(
+        display_name='Light', image='art.png', navigation={'page_forward': 'D+E'}
+    )
+    values['patches']['chorus']['navigation'] = {'page_back': 'A+B'}
+    image = Image.new('RGB', (20, 8), 'red')
+    image.save(tmp_path / 'art.png')
+    encoded = songs.encode(
+        songs.Library.model_validate(values),
+        target,
+        authoring=data_files.DataFile(name='Scenes', paths=[tmp_path / source.name]),
+    )
+    recovered = songs.decode(encoded)
+    song = recovered.songs[0]
+    assert song.display_name == 'Light'
+    assert song.image and song.image.endswith('.png')
+    assert song.navigation == models.PageNavigation(page_forward='D+E')
+    assert song.patches[0] == song.patches[2]
+    assert recovered.patches['chorus']['navigation'] == {'page_back': 'A+B'}
 
 
 def library() -> songs.Library:

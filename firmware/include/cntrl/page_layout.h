@@ -14,7 +14,8 @@ struct PageLayout {
     unsigned regions() const { return records ? records[7] : 0; }
     bool left_wins() const { return records && records[8]; }
     unsigned initial_focus() const { return records ? records[9] : 0; }
-    unsigned length() const { return 12 + windows() * 32 + pages() * (35 + windows()) + regions() * 34; }
+    unsigned length() const { return 12 + windows() * 32 + pages() * (35 + windows()) + regions() * 34 + (records ? records[10] : 0); }
+    const uint8_t *navigation() const { return records && records[10] ? records + length() - 4 : nullptr; }
     const char *window_name(unsigned index) const { return reinterpret_cast<const char *>(records + 12 + index * 32); }
     const uint8_t *record(unsigned index) const { return records + 12 + windows() * 32 + index * (34 + windows()); }
     const char *name(unsigned index) const { return reinterpret_cast<const char *>(record(index)); }

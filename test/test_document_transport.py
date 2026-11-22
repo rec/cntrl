@@ -718,6 +718,8 @@ def test_source_sync_keeps_inherited_edits_local_and_checks_shared_defaults(
 def test_song_authoring_recovers_its_global_rig_and_original_sources(
     bundle_peer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from PIL import Image
+
     from cntrl.patch_chooser import global_config, songs, source_archive
 
     defaults = tmp_path / 'global.toml'
@@ -727,9 +729,11 @@ def test_song_authoring_recovers_its_global_rig_and_original_sources(
     )
     defaults.write_text(original_defaults)
     monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
-    source = tmp_path / 'songs.toml'
+    source = tmp_path / 'Live.toml'
+    artwork = tmp_path / 'live.png'
+    Image.new('RGB', (16, 8), 'green').save(artwork)
     original_source = (
-        '[[songs]]\nname="Live"\n'
+        '[[songs]]\nimage="live.png"\ndisplay_name="On stage"\n'
         'patches=[{instrument="piano",program=34,display_name="Chosen"}]\n'
     )
     source.write_text(original_source)
@@ -745,10 +749,13 @@ def test_song_authoring_recovers_its_global_rig_and_original_sources(
             data = songs.download(transport.SetupClient(connection))
         assert len(songs.source_snapshots(data)) == 1
         value = songs.decode(data)
+        assert value.songs[0].name == 'Live'
+        assert value.songs[0].display_name == 'On stage'
         assert value.songs[0].patches[0]['program'] == 34
         assert value.instruments['piano']['channel'] == 3
         output = tmp_path / 'recovered'
         songs.run(songs.Download(directory=output, port=Path(port)))
+        assert value.songs[0].image and (output / value.songs[0].image).is_file()
         manifest = next((output / 'sessions').glob('*/cntrl-session.toml'))
         recovered = source_archive.recovered_recipe(manifest.parent)
         root = data_files.expressions(recovered.document)[0].paths[0]
@@ -759,11 +766,14 @@ def test_song_authoring_recovers_its_global_rig_and_original_sources(
             data_files.expressions(recovered.target)[0].paths[0].is_relative_to(output)
         )
         source.write_text('original source unavailable')
+        artwork.write_bytes(b'original image unavailable')
         defaults.write_text('different computer defaults unavailable')
         songs.run(songs.Copy(document=root, port=Path(port), overwrite=True))
         with transport.SerialConnection(Path(port)) as connection:
             rebuilt = songs.decode(songs.download(transport.SetupClient(connection)))
         assert rebuilt.songs[0].patches[0]['program'] == 34
+        assert rebuilt.songs[0].image == value.songs[0].image
+        assert rebuilt.songs[0].name == 'Live'
         assert rebuilt.instruments['piano']['channel'] == 3
         assert defaults.read_text() == 'different computer defaults unavailable'
 

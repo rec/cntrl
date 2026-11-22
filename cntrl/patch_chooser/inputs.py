@@ -4,7 +4,7 @@ import struct
 
 from . import midi_endpoints
 from .binary_format import DocumentFormatError
-from .models import Setup, Target
+from .models import PageNavigation, Setup, Target
 
 
 def pack(target: Target) -> bytes:
@@ -62,6 +62,40 @@ def button_mask(pair: str | None, target: Target) -> int:
             'stock firmware exit buttons unavailable; specify two declared inputs'
         )
     return sum(1 << target.buttons.index(b) for b in buttons if b is not None)
+
+
+NAVIGATION = ('song_forward', 'song_backward', 'page_forward', 'page_back')
+
+
+def navigation_masks(
+    navigation: PageNavigation, target: Target, keys: tuple[str, ...] = NAVIGATION
+) -> bytes:
+    values = [getattr(navigation, k) for k in keys]
+    if not any(v is not None for v in values):
+        return b''
+    masks = []
+    for key, value in zip(keys, values, strict=True):
+        if value is None:
+            masks.append(0)
+            continue
+        ids = {v: k for k, v in target.button_labels.items()}
+        buttons = [
+            b.strip() if b.strip() in target.buttons else ids.get(b.strip(), b.strip())
+            for b in value.split('+')
+        ]
+        if (
+            not 1 <= len(buttons) <= 2
+            or len(set(buttons)) != len(buttons)
+            or any(b not in target.buttons[:8] for b in buttons)
+        ):
+            raise ValueError(
+                f'navigation.{key}: expected one or two distinct controller buttons'
+            )
+        mask = sum(1 << target.buttons.index(b) for b in buttons)
+        if mask in masks:
+            raise ValueError(f'navigation.{key}: duplicate combination')
+        masks.append(mask)
+    return bytes(masks)
 
 
 def unpack(data: bytes, offset: int) -> list[str]:

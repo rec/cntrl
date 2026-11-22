@@ -31,6 +31,13 @@ public:
         return true;
     }
     void refresh() { rendering_ = dirty_ = true; }
+    uint8_t page_chord(unsigned direction) const {
+        if (!open_ || !bindings_) return 0;
+        if (auto mask = bindings_.page_chord(direction)) return mask;
+        if (scope_source_ && scope_song_ != ~0u)
+            return ControlBindings{scope_source_->document.node(scope_song_) + 4}.page_chord(direction);
+        return 0;
+    }
     void bank_context(unsigned bank, unsigned page) { bank_ = int(bank); bank_page_ = int(page); dirty_ = true; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_bind_controls)
@@ -659,8 +666,9 @@ private:
         if (!rendering_) return;
         if (outputs_.song_boundary()) { dirty_ = false; return; }
         if (bindings_) {
+            if (outputs_.song_navigation_active()) { render_scene(); dirty_ = false; return; }
             Pane panes[3];
-            if (const uint8_t *view = count_ <= 6 && (!outputs_.song_navigation_active() || hardware_.input_count() <= 6) ? bindings_.view() : nullptr) {
+            if (const uint8_t *view = count_ <= 6 ? bindings_.view() : nullptr) {
                 for (auto &pane : panes) {
                     pane.three_bands = true;
                     pane.graphics.background = 0;
@@ -681,12 +689,8 @@ private:
                 document_.counter_text(status.text, sizeof(status.text), view[33] ? reinterpret_cast<const char *>(view + 33) : " ", hardware_.counters, bank_, bank_page_);
                 for (unsigned i = 0; i < count_; ++i) {
                     const auto &s = states_[i];
-                    bool navigation = outputs_.song_navigation_active();
-                    unsigned input = s.record[0];
-                    if (navigation && (input == hardware_.control_input(ControlRole::confirm) || input == hardware_.control_input(ControlRole::back))) continue;
                     const uint8_t *visual = s.visual;
-                    unsigned slot = navigation && input < 6 ? input : i;
-                    auto &line = panes[slot % 3].lines[slot < 3 ? 2 : 0];
+                    auto &line = panes[i % 3].lines[i < 3 ? 2 : 0];
                     line.graphics = styled_graphics(visual ? visual : view);
                     line.x = 4;
                     line.centered = view[32] & 1;
@@ -702,7 +706,6 @@ private:
                         s.document->counter_text(detail.text, sizeof(detail.text), visual ? reinterpret_cast<const char *>(visual + 32) : label, hardware_.counters);
                     }
                 }
-                navigation_captions(panes, view);
                 present(panes); dirty_ = false; return;
             }
             for (auto &pane : panes) {
@@ -714,7 +717,6 @@ private:
             std::snprintf(panes[1].lines[0].text, 64, "%s", bindings_.title());
             for (unsigned i = 0; i < count_; ++i) {
                 const auto &s = states_[i];
-                if (outputs_.song_navigation_active() && (s.record[0] == hardware_.control_input(ControlRole::confirm) || s.record[0] == hardware_.control_input(ControlRole::back))) continue;
                 auto &pane = panes[i % 3];
                 const unsigned row = 2 + i / 3;
                 const char *state = s.unknown ? ui::i18n::text(ui::i18n::Message::unknown_title) : s.executor.busy() || s.queued ? ui::i18n::text(ui::i18n::Message::pending) : s.record[1] ? (s.active ? ui::i18n::text(ui::i18n::Message::on) : ui::i18n::text(ui::i18n::Message::off)) : "";
@@ -724,7 +726,6 @@ private:
                 std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", input, label, state[0] ? " | " : "", state);
                 if (ui::i18n::translated_ui) pane.lines[row].graphics.font = 253;
             }
-            navigation_captions(panes);
             present(panes); dirty_ = false; return;
         }
         ui::Prompt prompt(hardware_);
@@ -755,36 +756,71 @@ private:
         present(panes);
         dirty_ = false;
     }
-    void navigation_captions(Pane *panes, const uint8_t *view = nullptr) {
-        if (!outputs_.song_navigation_active()) return;
-        for (unsigned i = 0; i < 2; ++i) {
-            unsigned input = hardware_.control_input(i ? ControlRole::confirm : ControlRole::back);
-            if (view && input >= 6) continue;
-            auto &line = view ? panes[input % 3].lines[input < 3 ? 2 : 0] : panes[2].lines[i];
-            line.graphics = view ? styled_graphics(view) : panes[2].graphics;
-            line.graphics.font = ui::localized_face; line.graphics.size = line.graphics.line_height = 16;
-            line.centered = bool(view);
-            const char *next = hardware_.control_label(ControlRole::back), *modifier = hardware_.control_label(ControlRole::confirm);
-            if (i) std::snprintf(line.text, sizeof(line.text), "%s+%s %s", modifier, next, ui::i18n::text(ui::i18n::Message::back));
-            else std::snprintf(line.text, sizeof(line.text), "%s %s", next, ui::i18n::text(ui::i18n::Message::next_action));
-            if (view && i) {
-                char menu[64]; ui::i18n::format(menu, sizeof(menu), ui::i18n::Message::hold_menu, modifier);
-                std::snprintf(line.text, sizeof(line.text), "%s+%s %s; %.40s", modifier, next, ui::i18n::text(ui::i18n::Message::back), menu);
-                line.wrap = true;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_render_scene)
+#endif
+    void render_scene() {
+        const unsigned windows = hardware_.display_count();
+        const auto *view = bindings_.view();
+        auto base = bindings_.style() ? styled_graphics(bindings_.style()) : document_.graphics(1);
+        if (!bindings_.style()) outputs_.song_style(base);
+        TextLine song, setlist;
+        Bitmap bitmap;
+        outputs_.scene_titles(song, bitmap, setlist);
+        const auto *navigation = hardware_.setup_navigation();
+        const unsigned columns = (hardware_.input_count() + 1) / 2;
+        for (unsigned w = 0; w < windows; ++w) {
+            Pane pane;
+            pane.three_bands = true; pane.graphics.pad = 0; pane.graphics.background = base.background;
+            auto &middle = pane.lines[1];
+            if (!w) {
+                std::snprintf(middle.text, sizeof(middle.text), "%s", bindings_.title());
+                if (windows == 1) {
+                    pane.split_middle = true; pane.bitmap = bitmap; pane.lines[3] = song;
+                }
+            } else if (w == 1) { middle = song; pane.bitmap = bitmap; }
+            else if (w == windows - 1) middle = setlist;
+            for (auto &line : pane.lines) { line.graphics = base; line.fit = line.centered = true; }
+            for (unsigned i = 0; i < count_; ++i) {
+                const auto &state = states_[i];
+                const unsigned input = state.record[0];
+                if (!columns || input >= hardware_.input_count() || input % columns != w) continue;
+                auto &line = pane.lines[input < columns ? 2 : 0];
+                if (state.visual) line.graphics = styled_graphics(state.visual);
+                line.centered = !view || (view[32] & 1);
+                char label[64];
+                state.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(state.record + 6), hardware_.counters);
+                if (view && (view[32] & 2)) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", hardware_.input_label(input), label);
+                else std::snprintf(line.text, sizeof(line.text), "%s", label);
             }
+            for (unsigned row = 0; row < 2 && w < columns; ++row) {
+                const unsigned input = w + row * columns;
+                if (input >= hardware_.input_count()) continue;
+                auto &line = pane.lines[row ? 0 : 2];
+                const auto back = hardware_.control_input(ControlRole::back), confirm = hardware_.control_input(ControlRole::confirm);
+                if (!navigation && !page_chord(0) && !page_chord(1) && input == confirm) {
+                    char menu[64]; ui::i18n::format(menu, sizeof(menu), ui::i18n::Message::hold_menu, hardware_.input_label(input));
+                    std::snprintf(line.text, sizeof(line.text), "%s+%s %s; %.40s", hardware_.input_label(input), hardware_.control_label(ControlRole::back), ui::i18n::text(ui::i18n::Message::back), menu);
+                    line.wrap = true;
+                } else {
+                    unsigned masks[4] = {back < 8 ? 1u << back : 0, 0, page_chord(0), page_chord(1)};
+                    if (navigation) for (unsigned i = 0; i < 4; ++i)
+                        if (navigation[i] && (i < 2 || !masks[i])) masks[i] = navigation[i];
+                    const ui::i18n::Message labels[] = {ui::i18n::Message::next_action, ui::i18n::Message::back, ui::i18n::Message::next_action, ui::i18n::Message::back};
+                    for (unsigned i = 0; i < 4; ++i) if (masks[i] == (1u << input)) {
+                        std::snprintf(line.text, sizeof(line.text), "%s %s", hardware_.input_label(input), ui::i18n::text(labels[i])); break;
+                    }
+                }
+            }
+            hardware_.show(w, pane);
         }
-        if (view) return;
-        auto &menu = panes[2].lines[3];
-        menu.graphics = panes[2].graphics;
-        menu.graphics.font = ui::localized_face; menu.graphics.size = menu.graphics.line_height = 8;
-        ui::i18n::format(menu.text, sizeof(menu.text), ui::i18n::Message::hold_menu, hardware_.control_label(ControlRole::confirm));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_present)
 #endif
     void present(Pane (&panes)[3]) {
         ScreenGraphics song;
-        if (bindings_ && (bindings_.data[67] == 2 || outputs_.song_style(song))) for (auto &pane : panes) for (auto &line : pane.lines) if (line.text[0]) line.fit = true;
+        if (bindings_ && ((bindings_.data[67] & 3) == 2 || outputs_.song_style(song))) for (auto &pane : panes) for (auto &line : pane.lines) if (line.text[0]) line.fit = true;
         if (page_ == ~0u) ui::present(hardware_, panes, 1);
         else for (unsigned i = 0; i < 3; ++i) { panes[i].page = page_; hardware_.show(i, panes[i]); }
     }

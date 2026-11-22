@@ -56,7 +56,16 @@ struct Rectangle {
     bool stippled = false;
 };
 
+struct BitmapSource {
+    virtual bool read_bitmap(uint32_t generation, unsigned offset, uint16_t *pixels, unsigned count) const = 0;
+};
+struct Bitmap {
+    const BitmapSource *source = nullptr;
+    uint32_t generation = 0, offset = 0;
+    uint16_t width = 0, height = 0;
+};
 struct Pane {
+    Bitmap bitmap;
     unsigned page = ~0u;
     bool performance = false;
     bool three_bands = false;
@@ -64,6 +73,7 @@ struct Pane {
     bool focused = false;
     int pending_patch = -1; // Document patch index, or -1 when no unsent patch is displayed.
     ScreenGraphics graphics;
+    bool split_middle = false;
     TextLine lines[max_lines];
     Circle circles[4];
     Rectangle rectangles[4];
@@ -87,6 +97,7 @@ struct Hardware : RelayDriver {
     virtual const char *input_label(unsigned) const { return ""; }
     virtual const char *input_id(unsigned index) const { return input_label(index); }
     virtual unsigned control_input(ControlRole) const { return ~0u; }
+    virtual const uint8_t *setup_navigation() const { return nullptr; }
     virtual midi::Outputs midi_outputs() const { return {}; }
     // Accept the complete message sequence, or accept none of it.
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;

@@ -1,0 +1,31 @@
+[instruments.keys]
+output = 'din'
+channel = 1
+
+[patches.verse]
+name = 'Verse'
+program = 1
+bindings = { A = 'soft' }
+
+[patches.chorus]
+name = 'Chorus'
+program = 2
+bindings = { A = 'loud' }
+
+[patches.soft]
+name = 'Soft'
+controller = 7
+value = 80
+
+[patches.loud]
+name = 'Loud'
+controller = 7
+value = 110
+
+[[songs]]
+name = 'First Light'
+patches = ['verse', 'chorus', 'verse']
+
+[[setlists]]
+name = 'Evening'
+songs = ['First Light']

@@ -10,7 +10,7 @@ class LayoutError(ValueError):
     """The authored page layout cannot be packed with the declared windows."""
 
 
-def pack(show: models.Setup, windows: list[str]) -> bytes:
+def pack(show: models.Setup, windows: list[str], navigation: bytes = b'') -> bytes:
     pages = show.pages
     regions = show.regions
     if not regions and pages:
@@ -72,12 +72,22 @@ def pack(show: models.Setup, windows: list[str]) -> bytes:
     return (
         b'CPAG'
         + bytes(
-            (len(pages), len(windows), 2, len(order), settings.left_wins, focus, 0, 0)
+            (
+                len(pages),
+                len(windows),
+                2,
+                len(order),
+                settings.left_wins,
+                focus,
+                len(navigation),
+                0,
+            )
         )
         + b''.join(encoded_name(n) for n in windows)
         + records
         + region_records
         + cycles
+        + navigation
     )
 
 
@@ -107,10 +117,10 @@ def section_end(data: bytes, offset: int) -> int:
     count, windows, version, regions, left_wins, focus, first, second = data[
         offset + 4 : offset + 12
     ]
-    end = offset + 12 + windows * 32 + count * (35 + windows) + regions * 34
+    end = offset + 12 + windows * 32 + count * (35 + windows) + regions * 34 + first
     if (
         version != 2
-        or first
+        or first not in (0, 4)
         or second
         or not windows
         or regions > count
@@ -351,7 +361,11 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             },
         )
     try:
-        encoded = pack(models.Setup.model_validate(result), windows)
+        encoded = pack(
+            models.Setup.model_validate(result),
+            windows,
+            data[end - 4 : end] if data[offset + 10] else b'',
+        )
     except (LayoutError, ValidationError) as error:
         raise DocumentFormatError(f'invalid page layout records: {error}') from error
     if encoded != canonical:

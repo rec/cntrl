@@ -37,6 +37,7 @@ from . import (
     models,
     resolved,
     setup_bundle,
+    song_artwork,
     source_archive,
     transport,
 )
@@ -49,8 +50,11 @@ class SongLibraryError(ValueError):
 
 
 class Song(models.BindingScope, frozen=True):
+    navigation: models.PageNavigation | None = None
     bindings: dict[str, object] = Field(default_factory=dict)
     name: str
+    display_name: str | None = None
+    image: str | None = None
     style: models.Style | None = None
     enter: (
         Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)] | None
@@ -125,6 +129,15 @@ class Library(models.BindingScope, frozen=True):
     songs: list[Song] = Field(default_factory=list)
     setlists: list[Setlist] = Field(default_factory=list)
     model_config = ConfigDict(extra='forbid')
+
+
+class New(BaseModel, frozen=True):
+    """Create a song TOML file with one definition per distinct scene."""
+
+    document: Annotated[Path, tyro.conf.Positional]
+    scenes: Annotated[list[str], Field(min_length=1)] = Field(
+        default_factory=lambda: ['Verse']
+    )
 
 
 class Copy(BaseModel, frozen=True):
@@ -270,9 +283,15 @@ def encode(
         port_modes = cast(dict[str, models.TrsMode], context['trs_ports'])
         auxiliary_switches = cast(dict[str, str], context['auxiliary_switches'])
         scopes = [
-            (2, s.name, s.model_dump()['bindings']) for s in library.songs if s.bindings
+            (
+                2,
+                s.name,
+                s.model_dump(include={'bindings', 'navigation'}, exclude_none=True),
+            )
+            for s in library.songs
+            if s.bindings or s.navigation
         ]
-        pending: list[object] = [context, *({'bindings': b} for _, _, b in scopes)]
+        pending: list[object] = [context, *(b for _, _, b in scopes)]
         while pending:
             value = pending.pop()
             if isinstance(value, dict):
@@ -432,6 +451,31 @@ def encode(
                 ]
             }
         ).pack()
+    if any(s.image or s.display_name for s in library.songs):
+        assert target is not None
+        directory = bytearray(struct.pack('<I', len(library.songs)))
+        pixels = bytearray()
+        start = 4 + song_artwork.ENTRY.size * len(library.songs)
+        for song in library.songs:
+            width = height = 0
+            bitmap = b''
+            if song.image:
+                root = authoring.paths[0].parent if authoring else Path.cwd()
+                width, height, bitmap = song_artwork.prepare(
+                    root / song.image, target, trace.files if trace else None
+                )
+            label = label_text(song.display_name) if song.display_name else bytes(64)
+            directory.extend(
+                song_artwork.ENTRY.pack(label, width, height, start + len(pixels))
+            )
+            pixels.extend(bitmap)
+        document = binary_format.unpack(data, binary_format.Kind.songs)
+        document.records.append(
+            binary_format.Record(
+                tag=binary_format.SONG_ARTWORK, data=bytes(directory + pixels)
+            )
+        )
+        data = document.pack()
     return data
 
 
@@ -480,8 +524,11 @@ def _decode(data: bytes) -> Library:
     _, song_headers, positions, sets, sources = _parse(data)
     context: dict[str, object] = {'instruments': {}, 'patches': {}}
     authored_styles: list[object] = []
+    artwork: list[tuple[str, str, bytes]] = []
     if data.startswith(binary_format.MAGIC):
         for record in binary_format.unpack(data, binary_format.Kind.songs).records:
+            if record.tag == binary_format.SONG_ARTWORK:
+                artwork = song_artwork.unpack(record.data)
             if record.tag == binary_format.SONG_FORMATTING:
                 preferences = tomlkit.parse(record.data.decode()).unwrap()
                 authored_styles = preferences.pop('authored_styles', [])
@@ -584,6 +631,15 @@ def _decode(data: bytes) -> Library:
             Song.model_validate(
                 {
                     'name': name,
+                    'navigation': resolved.patch(sources[0], binding).get('navigation')
+                    if binding != 0xFFFFFFFF
+                    else None,
+                    'display_name': artwork[index][0] or None
+                    if index < len(artwork)
+                    else None,
+                    'image': artwork[index][1] or None
+                    if index < len(artwork)
+                    else None,
                     'patches': patches,
                     'bindings': bindings,
                     **{
@@ -926,10 +982,30 @@ def upload(client: transport.SetupClient, data: bytes, overwrite: bool) -> None:
         raise transport.UsbReplyError('song library read-back mismatch')
 
 
-def run(command: Copy | Download) -> None:
+def run(command: New | Copy | Download) -> None:
     from . import cli
     from .setup_compiler import document_references
 
+    if isinstance(command, New):
+        name = command.document.stem
+        text(name, 64)
+        for scene in command.scenes:
+            text(scene, 64)
+        source = tomlkit.dumps(
+            {
+                'patches': {
+                    s: {'display_name': s, 'patches': [], 'bindings': {}}
+                    for s in command.scenes
+                },
+                'songs': [{'name': name, 'patches': command.scenes}],
+            }
+        )
+        try:
+            with command.document.open('x', encoding='utf-8') as file:
+                file.write(source)
+        except OSError as error:
+            raise SongLibraryError(f'{command.document}: {error}') from error
+        return
     if isinstance(command, Copy):
         trace = data_files.Trace()
         try:
@@ -1141,6 +1217,18 @@ def run(command: Copy | Download) -> None:
             files = (
                 cli.download_files(client, companion_names) if companion_names else {}
             )
+            if data.startswith(binary_format.MAGIC):
+                for record in binary_format.unpack(
+                    data, binary_format.Kind.songs
+                ).records:
+                    if record.tag == binary_format.SONG_ARTWORK:
+                        files.update(
+                            {
+                                Path(n): b
+                                for _, n, b in song_artwork.unpack(record.data)
+                                if n
+                            }
+                        )
             for source in _parse(data)[4]:
                 if (snapshot := source_archive.identifier(source)) is not None:
                     manifest, entries = source_archive.read(
@@ -1164,12 +1252,12 @@ def run(command: Copy | Download) -> None:
             for path in library.fonts.values():
                 if Path(path) not in files:
                     files[Path(path)] = client.download_font(int(Path(path).stem, 16))
-        text = tomlkit.dumps(library.model_dump(exclude_none=True)).encode()
-        if Path('songs.toml') in files and files[Path('songs.toml')] != text:
+        content = tomlkit.dumps(library.model_dump(exclude_none=True)).encode()
+        if Path('songs.toml') in files and files[Path('songs.toml')] != content:
             raise SongLibraryError(
                 'songs.toml: conflicts with a downloaded setup or MIDI file'
             )
-        files[Path('songs.toml')] = text
+        files[Path('songs.toml')] = content
         cli.publish_download(files, command.directory)
 
 
@@ -1186,6 +1274,18 @@ def _read_authoring[Document: BaseModel](
     except (OSError, UnicodeDecodeError, JSONDecodeError, ParseError) as error:
         raise SongLibraryError(f'{path}: {error}') from error
     try:
+        if model is Library and isinstance(data, dict):
+            entries = cast(dict[str, object], data).get('songs')
+            if (
+                isinstance(entries, list)
+                and len(entries) == 1
+                and isinstance(entries[0], dict)
+            ):
+                origin = next(
+                    (p for p, local in relocations.items() if local == path.resolve()),
+                    path,
+                )
+                cast(dict[str, object], entries[0]).setdefault('name', origin.stem)
         return model.model_validate(data)
     except ValidationError as error:
         raise compiler_errors.CompilationError(

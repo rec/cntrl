@@ -289,6 +289,10 @@ private:
             ui::i18n::format(panes[1].lines[3].text, 64, ui::i18n::Message::hold_menu, hardware_.control_label(Role::confirm));
         } else prompt.add(Role::back, mode_ == adding ? ui::i18n::text(ui::i18n::Message::done_action) : ui::i18n::text(ui::i18n::Message::back));
         text(2, 3, prompt.text());
+        if (const auto *nav = hardware_.setup_navigation(); mode_ == performance && nav) {
+            if (nav[0]) text(2, 3, prompt.clear().chord(nav[0], ui::i18n::text(ui::i18n::Message::next_action)).text());
+            if (nav[1]) text(2, 2, prompt.clear().chord(nav[1], ui::i18n::text(ui::i18n::Message::back)).text());
+        }
         const char *feedback = mode_ == naming && dropped_keys_
             ? ui::i18n::text(ui::i18n::Message::keyboard_input_dropped) : feedback_;
         if (*feedback) { text(0, 2, feedback); panes[0].lines[2].graphics.font = ui::localized_face; }

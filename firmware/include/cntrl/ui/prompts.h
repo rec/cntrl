@@ -30,6 +30,14 @@ public:
         char labels[64]; std::snprintf(labels, sizeof(labels), "%s/%s", a, b); append(labels, action, separator); return *this;
     }
     const char *text() const { return bytes_; }
+    Prompt &chord(uint8_t mask, const char *action) {
+        char buttons[64] = {};
+        for (unsigned i = 0; i < hardware_.input_count(); ++i) if (mask & (1u << i)) {
+            const auto used = std::strlen(buttons);
+            std::snprintf(buttons + used, sizeof(buttons) - used, "%s%s", used ? "+" : "", hardware_.input_label(i));
+        }
+        append(buttons, action, " "); return *this;
+    }
 private:
     const Hardware &hardware_;
     char bytes_[64] = {};

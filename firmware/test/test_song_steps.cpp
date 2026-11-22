@@ -17,6 +17,8 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     cntrl::Pane panes[3];
     std::string last_error;
     uint32_t now = 0;
+    unsigned windows = 3;
+    unsigned display_count() const override { return windows; }
     unsigned input_count() const override { return 6; }
     unsigned switch_capacity() const override { return 5; }
     const char *input_label(unsigned input) const override { static const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[input]; }
@@ -41,6 +43,7 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     bool shift_switch_editor(bool backwards) override { return switches.shift(backwards); }
     bool state(unsigned operation, uint32_t value) override { return app->state(operation, value, *this); }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
+    void scene_titles(cntrl::TextLine &song, cntrl::Bitmap &bitmap, cntrl::TextLine &setlist) const override { app->scene_titles(song, bitmap, setlist); }
     bool song_boundary() const override { return app && app->song_boundary(); }
     cntrl::midi::Bridge::Delivery prepare_leave(cntrl::PatchExecutor &invocation) override { return switches.prepare_leave(invocation); }
     cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &d, unsigned node, cntrl::PatchExecutor &invocation) override { return switches.bind_controls(d, node, invocation); }
@@ -155,8 +158,17 @@ int main(int argc, char **argv) {
         return 0;
     }
     next(); assert(songs.continuation().patch == 0 && board.sent.back().second == 1);
+    assert(!std::strcmp(board.panes[1].lines[1].text, "One"));
+    assert(!std::strcmp(board.panes[2].lines[1].text, "Set"));
     assert(!std::strcmp(board.panes[2].lines[0].text, "F next"));
     assert(!std::strcmp(board.panes[2].lines[2].text, "C+F back; Hold C: menu"));
+    const std::string scene = board.panes[0].lines[1].text;
+    for (auto windows : {1u, 2u, 3u}) {
+        board.windows = windows; board.switches.refresh(); sample(0);
+        assert(board.panes[0].lines[1].text == scene);
+        assert(board.panes[0].split_middle == (windows == 1));
+        assert(!std::strcmp(windows == 1 ? board.panes[0].lines[3].text : board.panes[1].lines[1].text, "One"));
+    }
     assert(board.entry.start(board.document, unsigned(board.document.named_patch("forward")))); sample(0);
     assert(songs.continuation().patch == 1 && board.sent.back().second == 2);
     assert(board.entry.start(board.document, unsigned(board.document.named_patch("backward")))); sample(0);

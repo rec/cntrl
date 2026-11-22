@@ -1,4 +1,4 @@
-"""Song styles reach the real song browser and full-pedal patch renderer."""
+"""Song styles, artwork and navigation reach the shared scene renderer."""
 
 import struct
 from pathlib import Path
@@ -22,6 +22,12 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         'regions': {'main': {'pages': ['menu', 'patches']}},
         'patch_cycles': {'Sounds': [{'output': 'din', 'channel': 1, 'program': 99}]},
         'use_animations': False,
+        'navigation': {
+            'song_forward': 'f',
+            'song_backward': 'c',
+            'page_forward': 'b+e',
+            'page_back': 'a+d',
+        },
     }
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'
@@ -41,12 +47,17 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         },
         'binding_view': {'status': 'Ready'},
     }
+    artwork = tmp_path / 'light.png'
+    Image.new('RGB', (160, 43), 'red').save(artwork)
     library = songs.Library.model_validate(
         {
             'patches': {
                 'scene': scene,
                 'override': scene
-                | {'style': {'foreground_color': 'red', 'font_name': 'CaveatBold'}},
+                | {
+                    'style': {'foreground_color': 'red', 'font_name': 'CaveatBold'},
+                    'navigation': {'page_forward': 'a+e'},
+                },
                 'ordinary': {
                     'bindings': scene['bindings'],
                     'style': {'foreground_color': 'red'},
@@ -55,6 +66,9 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
             'songs': [
                 {
                     'name': 'Our song',
+                    'display_name': 'Our show',
+                    'image': str(artwork),
+                    'navigation': {'page_forward': 'd+e'},
                     'enter': {'output': 'din', 'channel': 1, 'program': 11},
                     'exit': {'output': 'din', 'channel': 1, 'program': 12},
                     'patches': ['scene', 'override', 'ordinary'],
@@ -127,10 +141,34 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         session.advance(1000000)
         assert not [m for m in session.messages if m.kind in ('midi', 'error')]
         snapshot(0)
-        press('f')  # First song step installs the full-pedal patch.
+        press('f')  # First song step installs the scene.
         assert [m.data for m in session.messages if m.kind == 'midi'] == [b'\xc0\x0a']
         snapshot(1)
         first = dict(session.frames)
+        assert first['lcd-2'][(48 * 160 + 8) * 2 :][:2] == b'\xf8\x00'
+
+        def chord(a: str, b: str) -> None:
+            session.button(a, True)
+            session.advance(session.time_us + 60000)
+            press(b)
+            session.button(a, False)
+            session.advance(session.time_us + 120000)
+
+        count = len([m for m in session.messages if m.kind == 'midi'])
+        chord('d', 'e')
+        assert session.frames != first
+        chord('a', 'd')
+        assert dict(session.frames) == first
+        press('f')
+        assert session.frames != first
+        second = dict(session.frames)
+        chord('a', 'e')
+        assert session.frames != second
+        chord('a', 'd')
+        assert dict(session.frames) == second
+        press('c')
+        assert dict(session.frames) == first
+        assert len([m for m in session.messages if m.kind == 'midi']) == count
         press('a')
         assert any(m.kind == 'midi' and m.data[:1] == b'\xc0' for m in session.messages)
         press('f')  # Explicit patch foreground overrides the song foreground.
@@ -159,7 +197,7 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         snapshot(5)
         midi = [m.data for m in session.messages if m.kind == 'midi']
         assert len(midi) == midi_count + 1 and midi[-1] == b'\xc0\x62'
-        press('f')  # Cycle to Menu.
+        chord('b', 'e')  # Use the setup's page-forward assignment to open Menu.
         press('c')
         press('b')
         press('c')  # Songs and setlists.

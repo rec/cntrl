@@ -241,6 +241,8 @@ public:
     bool configuration_locked() const override { return switches && switches->open(); }
     bool song_transfer_busy() const override { return false; }
     bool switch_editor_open() const override { return switches && switches->open(); }
+    uint8_t scene_page_chord(unsigned i) const override { return switches ? switches->page_chord(i) : 0; }
+    void refresh_switches() override { if (switches && switches->open()) switches->refresh(); }
     void open_switch_editor(const Document &d,uint64_t held_inputs) override { switches->enter(d,uint32_t(held_inputs)); }
     bool shift_switch_editor(bool reverse) override { return switches->shift(reverse); }
     void display_brightness(uint8_t) {}
@@ -255,6 +257,8 @@ public:
     ExpressionPedals &expression_controls() { return *expression; }
     bool expression_available(unsigned port) const override { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
+    void scene_titles(TextLine &song, Bitmap &bitmap, TextLine &setlist) const override { app->scene_titles(song, bitmap, setlist); }
+    const uint8_t *setup_navigation() const override { return app->layout.navigation(); }
     bool song_boundary() const override { return app && app->song_boundary(); }
     bool song_style(ScreenGraphics &style) const override { return app && app->song_style(style); }
     bool looper_storage_ready() const { return true; }

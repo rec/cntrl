@@ -179,15 +179,13 @@ def compile_show(
             named[key] = index
     scopes = list(binding_scopes or [])
     if show.bindings:
-        scopes.insert(0, (0, '', show.bindings))
+        scopes.insert(0, (0, '', {'bindings': show.bindings}))
     for kind, name, bindings in scopes:
         if kind not in (0, 2) or len(name.encode()) >= 64:
             errors.append('binding scope names must contain fewer than 64 bytes')
             continue
         path = f'binding_scopes.{kind}.{name}'
-        child = compiler.parse(
-            {'bindings': bindings, 'inherits': 'none'}, path, name or 'Global'
-        )
+        child = compiler.parse({**bindings, 'inherits': 'none'}, path, name or 'Global')
         if child is not None:
             marker = len(compiler.nodes)
             compiler.nodes.append(
@@ -477,7 +475,9 @@ def compile_show(
         looper_settings = looper.pack(show, target)
         arpeggiator_settings = arpeggiator.pack(show, target)
         page_layout = layout.pack(
-            show, [target.compiled_display_ids.get(d.id, d.id) for d in target.displays]
+            show,
+            [target.compiled_display_ids.get(d.id, d.id) for d in target.displays],
+            inputs.navigation_masks(show.navigation, target),
         )
         banked_pages = banked.pack(show, named, compiler.nodes)
         relay_settings = relay_outputs.pack(show, target)

@@ -95,7 +95,7 @@ struct SongResolver {
 
 // Three committed generations permit an atomic edit or undo. Slot 3 is an
 // uncommitted streaming import, never selected at boot. No collection is in RAM.
-class Songs {
+class Songs : public BitmapSource {
 public:
 #ifdef CNTRL_NOINLINE
     CNTRL_NOINLINE
@@ -196,6 +196,7 @@ public:
         if (!std::strcmp(song_cache_.name, name)) return &song_cache_;
         for (unsigned i = 0; i < counts_.songs; ++i) {
             if (!song_at(i, song_cache_)) return nullptr;
+            song_cache_index_ = i;
             if (!std::strcmp(song_cache_.name, name)) return &song_cache_;
         }
         return nullptr;
@@ -440,6 +441,27 @@ public:
     }
     bool invalid() const { return invalid_; }
     const char *current_name() const { return current_song_; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_presentation)
+#endif
+    void presentation(TextLine &line, Bitmap &bitmap) const {
+        std::snprintf(line.text, sizeof(line.text), "%s", current_song_);
+        const auto &view = slots_[active_].view;
+        uint8_t entry[72], header[4];
+        if (!view.artwork_offset || !song(current_song_) || !read_payload(view.artwork_offset, header, 4)) return;
+        const unsigned count = binary::read32(header);
+        if (song_cache_index_ >= count || !read_payload(view.artwork_offset + 4 + 72 * song_cache_index_, entry, sizeof(entry))) return;
+        const unsigned offset = binary::read32(entry + 68);
+        const uint16_t width = binary::read16(entry + 64), height = binary::read16(entry + 66);
+        if (width && height && offset >= 4 + 72 * count && offset <= view.artwork_length
+            && uint64_t(width) * height * 2 <= view.artwork_length - offset)
+            bitmap = {this, generation_, view.artwork_offset + offset, width, height};
+        if ((entry[0] || bitmap.source) && std::memchr(entry, 0, 64))
+            std::memcpy(line.text, entry, 64);
+    }
+    bool read_bitmap(uint32_t generation, unsigned offset, uint16_t *pixels, unsigned count) const override {
+        return generation == generation_ && read_payload(offset, reinterpret_cast<uint8_t *>(pixels), count * 2);
+    }
     bool removed() const { return removed_; }
     unsigned length() const { return slots_[active_].length; }
     uint32_t crc() const { return crc_; }
@@ -640,6 +662,7 @@ private:
     };
     SongCounts counts_;
     mutable Song song_cache_;
+    mutable unsigned song_cache_index_ = 0;
     mutable Setlist set_cache_;
     mutable unsigned set_offset_ = 0;
     uint32_t generation_ = 0, crc_ = checksum(reinterpret_cast<const uint8_t *>(&counts_), sizeof(counts_));

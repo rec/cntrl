@@ -43,10 +43,45 @@ when the entry operations complete.
 Pressing B selects `chorus`, replacing the map. Pressing A on `chorus` selects
 `verse`. Calling `boost`, which has no bindings, sends its MIDI while keeping
 the current map. E advances through the current song's patches, then to the
-next song in the selected setlist. During set performance, F always selects the
-next step on release; C+F selects the previous step in either press order. C is
-the modifier and has no standalone action. These controls take precedence over
-authored bindings and work regardless of `inherits`.
+next song in the selected setlist. With the default MC controls, release F
+to advance or press C+F to go back.
+
+## Create a song from scenes
+
+Run `cntrl songs new "First Light.toml" --scenes Verse Chorus Verse`.
+This creates a song with three steps and two editable scene definitions.
+In each definition, put the entry actions in `patches` and assign buttons in
+`bindings`. An empty action list lets you change controls without sending MIDI.
+The [worked song library](../examples/patch-chooser/scenes.toml) gives Verse
+and Chorus different sounds and different actions for the same button.
+
+On a three-window controller the middle bands show the scene, song and
+active setlist from left to right. The upper and lower bands label the buttons.
+Two windows show the scene and song. A single window stacks them in its middle
+band. An optional `image` in the song table is relative to the song file.
+CNTRL fits it to the target on the computer. Add `display_name` to draw text
+over the image, or use it alone for a shorter title. Without either field the
+song name appears. A single-song file can omit the name and use its filename
+stem. Setlists refer to the song name.
+
+This setup uses F and C for song navigation and two button combinations for
+page navigation.
+
+```toml
+[navigation]
+song_forward = 'F'
+song_backward = 'C'
+page_forward = 'D+E'
+page_back = 'A+D'
+```
+
+Press F or C directly on a scene to move one step forward or back with this
+setup. These buttons take priority over any song or scene binding. Page
+forward and back cycle through
+the setup's utility pages. The empty page shows the scene. To change a page
+combination for a song or a single scene, add a `navigation` table to that
+song or patch, such as `navigation = {page_forward = 'B+E'}`. The scene's
+setting takes precedence, followed by the song's and then the setup's.
 
 ## Binding scopes and inheritance
 
@@ -71,7 +106,7 @@ Every patch has an `inherits` setting:
 | `expression` | Expression assignments only; the default |
 | `both` | Switch and expression assignments |
 
-The patch's own bindings override the inherited assignments. A full-pedal patch
+The patch's own bindings override the inherited assignments. A scene
 therefore leaves unused switches inactive by default, while retaining the song's
 expression assignments. Inheritance resolves enclosing scopes, not the previous
 patch. Derivation with `parent` still resolves authored patch fields separately.

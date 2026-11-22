@@ -94,9 +94,9 @@ def unpack(data: bytes, kind: Kind) -> Document:
                 or int.from_bytes(data[cursor : cursor + size], 'little') & (1 << 27)
             ):
                 raise DocumentFormatError('invalid device-global setting overrides')
-        elif tag == SONG_FORMATTING and kind == Kind.songs:
-            if flags or any(r.tag == SONG_FORMATTING for r in records):
-                raise DocumentFormatError('invalid song formatting preferences')
+        elif tag in (SONG_FORMATTING, SONG_ARTWORK) and kind == Kind.songs:
+            if flags or any(r.tag == tag for r in records):
+                raise DocumentFormatError('invalid song presentation record')
         elif flags & REQUIRED:
             raise DocumentFormatError(f'unsupported required persistent record {tag}')
         records.append(
@@ -154,7 +154,7 @@ def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
             kind == Kind.setup
             and r.tag in (SOURCE, SETTING_OVERRIDES)
             or kind == Kind.songs
-            and r.tag == SONG_FORMATTING
+            and r.tag in (SONG_FORMATTING, SONG_ARTWORK)
         )
         for r in unpack(data, kind).records[1:]
     )
@@ -186,6 +186,7 @@ CORE = 1
 SOURCE = 2
 SETTING_OVERRIDES = 3
 SONG_FORMATTING = 4
+SONG_ARTWORK = 5
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096

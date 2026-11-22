@@ -5,6 +5,7 @@ import ntpath
 import posixpath
 from hashlib import sha256
 from pathlib import Path
+from typing import cast
 
 import tomlkit
 from pydantic import ValidationError
@@ -90,6 +91,12 @@ def normalize_references(
         )
         return str(source_reference(origin, value, relocations))
 
+    if isinstance(songs := document.get('songs'), list):
+        for i, entry in enumerate(songs):
+            if isinstance(entry, dict):
+                song = cast(dict[str, object], entry)
+                if isinstance(image := song.get('image'), str):
+                    song['image'] = reference(image, ('songs', i, 'image'))
     for field in ('fonts', 'font_sources'):
         if isinstance(fonts := document.get(field), dict):
             for n, f in fonts.items():

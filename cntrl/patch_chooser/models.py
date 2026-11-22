@@ -192,7 +192,15 @@ class BindingScope(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class PageNavigation(BaseModel, frozen=True):
+    page_forward: str | None = None
+    page_back: str | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class Presentation(BindingScope, frozen=True):
+    navigation: PageNavigation | None = None
     pickup: Annotated[
         Annotated[bool, Field(strict=True)] | None, BeforeValidator(parse_pickup)
     ] = None
@@ -864,7 +872,9 @@ class TargetPulse(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class NavigationSettings(BaseModel, frozen=True):
+class NavigationSettings(PageNavigation, frozen=True):
+    song_forward: str | None = None
+    song_backward: str | None = None
     hold_delay: Annotated[
         float,
         Field(strict=True, ge=0.001, le=65.535),

@@ -73,6 +73,10 @@ maximum = 128
 
 [navigation]
 
+page_forward = "sample"
+page_back = "sample"
+song_forward = "sample"
+song_backward = "sample"
 hold_delay = 1.5
 repeat_interval = 1.0
 

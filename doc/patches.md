@@ -66,6 +66,11 @@ random generator or new firmware record format.
 
 ## Automatic song styles
 
+To start a song with reusable scenes, run
+`cntrl songs new "First Light.toml" --scenes Verse Chorus Verse`.
+Put each scene's entry actions and button bindings in its named patch.
+See [Create a song from scenes](control-bindings.md#create-a-song-from-scenes).
+
 Song libraries also accept `fill_in_styles`, `seed` and `background_color`.
 The defaults match setups. The same cycle formatter assigns missing song
 foregrounds and font families, using the controller's embedded fonts. Authored

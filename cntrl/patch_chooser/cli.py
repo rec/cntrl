@@ -128,7 +128,8 @@ class SetupCLI(BaseModel, frozen=True):
 
 class Songs(BaseModel, frozen=True):
     command: (
-        Annotated[songs.Copy, tyro.conf.subcommand(name='copy')]
+        Annotated[songs.New, tyro.conf.subcommand(name='new')]
+        | Annotated[songs.Copy, tyro.conf.subcommand(name='copy')]
         | Annotated[songs.Download, tyro.conf.subcommand(name='download')]
     )
 

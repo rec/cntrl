@@ -187,6 +187,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_show)
 #endif
     void show(unsigned pane, const cntrl::Pane &content) {
+        if (application_.utility_visible()) return;
         if (content.page < application_.layout.pages()) {
             const unsigned r = application_.layout.page_region(content.page);
             const auto &region = application_.allocation.region(r);
@@ -342,6 +343,36 @@ public:
 #endif
     void browse_page(bool reverse) {
         if (!documents_.document().valid()) return;
+        if (application_.layout.navigation() || application_.song_navigation_active() || application_.feature_open(platform_) || application_.utility_visible()) {
+            const auto &layout = application_.layout;
+            const unsigned count = layout.pages();
+            unsigned index = application_.utility_visible() ? application_.utility_page : count;
+            for (unsigned i = 0; i <= count; ++i) {
+                index = (index + (reverse ? count : 1)) % (count + 1);
+                if (index == count) {
+                    if (!application_.utility_visible()) return;
+                    cancel_focus(); leave_page();
+                    application_.utility_page = PageLayout::max_pages;
+                    load_view(application_.allocation.selected()); pages_.revisit();
+                    application_.refresh(platform_); platform_.refresh_switches();
+                    application_.menu.refresh(); application_.setups.refresh(); application_.song_ui.refresh();
+                    return;
+                }
+                const auto type = layout.page(index)[0];
+                if (type == 10 || type == PageLayout::patch_chooser || type == PageLayout::banked) continue;
+#if !CNTRL_CABLE_TEST
+                if (type == unsigned(Pages::Page::cable)) continue;
+#endif
+#if !CNTRL_PANIC
+                if (type == unsigned(Pages::Page::panic)) continue;
+#endif
+                cancel_focus(); leave_page(); save_view();
+                application_.utility_page = index;
+                load_view(index); enter_page(); pages_.revisit(); save_view();
+                platform_.blank_performance();
+                return;
+            }
+        }
         auto previous = pages_.save_view();
         pages_.browse(reverse);
         unsigned selected = pages_.index();
@@ -477,7 +508,7 @@ public:
         if (application_.pending_region < application_.layout.regions()) {
             focus_region(application_.pending_region); application_.pending_region = PageLayout::max_pages;
         }
-        if (management_visible_ && !application_.feature_open(platform_)) {
+        if (management_visible_ && !application_.utility_visible() && !application_.feature_open(platform_)) {
             management_visible_ = false; enter_page(); pages_.revisit(); save_view();
         }
         if (platform_.display_priority_due()) return;
@@ -501,8 +532,8 @@ public:
 #endif
         save_view();
         if (!splash_visible_ && !application_.feature_open(platform_) && documents_.document().valid()) {
-          for (unsigned r = 0; r < application_.layout.regions(); ++r) {
-            const auto &region = application_.allocation.region(r);
+          for (unsigned r = 0; r < (application_.utility_visible() ? 1u : application_.layout.regions()); ++r) {
+            const auto region = application_.utility_visible() ? PageAllocation::Region{application_.utility_page, 0, std::min(display_.count(), PageLayout::maximum_windows(application_.layout.page(application_.utility_page)[0], display_.count()))} : application_.allocation.region(r);
             if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_chooser || application_.layout.page(region.selected)[0] == PageLayout::banked) continue;
             load_view(region.selected);
             if (!pages_.due(now)) { save_view(); continue; }
@@ -539,7 +570,7 @@ public:
             save_view();
           }
         }
-        if (application_.layout.regions()) load_view(application_.allocation.selected());
+        if (application_.layout.regions()) load_view(application_.utility_visible() ? application_.utility_page : application_.allocation.selected());
         if (!splash_visible_) draw();
     }
     void apply_brightness(uint32_t now) {

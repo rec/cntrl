@@ -596,6 +596,16 @@ def _decode(data: bytes) -> dict[str, object]:
     if data[cursor : cursor + 4] == b'CSHF':
         cursor += 4 + 5 * SHIFTED_ACTIONS.size
     result.update(layout.unpack(data, cursor))
+    nav_end = layout.section_end(data, cursor)
+    nav_bytes = data[nav_end - 4 : nav_end] if data[cursor + 10] else b''
+    if nav_bytes:
+        result['navigation'].update(
+            {
+                k: '+'.join(n for i, n in enumerate(labels) if mask & (1 << i))
+                for k, mask in zip(inputs.NAVIGATION, nav_bytes, strict=True)
+                if mask
+            }
+        )
     # Retained source metadata predates the wire upgrade. Reuse its concise
     # page authoring only when compiling it describes these exact page bytes.
     # Other source metadata remains untouched, including node IDs and assets.
@@ -611,7 +621,7 @@ def _decode(data: bytes) -> dict[str, object]:
                     if k in source or k in result
                 }
             )
-            authored_pages_wire = layout.pack(authored, windows)
+            authored_pages_wire = layout.pack(authored, windows, nav_bytes)
         except (ValidationError, layout.LayoutError):
             same_pages = False
         else:
@@ -1094,6 +1104,15 @@ def _patch(
             ],
         )
     elif kind == 10:
+        if data[cursor + 67] & 4:
+            end = cursor + struct.unpack_from('<H', data, cursor - 2)[0]
+            value['navigation'] = {
+                k: '+'.join(n for i, n in enumerate(labels) if mask & (1 << i))
+                for k, mask in zip(
+                    inputs.NAVIGATION[2:], data[end - 2 : end], strict=True
+                )
+                if mask
+            }
         if data[cursor - 3] != 2:
             value['inherits'] = list(models.Inherits)[data[cursor - 3]].value
         entry = _patch(

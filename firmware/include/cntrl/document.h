@@ -170,7 +170,7 @@ public:
             || bytes[names + 6] != 2 || bytes[names + 7] > bytes[names + 4]
             || bool(bytes[names + 7]) != bool(bytes[names + 4]) || bytes[names + 8] > 1
             || (bytes[names + 7] ? bytes[names + 9] >= bytes[names + 7] : bytes[names + 9] != 0)
-            || bytes[names + 10] || bytes[names + 11]) return false;
+            || (bytes[names + 10] && bytes[names + 10] != 4) || bytes[names + 11]) return false;
         const PageLayout arrangement{bytes + layout};
         unsigned page_count = arrangement.pages(), windows = arrangement.windows();
         names += arrangement.length();
@@ -965,11 +965,12 @@ private:
                 } else for (unsigned j = 1; j < 97; ++j) if (p[j]) return false;
                 break;
             case 10: {
+                const unsigned style = length >= 220 ? p[67] & 3 : 0;
                 if (!hardware.switch_capacity() || n[1] > 3 || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
-                    || p[66] > 8 || p[66] > input_count || p[67] > 2
-                    || length != 220u + binding_record_size * p[66] + (p[67] == 1 ? binding_view_header_size + binding_view_record_size * p[66] : p[67] == 2 ? 16 : 0)) return false;
-                if (p[67] == 2 && !graphics_valid(p + 220 + binding_record_size * p[66], hardware, true)) return false;
-                if (p[67] == 1) {
+                    || p[66] > 8 || p[66] > input_count || p[67] > 6 || style > 2
+                    || length != 220u + binding_record_size * p[66] + (style == 1 ? binding_view_header_size + binding_view_record_size * p[66] : style == 2 ? 16 : 0) + ((p[67] & 4) ? 2 : 0)) return false;
+                if (style == 2 && !graphics_valid(p + 220 + binding_record_size * p[66], hardware, true)) return false;
+                if (style == 1) {
                     const uint8_t *v = p + 220 + binding_record_size * p[66];
                     if (p[66] > 6 || v[32] > 3 || !label_valid(v + 33, 64)
                         || !graphics_valid(v, hardware, true) || !graphics_valid(v + 16, hardware, true)) return false;

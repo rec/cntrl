@@ -13,7 +13,7 @@ namespace cntrl::ui {
 class Renderer {
 public:
 #if UINTPTR_MAX == UINT32_MAX
-    static_assert(sizeof(Pane) == 1800, "Update display.estimate_frame_ram for changed transition snapshots");
+    static_assert(sizeof(Pane) == 1816, "Update display.estimate_frame_ram for changed transition snapshots");
 #endif
     Renderer(Display &display, const Fonts &fonts, uint16_t *work, unsigned work_capacity)
         : display_(display), fonts_(fonts), raster_(fonts, work), screens_(display.count()) {
@@ -266,10 +266,12 @@ private:
     unsigned column_ = 0, field_ = 0, letter_ = 0, progress_ = 0, duration_ = 0, animation_screen_ = 0, animation_column_ = 0, dim_column_ = 0;
     uint32_t started_ = 0;
     uint8_t brightness_ = 128, requested_brightness_ = 128;
+    unsigned bitmap_row_ = 0;
     void damage(Screen &screen, const Pane &content) {
         const auto &before = screen.requested;
-        bool full = before.three_bands != content.three_bands || before.heading_band != content.heading_band || before.focused != content.focused
-            || std::memcmp(&before.graphics, &content.graphics, sizeof(content.graphics));
+        bool full = before.three_bands != content.three_bands || before.split_middle != content.split_middle || before.heading_band != content.heading_band || before.focused != content.focused
+            || before.bitmap.source != content.bitmap.source || before.bitmap.offset != content.bitmap.offset
+            || before.bitmap.generation != content.bitmap.generation || std::memcmp(&before.graphics, &content.graphics, sizeof(content.graphics));
         // Compare values, not TextLine/Rectangle padding, when deciding damage.
         for (unsigned i = 0; i < max_lines && !full; ++i) {
             const auto &a = before.lines[i], &b = content.lines[i];
@@ -317,6 +319,7 @@ private:
         if (painting_region_.empty()) { drawing_ = -1; return; }
         column_ = unsigned(painting_region_.left); field_ = letter_ = 0;
         raster_.configure(v, painting_.graphics, painting_region_); backgrounds();
+        bitmap_row_ = 0;
 #ifdef CNTRL_EMULATOR
         if (!translation_regions_.empty()) {
             auto &regions = translation_regions_[screen];
@@ -378,7 +381,7 @@ private:
             const unsigned face = line.graphics.font, asset = face == localized_face ? 0 : line.graphics.asset;
             unsigned maximum = std::min(96u, unsigned(line.graphics.size));
             if (line.fit) for (unsigned size = 8; size <= 96; ++size) if (fonts_.supports(face, size, asset)) { maximum = std::max(maximum, size); break; }
-            const unsigned height = pane.three_bands ? viewport.height / 3
+            const unsigned height = pane.three_bands ? band_edge(pane, index, viewport.height, true) - band_edge(pane, index, viewport.height, false)
                 : line.y < 0 ? available_height / std::max(1u, count) : line.graphics.line_height;
             const int left = line.centered ? int(pad) : std::max(int(pad), int(line.x));
             const int width = std::max(0, int(viewport.width) - int(pad) - left);
@@ -431,6 +434,22 @@ private:
     CNTRL_FLASH_ROUTINE(renderer_paint_step)
 #endif
     void paint_step() {
+        const auto &bitmap = painting_.bitmap;
+        const auto v = screens_[unsigned(drawing_)].viewport;
+        const unsigned top = painting_.split_middle ? v.height / 2 : v.height / 3;
+        if (bitmap.source && bitmap.width == v.width && bitmap.height == v.height * 2 / 3 - top && bitmap_row_ < bitmap.height) {
+            const unsigned row = bitmap_row_++;
+            bitmap.source->read_bitmap(bitmap.generation, bitmap.offset + row * bitmap.width * 2,
+                                       raster_.pixels() + (top + row) * v.width, bitmap.width);
+            const unsigned field = painting_.split_middle ? 3 : 1;
+            const auto &caption = painting_.lines[field];
+            if (bitmap_row_ == bitmap.height && caption.text[0]) {
+                const auto bounds = fonts_.bounds(caption.graphics.font, caption.graphics.size, caption.graphics.asset, caption.text);
+                raster_.rectangle((int(v.width) - bounds.width) / 2 - 1, text_y(field) + bounds.top,
+                                  bounds.width + 2, bounds.height, caption.graphics.background);
+            }
+            return;
+        }
         const auto &line = painting_.lines[field_];
         const int y = text_y(field_);
         if ((letter_ || raster_.intersects(line, y)) && raster_.letter(line, letter_, y)) ++letter_;
@@ -493,12 +512,19 @@ private:
         for (unsigned y = 0; y < screen.viewport.height; ++y) encode(y, dim_pixel(brightness_screen_, cache_[screen.offset + y * screen.viewport.width + dim_column_]));
         if (submit_column(brightness_screen_, dim_column_, screen.viewport.height)) dim_column_ = (dim_column_ + 1) % screen.viewport.width;
     }
+    static unsigned band_edge(const Pane &pane, unsigned field, unsigned height, bool end) {
+        if (pane.split_middle && (field == 1 || field == 3)) {
+            if (field == 1) return end ? height / 2 : height / 3;
+            return end ? 2 * height / 3 : height / 2;
+        }
+        return (field + unsigned(end)) * height / 3;
+    }
     int text_y(unsigned field) const {
         const auto &line = painting_.lines[field];
         if (line.y >= 0) return line.y + line.graphics.top;
         const unsigned height = screens_[unsigned(drawing_)].viewport.height;
         if (painting_.three_bands) {
-            const unsigned start = field * height / 3, end = (field + 1) * height / 3, used = raster_.rows(line) * line.graphics.line_height;
+            const unsigned start = band_edge(painting_, field, height, false), end = band_edge(painting_, field, height, true), used = raster_.rows(line) * line.graphics.line_height;
             return int(start + (used < end - start ? (end - start - used) / 2 : 0) + line.graphics.top);
         }
         unsigned count = 0, used = 0, preceding = 0, index = 0;
@@ -527,7 +553,7 @@ private:
                 continue;
             }
             unsigned end = v.height > painting_.graphics.pad ? v.height - painting_.graphics.pad : 0;
-            if (painting_.three_bands) { start = i * v.height / 3; end = (i + 1) * v.height / 3; }
+            if (painting_.three_bands) { start = band_edge(painting_, i, v.height, false); end = band_edge(painting_, i, v.height, true); }
             else for (unsigned j = i + 1; j < max_lines; ++j) if (painting_.lines[j].text[0]) {
                 const int bottom = text_y(i) - line.graphics.top + raster_.rows(line) * line.graphics.line_height;
                 end = unsigned(std::max(0, (bottom + text_y(j) - painting_.lines[j].graphics.top) / 2)); break;

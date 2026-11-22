@@ -20,6 +20,8 @@ struct ApplicationServices {
     virtual bool output_idle() const = 0;
     virtual bool song_transfer_busy() const = 0;
     virtual bool switch_editor_open() const = 0;
+    virtual uint8_t scene_page_chord(unsigned) const { return 0; }
+    virtual void refresh_switches() {}
     virtual void open_switch_editor(const Document &, uint64_t held) = 0;
     virtual bool shift_switch_editor(bool backwards) = 0;
 };
@@ -118,6 +120,10 @@ public:
         return songs_.performing() && !menu.open() && !setups.open() && (song_ui.performing() || binding_return_songs);
     }
     bool song_boundary() const { return song_navigation_active() && songs_.boundary(); }
+    void scene_titles(TextLine &song, Bitmap &bitmap, TextLine &setlist) const {
+        songs_.presentation(song, bitmap);
+        std::snprintf(setlist.text, sizeof(setlist.text), "%s", songs_.active_set());
+    }
     void startup() {
         const char *name = documents_.startup_set();
         if (!name[0]) return;
@@ -148,9 +154,11 @@ public:
         songs_.stop_execution(); pending_song_step_ = 0; pending_operation = 0;
         menu.leave(); song_ui.leave();
         pending_page = pending_region = PageLayout::max_pages;
+        utility_page = PageLayout::max_pages;
         binding_return_songs = false; controls_locked = true;
     }
-    bool feature_open(const ApplicationServices &services) const { return menu.open() || setups.open() || song_ui.open() || services.switch_editor_open(); }
+    bool utility_visible() const { return utility_page < layout.pages(); }
+    bool feature_open(const ApplicationServices &services) const { return !utility_visible() && (menu.open() || setups.open() || song_ui.open() || services.switch_editor_open()); }
     void bindings_enter() {
         binding_return_songs = binding_return_songs || song_ui.open();
         controller().cancel_gesture(); menu.leave(); song_ui.leave();
@@ -268,6 +276,7 @@ public:
             if (!menu.open()) return false;
             if (menu.button(5, true) == -2) { documents_.redraw(); controls_locked = true; } return true;
         case Operation::menu_open:
+            utility_page = PageLayout::max_pages;
             binding_return_songs = false;
             controller().cancel_gesture(); song_ui.leave(); menu.enter(); controls_locked = true; return true;
         case Operation::performance_show:
@@ -325,6 +334,7 @@ public:
     PageAllocation allocation;
     unsigned visible_index = 0, processing_index = PageLayout::max_controllers;
     unsigned pending_page = PageLayout::max_pages;
+    unsigned utility_page = PageLayout::max_pages;
     unsigned pending_region = PageLayout::max_pages;
     unsigned pending_operation = 0;
     bool return_to_switches = false, controls_locked = false;
