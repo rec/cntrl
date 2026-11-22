@@ -2,6 +2,8 @@
 
 Hardware-independent descriptions of MIDI controllers
 
+See the [user glossary](glossary.md) for pedal, setlist, MIDI, and setup terms.
+
 Start a setup with `cntrl` or `cntrl setup create`. See the
 [setup and instrument guide](instrument-definitions.md) for the wizard and
 instructions an agent can use to fill in instrument definitions.
