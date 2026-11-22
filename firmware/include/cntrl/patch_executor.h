@@ -46,7 +46,7 @@ struct PatchOutputs {
     virtual void selection_complete(unsigned) {}
     virtual midi::Bridge::Delivery prepare_leave(PatchExecutor &) { return midi::Bridge::Delivery::complete; }
     virtual midi::Bridge::Delivery bind_controls(const Document &, unsigned, PatchExecutor &) { return midi::Bridge::Delivery::cancelled; }
-    virtual bool binding_context(const Document * = nullptr, unsigned = ~0u, unsigned = ~0u) { return true; }
+    virtual bool binding_context(const Document * = nullptr, unsigned = ~0u) { return true; }
     virtual bool expression_available(unsigned) const { return true; }
     virtual bool song_navigation_active() const { return false; }
     virtual bool song_boundary() const { return false; }

@@ -115,9 +115,10 @@ captured-source index, u32 graph-node index), followed by name[64], u32 nonzero
 selection count, u32 binding-map node, u32 enter-action node, u32 exit-action node, u16 RGB565
 foreground, u16 RGB565 background and u8 embedded font ID, then the
 remaining selections. Each setlist
-has name[64], u32 entry count, u32 binding-map node, and that many song names[64].
+has name[64], u32 entry count, a reserved u32 that must be `0xffffffff`, and
+that many song names[64].
 A binding-map or action node of `0xffffffff` means absent; other values
-refer to a control-map node in captured source zero. These references survive
+refer to the corresponding node in captured source zero. These references survive
 renames, occurrence edits and undo. All fixed text fields are zero padded
 and terminated. Names and external document/key references use the existing
 ASCII name rules; display labels are UTF-8. The four bytes `CSP9` follow the
@@ -133,7 +134,8 @@ Renames and setlist edits preserve this order, and new pedal captures append.
 Keeping authored properties separate from resolved core graphics lets later
 host recompilation change generated defaults without replacing explicit styles.
 
-Host backup readers also accept the preceding `CSP5`, `CSP6`, `CSP7` and `CSP8` library layouts.
+Host backup readers also accept the preceding `CSP5`, `CSP6`, `CSP7` and `CSP8`
+library layouts that contain no setlist binding maps.
 `CSP5` song and setlist headers omit the binding-map field. Offline upgrade inserts
 `0xffffffff` for those fields and the new enter/exit nodes. The former optional
 last-step byte is discarded; boundaries are always present in the runtime.
@@ -152,9 +154,9 @@ bits 0, 1 and 2 mark explicit foreground, background and font. Older zero bytes
 retain fixed graphics values. This byte is not a runtime flag icon.
 
 Binding-scope directory nodes (kind 19) have zero flags and a 67-byte payload:
-u8 kind (global 0, setlist 1, song 2), name[64], and u16 control-map node. Global
-uses an empty name. Song/setlist records retain their direct map references;
-directory names describe the compiled source and do not determine playback
+u8 kind (global 0, song 2), name[64], and u16 control-map node. Global
+uses an empty name. Song records retain their direct map references.
+Directory names describe the compiled source and do not determine playback
 identity after an on-pedal rename.
 
 Bundle numeric saves retain outer metadata. Deleting or reindexing entries with

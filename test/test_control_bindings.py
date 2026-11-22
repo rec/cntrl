@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 import tomlkit
 
-from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved, songs
+from cntrl.patch_chooser import (
+    binary_format,
+    compiler,
+    compiler_inputs,
+    models,
+    resolved,
+    songs,
+)
 from scripts import native_tests
 
 
@@ -50,7 +57,12 @@ def test_scoped_bindings_override_and_preserve_ordinary_actions(
         return {'output': 'din', 'channel': 1, 'controller': controller}
 
     library = songs.Library(
-        bindings={'A': cc(20, 1), 'D': 'boost', 'configurable-1': expression(7)},
+        bindings={
+            'A': cc(20, 1),
+            'B': cc(21, 1),
+            'D': 'boost',
+            'configurable-1': expression(7),
+        },
         patches={
             'boost': cc(30, 1),
             'default': {'bindings': {'C': 'boost', 'E': 'both'}},
@@ -71,15 +83,8 @@ def test_scoped_bindings_override_and_preserve_ordinary_actions(
             songs.Song(name='Two', patches=['default']),
         ],
         setlists=[
-            songs.Setlist(
-                name='Set',
-                songs=['One', 'Two'],
-                bindings={'B': cc(21, 1), 'configurable-1': expression(10)},
-            ),
-            songs.Setlist(
-                name='Other', songs=['Two'], bindings={'configurable-1': expression(74)}
-            ),
-            songs.Setlist(name='Plain', songs=['Two']),
+            songs.Setlist(name='Set', songs=['One', 'Two']),
+            songs.Setlist(name='Other', songs=['Two']),
         ],
     )
     foreign = {
@@ -105,6 +110,31 @@ def test_scoped_bindings_override_and_preserve_ordinary_actions(
     subprocess.run(
         [str(binding_runner), str(fixture), '--scopes', str(source)], check=True
     )
+
+
+def test_setlist_bindings_are_rejected(tmp_path: Path, binding_runner: Path) -> None:
+    with pytest.raises(ValueError, match=r'setlists\.0\.bindings'):
+        songs.Library.model_validate(
+            {'setlists': [{'name': 'Set', 'bindings': {'A': cc(21, 1)}}]}
+        )
+
+    library = songs.Library(
+        songs=[songs.Song(name='Song', patches=[cc(20, 1)], bindings={'A': cc(21, 1)})],
+        setlists=[songs.Setlist(name='Set', songs=['Song'])],
+    )
+    data = songs.encode(library, binding_target())
+    core = bytearray(binary_format.core(data, binary_format.Kind.songs))
+    song_header = 8 + songs.SELECTION.size
+    _, _, binding, *_ = songs.SONG.unpack_from(core, song_header)
+    set_header = song_header + songs.SONG.size
+    songs.SET.pack_into(core, set_header, songs.text('Set', 64), 1, binding)
+    old_library = binary_format.wrap(bytes(core), binary_format.Kind.songs)
+    with pytest.raises(songs.SongLibraryError, match='remove them and recompile'):
+        songs.decode(old_library)
+
+    fixture = tmp_path / 'old-setlist.bin'
+    fixture.write_bytes(old_library)
+    subprocess.run([str(binding_runner), str(fixture), '--reject-setlist'], check=True)
 
 
 def test_imported_maps_preserve_local_control_references(

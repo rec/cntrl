@@ -1044,7 +1044,7 @@ private:
                 }
                 break;
             case 19:
-                if (n[1] || length != 67 || p[0] > 2 || u16(p + 65) >= i
+                if (n[1] || length != 67 || (p[0] != 0 && p[0] != 2) || u16(p + 65) >= i
                     || (p[0] ? !text_valid(p + 1, 64) : p[1] != 0)) return false;
                 if (g[u32(g + 16 + u16(p + 65) * 4)] != 10) return false;
                 break;

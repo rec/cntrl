@@ -311,7 +311,7 @@ public:
         }
         return bridge.idle() ? midi::Bridge::Delivery::complete : midi::Bridge::Delivery::pending;
     }
-    bool binding_context(const Document *d = nullptr,unsigned set = ~0u,unsigned song = ~0u) override { return switches->binding_context(d,set,song); }
+    bool binding_context(const Document *d = nullptr, unsigned song = ~0u) override { return switches->binding_context(d, song); }
     bool gate_midi_stream(const char *name,bool enabled) override { return midi_runtime.streams().gate(name,enabled); }
     bool select_midi_streams(const Document &d,unsigned node) override {
         unsigned scope; if (!d.stream_scope(node,scope)) return false;

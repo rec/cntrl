@@ -26,7 +26,7 @@ struct SongContinuation {
     uint8_t solo = 0;
 };
 struct SongEntry { char song[64] = {}; };
-struct Setlist { char name[64] = {}; uint32_t count = 0, bindings = 0xffffffff; };
+struct Setlist { char name[64] = {}; uint32_t count = 0, reserved = 0xffffffff; };
 struct SongCounts { uint32_t songs = 0, sets = 0; };
 #pragma pack(pop)
 static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 285 && sizeof(Setlist) == 72 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
@@ -44,7 +44,7 @@ inline void encode_song_record(const T &value, uint8_t *bytes) {
             bytes[282] = uint8_t(value.background); bytes[283] = uint8_t(value.background >> 8);
             bytes[284] = value.font; }
     } else if constexpr (std::is_same_v<T, Setlist>) {
-        std::memcpy(bytes, value.name, 64); put32(bytes + 64, value.count); put32(bytes + 68, value.bindings);
+        std::memcpy(bytes, value.name, 64); put32(bytes + 64, value.count); put32(bytes + 68, 0xffffffff);
     } else if constexpr (std::is_same_v<T, SongCounts>) {
         put32(bytes, value.songs); put32(bytes + 4, value.sets);
     } else if constexpr (std::is_same_v<T, SongEntry>) std::memcpy(bytes, value.song, 64);
@@ -58,7 +58,7 @@ inline void decode_song_record(const uint8_t *bytes, T &value) {
             value.enter = u32(bytes + 272); value.exit = u32(bytes + 276);
             value.foreground = u16(bytes + 280); value.background = u16(bytes + 282); value.font = bytes[284]; }
     } else if constexpr (std::is_same_v<T, Setlist>) {
-        std::memcpy(value.name, bytes, 64); value.count = u32(bytes + 64); value.bindings = u32(bytes + 68);
+        std::memcpy(value.name, bytes, 64); value.count = u32(bytes + 64); value.reserved = u32(bytes + 68);
     } else if constexpr (std::is_same_v<T, SongCounts>) {
         value.songs = u32(bytes); value.sets = u32(bytes + 4);
     } else if constexpr (std::is_same_v<T, SongEntry>) std::memcpy(value.song, bytes, 64);
@@ -530,6 +530,7 @@ private:
                 Setlist value;
                 if (position > length || sizeof(value) > length - position
                     || !read_song_record(storage, slot, base + position, &value, sizeof(value))
+                    || value.reserved != 0xffffffff
                     || !text_valid(reinterpret_cast<const uint8_t *>(value.name), 64)) return false;
                 position += sizeof(value);
                 if (value.count > (length - position) / sizeof(SongEntry)) return false;

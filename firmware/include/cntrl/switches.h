@@ -21,13 +21,13 @@ public:
     bool performance() const { return bool(bindings_); }
     unsigned revision() const { return revision_; }
     ExpressionAssignment expression(unsigned input) const { return resolved_ ? resolved_->expressions[input] : ExpressionAssignment{}; }
-    bool binding_context(const Document *document = nullptr, unsigned set = ~0u, unsigned song = ~0u) {
+    bool binding_context(const Document *document = nullptr, unsigned song = ~0u) {
         if (!document) { context_.reset(); return true; }
-        for (unsigned root : {set, song}) if (root != ~0u && (root >= document->nodes() || document->node(root)[0] != 10)) return false;
+        if (song != ~0u && (song >= document->nodes() || document->node(song)[0] != 10)) return false;
         std::unique_ptr<BindingDocument> candidate(new (std::nothrow) BindingDocument);
         if (!candidate || !candidate->copy(*document, hardware_)) return false;
         context_ = std::move(candidate);
-        context_set_ = set; context_song_ = song;
+        context_song_ = song;
         return true;
     }
     void refresh() { rendering_ = dirty_ = true; }
@@ -51,7 +51,6 @@ public:
                 if (!candidate.scope_source_ || !candidate.scope_source_->copy(context->document, hardware_)) {
                     prepared_controls_.reset(); pending_.clear(); return midi::Bridge::Delivery::cancelled;
                 }
-                candidate.context_set_ = owns(invocation) ? scope_set_ : context_set_;
                 candidate.context_song_ = owns(invocation) ? scope_song_ : context_song_;
             }
             prepared_controls_->initialize(pending_document_, held_, ControlBindings{pending_document_.node(node) + 4});
@@ -133,7 +132,7 @@ private:
         document_ = candidate.document_; bindings_ = candidate.bindings_; ++revision_;
         resolved_ = std::move(candidate.resolved_);
         scope_source_ = std::move(candidate.scope_source_);
-        scope_set_ = candidate.context_set_; scope_song_ = candidate.context_song_;
+        scope_song_ = candidate.context_song_;
         for (unsigned i = 0; i < count_; ++i) {
             if (states_[i].document == &candidate.document_) states_[i].document = &document_;
             if (resolved_ && resolved_->switches[i].document == &candidate.document_) resolved_->switches[i].document = &document_;
@@ -157,8 +156,8 @@ private:
             if (scope_source_) {
                 const auto &source = scope_source_->document;
                 merged = merged && resolved_->scope(source, 0, "", inheritance);
-                for (unsigned root : {context_set_, context_song_}) if (root != ~0u)
-                    merged = merged && resolved_->overlay(source, {source.node(root) + 4}, inheritance & 1, inheritance & 2);
+                if (context_song_ != ~0u)
+                    merged = merged && resolved_->overlay(source, {source.node(context_song_) + 4}, inheritance & 1, inheritance & 2);
             } else merged = resolved_->scope(document_, 0, "", inheritance);
             if (!merged || !resolved_->overlay(document_, bindings, true, true)) {
                 hardware_.error("Too many inherited switch bindings"); return;
@@ -456,8 +455,7 @@ private:
     ControlBindings bindings_;
     std::unique_ptr<ResolvedBindings> resolved_;
     std::unique_ptr<BindingDocument> context_, scope_source_;
-    unsigned context_set_ = ~0u, context_song_ = ~0u;
-    unsigned scope_set_ = ~0u, scope_song_ = ~0u;
+    unsigned context_song_ = ~0u, scope_song_ = ~0u;
     MemoryBuffer bound_, pending_;
     std::unique_ptr<Switches> prepared_controls_;
     Document pending_document_;

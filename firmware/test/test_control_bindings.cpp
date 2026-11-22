@@ -76,10 +76,8 @@ struct ScopedSongs : cntrl::SongResolver {
         if (!songs->read_source(0, 0, bytes.data(), unsigned(bytes.size()))
             || !document.load(bytes.data(), unsigned(bytes.size()), board)) return false;
         board.source_signature = document.names_signature();
-        const auto *set = songs->setlist(context.set);
-        unsigned set_bindings = set ? set->bindings : ~0u;
         const auto *song = songs->song(context.song);
-        return song && board.switches.binding_context(&document, set_bindings, song->bindings)
+        return song && board.switches.binding_context(&document, song->bindings)
             && board.entry.start(document, selection.node);
     }
     cntrl::SongExecution execution_status() const override { return board.entry.busy() ? cntrl::SongExecution::pending : cntrl::SongExecution::completed; }
@@ -117,10 +115,10 @@ void scoped_bindings(Board &board, const std::vector<uint8_t> &bytes) {
     press(4); // A bound map change retains its enclosing song despite a browser action.
     assert(board.switches.expression(0).controller == 11);
     assert(board.switches.binding_context(&resolver.document,
-        unsigned(resolver.document.binding_scope(1, "Set")), unsigned(resolver.document.binding_scope(2, "One"))));
+        unsigned(resolver.document.binding_scope(2, "One"))));
     recall("both");
     press(0); assert(board.sent.back().bytes[1] == 22); // Song overrides global A.
-    press(1); assert(board.sent.back().bytes[1] == 21); // Set B.
+    press(1); assert(board.sent.back().bytes[1] == 21); // Global B.
     press(3); assert(board.sent.back().bytes[1] == 30); // Global D.
     assert(board.switches.expression(0).controller == 11);
     recall("switch");
@@ -137,16 +135,15 @@ void scoped_bindings(Board &board, const std::vector<uint8_t> &bytes) {
     press(3); assert(board.sent.back().bytes[1] == 30); // Global reference uses the library's boost.
     press(5); assert(board.sent.back().bytes[1] == 31); // Local reference uses the foreign boost.
     press(0); assert(board.sent.back().bytes[1] == 22);
-    next(); assert(songs.boundary()); next(); assert(board.switches.expression(0).controller == 10); // Song Two inherits the set.
-    songs.choose("Other"); next(); assert(board.switches.expression(0).controller == 74);
-    songs.choose("Plain"); next(); assert(board.switches.expression(0).controller == 7);
+    next(); assert(songs.boundary()); next(); assert(board.switches.expression(0).controller == 7); // Song Two inherits the library.
+    songs.choose("Other"); next(); assert(board.switches.expression(0).controller == 7);
     assert(songs.rename_song("One", "Renamed")); while (songs.busy()) songs.tick(); assert(songs.success());
     const auto *renamed = songs.song("Renamed");
     assert(renamed && renamed->foreground == original_style.foreground && renamed->background == original_style.background
         && renamed->font == original_style.font);
     assert(songs.rename_setlist("Set", "Renamed set")); while (songs.busy()) songs.tick(); assert(songs.success());
     songs.choose("Renamed set"); next(); assert(board.switches.expression(0).controller == 11);
-    next(); next(); assert(board.switches.expression(0).controller == 10);
+    next(); next(); assert(board.switches.expression(0).controller == 7);
     assert(songs.undo()); while (songs.busy()) songs.tick(); assert(songs.success());
     const auto *restored = songs.song("Renamed");
     assert(restored && restored->foreground == original_style.foreground && restored->background == original_style.background && restored->font == original_style.font);
@@ -161,6 +158,15 @@ int main(int argc, char **argv) {
     std::ifstream file(argv[1], std::ios::binary);
     std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), {}};
     Board board; cntrl::Document document;
+    if (!std::strcmp(argv[2], "--reject-setlist")) {
+        TestStorage storage; ScopedSongs resolver(board); cntrl::Songs songs(storage, resolver);
+        assert(songs.boot() && songs.import_begin(unsigned(bytes.size())));
+        assert(songs.import_write(bytes.data(), unsigned(bytes.size())));
+        assert(songs.import_finish(unsigned(bytes.size()), cntrl::checksum(bytes.data(), unsigned(bytes.size()))));
+        while (songs.busy()) songs.tick();
+        assert(!songs.success());
+        return 0;
+    }
     if (!std::strcmp(argv[2], "--scopes")) {
         assert(argc == 4);
         std::ifstream source(argv[3], std::ios::binary);

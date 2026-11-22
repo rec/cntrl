@@ -194,9 +194,9 @@ Names and patch-selection fields retain their existing format bounds.
 The payload begins with two little-endian 32-bit counts: songs and setlists.
 Each song stores its first patch selection, name, patch count, binding-map
 reference, enter/exit action references and style, then its remaining selections. Each setlist stores its name, entry
-count and binding-map reference followed by that many song names. Committed
+count and reserved word followed by that many song names. Committed
 files use the `CSG8` journal; a `CSP9` appendix stores immutable compiled patch
-sources. Bindings at global, setlist and song scopes are described in
+sources. Bindings at global and song scopes are described in
 [patch bindings](../../../../doc/control-bindings.md). Export older libraries with the old host
 before replacing the firmware, then remove ID fields and replace numeric setlist
 references with song names before copying them with the new host. There is no

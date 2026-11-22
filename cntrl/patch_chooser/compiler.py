@@ -181,7 +181,7 @@ def compile_show(
     if show.bindings:
         scopes.insert(0, (0, '', show.bindings))
     for kind, name, bindings in scopes:
-        if kind not in (0, 1, 2) or len(name.encode()) >= 64:
+        if kind not in (0, 2) or len(name.encode()) >= 64:
             errors.append('binding scope names must contain fewer than 64 bytes')
             continue
         path = f'binding_scopes.{kind}.{name}'

@@ -304,8 +304,8 @@ public:
         return cntrl::midi::Bridge::Delivery::cancelled;
 #endif
     }
-    bool binding_context(const cntrl::Document *document = nullptr, unsigned set = ~0u, unsigned song = ~0u) override {
-        return switches.binding_context(document, set, song);
+    bool binding_context(const cntrl::Document *document = nullptr, unsigned song = ~0u) override {
+        return switches.binding_context(document, song);
     }
     bool stock(uint8_t pair, cntrl::PatchExecutor &invocation) override {
 #if CNTRL_ORIGINAL_FIRMWARE

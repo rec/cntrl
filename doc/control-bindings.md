@@ -51,16 +51,16 @@ authored bindings and work regardless of `inherits`.
 ## Binding scopes and inheritance
 
 Bindings can also live at the top level of the existing `global.toml` defaults,
-at the root of a setup or song library, and on each setlist and song. Global
-defaults are resolved when compiling; changing the global file requires
-recompiling its consumers. Setlist and song bindings follow the active set and
-song at playback. Renaming either on the pedal preserves its bindings, as do
-saved edits and undo.
+at the root of a setup or song library, and on each song. Global defaults are
+resolved when compiling, so changing the global file requires recompiling its
+consumers. Song bindings follow the active song at playback. Renaming a song
+on the pedal preserves its bindings, as do saved edits and undo.
 
-Higher scopes merge by control: a song assignment replaces the setlist's entire
-assignment for that control, and a setlist assignment replaces the global one.
-Other controls remain inherited. The tables accept the same switch and
-expression assignments used on patches.
+A song assignment replaces the shared assignment for that control. Other
+controls remain inherited. The tables accept the same switch and expression
+assignments used on patches. Setlists contain a name and a list of songs. For
+older libraries with setlist bindings, remove the bindings from the source and
+recompile before loading the library.
 
 Every patch has an `inherits` setting:
 
