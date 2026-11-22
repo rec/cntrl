@@ -187,9 +187,9 @@ require additional application support; they are not silently mapped to buttons.
 
 ### Page tooltips
 
-The internal [tooltip catalogue](../cntrl/emulator/tooltips.toml) has blank
-slots for display windows and pedal buttons on each page. Fill in a slot to
-show its text when the pointer hovers over that area. Windows are numbered
+The internal [tooltip catalogue](../cntrl/emulator/tooltips.toml) contains
+editable English defaults for display windows and pedal buttons. The emulator
+shows the text on hover. Clear the entry to hide it. Windows are numbered
 from left to right within their page's visible region. A button uses the
 focused page's entry and its control ID, such as `button-a`.
 

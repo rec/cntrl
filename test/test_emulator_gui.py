@@ -1129,7 +1129,8 @@ def test_hover_uses_screen_page_button_focus_and_active_language(
 
     hover(screen)
     hover(button)
-    assert shown == []
+    assert shown == ['<p>Current or selected patch</p>']
+    shown.clear()
     monkeypatch.setattr(
         gui,
         'tooltip_messages',
