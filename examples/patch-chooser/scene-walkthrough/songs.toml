@@ -1,0 +1,59 @@
+fill_in_styles = false
+
+[instruments.keys]
+output = 'din'
+channel = 1
+
+[patches.intro]
+name = 'Intro'
+program = 1
+bindings = { a = 'soft' }
+
+[patches.verse]
+name = 'Verse'
+program = 2
+bindings = { a = 'soft' }
+
+[patches.chorus]
+name = 'Chorus'
+program = 3
+bindings = { a = 'loud' }
+
+[patches.bridge]
+name = 'Bridge'
+program = 4
+bindings = { a = 'soft', b = 'loud' }
+
+[patches.outro]
+name = 'Outro'
+program = 5
+bindings = { a = 'soft' }
+
+[patches.soft]
+name = 'Soft'
+controller = 7
+value = 80
+
+[patches.loud]
+name = 'Loud'
+controller = 7
+value = 110
+
+[[songs]]
+name = 'First Light'
+patches = ['intro', 'verse', 'chorus']
+style = { foreground_color = 'navy', background_color = '0xFFF4D6' }
+
+[[songs]]
+name = 'River Road'
+patches = ['verse', 'chorus', 'verse', 'outro']
+style = { foreground_color = 'navy', background_color = '0xDCEEFF' }
+
+[[songs]]
+name = 'Last Train Home'
+patches = ['intro', 'verse', 'chorus', 'bridge', 'chorus']
+style = { foreground_color = 'white', background_color = 'navy' }
+
+[[setlists]]
+name = 'Evening Set'
+songs = ['First Light', 'River Road', 'Last Train Home']

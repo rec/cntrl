@@ -1,0 +1,16 @@
+use_animations = false
+
+[navigation]
+song_forward = 'F'
+song_backward = 'C'
+page_forward = 'D+E'
+page_back = 'A+D'
+
+[pages.patches]
+type = 'patch-chooser'
+
+[pages.menu]
+type = 'menu'
+
+[regions.main]
+pages = ['patches', 'menu']
