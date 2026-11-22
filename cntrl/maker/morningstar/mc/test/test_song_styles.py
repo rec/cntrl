@@ -1,4 +1,4 @@
-"""Song styles, artwork and navigation reach the shared scene renderer."""
+"""Scene bands, song colors, artwork and navigation reach the shared renderer."""
 
 import struct
 from pathlib import Path
@@ -146,6 +146,11 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         snapshot(1)
         first = dict(session.frames)
         assert first['lcd-2'][(48 * 160 + 8) * 2 :][:2] == b'\xf8\x00'
+        left = first['lcd-1']
+        assert left[:2] == b'\0\0'  # The rounded corner is clipped.
+        assert left[(8 * 160 + 8) * 2 :][:2] == b'\0\x10'
+        assert left[(119 * 160 + 8) * 2 :][:2] == b'\0\x10'
+        assert left[(48 * 160 + 8) * 2 :][:2] != b'\0\x10'
 
         def chord(a: str, b: str) -> None:
             session.button(a, True)
@@ -181,10 +186,10 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         snapshot(4)
         press('f')  # The next song installs its controls with its own defaults.
         assert not [m for m in session.messages if m.kind == 'error']
-        assert session.frames['lcd-2'][160:162] == b'\0\x10'
+        assert session.frames['lcd-2'][(48 * 160 + 8) * 2 :][:2] == b'\0\x10'
         press('f')  # The shared boundary separates the songs.
         press('f')  # Final song installs its own display defaults.
-        assert session.frames['lcd-2'][160:162] == b'\0\x1f'
+        assert session.frames['lcd-2'][(48 * 160 + 8) * 2 :][:2] == b'\0\x1f'
         midi_count = len([m for m in session.messages if m.kind == 'midi'])
         session.button('c', True)
         session.advance(session.time_us + 600000)

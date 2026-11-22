@@ -771,7 +771,9 @@ private:
         const unsigned columns = (hardware_.input_count() + 1) / 2;
         for (unsigned w = 0; w < windows; ++w) {
             Pane pane;
-            pane.three_bands = true; pane.graphics.pad = 0; pane.graphics.background = base.background;
+            pane.scene = pane.three_bands = true;
+            pane.graphics = base;
+            pane.graphics.pad = 0;
             auto &middle = pane.lines[1];
             if (!w) {
                 std::snprintf(middle.text, sizeof(middle.text), "%s", bindings_.title());
@@ -780,7 +782,7 @@ private:
                 }
             } else if (w == 1) { middle = song; pane.bitmap = bitmap; }
             else if (w == windows - 1) middle = setlist;
-            for (auto &line : pane.lines) { line.graphics = base; line.fit = line.centered = true; }
+            for (auto &line : pane.lines) { line.graphics = base; line.centered = true; }
             for (unsigned i = 0; i < count_; ++i) {
                 const auto &state = states_[i];
                 const unsigned input = state.record[0];
@@ -811,6 +813,15 @@ private:
                         std::snprintf(line.text, sizeof(line.text), "%s %s", hardware_.input_label(input), ui::i18n::text(labels[i])); break;
                     }
                 }
+            }
+            for (unsigned field : {0u, 1u, 2u, 3u}) {
+                auto &line = pane.lines[field];
+                const bool button = field == 0 || field == 2;
+                if (button) std::swap(line.graphics.foreground, line.graphics.background);
+                line.graphics.font = ui::localized_face;
+                line.graphics.asset = line.graphics.top = line.graphics.flag = 0;
+                line.graphics.size = line.graphics.line_height = button || pane.split_middle ? 16 : 20;
+                line.fit = true;
             }
             hardware_.show(w, pane);
         }

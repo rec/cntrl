@@ -74,6 +74,7 @@ struct Pane {
     int pending_patch = -1; // Document patch index, or -1 when no unsent patch is displayed.
     ScreenGraphics graphics;
     bool split_middle = false;
+    bool scene = false;
     TextLine lines[max_lines];
     Circle circles[4];
     Rectangle rectangles[4];

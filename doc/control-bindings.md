@@ -243,12 +243,12 @@ band. Empty middle bands retain their background color.
 
 ## Song styles
 
-During set performance, the current song's `style` supplies missing foreground,
-background and font properties in these displays, including the ordinary switch
-presentation when `binding_view` is omitted. Explicit patch, switch and status
-styles take precedence per property. Song fonts use the controller's embedded
-families. Fixed-size families use their smallest size when it exceeds a nominal
-size limit; labels are fitted or shortened within their bands.
+During song and set performance, the current song's `style` supplies the scene's
+default foreground and background colors. Explicit patch and switch colors take
+precedence. Each window has rounded corners, and its upper and lower button bands
+swap foreground and background. Scenes use the controller's interface font in
+two sizes, with shorter captions when space is limited. The song's font choice
+applies in the song browser.
 
 Recompile full-pedal setups to enable this inheritance. Older compiled binding
 views retain their fixed display values, because they did not record which

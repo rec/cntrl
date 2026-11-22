@@ -269,7 +269,7 @@ private:
     unsigned bitmap_row_ = 0;
     void damage(Screen &screen, const Pane &content) {
         const auto &before = screen.requested;
-        bool full = before.three_bands != content.three_bands || before.split_middle != content.split_middle || before.heading_band != content.heading_band || before.focused != content.focused
+        bool full = before.three_bands != content.three_bands || before.split_middle != content.split_middle || before.scene != content.scene || before.heading_band != content.heading_band || before.focused != content.focused
             || before.bitmap.source != content.bitmap.source || before.bitmap.offset != content.bitmap.offset
             || before.bitmap.generation != content.bitmap.generation || std::memcmp(&before.graphics, &content.graphics, sizeof(content.graphics));
         // Compare values, not TextLine/Rectangle padding, when deciding damage.
@@ -380,14 +380,14 @@ private:
             if (!line.text[0] || (line.graphics.font != localized_face && !line.fit)) continue;
             const unsigned face = line.graphics.font, asset = face == localized_face ? 0 : line.graphics.asset;
             unsigned maximum = std::min(96u, unsigned(line.graphics.size));
-            if (line.fit) for (unsigned size = 8; size <= 96; ++size) if (fonts_.supports(face, size, asset)) { maximum = std::max(maximum, size); break; }
+            if (line.fit && !pane.scene) for (unsigned size = 8; size <= 96; ++size) if (fonts_.supports(face, size, asset)) { maximum = std::max(maximum, size); break; }
             const unsigned height = pane.three_bands ? band_edge(pane, index, viewport.height, true) - band_edge(pane, index, viewport.height, false)
                 : line.y < 0 ? available_height / std::max(1u, count) : line.graphics.line_height;
             const int left = line.centered ? int(pad) : std::max(int(pad), int(line.x));
-            const int width = std::max(0, int(viewport.width) - int(pad) - left);
+            const int width = std::max(0, int(viewport.width) - (pane.scene ? 8 : int(pad) + left));
             const auto original = fonts_.bounds(face, line.graphics.size, asset, line.text);
             auto choose = [&]() {
-                for (unsigned size = maximum; size >= 8; --size) {
+                for (unsigned size = maximum; size >= (pane.scene ? 16u : 8u); size -= pane.scene ? 4 : 1) {
                     if (!fonts_.supports(face, size, asset)) continue;
                     const auto bounds = fonts_.bounds(face, size, asset, line.text);
                     unsigned rows = 1;
@@ -543,7 +543,8 @@ private:
         const auto v = screens_[unsigned(drawing_)].viewport;
         unsigned start = painting_.heading_band ? 0 : painting_.graphics.pad;
         for (unsigned i = 0; i < max_lines; ++i) {
-            const auto &line = painting_.lines[i]; if (!line.text[0]) continue;
+            const auto &line = painting_.lines[i];
+            if (!line.text[0] && !(painting_.scene && !preserve && (i == 0 || i == 2))) continue;
             if (preserve && line.y >= 0) {
                 if (line.stippled) {
                     auto b = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);

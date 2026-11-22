@@ -4,40 +4,59 @@ fill_in_styles = false
 output = 'din'
 channel = 1
 
+[bindings]
+d = { name = 'Sustain on', on = 'sustain_on' }
+e = { name = 'Sustain off', on = 'sustain_off' }
+
 [patches.intro]
 name = 'Intro'
 program = 1
-bindings = { a = 'soft' }
+inherits = 'both'
+bindings = { a = { name = 'Soft keys', on = 'soft' }, b = { name = 'Loud keys', on = 'loud' } }
 
 [patches.verse]
 name = 'Verse'
 program = 2
-bindings = { a = 'soft' }
+inherits = 'both'
+bindings = { a = { name = 'Soft keys', on = 'soft' }, b = { name = 'Loud keys', on = 'loud' } }
 
 [patches.chorus]
 name = 'Chorus'
 program = 3
-bindings = { a = 'loud' }
+inherits = 'both'
+bindings = { a = { name = 'Loud keys', on = 'loud' }, b = { name = 'Soft keys', on = 'soft' } }
 
 [patches.bridge]
 name = 'Bridge'
 program = 4
-bindings = { a = 'soft', b = 'loud' }
+inherits = 'both'
+bindings = { a = { name = 'Soft keys', on = 'soft' }, b = { name = 'Loud keys', on = 'loud' } }
 
 [patches.outro]
 name = 'Outro'
 program = 5
-bindings = { a = 'soft' }
+inherits = 'both'
+bindings = { a = { name = 'Soft keys', on = 'soft' }, b = { name = 'Loud keys', on = 'loud' } }
 
 [patches.soft]
-name = 'Soft'
+name = 'Soft keys'
 controller = 7
 value = 80
 
 [patches.loud]
-name = 'Loud'
+name = 'Loud keys'
 controller = 7
 value = 110
+
+[patches.sustain_on]
+name = 'Sustain on'
+controller = 64
+value = 127
+
+[patches.sustain_off]
+name = 'Sustain off'
+controller = 64
+value = 0
 
 [[songs]]
 name = 'First Light'
