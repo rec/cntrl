@@ -555,6 +555,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
     def __init__(self, session: Session, *, caret_blink_interval: int = 500) -> None:
         super().__init__()
         self.session = session
+        self.package_directory = Path(__file__).resolve().parents[1]
         self.worker = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix='cntrl-native'
         )
@@ -1344,6 +1345,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 if self.session.layout.provisional
                 else ''
             )
+            + f' | {self.package_directory}'
         )
         updates = self.session.messages[:]
         del self.session.messages[: len(updates)]

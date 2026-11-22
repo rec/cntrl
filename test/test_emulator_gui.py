@@ -1078,7 +1078,11 @@ def test_desktop_starts_in_the_mirrored_pedals_language(
     window = EmulatorWindow(session)
     window.timer.stop()
     assert window.running.text() == 'Temps réel'
-    assert window.windowTitle() == 'Test controller [miroir de la pédale]'
+    package_directory = Path(crashes.__file__).resolve().parent
+    assert (
+        window.windowTitle()
+        == f'Test controller [miroir de la pédale] | {package_directory}'
+    )
     assert set(catalogue.locales()) == {
         'en',
         'fr',
