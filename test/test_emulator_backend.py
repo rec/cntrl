@@ -444,6 +444,15 @@ def test_recovered_globals_initialize_only_fresh_emulator_storage(
     assert journal.read_bytes() == device_globals.journal(Overlay(values={0: 80}))
 
 
+def send_selected_patch(session: backend.Session) -> None:
+    # A one-display Patch Chooser shows the last successfully sent patch.
+    session.advance(20_000)
+    session.button('a', True)
+    session.advance(40_000)
+    session.button('a', False)
+    session.advance(60_000)
+
+
 def test_font_replacement_changes_rendering_without_recompiling(
     backend_files: BackendFiles, tmp_path: Path
 ) -> None:
@@ -457,8 +466,9 @@ def test_font_replacement_changes_rendering_without_recompiling(
         tmp_path / 'before',
         backend_files.setup,
     ) as session:
-        session.advance(20000)
-        before = dict(session.frames)
+        send_selected_patch(session)
+        before = session.frames[original.displays[0].id]
+        assert any(before)
     font = tmp_path / 'replacement.cfont'
     font.write_bytes(
         ui.prepare(
@@ -482,10 +492,10 @@ def test_font_replacement_changes_rendering_without_recompiling(
         tmp_path / 'after',
         backend_files.setup,
     ) as session:
-        session.advance(20000)
-        assert (
-            session.frames[original.displays[0].id] != before[original.displays[0].id]
-        )
+        send_selected_patch(session)
+        after = session.frames[original.displays[0].id]
+        assert any(after)
+        assert after != before
 
 
 def test_new_patch_font_loads_without_recompiling(
@@ -522,7 +532,7 @@ def test_new_patch_font_loads_without_recompiling(
     with backend.Session(
         backend_files.layout, target, executable, storage, setup
     ) as session:
-        session.advance(20000)
+        send_selected_patch(session)
         assert any(session.frames[target.displays[0].id])
 
 

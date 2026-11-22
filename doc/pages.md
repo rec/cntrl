@@ -178,6 +178,10 @@ first, defaulting to the reverse target display order. Surviving slots keep
 their logical order and map into the region's physical span. These names do
 not anchor content to a physical side.
 
+When Patch Chooser has one display, it shows the last successfully sent patch
+using `windows.sent`, regardless of `give_up_windows`. The display is blank
+until a patch is sent.
+
 The encoded layout supports up to 255 named pages, subject to available memory.
 Display IDs and window counts follow the target's declared displays.
 

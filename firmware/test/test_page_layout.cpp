@@ -19,9 +19,25 @@ int main(int argc,char **argv) {
         cntrl::PageLayout layout{bytes.data()}; cntrl::PageAllocation allocation;
         assert(allocation.prepare(layout)); allocation.finish(true); allocation.configure(layout);
         assert(layout.windows() == windows && layout.pages() == 2 && layout.length() == bytes.size());
-        for (unsigned logical = 0; logical < windows; ++logical) assert(allocation.controller_window(0,logical) == int(logical));
+        if (windows == 1) {
+            assert(allocation.controller_window(0,0) == -1);
+            assert(allocation.controller_window(0,1) == 0);
+            assert(allocation.controller_window(0,2) == -1);
+        } else {
+            for (unsigned logical = 0; logical < windows; ++logical) assert(allocation.controller_window(0,logical) == int(logical));
+        }
         allocation.select(1); assert(allocation.region(0).count == 1 && !allocation.controller_visible(0));
     }
+    auto shared = page_fixture(3,{1,10,11,1},{{0,1},{2},{3}});
+    cntrl::PageLayout shared_layout{shared.data()}; cntrl::PageAllocation shared_allocation;
+    assert(shared_allocation.prepare(shared_layout)); shared_allocation.finish(true); shared_allocation.configure(shared_layout);
+    assert(shared_allocation.controller_window(0,0) == -1);
+    assert(shared_allocation.controller_window(0,1) == 1);
+    assert(shared_allocation.controller_window(0,2) == -1);
+    shared_allocation.select(1);
+    assert(shared_allocation.controller_window(0,0) == 0);
+    assert(shared_allocation.controller_window(0,1) == 1);
+    assert(shared_allocation.controller_window(0,2) == -1);
     for (bool left : {false,true}) {
         auto bytes = page_fixture(3,{11,12,1,10,11},{{0,2},{1,3,4}},left);
         cntrl::PageLayout layout{bytes.data()}; cntrl::PageAllocation allocation;
@@ -35,7 +51,7 @@ int main(int argc,char **argv) {
         assert(allocation.selected() == 3 && allocation.region(1).count == 0);
         assert(allocation.region(0).selected == 0 && allocation.region(0).count == 3);
         allocation.select(4); assert(allocation.controller_visible(0) && allocation.controller_visible(1));
-        assert(allocation.controller_window(1,0) == int(allocation.region(1).first));
+        assert(allocation.controller_window(1,left ? 1 : 0) == int(allocation.region(1).first));
         allocation.select(2); assert(allocation.region(0).count == 1 && allocation.region(1).count == 2);
         allocation.select(3); assert(allocation.selected() == 3);
         assert(allocation.region(0).count == 1);

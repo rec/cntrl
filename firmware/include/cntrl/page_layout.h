@@ -91,13 +91,17 @@ public:
     }
     int controller_window(unsigned slot,unsigned logical) const {
         unsigned index = layout.controller_page(slot), r = layout.page_region(index);
-        if (index == layout.pages() || r == layout.regions() || logical >= layout.windows() || regions_[r].selected != index) return -1;
-        unsigned visible = regions_[r].count;
+        if (index == layout.pages() || r == layout.regions() || regions_[r].selected != index) return -1;
+        const auto &region = regions_[r];
+        unsigned visible = region.count;
+        // The sent-patch pane is the sole view when only one screen is available.
+        if (visible == 1) return logical == 1 ? int(region.first) : -1;
+        if (logical >= layout.windows()) return -1;
         const auto *p = layout.page(index);
         bool removed[256] = {};
         for (unsigned i = 0; i < layout.windows() - visible; ++i) removed[p[2 + i]] = true;
         if (removed[logical]) return -1;
-        unsigned physical = regions_[r].first;
+        unsigned physical = region.first;
         for (unsigned i = 0; i < logical; ++i) if (!removed[i]) ++physical;
         return int(physical);
     }
