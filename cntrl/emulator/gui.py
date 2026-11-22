@@ -73,12 +73,17 @@ class CaptionEditor(QtWidgets.QLineEdit):
             end = self.selectionEnd()
             for glyph in self.glyphs[start:end]:
                 painter.fillRect(glyph, QtGui.QColor(66, 122, 224, 85))
-        elif self.hasFocus() and self.glyphs:
-            position = self.cursorPosition()
-            glyph = self.glyphs[min(position, len(self.glyphs) - 1)]
-            x = glyph.left() if position < len(self.glyphs) else glyph.right()
-            painter.setPen(QtGui.QColor('#467de6'))
-            painter.drawLine(QtCore.QLineF(x, glyph.top(), x, glyph.bottom()))
+        elif self.hasFocus():
+            x = 1
+            if self.glyphs:
+                position = self.cursorPosition()
+                glyph = self.glyphs[min(position, len(self.glyphs) - 1)]
+                x = round(
+                    glyph.left() if position < len(self.glyphs) else glyph.right()
+                )
+            x = min(max(1, x), self.width() - 2)
+            painter.setPen(QtGui.QColor('#d73737'))
+            painter.drawLine(x, 1, x, self.height() - 2)
         painter.end()
 
     def index_at(self, point: QtCore.QPointF) -> int:

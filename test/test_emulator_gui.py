@@ -434,6 +434,15 @@ def test_correction_editor_overlays_native_pixels_and_consumes_keys(
         assert original.copy(area.adjusted(1, 1, -1, -1)) == edited.copy(
             area.adjusted(1, 1, -1, -1)
         )
+        editor = window.correction_editor.geometry()
+        caret_x = editor.right() - 1
+        red = QtGui.QColor('#d73737')
+        assert all(
+            edited.pixelColor(caret_x, y) == red
+            for y in range(editor.top() + 1, editor.bottom())
+        )
+        assert edited.pixelColor(caret_x, editor.top()) != red
+        assert edited.pixelColor(caret_x, editor.bottom()) != red
         painted_centres: list[float] = []
         for action in (window.correction_cancel, window.correction_accept):
             bounds = action.geometry()
