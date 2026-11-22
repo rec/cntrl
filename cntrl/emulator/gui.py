@@ -101,9 +101,11 @@ class CaptionEditor(QtWidgets.QLineEdit):
                 x = round(
                     glyph.left() if position < len(self.glyphs) else glyph.right()
                 )
-            x = min(max(1, x), self.width() - 2)
-            painter.setPen(QtGui.QColor('#d73737'))
-            painter.drawLine(x, 1, x, self.height() - 2)
+            caret_width = 2
+            x = min(max(1, x), self.width() - 1 - caret_width)
+            painter.fillRect(
+                x, 1, caret_width, self.height() - 2, QtGui.QColor('#d73737')
+            )
         painter.end()
 
     def paint_selection(self, painter: QtGui.QPainter) -> None:

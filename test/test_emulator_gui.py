@@ -431,14 +431,15 @@ def test_correction_editor_overlays_native_pixels_and_consumes_keys(
             window.correction_accept.x()
             == window.correction_cancel.x() + window.correction_cancel.width()
         )
-        assert original.copy(area.adjusted(1, 1, -1, -1)) == edited.copy(
-            area.adjusted(1, 1, -1, -1)
+        assert original.copy(area.adjusted(1, 1, -2, -1)) == edited.copy(
+            area.adjusted(1, 1, -2, -1)
         )
         editor = window.correction_editor.geometry()
-        caret_x = editor.right() - 1
+        caret_x = editor.right() - 2
         red = QtGui.QColor('#d73737')
         assert all(
-            edited.pixelColor(caret_x, y) == red
+            edited.pixelColor(x, y) == red
+            for x in (caret_x, caret_x + 1)
             for y in range(editor.top() + 1, editor.bottom())
         )
         assert edited.pixelColor(caret_x, editor.top()) != red
