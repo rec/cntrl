@@ -1445,3 +1445,15 @@ context = 'Status page memory use and totals in kilobytes for both memory banks'
 en = 'Git:{commit:07x}'
 context = 'Status page firmware Git commit'
 
+[messages.edit_original_patch]
+en = 'Edit original patch'
+context = 'Switch from editing the local patch entry to editing the shared named patch'
+
+[messages.edit_patch_entry]
+en = 'Edit this entry'
+context = 'Switch from editing the shared named patch to editing this occurrence'
+
+[messages.instrument_channel]
+en = 'Instrument channel'
+context = 'Setup editor field for the shared instrument MIDI channel'
+

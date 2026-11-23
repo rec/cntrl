@@ -15,13 +15,80 @@ from cntrl.patch_chooser import (
     backups,
     binary_format,
     cli,
+    compiler_inputs,
     data_files,
     global_config,
+    models,
+    resolved,
     setup_sync,
     setup_sync_sources,
     setup_sync_store,
     transport,
 )
+from scripts import native_tests
+
+
+@pytest.mark.parametrize('binding_map', [False, True])
+def test_pedal_patch_reference_edit_syncs_to_the_selected_occurrence(
+    tmp_path: Path, native_programs: native_tests.NativePrograms, binding_map: bool
+) -> None:
+    source = tmp_path / 'show.toml'
+    source.write_text(
+        '[instruments.synth]\noutput="din"\nchannel=1\n'
+        '[patches.clean]\nprogram=7\nvolume=80\n'
+        '[patch_cycles]\nLive=[{patch="clean",display_name="Solo"},"clean","clean"]\n'
+        + ('[patches.clean.bindings]\nF={operation="back"}\n' if binding_map else '')
+    )
+    target = Path(__file__).parents[1] / 'firmware/test/target.json'
+    inputs = data_files.Sources(document=[f'Show={source}'], target=[str(target)])
+    trace = data_files.Trace()
+    base = cli.compile_inputs(inputs, trace=trace).setups['Show']
+    raw, saved = tmp_path / 'before.bin', tmp_path / 'after.bin'
+    raw.write_bytes(base)
+    native_tests.run_native(
+        [
+            str(native_programs.build('test/test_chooser.cpp')),
+            '--patch-edit',
+            str(raw),
+            str(saved),
+        ]
+    )
+    host = setup_sync.canonical(base)
+    pedal = setup_sync.canonical(saved.read_bytes())
+    local = pedal['patch_cycles']['Live'][0]
+    assert local['display_name'] == 'Solo'
+    assert local['volume'] == 85 and 'patch' not in local
+    if binding_map:
+        assert local['bindings'] == pedal['patches']['clean']['bindings']
+    assert pedal['patches']['clean']['volume'] == 82
+    other_local = pedal['patch_cycles']['Live'][1]
+    assert other_local['program'] == 8 and other_local['pan'] == 0
+    assert other_local['volume'] == 82 and 'patch' not in other_local
+    assert pedal['patch_cycles']['Live'][2]['patch'] == 'clean'
+    assert (
+        setup_sync.canonical(
+            resolved.refresh_memory(
+                saved.read_bytes(),
+                {},
+                target=models.Target.model_validate(
+                    compiler_inputs.read_document(target)
+                ),
+            )
+        )
+        == pedal
+    )
+    changes = setup_sync.merge_changes(
+        'Show',
+        *[setup_sync_store.Value(present=True, value=v) for v in (host, host, pedal)],
+    )
+    document = tomlkit.parse(source.read_text())
+    for edit in changes:
+        change = setup_sync_sources.destination(edit, trace, host, pedal)
+        assert change.choice == 'pedal', change
+        setup_sync_sources.apply_change(document, change)
+    source.write_text(tomlkit.dumps(document))
+    result = cli.compile_inputs(inputs).setups['Show']
+    assert setup_sync.canonical(result) == pedal
 
 
 @pytest.mark.parametrize('interrupted', [False, True])

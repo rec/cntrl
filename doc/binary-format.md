@@ -50,6 +50,7 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | Kind 3 | Song library, with the counts/records/`CSP9` core described below |
 | Tag 1 | Required, first, singleton core snapshot |
 | Tag 4, kind 3 | Optional singleton TOML song formatting preferences and authored song styles |
+| Tag 6, kind 1 | Optional authoring metadata for a local patch created by the setup editor |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
 The setup core snapshot uses the explicitly encoded `CSW1` schema 48,
@@ -78,6 +79,11 @@ bundle saves, song import/undo and backup conversion.
 They may contain opaque nested descriptive metadata. An optional subtree cannot
 introduce executable semantics. Known records must also reject unsupported
 values, such as an unrecognized operation or asset codec.
+
+Each local patch edit record starts with two little-endian u16 node IDs for the
+new root and the former browser root. Pairs of u16 node IDs then map each cloned
+node to its source node for export. The core graph contains the complete local
+patch and remains authoritative for playback.
 
 An editor refuses transformations that could invalidate opaque references.
 This includes remapping a setup table, changing node identities or upgrading a

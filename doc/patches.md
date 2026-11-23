@@ -446,6 +446,16 @@ does not write the setup. Persistent setup settings still use the existing
 explicit setup editing and Save workflow. There is no arbitrary attribute,
 expression or dictionary of arguments to evaluate.
 
+### Editing patch references on the pedal
+
+In the **Setups** menu, choose **Edit**. Changing program, bank, volume or pan on
+an entry that references a named patch makes a local copy for that entry.
+**Save** commits the copy. **Discard** keeps the reference. To change the shared
+definition, choose **Edit original patch** in the field list before adjusting a value.
+The heading indicates that you are editing the original. Choose **Edit this
+entry** to edit the selected entry again. **Instrument channel** always changes
+the instrument, so other patches that use it share that change.
+
 ## Switch timing and ownership
 
 Switches use A through E; F remains the context's Back control. `mode` defaults to

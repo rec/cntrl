@@ -8,7 +8,9 @@ constexpr uint16_t development_format = 0x8000u | 46u;
 constexpr bool supported_format(uint16_t format) { return format == development_format || format == (0x8000u | 44u) || format == (0x8000u | 45u); }
 enum class Kind : uint16_t { setup = 1, bundle = 2, songs = 3 };
 constexpr unsigned header_size = 20, record_size = 8, maximum_payload = 16u * 1024u * 1024u;
+constexpr uint16_t patch_edit_origins = 6;
 inline uint16_t read16(const uint8_t *p) { return uint16_t(p[0]) | uint16_t(p[1]) << 8; }
+inline void write16(uint8_t *p, uint16_t n) { p[0] = uint8_t(n); p[1] = uint8_t(n >> 8); }
 inline uint32_t read32(const uint8_t *p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
 }
@@ -112,6 +114,8 @@ public:
                 if (view_.artwork_offset || n < 4 || !reader.read(position_, bytes, 4)
                     || read32(bytes) > (n - 4) / 72) return false;
                 view_.artwork_offset = position_; view_.artwork_length = n;
+            } else if (tag == patch_edit_origins && kind_ == Kind::setup) {
+                if (n < 8 || n % 4) return false;
             } else view_.opaque = true;
         }
         position_ += n; return true;

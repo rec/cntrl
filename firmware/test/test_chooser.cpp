@@ -802,8 +802,64 @@ static void test_pages_run_independently(const std::string &path) {
     assert(!hw.splash && hw.idle_timeout == 0);
 }
 
+void test_patch_reference_edits(const char *input, const char *output) {
+    std::ifstream file(input, std::ios::binary);
+    std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), {}};
+    struct EditorHardware : Fake {
+        unsigned switch_capacity() const override { return 5; }
+    } hw;
+    TestStorage card; TestController controller(hw);
+    cntrl::Documents docs(card, hw, controller, hw);
+    docs.boot();
+    upload(docs, bytes); command(docs, "CNTRL SETUP FINISH");
+    assert(docs.document().patches() == 3);
+    assert(docs.edit_begin() && docs.edit_has_original(0));
+    assert(!docs.edit_adjust(0, 3, 0) && docs.edit_has_original(0));
+    assert(docs.edit_adjust(0, 2, 1) && docs.edit_has_original(0));
+    assert(docs.edit_value(1, 2) == 2);
+    assert(docs.edit_adjust(0, 3, 5) && !docs.edit_has_original(0));
+    assert(docs.edit_value(0, 3) == 85 && docs.edit_value(1, 3) == 80);
+    docs.edit_cancel();
+    assert(docs.edit_begin() && docs.edit_has_original(0));
+    assert(docs.edit_value(0, 3) == 80);
+    assert(docs.edit_adjust(0, 3, 5));
+    assert(docs.edit_save(0));
+    while (docs.busy()) docs.tick(1);
+    cntrl::SetupUi ui(docs, hw);
+    ui.enter(); ui.poll(0);
+    auto press = [&](unsigned button) { ui.button(button, true, 1); };
+    press(2); press(1); press(2); // Edit the selected setup.
+    press(1); press(1); press(2); // Open the third entry's fields.
+    press(0); // Last field action: Edit original patch.
+    assert(!std::strcmp(hw.panes[1].lines[1].text, "Edit original patch"));
+    press(2); press(1); press(1); press(1); press(2); // Volume of the original.
+    press(1); press(1);
+    assert(docs.edit_value(0, 3) == 85 && docs.edit_value(1, 3) == 82 && docs.edit_value(2, 3) == 82);
+    press(5); press(5); press(5); press(0); press(0); press(2); // Save.
+    while (docs.busy()) docs.tick(2);
+    ui.poll(0); assert(!ui.open() && !docs.dirty());
+    assert(docs.edit_begin() && docs.edit_adjust(1, 0, 1));
+    assert(docs.edit_adjust(1, 4, 65) && docs.edit_value(1, 4) == 0);
+    assert(docs.edit_value(0, 0) == 7 && docs.edit_value(2, 0) == 7);
+    assert(docs.edit_save(2));
+    while (docs.busy()) docs.tick(3);
+    cntrl::Documents reboot(card, hw, controller, hw);
+    reboot.boot();
+    assert(reboot.edit_begin() && !reboot.edit_has_original(0) && !reboot.edit_has_original(1));
+    assert(reboot.edit_has_original(2));
+    assert(reboot.edit_value(0, 3) == 85 && reboot.edit_value(1, 3) == 82);
+    const auto &document = reboot.document();
+    std::ofstream saved(output, std::ios::binary);
+    saved.write(reinterpret_cast<const char *>(document.data()), document.length());
+    assert(saved);
+}
+
 int main(int argc, char **argv) {
     assert(argc >= 3);
+    if (argc == 4 && !std::strcmp(argv[1], "--patch-edit")) {
+        test_patch_reference_edits(argv[2], argv[3]);
+        return 0;
+    }
     bool profiling = false, exhaustive = false;
     for (int i = 3; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--profile")) profiling = true;

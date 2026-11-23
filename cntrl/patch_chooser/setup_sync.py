@@ -108,9 +108,19 @@ def merge_changes(
         return []
     if all(v.present and isinstance(v.value, dict) for v in (base, host, pedal)):
         b, h, p = (cast(dict[str, object], v.value) for v in (base, host, pedal))
-        if ('parent' in b and 'parent' not in p) or (
-            b.get('type') == 'program-change'
-            and any(b.get(k) != p.get(k) for k in ('program', 'bank'))
+        if (
+            (
+                len(path) == 3
+                and path[0] == 'patch_cycles'
+                and isinstance(path[2], int)
+                and 'patch' in b
+                and p.get('type') == 'program-change'
+            )
+            or ('parent' in b and 'parent' not in p)
+            or (
+                b.get('type') == 'program-change'
+                and any(b.get(k) != p.get(k) for k in ('program', 'bank'))
+            )
         ):
             return [
                 Change(

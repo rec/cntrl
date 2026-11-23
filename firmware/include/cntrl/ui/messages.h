@@ -365,9 +365,12 @@ enum class Message : uint16_t {
     keyboard_input_dropped,
     ram_value,
     git_value,
+    edit_original_patch,
+    edit_patch_entry,
+    instrument_channel,
 };
-inline constexpr unsigned message_count = 362;
-inline constexpr uint32_t catalogue_schema = 0x011555e8u;
+inline constexpr unsigned message_count = 365;
+inline constexpr uint32_t catalogue_schema = 0x4da968f5u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -1526,6 +1529,12 @@ inline const char git_value_commit_spec[] CNTRL_I18N_STORAGE = "07x";
 inline const Field git_value_fields[] CNTRL_I18N_STORAGE = {
     {git_value_commit_name, git_value_commit_spec},
 };
+inline const char edit_original_patch_text[] CNTRL_I18N_STORAGE = "Edit original patch";
+inline const char edit_original_patch_short[] CNTRL_I18N_STORAGE = "";
+inline const char edit_patch_entry_text[] CNTRL_I18N_STORAGE = "Edit this entry";
+inline const char edit_patch_entry_short[] CNTRL_I18N_STORAGE = "";
+inline const char instrument_channel_text[] CNTRL_I18N_STORAGE = "Instrument channel";
+inline const char instrument_channel_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {patch_chooser_text, patch_chooser_short, nullptr, 0},
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
@@ -1889,6 +1898,9 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {keyboard_input_dropped_text, keyboard_input_dropped_short, nullptr, 0},
     {ram_value_text, ram_value_short, ram_value_fields, 4},
     {git_value_text, git_value_short, git_value_fields, 1},
+    {edit_original_patch_text, edit_original_patch_short, nullptr, 0},
+    {edit_patch_entry_text, edit_patch_entry_short, nullptr, 0},
+    {instrument_channel_text, instrument_channel_short, nullptr, 0},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

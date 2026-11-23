@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
     while (documents.busy()) documents.tick(0);
     assert(board.response == "CNTRL OK" && documents.select("Test")); documents.tick(0);
     assert(documents.edit_begin());
-    assert(documents.edit_adjust(4, 3, 1) && documents.edit_value(4, 3) == 101);
+    assert(documents.edit_adjust(4, 3, 1, true) && documents.edit_value(4, 3) == 101);
     assert(documents.edit_save(0)); while (documents.busy()) documents.tick(0);
     const auto &saved = documents.document();
     std::ofstream output(argv[2], std::ios::binary);

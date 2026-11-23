@@ -110,18 +110,23 @@ public:
                 else { hardware_.error(ui::i18n::text(ui::i18n::Message::restore_failed)); return; }
             }
         } else if (mode_ == Mode::patch) {
-            if (button < 2) patch_ = (patch_ + docs_.document().patches() + (button == 0 ? -1 : 1)) % docs_.document().patches();
-            else if (button == 2) { mode_ = Mode::field; field_ = 0; }
+            if (button < 2) {
+                patch_ = (patch_ + docs_.document().patches() + (button == 0 ? -1 : 1)) % docs_.document().patches();
+                original_ = false;
+            }
+            else if (button == 2) { mode_ = Mode::field; field_ = 0; original_ = false; }
             else if (button == 5) { mode_ = Mode::decision; item_ = 2; }
         } else if (mode_ == Mode::field) {
             if (button < 2) {
-                unsigned first = docs_.document().patches() ? 0 : 5, count = 8 - first;
+                unsigned first = docs_.document().patches() ? 0 : 5;
+                unsigned count = 8 - first + (first == 0 && docs_.edit_has_original(patch_));
                 field_ = first + (field_ - first + count + (button == 0 ? -1 : 1)) % count;
             }
+            else if (button == 2 && field_ == 8) { original_ = !original_; field_ = 0; }
             else if (button == 2) mode_ = Mode::value;
             else if (button == 5) { mode_ = docs_.document().patches() ? Mode::patch : Mode::decision; item_ = 2; }
         } else if (mode_ == Mode::value) {
-            if (button < 2) docs_.edit_adjust(patch_, field_, button == 0 ? -1 : 1);
+            if (button < 2) docs_.edit_adjust(patch_, field_, button == 0 ? -1 : 1, original_ && field_ < 5);
             else if (button == 2 || button == 5) mode_ = Mode::field;
         } else if (mode_ == Mode::decision) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
@@ -141,7 +146,7 @@ private:
     Revision revision_;
     unsigned changed_patches_ = 0, changed_routes_ = 0;
     bool changed_settings_ = false, changed_formatting_ = false;
-    bool locked_ = false, browsing_ = false, select_edit_ = false;
+    bool locked_ = false, browsing_ = false, select_edit_ = false, original_ = false;
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
     void close() { mode_ = Mode::closed; docs_.redraw(); }
@@ -150,6 +155,7 @@ private:
 #endif
     void begin_edit() {
         if (!docs_.edit_begin()) { mode_ = Mode::failed; render(); return; }
+        original_ = false;
         mode_ = Mode::patch; patch_ = field_ = 0;
         if (!docs_.document().patches()) { mode_ = Mode::field; field_ = 5; }
         render();
@@ -172,8 +178,11 @@ private:
             value = reinterpret_cast<const char *>(docs_.document().patch(patch_) + 12);
             value_label = ui::i18n::text(ui::i18n::Message::patch);
         }
-        else if (mode_ == Mode::field || mode_ == Mode::value) {
-            const char *fields[] = {ui::i18n::text(ui::i18n::Message::program), ui::i18n::text(ui::i18n::Message::bank), ui::i18n::text(ui::i18n::Message::channel), ui::i18n::text(ui::i18n::Message::volume), ui::i18n::text(ui::i18n::Message::pan), ui::i18n::text(ui::i18n::Message::brightness), ui::i18n::text(ui::i18n::Message::idle_seconds), ui::i18n::text(ui::i18n::Message::usb_midi)};
+        else if (mode_ == Mode::field && field_ == 8) {
+            title = ui::i18n::text(original_ ? ui::i18n::Message::edit_patch_entry : ui::i18n::Message::edit_original_patch);
+            value = "";
+        } else if (mode_ == Mode::field || mode_ == Mode::value) {
+            const char *fields[] = {ui::i18n::text(ui::i18n::Message::program), ui::i18n::text(ui::i18n::Message::bank), ui::i18n::text(ui::i18n::Message::instrument_channel), ui::i18n::text(ui::i18n::Message::volume), ui::i18n::text(ui::i18n::Message::pan), ui::i18n::text(ui::i18n::Message::brightness), ui::i18n::text(ui::i18n::Message::idle_seconds), ui::i18n::text(ui::i18n::Message::usb_midi)};
             title = fields[field_];
             int64_t v = docs_.edit_value(patch_, field_);
             if ((field_ == 1 && v == -1) || (field_ == 3 && v == -1) || (field_ == 4 && v == -65)) ui::i18n::format(number, sizeof(number), ui::i18n::Message::none);
@@ -223,7 +232,8 @@ private:
             ui::copy_caption(views[2].lines[0], ui::i18n::text(ui::i18n::Message::setup_menu));
             ui::copy_caption(views[2].lines[1], ui::i18n::text(ui::i18n::Message::no_midi_sent));
         } else {
-            ui::copy_caption(views[1].lines[0], ui::i18n::text(mode_ == Mode::action ? ui::i18n::Message::setup : mode_ == Mode::patch ? ui::i18n::Message::patch_cycle : ui::i18n::Message::field));
+            const bool shared_edit = original_ && (mode_ == Mode::field || mode_ == Mode::value) && field_ < 5;
+            ui::copy_caption(views[1].lines[0], ui::i18n::text(mode_ == Mode::action ? ui::i18n::Message::setup : mode_ == Mode::patch ? ui::i18n::Message::patch_cycle : shared_edit ? ui::i18n::Message::edit_original_patch : ui::i18n::Message::field));
             ui::copy_caption(views[1].lines[1], title);
             ui::copy_caption(views[2].lines[0], value_label);
             ui::copy_caption(views[2].lines[1], value);

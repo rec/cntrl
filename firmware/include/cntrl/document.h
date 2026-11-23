@@ -619,6 +619,7 @@ public:
         return -1;
     }
     unsigned graph_metadata() const { return graph_; }
+    const uint8_t *pickup_record() const { return pickup_ ? data_ + pickup_ : nullptr; }
     const uint8_t *node(unsigned i) const { return data_ + graph_ + u32(data_ + graph_ + 16 + i * 4); }
     unsigned browser_root(unsigned i) const { return u16(data_ + graph_ + 16 + nodes() * 4 + i * 2); }
     unsigned named_patches() const { return u16(data_ + graph_ + 14); }

@@ -375,3 +375,12 @@ text = 'RAM:{used_a:lu}/{total_a:lu}k {used_b:lu}/{total_b:lu}k'
 
 [messages.git_value]
 text = 'Git:{commit:07x}'
+
+[messages.edit_original_patch]
+text = 'Özgün patch’i düzenle'
+
+[messages.edit_patch_entry]
+text = 'Bu girdiyi düzenle'
+
+[messages.instrument_channel]
+text = 'Enstrüman kanalı'

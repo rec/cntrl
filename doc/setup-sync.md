@@ -74,6 +74,10 @@ require a complete program selection. The report identifies that materialization
 Unmapped edits require manual source placement and a fresh preview. There is no
 matching by display name or nearest list position.
 
+A saved local edit to a patch reference is reviewed as a replacement of that
+patch-cycle entry. An edit made through **Edit original patch** is reviewed
+against the named patch.
+
 An accepted import advances Base to the captured **Pedal** state, including when
 Host choices differ from it. It does not advance Base to an unuploaded merged
 Host result. Repeating an import therefore preserves subsequent host edits and

@@ -55,10 +55,8 @@ from .models import MidiEndpoint, Setup, Target
 
 def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> bytes:
     """Refresh current setup memory accounting directly from its wire records."""
-    if data.startswith(binary_format.MAGIC):
-        return binary_format.replace_core(
-            data, refresh_memory(binary_format.core(data), fonts, target=target)
-        )
+    saved = data
+    data = binary_format.core(data)
     graph = graph_offset(data)
     if struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
         raise binary_format.DocumentFormatError(
@@ -67,7 +65,7 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> b
     _, _, _, _, instruments, cycles, patches, *_ = HEADER.unpack_from(data)
     metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
     page = _page_offsets(data)[0]
-    settings = Setup.model_validate(tomlkit.parse(export(data)).unwrap())
+    settings = Setup.model_validate(tomlkit.parse(export(saved)).unwrap())
     windows = [
         data[i : i + graphics.SCREEN.size] for i in range(28, 76, graphics.SCREEN.size)
     ]
@@ -105,11 +103,11 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> b
     )
     address = metadata + METADATA.size - 8
     if struct.unpack_from('<I', data, address)[0] == needed:
-        return data
+        return saved
     refreshed = bytearray(data)
     struct.pack_into('<I', refreshed, address, needed)
     struct.pack_into('<I', refreshed, 20, crc32(refreshed[28:]))
-    return bytes(refreshed)
+    return binary_format.replace_core(saved, bytes(refreshed))
 
 
 def prepare_restore(
@@ -483,13 +481,14 @@ def arm_memory(data: bytes) -> dict[str, int]:
 
 def patch(data: bytes, node: int) -> dict[str, object]:
     """Decode any graph node into the common tagged Patch authoring table."""
-    data = binary_format.core(data)
+    data, edits = patch_edit_core(data)
     if len(data) >= 6 and struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
         data = upgrade(data)
     offset = graph_offset(data)
     source = read_source(data, offset)
     labels = input_labels(data)
     metadata = cast(dict[str, object], source.get('patch_metadata', {}))
+    apply_patch_edit_origins(edits, data, offset, metadata)
     return _patch(data, offset, node, metadata, set(), labels)
 
 
@@ -530,7 +529,7 @@ def export(data: bytes) -> str:
 
 
 def _decode(data: bytes) -> dict[str, object]:
-    data = binary_format.core(data)
+    data, edits = patch_edit_core(data)
     if len(data) >= 6 and struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
         data = upgrade(data)
     offset = graph_offset(data)
@@ -543,6 +542,7 @@ def _decode(data: bytes) -> dict[str, object]:
     source = read_source(data, offset)
     labels = input_labels(data)
     metadata = cast(dict[str, object], source.pop('patch_metadata', {}))
+    detached = apply_patch_edit_origins(edits, data, offset, metadata)
     source.pop('program_styles', None)
     source.pop('program_tags', None)
     source.pop('patch_styles', None)
@@ -737,8 +737,9 @@ def _decode(data: bytes) -> dict[str, object]:
         for position in range(start, start + count):
             root = roots[position]
             value = _patch(data, offset, root, metadata, set(), labels)
-            if 'patch' in value and _edited_program(
-                data, offset, root, metadata, named_nodes
+            if root in detached or (
+                'patch' in value
+                and _edited_program(data, offset, root, metadata, named_nodes)
             ):
                 cache = 76 + ni * 68 + nc * 68 + position * 82
                 value['display_name'] = _text(data, cache + 12, 64)
@@ -848,6 +849,48 @@ def _decode(data: bytes) -> dict[str, object]:
     if offset + size > len(data):
         raise binary_format.DocumentFormatError('truncated Patch graph')
     return result
+
+
+def patch_edit_core(data: bytes) -> tuple[bytes, list[bytes]]:
+    if not data.startswith(binary_format.MAGIC):
+        return data, []
+    records = binary_format.unpack(data, binary_format.Kind.setup).records
+    return records[0].data, [
+        r.data for r in records[1:] if r.tag == binary_format.PATCH_EDIT_ORIGINS
+    ]
+
+
+def apply_patch_edit_origins(
+    edits: list[bytes], data: bytes, graph: int, metadata: dict[str, object]
+) -> set[int]:
+    """Keep authoring annotations for graph nodes the pedal copied."""
+    count = GRAPH.unpack_from(data, graph)[2]
+    detached: set[int] = set()
+    copied: set[int] = set()
+    for edit in edits:
+        root, occurrence = struct.unpack_from('<HH', edit)
+        first = struct.unpack_from('<H', edit, 4)[0]
+        if root != first or not occurrence < root < count:
+            raise binary_format.DocumentFormatError('invalid local patch root')
+        detached.add(root)
+        for clone, origin in struct.iter_unpack('<HH', edit[4:]):
+            if not origin < root <= clone < count or clone in copied:
+                raise binary_format.DocumentFormatError('invalid local patch node')
+            copied.add(clone)
+            properties = cast(dict[str, object], metadata.get(str(origin), {}))
+            metadata[str(clone)] = {
+                k: v
+                for k, v in properties.items()
+                if k not in ('_derived', '_derived_program')
+            }
+        source = cast(dict[str, object], metadata.get(str(occurrence), {}))
+        target = cast(dict[str, object], metadata[str(root)])
+        target.update(
+            (k, source[k])
+            for k in ('name', 'display_name', 'style', 'tags')
+            if k in source
+        )
+    return detached
 
 
 def _patch(

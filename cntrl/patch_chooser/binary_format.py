@@ -94,6 +94,9 @@ def unpack(data: bytes, kind: Kind) -> Document:
                 or int.from_bytes(data[cursor : cursor + size], 'little') & (1 << 27)
             ):
                 raise DocumentFormatError('invalid device-global setting overrides')
+        elif tag == PATCH_EDIT_ORIGINS and kind == Kind.setup:
+            if flags or size < 8 or size % 4:
+                raise DocumentFormatError('invalid local patch origins')
         elif tag in (SONG_FORMATTING, SONG_ARTWORK) and kind == Kind.songs:
             if flags or any(r.tag == tag for r in records):
                 raise DocumentFormatError('invalid song presentation record')
@@ -152,7 +155,7 @@ def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
     return data.startswith(MAGIC) and any(
         not (
             kind == Kind.setup
-            and r.tag in (SOURCE, SETTING_OVERRIDES)
+            and r.tag in (SOURCE, SETTING_OVERRIDES, PATCH_EDIT_ORIGINS)
             or kind == Kind.songs
             and r.tag in (SONG_FORMATTING, SONG_ARTWORK)
         )
@@ -184,6 +187,7 @@ HEADER = struct.Struct('<4sHHHHII')
 RECORD = struct.Struct('<HHI')
 CORE = 1
 SOURCE = 2
+PATCH_EDIT_ORIGINS = 6
 SETTING_OVERRIDES = 3
 SONG_FORMATTING = 4
 SONG_ARTWORK = 5

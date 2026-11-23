@@ -2,6 +2,7 @@
 #include "ui/messages.h"
 #include <cntrl/usb_config.h>
 #include "controller.h"
+#include "patch_edit.h"
 #include "setup_names.h"
 #include "revisions.h"
 #include <cstdlib>
@@ -150,7 +151,7 @@ public:
         std::memcpy(staging_.data, active_.data, document_.length()); dirty_ = true; return true;
     }
     int64_t edit_value(unsigned patch, unsigned field) const {
-        Document d; if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_, global_values()) || (field <= 4 && patch >= d.patches())) return 0;
+        Document d; if (!dirty_ || !d.load(staging_.data, staging_.size, hardware_, global_values()) || (field <= 4 && patch >= d.patches())) return 0;
         const uint8_t *p = patch < d.patches() ? d.patch(patch) : nullptr;
         if (p && u16(p) == 65535 && field <= 4) return -1;
         switch (field) {
@@ -167,57 +168,75 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_adjust)
 #endif
-    bool edit_adjust(unsigned patch, unsigned field, int delta) {
+    bool edit_adjust(unsigned patch, unsigned field, int delta, bool original = false) {
         Document d;
-        if (!dirty_ || !d.load(staging_.data, document_.length(), hardware_, global_values()) || (field <= 4 && patch >= d.patches()) || field > 7) return false;
+        if (!dirty_ || !d.load(staging_.data, staging_.size, hardware_, global_values()) || (field <= 4 && patch >= d.patches()) || !delta || field > 7) return false;
         uint8_t *p = patch < d.patches() ? staging_.data + (d.patch(patch) - staging_.data) : nullptr;
         if (p && u16(p) == 65535 && field <= 4) return false;
-        int node = patch < d.patches() ? editable_node(d, patch) : -1;
-        if (field <= 4 && node < 0) return false;
-        if (!allocate(scratch_, document_.length())) return false;
-        std::memcpy(scratch_.data, staging_.data, document_.length());
+        bool reference = false;
+        int node = patch < d.patches() ? patch_edit_node(d, d.browser_root(patch), &reference) : -1;
+        if ((field <= 4 && node < 0) || (original && !reference)) return false;
+        uint8_t selection[11];
+        if (field <= 4) std::memcpy(selection, d.node(unsigned(node)) + 4, sizeof(selection));
         int64_t old = edit_value(patch, field), value = old + delta;
-        if (field == 0 && value >= 1 && value <= 128) p[4] = uint8_t(value - 1);
+        if (field == 0 && value >= 1 && value <= 128) selection[2] = uint8_t(value - 1);
         else if (field == 1) {
             uint32_t bank = 0xffffffffu; const uint8_t *mapping = nullptr;
             for (unsigned i = 0; i < d.mappings(); ++i) {
                 const uint8_t *m = d.mapping(i); uint32_t candidate = u32(m + 2);
-                if (u16(m) != u16(p)) continue;
+                if (u16(m) != u16(selection)) continue;
                 if (delta > 0 && (old < 0 || candidate > unsigned(old)) && (!mapping || candidate < bank)) { bank = candidate; mapping = m; }
                 if (delta < 0 && old >= 0 && candidate < unsigned(old) && (!mapping || candidate > bank)) { bank = candidate; mapping = m; }
             }
             if ((delta > 0 && !mapping) || (delta < 0 && old < 0)) return false;
-            p[5] = mapping ? mapping[6] : 255; p[6] = mapping ? mapping[7] : 255;
-            put32(staging_.data + (d.bank(patch) - staging_.data), bank);
-        } else if (field == 2 && value >= 1 && value <= 16) staging_.data[d.instrument(u16(p)) - staging_.data + 64] = uint8_t(value - 1);
-        else if (field == 3 && value >= -1 && value <= 127) p[7] = value < 0 ? 255 : uint8_t(value);
-        else if (field == 4 && value >= -65 && value <= 63) p[8] = value == -65 ? 255 : uint8_t(value + 64);
-        else if (field == 5 && value >= 0 && value <= 255) staging_.data[d.core_offset() + 18] = uint8_t(value);
-        else if (field == 6 && value >= 0 && value <= 2147483) put32(staging_.data + d.core_offset() + 24, unsigned(value) * 1000);
-        else if (field == 7 && value >= 0 && value <= 1) staging_.data[d.core_offset() + 19] = (staging_.data[d.core_offset() + 19] & ~uint8_t(2)) | (uint8_t(value) << 1);
-        else return false;
-        if (field <= 4) {
-            uint8_t *program = staging_.data + (d.node(unsigned(node)) - staging_.data) + 4;
-            std::memcpy(program + 2, p + 4, 5);
-            std::memcpy(program + 7, d.bank(patch), 4);
-            for (unsigned i = 0; i < d.patches(); ++i) {
-                if (editable_node(d, i) != node) continue;
-                uint8_t *cache = staging_.data + (d.patch(i) - staging_.data);
-                std::memcpy(cache + 4, program + 2, 5);
-                std::memcpy(staging_.data + (d.bank(i) - staging_.data), program + 7, 4);
+            selection[3] = mapping ? mapping[6] : 255;
+            selection[4] = mapping ? mapping[7] : 255;
+            put32(selection + 7, bank);
+        } else if (field == 3 && value >= -1 && value <= 127) selection[5] = value < 0 ? 255 : uint8_t(value);
+        else if (field == 4 && value >= -65 && value <= 63) selection[6] = value == -65 ? 255 : uint8_t(value + 64);
+        else if (!(field == 2 && value >= 1 && value <= 16)
+            && !(field == 5 && value >= 0 && value <= 255)
+            && !(field == 6 && value >= 0 && value <= 2147483)
+            && !(field == 7 && value >= 0 && value <= 1)) return false;
+        if (field <= 4 && field != 2 && reference && !original) {
+            if (!detach_patch(d, patch, scratch_) || !d.load(scratch_.data, scratch_.size, hardware_, global_values())) {
+                hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed));
+                return false;
             }
+            node = patch_edit_node(d, d.browser_root(patch));
+            if (node < 0) return false;
+        } else {
+            if (!allocate(scratch_, staging_.size)) return false;
+            std::memcpy(scratch_.data, staging_.data, staging_.size);
         }
+        auto *bytes = scratch_.data;
+        auto address = [&](const uint8_t *p) { return bytes + (p - d.data()); };
+        if (field == 2) address(d.instrument(u16(selection)))[64] = uint8_t(value - 1);
+        else if (field <= 4) {
+            std::memcpy(address(d.node(unsigned(node))) + 4, selection, sizeof(selection));
+            for (unsigned i = 0; i < d.patches(); ++i) {
+                if (patch_edit_node(d, d.browser_root(i)) != node) continue;
+                std::memcpy(address(d.patch(i)) + 4, selection + 2, 5);
+                std::memcpy(address(d.bank(i)), selection + 7, 4);
+            }
+        } else if (field == 5) bytes[d.core_offset() + 18] = uint8_t(value);
+        else if (field == 6) put32(bytes + d.core_offset() + 24, unsigned(value) * 1000);
+        else bytes[d.core_offset() + 19] = (bytes[d.core_offset() + 19] & ~uint8_t(2)) | (uint8_t(value) << 1);
         if (field >= 5 && d.global_mask_offset()) {
             uint64_t mask = d.explicit_settings() | (uint64_t(1) << (field - 5));
-            for (unsigned i = 0; i < 8; ++i) staging_.data[d.global_mask_offset() + i] = uint8_t(mask >> (i * 8));
+            for (unsigned i = 0; i < 8; ++i) bytes[d.global_mask_offset() + i] = uint8_t(mask >> (i * 8));
         }
-        binary::seal_setup(staging_.data, document_.length());
+        binary::seal_setup(bytes, scratch_.size);
         Document candidate;
-        if (!candidate.load(staging_.data, document_.length(), hardware_, global_values())) {
-            std::memcpy(staging_.data, scratch_.data, document_.length());
-            return false;
-        }
+        if (!candidate.load(bytes, scratch_.size, hardware_, global_values())) return false;
+        staging_.swap(scratch_);
         return true;
+    }
+    bool edit_has_original(unsigned patch) const {
+        Document d;
+        if (!dirty_ || !d.load(staging_.data, staging_.size, hardware_, global_values()) || patch >= d.patches()) return false;
+        bool reference = false;
+        return patch_edit_node(d, d.browser_root(patch), &reference) >= 0 && reference;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_save_trs_mode)
@@ -239,9 +258,9 @@ public:
     void edit_cancel() { dirty_ = false; staging_.clear(); scratch_.clear(); }
     bool edit_save(uint32_t now) {
         if (!dirty_ || busy() || hardware_.configuration_locked()) return false;
-        if (!allocate(scratch_, document_.length())) return false;
+        if (!allocate(scratch_, staging_.size)) return false;
         std::snprintf(record_name_, sizeof(record_name_), "%s", selected_);
-        expected_ = document_.length(); expected_crc_ = checksum(staging_.data, expected_); quiet_ = true;
+        expected_ = staging_.size; expected_crc_ = checksum(staging_.data, expected_); quiet_ = true;
         if (!start_write(now)) return false;
         return true;
     }
@@ -318,19 +337,6 @@ public:
     bool history_compare(const char *name, uint64_t number) { return begin_history(HistoryAction::compare, name, number); }
     bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
-    static int editable_node(const Document &document, unsigned patch) {
-        unsigned node = document.browser_root(patch);
-        for (unsigned visited = 0; visited < document.nodes(); ++visited) {
-            const uint8_t *p = document.node(node);
-            if (p[0] == 1) return int(node);
-            if (p[0] == 10) { node = u16(p + 4); continue; }
-            if (p[0] != 6 || u16(p + 4) != 65535) return -1;
-            int referenced = document.named_patch(reinterpret_cast<const char *>(p + 6));
-            if (referenced < 0) return -1;
-            node = unsigned(referenced);
-        }
-        return -1;
-    }
     enum class BrowsePhase { idle, scan, header, body, trailer, activate };
     struct Browse {
         char reference[64] = {}, candidate[64] = {}, canonical[64] = {}, result[64] = {};
