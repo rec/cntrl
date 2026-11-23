@@ -185,8 +185,8 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         assert left[upper_edge:][:2] != b'\0\x10'
         assert left[lower_edge - 320 :][:2] != b'\0\x10'
         assert left[lower_edge:][:2] == b'\0\x10'
-        assert left[(8 * 160 + 8) * 2 :][:2] == b'\0\x10'
-        assert left[(119 * 160 + 8) * 2 :][:2] == b'\0\x10'
+        assert left[(8 * 160 + 151) * 2 :][:2] == b'\0\x10'
+        assert left[(119 * 160 + 151) * 2 :][:2] == b'\0\x10'
         assert left[(48 * 160 + 8) * 2 :][:2] != b'\0\x10'
 
         def chord(a: str, b: str) -> None:

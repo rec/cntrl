@@ -77,6 +77,7 @@ struct ScenePanel {
     TextLine title;
     Bitmap bitmap;
 };
+enum class SwitchLabelAlignment : uint8_t { center, left, right };
 struct Pane {
     Bitmap bitmap;
     Bitmap second_bitmap;
@@ -89,6 +90,7 @@ struct Pane {
     ScreenGraphics graphics;
     bool split_middle = false;
     bool scene = false;
+    SwitchLabelAlignment switch_label_alignment = SwitchLabelAlignment::center;
     TextLine lines[max_lines];
     Circle circles[4];
     Rectangle rectangles[4];

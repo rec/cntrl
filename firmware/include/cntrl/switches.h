@@ -782,6 +782,10 @@ private:
         for (unsigned w = 0; w < windows; ++w) {
             Pane pane;
             pane.scene = pane.three_bands = true;
+            if (windows > 1) {
+                if (!w) pane.switch_label_alignment = SwitchLabelAlignment::left;
+                else if (w == windows - 1) pane.switch_label_alignment = SwitchLabelAlignment::right;
+            }
             pane.graphics = base;
             pane.graphics.pad = 0;
             auto &middle = pane.lines[1];
@@ -804,7 +808,6 @@ private:
                 if (!columns || input >= hardware_.input_count() || input % columns != w) continue;
                 auto &line = pane.lines[input < columns ? 2 : 0];
                 if (state.visual) style_line(line, *state.document, state.visual);
-                line.centered = !view || (view[32] & 1);
                 char label[64];
                 state.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(state.record + 6), hardware_.counters);
                 if (view && (view[32] & 2)) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", hardware_.input_label(input), label);

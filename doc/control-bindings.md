@@ -56,7 +56,8 @@ The [worked song library](../examples/patch-chooser/scenes.toml) gives Verse
 and Chorus different sounds and different actions for the same button.
 
 On a three-window controller the middle bands show the scene, song and
-active setlist from left to right. The upper and lower bands label the buttons.
+active setlist from left to right. The upper and lower bands hold the switch
+labels. The labels align left, center, and right in their respective windows.
 Two windows show the scene and song. A single window stacks them in its middle
 band. A scene, song, or setlist can set `style.image` relative to its source file.
 CNTRL fits it to the target on the computer. Add `display_name` to draw text

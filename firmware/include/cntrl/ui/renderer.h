@@ -277,6 +277,7 @@ private:
     void damage(Screen &screen, const Pane &content) {
         const auto &before = screen.requested;
         bool full = before.three_bands != content.three_bands || before.split_middle != content.split_middle || before.scene != content.scene || before.heading_band != content.heading_band || before.focused != content.focused
+            || before.switch_label_alignment != content.switch_label_alignment
             || before.bitmap.source != content.bitmap.source || before.bitmap.offset != content.bitmap.offset
             || before.second_bitmap.source != content.second_bitmap.source || before.second_bitmap.offset != content.second_bitmap.offset
             || before.second_bitmap.generation != content.second_bitmap.generation
@@ -323,6 +324,19 @@ private:
         drawing_ = int(screen); painting_ = content;
         auto &s = screens_[screen]; const auto v = s.viewport;
         fit_text(painting_, v);
+        if (painting_.switch_label_alignment != SwitchLabelAlignment::center) {
+            for (unsigned index : {0u, 2u}) {
+                auto &line = painting_.lines[index];
+                if (!line.text[0]) continue;
+                const auto ink = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);
+                const int inset = line.x;
+                // The heavier switch-label stroke extends one pixel to the right.
+                const int left = painting_.switch_label_alignment == SwitchLabelAlignment::right
+                    ? int(v.width) - inset - ink.width - 1 : inset;
+                line.centered = false;
+                line.x = uint16_t(std::max(0, left - ink.left));
+            }
+        }
         painting_region_ = !s.valid || preparing_ || animating_ ? Region{0, 0, int(v.width), int(v.height)} : s.damage;
         s.damage = {};
         painting_region_ = {std::max(0, painting_region_.left), std::max(0, painting_region_.top), std::min(int(v.width), painting_region_.right), std::min(int(v.height), painting_region_.bottom)};

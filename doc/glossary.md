@@ -57,6 +57,7 @@
 | **Undo** | In Patch Chooser, recalls a previous known program selection when available. It cannot reverse arbitrary actions in a patch. The looper and setlist editor have their own Undo actions. |
 | **Binding**, **assignment** | What a control does in a setup, song, or patch. A binding can run a patch on a switch gesture or send MIDI as an expression pedal moves. |
 | **Scene** | A patch that takes over all the pedal's windows and supplies the control bindings for that part of a song. For example, a song can use a verse scene, a chorus scene, then the verse scene again. |
+| **Switch labels** | The top and bottom positions in each scene window. Each label shows what its corresponding switch does. A three-window pedal has six switch label positions. |
 | **Binding map** | The assignments that determine what the pedal's controls do while a scene is active. |
 | **Song forward / song backward** | The setup's reserved controls for stepping forward or backward directly from any scene in a song or set. The defaults are F click and F double-click. |
 | **Page forward / page back** | Gestures or combinations for browsing utility pages. By default, hold F to advance or click F and hold the second press to go back. Songs and scenes can each supply their own combinations. Returning to the empty page shows the current scene. |
