@@ -463,10 +463,19 @@ private:
     void paint_step() {
         const auto &bitmap = second_bitmap_ ? painting_.second_bitmap : painting_.bitmap;
         const auto v = screens_[unsigned(drawing_)].viewport;
+        if (bitmap.source && !painting_.three_bands && bitmap_row_ < v.height) {
+            const unsigned y = bitmap_row_++;
+            const unsigned offset = bitmap.offset + (y * bitmap.height / v.height) * bitmap.width * 2;
+            auto *row = raster_.pixels() + y * v.width;
+            if (bitmap.width == v.width) bitmap.source->read_bitmap(bitmap.generation, offset, row, v.width);
+            else for (unsigned x = 0; x < v.width; ++x)
+                bitmap.source->read_bitmap(bitmap.generation, offset + (x * bitmap.width / v.width) * 2, row + x, 1);
+            return;
+        }
         const unsigned field = second_bitmap_ ? 3 : 1;
         const unsigned start = band_edge(painting_, field, v.height, false);
         const unsigned height = band_edge(painting_, field, v.height, true) - start;
-        if (bitmap.source && bitmap.width == v.width && bitmap.height <= height && bitmap_row_ < bitmap.height) {
+        if (painting_.three_bands && bitmap.source && bitmap.width == v.width && bitmap.height <= height && bitmap_row_ < bitmap.height) {
             const unsigned top = start + (height - bitmap.height) / 2;
             const unsigned row = bitmap_row_++;
             bitmap.source->read_bitmap(bitmap.generation, bitmap.offset + row * bitmap.width * 2,

@@ -609,7 +609,17 @@ static void doom_launches_only_from_its_utility_page(cntrl::Documents &documents
     cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0,1,2,3,4,5,5,3,2,bindings,6});
     auto view = host.pages_.save_view(); view.page = cntrl::ui::Pages::Page::doom; host.pages_.restore_view(view);
     const auto pane = host.pages_.view(0, 0, {}, {}, cntrl::Panic::Status::ready);
-    assert(!std::strcmp(pane.lines[0].text, "C Doom") && !pane.lines[1].text[0]);
+    assert(pane.bitmap.source && pane.bitmap.width == 160 && pane.bitmap.height == 128);
+    assert(!pane.three_bands && !pane.lines[0].text[0]);
+    renderer.show(0, pane);
+    for (unsigned i = 0; i < 1000; ++i) renderer.draw();
+    assert(renderer.ready());
+    for (unsigned y = 0; y < 64; ++y) for (unsigned x = 0; x < 64; ++x) {
+        const unsigned source = (y * pane.bitmap.height / 64) * pane.bitmap.width + x * pane.bitmap.width / 64;
+        uint16_t expected;
+        assert(pane.bitmap.source->read_bitmap(0, source * 2, &expected, 1));
+        assert(display.pixels[0][64 * y + x] == expected);
+    }
     assert(!host.looper_button(5, true) && host.looper_button(2, false));
     assert(platform.doom_launches == 0);
     assert(host.looper_button(2, true) && platform.doom_launches == 1);

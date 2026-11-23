@@ -12,6 +12,7 @@
 #include "fonts.h"
 #include "display.h"
 #include "controls.h"
+#include "doom_artwork.h"
 #include "pong.h"
 #include "flags.h"
 #include "status_snapshot.h"
@@ -297,8 +298,7 @@ public:
         if (page_ == Page::status && contact_) { contact_view(pane, contact); return pane; }
         if (page_ == Page::time && window == 0) { time_view(pane); return pane; }
         if (page_ == Page::doom) {
-            i18n::format(prompt_, sizeof(prompt_), i18n::Message::control_action, "", label(controls_.confirm), "Doom");
-            line(pane, 0, prompt_, vertical(64), vertical(24), settings_[R::status_font], true);
+            pane.bitmap = {&doom_artwork, 0, 0, DoomArtwork::width, DoomArtwork::height};
             return pane;
         }
         if (page_ == Page::menu) {
