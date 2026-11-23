@@ -11,7 +11,16 @@ these and avoid creating special-purpose scripts. You can add new functionality 
 
 AVOID APPROVALS WHENEVER YOU CAN.
 
-# Open the emulator without prompting for any change which affects the GUI in any way
+# Special commands.
+
+"Emulate" as a full sentence means to start the emulator.
+
+"Update" means to git fetch from origin/main and use that commit ID as a base for
+further work.
+
+"Flash" means to rebuild an image, if needed, and then flash the pedal if it is
+attached, otherwise report an error.
+
 
 # Hardware catalogue invariant
 
