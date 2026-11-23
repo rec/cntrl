@@ -352,10 +352,8 @@ public:
                 || u32(bytes + meta + scrolling_offset + 8) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
             for (const auto &connection : hardware.midi_outputs()) if (connection.port != midi::no_port
                 && (mask & (1u << connection.route)) && !midi::midi_output(midi::TrsMode(effective_ports[connection.port]))) return false;
-            for (const auto &connection : hardware.midi_outputs()) if (u16(bytes + names + 8) & (1u << connection.route)) {
-                if ((connection.transport == midi::OutputTransport::usb_device && !(flags & 8))
-                    || (connection.transport == midi::OutputTransport::usb_host && !(flags & 16))) return false;
-            }
+            // A device-wide USB override can silence a declared input without
+            // invalidating the saved capture filters.
             looper = names; names += 14;
         }
         unsigned arpeggiator = 0;

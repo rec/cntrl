@@ -14,6 +14,7 @@ struct Hardware : TestInputHardware {
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *name) const override { return midi_outputs().find(name); }
     bool supports_font(unsigned, unsigned) const override { return true; }
+    unsigned memory_capacity() const override { return 1024 * 1024; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     unsigned display_count() const override { return 3; }

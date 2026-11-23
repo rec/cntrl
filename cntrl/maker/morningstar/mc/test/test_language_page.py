@@ -43,11 +43,12 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         del source['pages']
         del source['regions']
         del source['layout']
-    language_position = [
+    utility_pages = [
         p.type
         for p in models.Setup.model_validate(source).pages.values()
         if p.type != 'patch-chooser'
-    ].index('language')
+    ]
+    language_position = utility_pages.index('language')
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'
     bundle.write_bytes(
@@ -84,8 +85,9 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
                     image.paste(panel, (i * 160, row * 128))
 
         advance(1000000)
-        for _ in range(language_position):
+        for page in utility_pages[1 : language_position + 1]:
             press('f')
+            assert session.tooltip_context[0] == page
         if language_position:
             advance(500000)
         english = session.frames['lcd-3']

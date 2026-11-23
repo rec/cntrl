@@ -70,33 +70,6 @@ def compile_show(
         show = models.Setup.model_validate(document)
     except ValidationError as error:
         raise CompilationError(validation_errors('show', error)) from error
-    if 'pages' not in show.model_fields_set:
-        if show.regions:
-            selected = {n for r in show.regions.values() for n in r.pages}
-            pages = {n: p for n, p in show.pages.items() if n in selected}
-            if 'None' in selected:
-                pages['None'] = models.Page(type='None')
-        else:
-            pages = {
-                n: p
-                for n, p in show.pages.items()
-                if p.min_windows <= len(target.displays)
-            }
-            if 'doom' in target.functions:
-                pages['doom'] = models.Page(type='doom')
-            pages['None'] = models.Page(type='None')
-        show = show.model_copy(
-            update={
-                'pages': pages,
-                'layout': (
-                    models.PageLayout(focus='tools')
-                    if show.layout is None
-                    and not show.regions
-                    and len(target.displays) > 1
-                    else show.layout
-                ),
-            }
-        )
     if 'doom' not in target.functions:
         for name, page in show.pages.items():
             if page.type == 'doom':
@@ -133,6 +106,41 @@ def compile_show(
             ]
         }
     )
+    if 'pages' not in show.model_fields_set:
+        if show.regions:
+            selected = {n for r in show.regions.values() for n in r.pages}
+            pages = {n: p for n, p in show.pages.items() if n in selected}
+            if 'None' in selected:
+                pages['None'] = models.Page(type='None')
+        else:
+            pages = {
+                n: p
+                for n, p in show.pages.items()
+                if p.min_windows <= len(target.displays)
+            }
+            if not looper.available_inputs(show, target) or not any(
+                e.name == target.default_midi_output and midi_endpoints.enabled(e, show)
+                for e in target.midi_endpoints
+            ):
+                if show.page_settings.looper is None:
+                    pages.pop('midi-looper')
+                if show.page_settings.arpeggiator is None:
+                    pages.pop('arpeggiator')
+            if 'doom' in target.functions:
+                pages['doom'] = models.Page(type='doom')
+            pages['None'] = models.Page(type='None')
+        show = show.model_copy(
+            update={
+                'pages': pages,
+                'layout': (
+                    models.PageLayout(focus='tools')
+                    if show.layout is None
+                    and not show.regions
+                    and len(target.displays) > 1
+                    else show.layout
+                ),
+            }
+        )
     try:
         parsed = show.definitions or models.Definitions.model_validate(
             definitions if definitions else {'profiles': []}

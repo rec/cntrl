@@ -124,6 +124,7 @@ def test_configurable_port_names_are_bound_by_explicit_slot() -> None:
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['trs_ports'] == {'auxiliary': 'expression'}
     assert exported['page_settings']['expression']['auxiliary']['output'] == 'synth'
+    assert {'midi-looper', 'arpeggiator'}.isdisjoint(exported['pages'])
     assert compiler.compile_show(exported, {}, [], target) == data
 
 

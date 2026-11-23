@@ -113,6 +113,14 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     assert exported['layout']['focus'] == ('tools' if count >= 2 else 'main')
     assert not {'menu', 'trs-ports', 'expression'} & pages.keys()
     assert pages['patch-chooser']['min_windows'] == 0
+    rotation = exported['regions']['tools' if count >= 2 else 'main']['pages']
+    start = rotation.index('panic') + 1
+    assert rotation[start : start + 3] == [
+        'midi-monitor',
+        'midi-looper',
+        'arpeggiator',
+    ]
+    assert {'looper', 'arpeggiator'} <= exported['page_settings'].keys()
     if count == 3:
         assert exported['regions']['tools']['pages'][-5:] == [
             'setups',

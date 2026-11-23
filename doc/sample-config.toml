@@ -40,7 +40,7 @@ pages = ["patch-chooser"]
 
 [regions.tools]
 
-pages = ["status", "cable-test", "panic", "time", "pong", "language", "setups", "songs-and-setlists", "switches", "calibration"]
+pages = ["status", "cable-test", "panic", "midi-monitor", "midi-looper", "arpeggiator", "time", "pong", "language", "setups", "songs-and-setlists", "switches", "calibration"]
 
 [layout]
 
@@ -158,6 +158,30 @@ patch = "sample"
 [pages.panic]
 
 type = "panic"
+ram2_bytes = 0
+min_windows = 1
+give_up_windows = []
+patch = "sample"
+
+[pages.midi-monitor]
+
+type = "midi-monitor"
+ram2_bytes = 0
+min_windows = 1
+give_up_windows = []
+patch = "sample"
+
+[pages.midi-looper]
+
+type = "midi-looper"
+ram2_bytes = 0
+min_windows = 1
+give_up_windows = []
+patch = "sample"
+
+[pages.arpeggiator]
+
+type = "arpeggiator"
 ram2_bytes = 0
 min_windows = 1
 give_up_windows = []

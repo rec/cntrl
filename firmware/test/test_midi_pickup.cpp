@@ -186,6 +186,7 @@ void test_disconnected_sources_drop_unsent_values_and_reacquire() {
 }
 struct PolicyHardware : TestInputHardware {
     cntrl::midi::Outputs midi_outputs() const override { return test_midi_outputs; }
+    unsigned memory_capacity() const override { return 1024 * 1024; }
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned, unsigned) const override { return true; }

@@ -584,7 +584,8 @@ def test_source_sync_round_trip_preserves_independent_pedal_setups(
             client.copy('Show', bytes(edited), True)
             client.ok('CNTRL SETUP FINISH')
             independent = bytearray(binary_format.core(client.download('Other')))
-            struct.pack_into('<H', independent, 18, 44)
+            flags = struct.unpack_from('<H', independent, 18)[0]
+            struct.pack_into('<H', independent, 18, (flags & ~255) | 44)
             struct.pack_into('<I', independent, 20, crc32(independent[28:]))
             client.copy('Other', bytes(independent), True)
             client.ok('CNTRL SETUP FINISH')

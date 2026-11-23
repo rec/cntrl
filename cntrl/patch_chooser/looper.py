@@ -16,19 +16,23 @@ def pack(show: models.Setup, target: models.Target) -> bytes:
     return CONFIG.pack(b'CLOP', 1, channels, inputs, outputs, settings.events)
 
 
-def routing(
-    settings: models.LooperSettings, show: models.Setup, target: models.Target
-) -> tuple[int, int, int]:
-    label = (
-        'arpeggiator' if isinstance(settings, models.ArpeggiatorSettings) else 'looper'
-    )
-    incoming = {
+def available_inputs(show: models.Setup, target: models.Target) -> dict[str, int]:
+    return {
         e.name: e.route
         for e in target.midi_endpoints
         if e.input
         and (e.transport != 'usb-device' or show.usb_device_midi)
         and (e.transport != 'usb-host' or show.usb_host_midi)
     }
+
+
+def routing(
+    settings: models.LooperSettings, show: models.Setup, target: models.Target
+) -> tuple[int, int, int]:
+    label = (
+        'arpeggiator' if isinstance(settings, models.ArpeggiatorSettings) else 'looper'
+    )
+    incoming = available_inputs(show, target)
     outgoing = {
         e.name: e.route
         for e in target.midi_endpoints

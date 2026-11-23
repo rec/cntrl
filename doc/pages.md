@@ -11,10 +11,13 @@ controls are hold F to browse utility pages forward, or click F and hold the
 second press to browse backward.
 Page and region names contain 1 to 31 printable ASCII characters.
 
-The default utility pages are Status, MIDI Cable Test, Panic, Time, Pong,
-Language, Setups, Songs and setlists, Switches, and Calibration, in that order.
+The default utility pages for testing are Status, MIDI Cable Test, Panic,
+MIDI Monitor, MIDI Looper, Arpeggiator, Time, Pong, Language, Setups,
+Songs and setlists, Switches, and Calibration, in that order.
 Press C on Setups, Songs and setlists, or Switches to open its editor.
 Pong requires three displays. Time and Language require two.
+MIDI Looper and Arpeggiator need an enabled MIDI input and output.
+Banked views are configured with the Banked patches they display.
 When the setup inherits the whole default cycle, Patch Chooser mode puts one
 Empty stop at the end and Setlist mode puts it at the start. Empty gives the
 performance view the full display. Authored page and region lists use only the
