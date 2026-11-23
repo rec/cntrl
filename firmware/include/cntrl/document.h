@@ -489,7 +489,25 @@ public:
             if (!size || size > 64 || cursor + size > length || !label_valid(bytes + cursor, size)) return false;
             cursor += size;
         }
-        if (cursor + u32(bytes + end + 12) != length) return false;
+        const unsigned source_length = u32(bytes + end + 12);
+        if (source_length > length - cursor) return false;
+        cursor += source_length;
+        unsigned artwork = 0;
+        if (cursor != length) {
+            if (length - cursor < 20 || std::memcmp(bytes + cursor, "CART", 4)
+                || std::memcmp(bytes + length - 8, "AEND", 4) || u32(bytes + length - 4) != length - cursor) return false;
+            const unsigned total = u32(bytes + cursor + 4), bindings = u32(bytes + cursor + 8);
+            if (bindings > total || total - bindings != ns || total > 65535 || total > (length - cursor - 20) / 8) return false;
+            artwork = cursor;
+            for (unsigned i = 0; i < total; ++i) {
+                const auto *entry = bytes + artwork + 12 + i * 8;
+                const unsigned width = u16(entry), height = u16(entry + 2), offset = u32(entry + 4);
+                if (!offset) {
+                    if (width || height) return false;
+                } else if (!width || !height || offset < 12 + 8 * total || offset > length - artwork - 8
+                    || uint64_t(width) * height * 2 > length - artwork - 8 - offset) return false;
+            }
+        }
         for (unsigned i = 0; i < ni; ++i)
             if (!text_valid(bytes + meta + metadata_header_size + i * 64, 32)
                 || !text_valid(bytes + meta + metadata_header_size + 32 + i * 64, 32)) return false;
@@ -555,11 +573,12 @@ public:
         core_length_ = length; opaque_ = persistent.opaque;
         instruments_ = ni; patch_cycles_ = nc; patches_ = np;
         styles_ = styles + core_; pages_ = page_start + core_; texts_ = texts + core_;
+        artwork_ = artwork ? artwork + core_ : 0;
         graph_ = graph + core_; streams_ = streams ? streams + core_ : 0;
         pickup_ = pickup ? pickup + core_ : 0; looper_ = looper ? looper + core_ : 0;
         loop_reset_ = loop_reset ? loop_reset + core_ : 0;
         globals_ = globals; explicit_fields_ = explicit_fields;
-        global_mask_offset_ = persistent.global_mask_offset;
+        global_mask_offset_ = persistent.auxiliary_record_offset;
         return true;
     }
     bool valid() const { return data_ != nullptr; }
@@ -634,6 +653,16 @@ public:
     const uint8_t *data() const { return data_; }
     unsigned core_offset() const { return core_; }
     unsigned core_length() const { return core_length_; }
+    uint32_t artwork_generation() const { return artwork_ ? u32(data_ + core_ + 20) : 0; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_bitmap_for)
+#endif
+    Bitmap bitmap_for(const BitmapSource *source, unsigned index) const {
+        if (!artwork_ || !index || index > u32(data_ + artwork_ + 4)) return {};
+        const auto *entry = data_ + artwork_ + 4 + index * 8;
+        if (!u32(entry + 4)) return {};
+        return {source, artwork_generation(), artwork_ + u32(entry + 4), u16(entry), u16(entry + 2)};
+    }
     bool has_opaque_metadata() const { return opaque_; }
     unsigned patch_cycles() const { return patch_cycles_; }
     unsigned instruments() const { return instruments_; }
@@ -820,6 +849,9 @@ public:
     static ScreenGraphics read_graphics(const uint8_t *p) {
         return {p[0], p[1], p[2], 0, u16(p + 4), u16(p + 6), u16(p + 8), u16(p + 10), u32(p + 12)};
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_page_record)
+#endif
     void page_record(Pane &view, unsigned page, unsigned index, bool already_sent, const char *state = "", const Counters *values = nullptr) const {
         const uint8_t *p = data_ + pages_;
         while (page--) p += 1 + p[0] * 8;
@@ -827,6 +859,13 @@ public:
         for (unsigned i = 0; i < count; ++i, p += 8) {
             TextLine &line = view.lines[i];
             line.graphics = read_graphics(data_ + styles_ + u16(p + 2) * 16);
+            if (artwork_) {
+                const unsigned index = u32(data_ + artwork_ + 8) + u16(p + 2);
+                if (u32(data_ + artwork_ + 16 + index * 8)) {
+                    line.artwork_index = uint16_t(index + 1);
+                    line.artwork_generation = artwork_generation();
+                }
+            }
             line.x = u16(p + 4);
             line.centered = (p[0] >= 2 && p[0] <= 5) || (p[0] >= 16 && p[0] <= 24);
             line.stippled = already_sent && p[1];
@@ -1120,7 +1159,7 @@ private:
     }
     static bool graphics_valid(const uint8_t *p, const Hardware &hardware, bool binding = false) {
         return (p[0] == 255 ? u32(p + 12) && hardware.supports_font_asset(u32(p + 12), p[1])
-                           : !u32(p + 12) && hardware.supports_font(p[0], p[1])) && !(p[3] & (binding ? ~15u : 255u))
+                           : (binding ? u32(p + 12) <= 65535 : !u32(p + 12)) && hardware.supports_font(p[0], p[1])) && !(p[3] & (binding ? ~15u : 255u))
             && 2u * p[2] < hardware.display_width()
             && 2u * p[2] + u16(p + 8) <= hardware.display_height()
             && u16(p + 8) && u16(p + 10) < u16(p + 8);
@@ -1170,7 +1209,7 @@ private:
     unsigned length_ = 0, instruments_ = 0, patch_cycles_ = 0, patches_ = 0;
     unsigned core_ = 0, core_length_ = 0;
     bool opaque_ = false;
-    unsigned styles_ = 0, pages_ = 0, texts_ = 0;
+    unsigned styles_ = 0, pages_ = 0, texts_ = 0, artwork_ = 0;
     unsigned graph_ = 0, streams_ = 0, pickup_ = 0, looper_ = 0, loop_reset_ = 0;
     const GlobalSettings::Values *globals_ = nullptr;
     uint64_t explicit_fields_ = UINT64_MAX;

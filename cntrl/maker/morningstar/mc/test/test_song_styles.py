@@ -18,10 +18,21 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
     tmp_path: Path, file_regression: FileRegressionFixture
 ) -> None:
     target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
+    artwork = tmp_path / 'light.png'
+    Image.new('RGB', (160, 64), 'red').save(artwork)
     source = {
         'pages': {'menu': {'type': 'menu'}, 'patches': {'type': 'patch-chooser'}},
         'regions': {'main': {'pages': ['menu', 'patches']}},
-        'patch_cycles': {'Sounds': [{'output': 'din', 'channel': 1, 'program': 99}]},
+        'patch_cycles': {
+            'Sounds': [
+                {
+                    'output': 'din',
+                    'channel': 1,
+                    'program': 99,
+                    'style': {'image': str(artwork)},
+                }
+            ]
+        },
         'use_animations': False,
         'navigation': {
             'song_forward': 'f',
@@ -48,8 +59,6 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         },
         'binding_view': {'status': 'Ready'},
     }
-    artwork = tmp_path / 'light.png'
-    Image.new('RGB', (160, 64), 'red').save(artwork)
     mixed_artwork = tmp_path / 'mixed.png'
     mixed = Image.new('RGB', (160, 64), 'red')
     mixed.paste('blue', (80, 0, 160, 64))
@@ -57,7 +66,7 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
     library = songs.Library.model_validate(
         {
             'patches': {
-                'scene': scene,
+                'scene': scene | {'style': {'image': str(mixed_artwork)}},
                 'override': scene
                 | {
                     'style': {'foreground_color': 'red', 'font_name': 'CaveatBold'},
@@ -72,12 +81,12 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
                 {
                     'name': 'Our song',
                     'display_name': 'Our show',
-                    'image': str(artwork),
                     'navigation': {'page_forward': 'd+e'},
                     'enter': {'output': 'din', 'channel': 1, 'program': 11},
                     'exit': {'output': 'din', 'channel': 1, 'program': 12},
                     'patches': ['scene', 'override', 'ordinary'],
                     'style': {
+                        'image': str(artwork),
                         'foreground_color': 'navy',
                         'background_color': '0xFFFFF0',
                         'font_name': 'CourierPrime',
@@ -95,13 +104,21 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
                 {
                     'name': 'Final song',
                     'display_name': 'Final song',
-                    'image': str(mixed_artwork),
                     'patches': ['scene'],
-                    'style': {'background_color': 'blue', 'font_name': 'CourierPrime'},
+                    'style': {
+                        'image': str(mixed_artwork),
+                        'background_color': 'blue',
+                        'font_name': 'CourierPrime',
+                    },
                 },
             ],
             'setlists': [
-                {'name': 'Tonight', 'songs': ['Our song', 'Next song', 'Final song']}
+                {
+                    'name': 'Tonight',
+                    'display_name': 'Tonight',
+                    'style': {'image': str(mixed_artwork)},
+                    'songs': ['Our song', 'Next song', 'Final song'],
+                }
             ],
         }
     )
@@ -159,6 +176,8 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
             0x0010,
         }
         left = first['lcd-1']
+        assert left[(48 * 160 + 8) * 2 :][:2] == b'\xf8\x00'
+        assert first['lcd-3'][(48 * 160 + 8) * 2 :][:2] == b'\xf8\x00'
         assert left[:2] == b'\0\0'  # The rounded corner is clipped.
         upper_edge = (32 * 160 + 8) * 2
         lower_edge = (96 * 160 + 8) * 2

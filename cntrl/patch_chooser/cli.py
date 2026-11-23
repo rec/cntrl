@@ -446,6 +446,13 @@ def download_files(
                 f'{name}: cannot decode setup: {error}'
             ) from error
         source = tomlkit.parse(text).unwrap()
+        image_paths, artwork = resolved.artwork_files(data)
+        if image_paths:
+            from .display import remap_artwork
+
+            remap_artwork(source, image_paths)
+            text = tomlkit.dumps(source)
+            files.update(artwork)
         setups[name] = data
         sources[name] = source
         files[Path(f'{name}.toml')] = text.encode()

@@ -21,7 +21,7 @@ programs, patches and shared parameters. Named tag styles live directly in
 | `background_color` | Color behind the line |
 | `font_name` | Exact installed bitmap font family |
 | `horizontal_scale` | Positive width multiplier; overrides the font default |
-| `icon` | Image-file reference; empty string suppresses an inherited icon |
+| `image` | Artwork path relative to the declaring file. An empty string clears inherited artwork. |
 
 All five properties are optional. Omission leaves the lower-precedence value
 unchanged. Merge individual properties, not whole style objects. Apply centrally
@@ -137,14 +137,15 @@ there is no extra style color or `half` setting.
 
 ## Optional style icons
 
-Every style may include an optional `icon` image-file reference, for example
-`icon = 'images/sax.png'`. It follows the same property override order as colors
-and font names. Omission inherits; `icon = ''` explicitly suppresses an inherited
-icon. Programs, patches and tags have no separate direct icon property.
-Preserve partial styles, including empty icon strings, through download/recompile.
+Use `image = 'images/sax.png'` in a style to supply artwork. Images inherit and
+override through the same style order as colors and font names. Use `image = ''`
+to clear an inherited image. CNTRL sizes artwork on the computer before copying
+it to the controller. In the performance view, scene, song, and setlist artwork
+appears in their respective body areas. In Patch Chooser and binding views,
+artwork appears behind the styled field.
 
-Image loading, path resolution, conversion, embedding, layout and rendering remain
-future work. Resolving the reference does not display an icon yet.
+Rename the old `style.icon` field to `style.image`. Move a song's former
+top-level `image` into its `style` table.
 
 ## Patch views and fields
 

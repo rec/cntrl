@@ -43,7 +43,7 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     bool shift_switch_editor(bool backwards) override { return switches.shift(backwards); }
     bool state(unsigned operation, uint32_t value) override { return app->state(operation, value, *this); }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
-    void scene_titles(cntrl::TextLine &song, cntrl::Bitmap &bitmap, cntrl::TextLine &setlist) const override { app->scene_titles(song, bitmap, setlist); }
+    void scene_panels(cntrl::ScenePanel &scene, cntrl::ScenePanel &song, cntrl::ScenePanel &setlist, const cntrl::Document &document, const uint8_t *binding) const override { app->scene_panels(scene, song, setlist, document, binding); }
     bool song_boundary() const override { return app && app->song_boundary(); }
     cntrl::midi::Bridge::Delivery prepare_leave(cntrl::PatchExecutor &invocation) override { return switches.prepare_leave(invocation); }
     cntrl::midi::Bridge::Delivery bind_controls(const cntrl::Document &d, unsigned node, cntrl::PatchExecutor &invocation) override { return switches.bind_controls(d, node, invocation); }

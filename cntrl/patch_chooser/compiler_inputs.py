@@ -91,12 +91,25 @@ def normalize_references(
         )
         return str(source_reference(origin, value, relocations))
 
-    if isinstance(songs := document.get('songs'), list):
-        for i, entry in enumerate(songs):
-            if isinstance(entry, dict):
-                song = cast(dict[str, object], entry)
-                if isinstance(image := song.get('image'), str):
-                    song['image'] = reference(image, ('songs', i, 'image'))
+    def artwork(node: object, context: tuple[str | int, ...]) -> None:
+        if isinstance(node, dict):
+            fields = cast(dict[str, object], node)
+            if (
+                isinstance(image := fields.get('image'), str)
+                and image
+                and (
+                    context[-1:] in (('style',), ('status_style',))
+                    or context[-2:-1] in (('line_styles',), ('tag_styles',))
+                )
+            ):
+                fields['image'] = reference(image, (*context, 'image'))
+            for name, value in fields.items():
+                artwork(value, (*context, name))
+        elif isinstance(node, list):
+            for i, value in enumerate(node):
+                artwork(value, (*context, i))
+
+    artwork(document, ())
     for field in ('fonts', 'font_sources'):
         if isinstance(fonts := document.get(field), dict):
             for n, f in fonts.items():

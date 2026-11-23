@@ -37,6 +37,9 @@ struct TextLine {
     uint16_t alternate_color = 0;
     TextOutline outline = TextOutline::none;
     bool artwork_foreground = false;
+    bool artwork_background = false;
+    uint16_t artwork_index = 0;
+    uint32_t artwork_generation = 0;
 #ifdef CNTRL_EMULATOR
     uint16_t translation_id = 0; // Catalogue index plus one, or zero for other text.
     bool translation_short = false;
@@ -67,8 +70,16 @@ struct Bitmap {
     uint32_t generation = 0, offset = 0;
     uint16_t width = 0, height = 0;
 };
+struct BitmapLookup : BitmapSource {
+    virtual Bitmap bitmap_for(uint32_t generation, unsigned index) const = 0;
+};
+struct ScenePanel {
+    TextLine title;
+    Bitmap bitmap;
+};
 struct Pane {
     Bitmap bitmap;
+    Bitmap second_bitmap;
     unsigned page = ~0u;
     bool performance = false;
     bool three_bands = false;

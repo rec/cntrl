@@ -58,14 +58,14 @@ and Chorus different sounds and different actions for the same button.
 On a three-window controller the middle bands show the scene, song and
 active setlist from left to right. The upper and lower bands label the buttons.
 Two windows show the scene and song. A single window stacks them in its middle
-band. An optional `image` in the song table is relative to the song file.
+band. A scene, song, or setlist can set `style.image` relative to its source file.
 CNTRL fits it to the target on the computer. Add `display_name` to draw text
 over the image, or use it alone for a shorter title. Without either field the
 song name appears. A single-song file can omit the name and use its filename
 stem. Setlists refer to the song name.
 
-When a song has both an image and a display name, CNTRL checks the contrast
-under the title at compile time. It keeps an explicit song foreground color
+When a scene, song, or setlist has artwork and a title, CNTRL checks the contrast
+under the title at compile time. It keeps an explicit foreground color
 and warns if the contrast is low. With an automatic color, it chooses black
 or white and adds a one-pixel outline if both colors need more contrast.
 

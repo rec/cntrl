@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import tomlkit
+from PIL import Image
 
 from cntrl.patch_chooser import compiler, compiler_inputs, display, models, resolved
 
@@ -170,32 +171,37 @@ def test_program_table_tags_merge_as_a_union(
     assert exported.definitions.programs[0].tags == ['sax', 'whole-system']
 
 
-@pytest.mark.parametrize('icon', ['images/patch.png', ''])
-def test_icons_preserve_explicit_owners_through_recompilation(
-    show: dict[str, object], target: models.Target, icon: str
+@pytest.mark.parametrize('clear', [False, True])
+def test_images_preserve_explicit_owners_through_recompilation(
+    show: dict[str, object], target: models.Target, tmp_path: Path, clear: bool
 ) -> None:
+    for name in ('patch', 'sax', 'program'):
+        Image.new('RGB', (12, 12), 'white').save(tmp_path / f'{name}.png')
+    image = '' if clear else str(tmp_path / 'patch.png')
     show = models.Setup.model_validate(show).model_dump(exclude_none=True)
-    show['tag_styles']['sax'] = {'icon': 'images/sax.png'}
-    show['definitions']['programs'][0]['style'] = {'icon': 'images/program.png'}
-    show['patch_cycles']['Song 1'][0]['style'] = {'icon': icon}
+    show['tag_styles']['sax'] = {'image': str(tmp_path / 'sax.png')}
+    show['definitions']['programs'][0]['style'] = {
+        'image': str(tmp_path / 'program.png')
+    }
+    show['patch_cycles']['Song 1'][0]['style'] = {'image': image}
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['tag_styles']['sax'] == {'icon': 'images/sax.png'}
+    assert exported['tag_styles']['sax'] == {'image': str(tmp_path / 'sax.png')}
     assert exported['definitions']['programs'][0]['style'] == {
-        'icon': 'images/program.png'
+        'image': str(tmp_path / 'program.png')
     }
-    assert exported['patch_cycles']['Song 1'][0]['style'] == {'icon': icon}
+    assert exported['patch_cycles']['Song 1'][0]['style'] == {'image': image}
     assert 'style' not in exported['patch_cycles']['Song 1'][1]
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
-def test_style_icons_inherit_and_can_be_suppressed() -> None:
+def test_style_images_inherit_and_can_be_suppressed() -> None:
     inherited = display.merge_style(
-        models.Style(icon='images/sax.png'), models.Style(foreground_color='red')
+        models.Style(image='images/sax.png'), models.Style(foreground_color='red')
     )
-    assert inherited.icon == 'images/sax.png'
+    assert inherited.image == 'images/sax.png'
     assert (
-        display.merge_style(inherited, models.Style(icon='images/patch.png')).icon
+        display.merge_style(inherited, models.Style(image='images/patch.png')).image
         == 'images/patch.png'
     )
-    assert display.merge_style(inherited, models.Style(icon='')).icon == ''
+    assert display.merge_style(inherited, models.Style(image='')).image == ''

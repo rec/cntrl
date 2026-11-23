@@ -18,7 +18,10 @@ public:
     PageHost(Platform &platform, Application &application, Documents &documents,
              Display &display, const Fonts &fonts, Renderer &renderer, Controls controls)
         : pages_(fonts, display.viewport(display.count() - 1)), platform_(platform),
-          application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) { pages_.controls(controls); pages_.monitor = &platform_.midi_monitor(); pages_.languages = &platform_; }
+          application_(application), documents_(documents), display_(display), renderer_(renderer), controls_(controls) {
+        pages_.controls(controls); pages_.monitor = &platform_.midi_monitor(); pages_.languages = &platform_;
+        renderer_.artwork_source(application_);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_prepare_display)
 #endif

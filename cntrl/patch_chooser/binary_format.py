@@ -98,12 +98,24 @@ def unpack(data: bytes, kind: Kind) -> Document:
             if flags or size < 8 or size % 4:
                 raise DocumentFormatError('invalid local patch origins')
         elif (
-            tag in (SONG_FORMATTING, SONG_ARTWORK, SONG_TITLE_CONTRAST)
+            tag
+            in (
+                SONG_FORMATTING,
+                SONG_ARTWORK,
+                SONG_TITLE_CONTRAST,
+                SETLIST_ARTWORK,
+                SETLIST_TITLE_CONTRAST,
+                SCENE_ARTWORK,
+                SCENE_TITLE_STYLE,
+            )
             and kind == Kind.songs
         ):
             if flags or any(r.tag == tag for r in records):
                 raise DocumentFormatError('invalid song presentation record')
-            if tag == SONG_TITLE_CONTRAST and not size:
+            if (
+                tag in (SONG_TITLE_CONTRAST, SETLIST_TITLE_CONTRAST, SCENE_TITLE_STYLE)
+                and not size
+            ):
                 raise DocumentFormatError('empty song title contrast record')
         elif flags & REQUIRED:
             raise DocumentFormatError(f'unsupported required persistent record {tag}')
@@ -162,7 +174,16 @@ def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
             kind == Kind.setup
             and r.tag in (SOURCE, SETTING_OVERRIDES, PATCH_EDIT_ORIGINS)
             or kind == Kind.songs
-            and r.tag in (SONG_FORMATTING, SONG_ARTWORK, SONG_TITLE_CONTRAST)
+            and r.tag
+            in (
+                SONG_FORMATTING,
+                SONG_ARTWORK,
+                SONG_TITLE_CONTRAST,
+                SETLIST_ARTWORK,
+                SETLIST_TITLE_CONTRAST,
+                SCENE_ARTWORK,
+                SCENE_TITLE_STYLE,
+            )
         )
         for r in unpack(data, kind).records[1:]
     )
@@ -197,6 +218,10 @@ SETTING_OVERRIDES = 3
 SONG_FORMATTING = 4
 SONG_ARTWORK = 5
 SONG_TITLE_CONTRAST = 7
+SETLIST_ARTWORK = 8
+SETLIST_TITLE_CONTRAST = 9
+SCENE_ARTWORK = 10
+SCENE_TITLE_STYLE = 11
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096

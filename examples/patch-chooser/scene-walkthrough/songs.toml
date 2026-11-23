@@ -60,10 +60,9 @@ value = 0
 
 [[songs]]
 name = 'First Light'
-image = 'first-light.png'
 display_name = 'First Light'
 patches = ['intro', 'verse', 'chorus']
-style = { foreground_color = 'navy', background_color = '0xFFF4D6' }
+style = { image = 'first-light.png', foreground_color = 'navy', background_color = '0xFFF4D6' }
 
 [[songs]]
 name = 'River Road'

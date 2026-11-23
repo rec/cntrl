@@ -35,7 +35,7 @@ struct View {
     unsigned offset = 0, length = 0;
     bool opaque = false;
     uint64_t global_explicit_mask = UINT64_MAX;
-    unsigned global_mask_offset = 0;
+    unsigned auxiliary_record_offset = 0; // Global mask for setups, first extended artwork record for songs.
     unsigned artwork_offset = 0, artwork_length = 0;
     unsigned title_contrast_offset = 0;
 };
@@ -104,10 +104,10 @@ public:
                 if (source_ || n != 32) return false;
                 source_ = true;
             } else if (tag == 3 && kind_ == Kind::setup) {
-                if (view_.global_mask_offset || n != 8 || !reader.read(position_, bytes, 8)) return false;
+                if (view_.auxiliary_record_offset || n != 8 || !reader.read(position_, bytes, 8)) return false;
                 const uint64_t mask = uint64_t(read32(bytes)) | uint64_t(read32(bytes + 4)) << 32;
                 if ((mask >> 34) || (mask & (uint64_t(1) << 27))) return false;
-                view_.global_explicit_mask = mask; view_.global_mask_offset = position_;
+                view_.global_explicit_mask = mask; view_.auxiliary_record_offset = position_;
             } else if (tag == 4 && kind_ == Kind::songs) {
                 if (song_formatting_) return false;
                 song_formatting_ = true;
@@ -118,6 +118,14 @@ public:
             } else if (tag == 7 && kind_ == Kind::songs) {
                 if (view_.title_contrast_offset || !n) return false;
                 view_.title_contrast_offset = position_;
+            } else if (tag >= 8 && tag <= 11 && kind_ == Kind::songs) {
+                const unsigned bit = 1u << (tag - 8);
+                if (extended_artwork_seen_ & bit) return false;
+                if (!(tag & 1)) {
+                    if (n < 4 || !reader.read(position_, bytes, 4) || read32(bytes) > (n - 4) / 72) return false;
+                } else if (!n || n % (tag == 9 ? 6 : 10)) return false;
+                if (!extended_artwork_seen_) view_.auxiliary_record_offset = position_ - record_size;
+                extended_artwork_seen_ |= bit;
             } else if (tag == patch_edit_origins && kind_ == Kind::setup) {
                 if (n < 8 || n % 4) return false;
             } else view_.opaque = true;
@@ -126,6 +134,7 @@ public:
     }
 private:
     bool song_formatting_ = false;
+    uint8_t extended_artwork_seen_ = 0;
     enum class Phase { header, hash, records, done };
     Phase phase_ = Phase::header;
     unsigned length_, position_ = 0, records_ = 0;

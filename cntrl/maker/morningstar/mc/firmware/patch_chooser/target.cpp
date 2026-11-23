@@ -305,7 +305,14 @@ public:
     bool looper_storage_ready() const { return midi_storage_idle(); }
     FLASHMEM bool state(unsigned operation, uint32_t value) override { return application.state(operation, value, *this); }
     bool song_navigation_active() const override { return application.song_navigation_active(); }
-    void scene_titles(cntrl::TextLine &song, cntrl::Bitmap &bitmap, cntrl::TextLine &setlist) const override { application.scene_titles(song, bitmap, setlist); }
+    void scene_panels(cntrl::ScenePanel &scene, cntrl::ScenePanel &song, cntrl::ScenePanel &setlist, const cntrl::Document &document, const uint8_t *binding) const override { application.scene_panels(scene, song, setlist, document, binding); }
+    const cntrl::Document *artwork_document(uint32_t generation) const override {
+#if CNTRL_SWITCHES
+        return switches.artwork_document(generation);
+#else
+        (void)generation; return nullptr;
+#endif
+    }
     const uint8_t *setup_navigation() const override { return application.layout.navigation(); }
     bool song_boundary() const override { return application.song_boundary(); }
     bool song_style(cntrl::ScreenGraphics &style) const override { return application.song_style(style); }

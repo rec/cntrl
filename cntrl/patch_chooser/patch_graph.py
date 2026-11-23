@@ -149,6 +149,7 @@ class PatchCompiler:
         )
         self.target, self.errors, self.documents = target, errors, documents
         self.source_snapshots = source_snapshots
+        self.binding_images: list[str] = []
         self.counters = dict(show.counters)
         self.values: list[models.ConcretePatch] = []
         self.nodes: list[bytes] = []
@@ -618,6 +619,12 @@ class PatchCompiler:
         records: list[bytes] = []
         visuals: list[bytes] = []
         expressions: dict[str, models.ExpressionAssignment] = {}
+        binding_view = value.binding_view
+        if binding_view is None and any(
+            isinstance(v, models.SwitchBinding) and v.style and v.style.image
+            for v in (value.bindings or {}).values()
+        ):
+            binding_view = models.BindingView(status=' ')
         navigation = (
             inputs.navigation_masks(
                 value.navigation, self.target, inputs.NAVIGATION[2:]
@@ -738,7 +745,7 @@ class PatchCompiler:
                     )
                 )
             )
-            if view := value.binding_view:
+            if view := binding_view:
                 short = f'{key}: {label}' if view.show_labels else label
                 visuals.append(
                     self.binding_graphics(short, action.style, view, view.maximum_size)
@@ -766,7 +773,7 @@ class PatchCompiler:
             midi_endpoints.ports(self.target.midi_endpoints),
         )
         visual = b''
-        if view := value.binding_view:
+        if view := binding_view:
             if len(records) > 6:
                 raise ValueError(
                     f'{path}.binding_view: at most six switches are supported'
@@ -808,7 +815,7 @@ class PatchCompiler:
                 (4 if navigation else 0)
                 | (
                     1
-                    if value.binding_view is not None
+                    if binding_view is not None
                     else 2
                     if value.style is not None
                     else 0
@@ -818,7 +825,7 @@ class PatchCompiler:
             + b''.join(records)
             + (
                 visual
-                if value.binding_view is not None
+                if binding_view is not None
                 else self.binding_graphics(' ', value.style, models.BindingView(), 16)
                 if value.style is not None
                 else b''
@@ -916,7 +923,7 @@ class PatchCompiler:
             raise ValueError(f'binding text does not fit: {text!r}')
         foreground, background = graphics.colors(style, 0)
         top, bottom = vertical_bounds(size)
-        return graphics.SCREEN.pack(
+        packed = graphics.SCREEN.pack(
             embedded.id,
             size,
             0,
@@ -934,6 +941,13 @@ class PatchCompiler:
             bottom - top,
             -top,
         )
+        if style.image:
+            if style.image not in self.binding_images:
+                self.binding_images.append(style.image)
+            packed = packed[:12] + struct.pack(
+                '<I', self.binding_images.index(style.image) + 1
+            )
+        return packed
 
     def program(self, patch: models.ProgramChange, index: int, path: str) -> bytes:
         if (
@@ -1565,6 +1579,28 @@ class PatchCompiler:
                             ),
                         )
                     ]
+                    count, style = data[70], data[71] & 3
+                    visual = 224 + count * BINDING_RECORD_SIZE
+                    graphics_offsets = [visual] if style else []
+                    if style == 1:
+                        graphics_offsets += [visual + 16]
+                        graphics_offsets += [
+                            visual + 97 + i * 96 + shift
+                            for i in range(count)
+                            for shift in (0, 16)
+                        ]
+                    for address in graphics_offsets:
+                        image = struct.unpack_from('<I', data, address + 12)[0]
+                        if image:
+                            name = context.binding_images[image - 1]
+                            if name not in self.binding_images:
+                                self.binding_images.append(name)
+                            struct.pack_into(
+                                '<I',
+                                data,
+                                address + 12,
+                                self.binding_images.index(name) + 1,
+                            )
                 for offset in offsets:
                     child = struct.unpack_from('<H', data, offset)[0]
                     if child != 65535:

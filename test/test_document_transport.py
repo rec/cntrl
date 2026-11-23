@@ -733,7 +733,7 @@ def test_song_authoring_recovers_its_global_rig_and_original_sources(
     artwork = tmp_path / 'live.png'
     Image.new('RGB', (16, 8), 'green').save(artwork)
     original_source = (
-        '[[songs]]\nimage="live.png"\ndisplay_name="On stage"\n'
+        '[[songs]]\nstyle={image="live.png"}\ndisplay_name="On stage"\n'
         'patches=[{instrument="piano",program=34,display_name="Chosen"}]\n'
     )
     source.write_text(original_source)
@@ -755,7 +755,8 @@ def test_song_authoring_recovers_its_global_rig_and_original_sources(
         assert value.instruments['piano']['channel'] == 3
         output = tmp_path / 'recovered'
         songs.run(songs.Download(directory=output, port=Path(port)))
-        assert value.songs[0].image and (output / value.songs[0].image).is_file()
+        style = value.songs[0].style
+        assert style and style.image and (output / style.image).is_file()
         manifest = next((output / 'sessions').glob('*/cntrl-session.toml'))
         recovered = source_archive.recovered_recipe(manifest.parent)
         root = data_files.expressions(recovered.document)[0].paths[0]
@@ -772,7 +773,7 @@ def test_song_authoring_recovers_its_global_rig_and_original_sources(
         with transport.SerialConnection(Path(port)) as connection:
             rebuilt = songs.decode(songs.download(transport.SetupClient(connection)))
         assert rebuilt.songs[0].patches[0]['program'] == 34
-        assert rebuilt.songs[0].image == value.songs[0].image
+        assert rebuilt.songs[0].style == style
         assert rebuilt.songs[0].name == 'Live'
         assert rebuilt.instruments['piano']['channel'] == 3
         assert defaults.read_text() == 'different computer defaults unavailable'

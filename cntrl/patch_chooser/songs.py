@@ -17,6 +17,7 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
+    model_validator,
 )
 from tomlkit.exceptions import ParseError
 
@@ -54,7 +55,6 @@ class Song(models.BindingScope, frozen=True):
     bindings: dict[str, object] = Field(default_factory=dict)
     name: str
     display_name: str | None = None
-    image: str | None = None
     style: models.Style | None = None
     seed: Annotated[int, Field(strict=True)] | None = None
     enter: (
@@ -66,6 +66,13 @@ class Song(models.BindingScope, frozen=True):
     patches: list[
         Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)]
     ] = Field(min_length=1)
+
+    @model_validator(mode='before')
+    @classmethod
+    def artwork_field(cls, value: object) -> object:
+        if isinstance(value, dict) and 'image' in value:
+            raise ValueError('move song image to style.image')
+        return value
 
     @field_validator('enter', 'exit')
     @classmethod
@@ -99,11 +106,10 @@ class Song(models.BindingScope, frozen=True):
     @field_validator('style')
     @classmethod
     def supported_style(cls, value: models.Style | None) -> models.Style | None:
-        if value is not None and (
-            value.icon is not None or value.horizontal_scale is not None
-        ):
+        if value is not None and value.horizontal_scale is not None:
             raise SongLibraryError(
-                'song styles support foreground_color, background_color and font_name'
+                'song styles support image, foreground_color, background_color '
+                'and font_name'
             )
         return value
 
@@ -113,6 +119,8 @@ class Song(models.BindingScope, frozen=True):
 class Setlist(BaseModel, frozen=True):
     name: str
     songs: list[str] = Field(default_factory=list)
+    display_name: str | None = None
+    style: models.Style | None = None
     model_config = ConfigDict(extra='forbid')
 
 
@@ -209,6 +217,7 @@ def encode(
                 paths.append(f'songs[{song_index}].{name}')
     source = b''
     roots: list[int] = []
+    scene_images: dict[int, tuple[str, models.Style, int]] = {}
     if (
         values_for_source
         or library.patches
@@ -307,6 +316,7 @@ def encode(
                 movie_assets,
                 source_snapshots=trace.files if trace is not None else None,
                 binding_scopes=scopes,
+                scene_images=scene_images,
             )
         except compiler_errors.CompilationError as error:
             messages = error.errors
@@ -437,16 +447,30 @@ def encode(
         exclude_defaults=True,
         exclude_none=True,
     )
-    authored_styles = [
-        s.style.model_dump(exclude_none=True) if s.style is not None else {}
-        for s in library.songs
-    ]
-    if any(authored_styles):
-        preferences['authored_styles'] = authored_styles
+    for collection, field in (
+        (library.songs, 'authored_styles'),
+        (library.setlists, 'setlist_styles'),
+    ):
+        authored_styles = [
+            {
+                k: v
+                for k, v in s.style.model_dump(exclude_none=True).items()
+                if k != 'image' or v == ''
+            }
+            if s.style is not None
+            else {}
+            for s in collection
+        ]
+        if any(authored_styles):
+            preferences[field] = authored_styles
     if song_seeds := {
         str(i): s.seed for i, s in enumerate(library.songs) if s.seed is not None
     }:
         preferences['song_seeds'] = song_seeds
+    if scene_images:
+        preferences['scene_image_sources'] = {
+            str(i): s.image for i, (_, s, _) in scene_images.items()
+        }
     if preferences:
         document = binary_format.unpack(data, binary_format.Kind.songs)
         data = document.model_copy(
@@ -460,49 +484,94 @@ def encode(
                 ]
             }
         ).pack()
-    if any(s.image or s.display_name for s in library.songs):
-        assert target is not None
-        directory = bytearray(struct.pack('<I', len(library.songs)))
+    scene_entries = [
+        scene_images.get(i, ('', None, 0))
+        for i in range(max(scene_images, default=-1) + 1)
+    ]
+    for collection, tag, contrast_tag, window in (
+        (
+            [(s.display_name, s.style, 0) for s in library.songs],
+            binary_format.SONG_ARTWORK,
+            binary_format.SONG_TITLE_CONTRAST,
+            1,
+        ),
+        (
+            [(s.display_name, s.style, 0) for s in library.setlists],
+            binary_format.SETLIST_ARTWORK,
+            binary_format.SETLIST_TITLE_CONTRAST,
+            2,
+        ),
+        (
+            scene_entries,
+            binary_format.SCENE_ARTWORK,
+            binary_format.SCENE_TITLE_STYLE,
+            0,
+        ),
+    ):
+        if not any((s and (s.image or window == 2)) or n for n, s, _ in collection):
+            continue
+        if target is None and any(s and s.image for _, s, _ in collection):
+            raise SongLibraryError('artwork requires --target')
+        directory = bytearray(struct.pack('<I', len(collection)))
         pixels = bytearray()
         contrast = bytearray()
-        start = 4 + song_artwork.ENTRY.size * len(library.songs)
-        for song in library.songs:
+        start = 4 + song_artwork.ENTRY.size * len(collection)
+        for caption, style, node_crc in collection:
             width = height = 0
             bitmap = b''
-            if song.image:
+            if style and style.image:
+                assert target is not None
                 root = authoring.paths[0].parent if authoring else Path.cwd()
                 width, height, bitmap = song_artwork.prepare(
-                    root / song.image, target, trace.files if trace else None
+                    root / style.image,
+                    target,
+                    trace.files if trace else None,
+                    window=window,
                 )
-            label = label_text(song.display_name) if song.display_name else bytes(64)
-            foreground = song.style.foreground_color if song.style else None
-            contrast.append(
+            label = label_text(caption) if caption else bytes(64)
+            foreground = style.foreground_color if style else None
+            mode = (
                 song_artwork.title_contrast(
-                    song.display_name,
+                    caption,
                     width,
                     height,
                     bitmap,
                     graphics.rgb565(graphics.color(foreground)) if foreground else None,
-                    compact=len(target.displays) == 1,
+                    compact=target is not None and len(target.displays) == 1,
                 )
-                if bitmap and song.display_name
+                if bitmap and caption
                 else 0
             )
+            if window != 1:
+                background = style.background_color if style else None
+                contrast.extend(
+                    struct.pack(
+                        '<BBHH',
+                        mode,
+                        int(bool(foreground)) | int(bool(background)) << 1,
+                        graphics.rgb565(graphics.color(foreground))
+                        if foreground
+                        else 0,
+                        graphics.rgb565(graphics.color(background))
+                        if background
+                        else 0,
+                    )
+                )
+                if window == 0:
+                    contrast.extend(struct.pack('<I', node_crc))
+            else:
+                contrast.append(mode)
             directory.extend(
                 song_artwork.ENTRY.pack(label, width, height, start + len(pixels))
             )
             pixels.extend(bitmap)
         document = binary_format.unpack(data, binary_format.Kind.songs)
         document.records.append(
-            binary_format.Record(
-                tag=binary_format.SONG_ARTWORK, data=bytes(directory + pixels)
-            )
+            binary_format.Record(tag=tag, data=bytes(directory + pixels))
         )
         if any(contrast):
             document.records.append(
-                binary_format.Record(
-                    tag=binary_format.SONG_TITLE_CONTRAST, data=bytes(contrast)
-                )
+                binary_format.Record(tag=contrast_tag, data=bytes(contrast))
             )
         data = document.pack()
     return data
@@ -552,16 +621,26 @@ def decode(data: bytes) -> Library:
 def _decode(data: bytes) -> Library:
     _, song_headers, positions, sets, sources = _parse(data)
     context: dict[str, object] = {'instruments': {}, 'patches': {}}
-    authored_styles: list[object] = []
+    authored_styles: list[dict[str, object]] = []
+    setlist_styles: list[dict[str, object]] = []
     song_seeds: dict[str, int] = {}
     artwork: list[tuple[str, str, bytes]] = []
+    setlist_artwork: list[tuple[str, str, bytes]] = []
+    scene_artwork: list[tuple[str, str, bytes]] = []
+    scene_image_sources: dict[str, str] = {}
     if data.startswith(binary_format.MAGIC):
         for record in binary_format.unpack(data, binary_format.Kind.songs).records:
             if record.tag == binary_format.SONG_ARTWORK:
                 artwork = song_artwork.unpack(record.data)
+            if record.tag == binary_format.SETLIST_ARTWORK:
+                setlist_artwork = song_artwork.unpack(record.data)
+            if record.tag == binary_format.SCENE_ARTWORK:
+                scene_artwork = song_artwork.unpack(record.data)
             if record.tag == binary_format.SONG_FORMATTING:
                 preferences = tomlkit.parse(record.data.decode()).unwrap()
                 authored_styles = preferences.pop('authored_styles', [])
+                setlist_styles = preferences.pop('setlist_styles', [])
+                scene_image_sources = preferences.pop('scene_image_sources', {})
                 song_seeds = preferences.pop('song_seeds', {})
                 context.update(preferences)
     instruments: dict[str, object] = {}
@@ -658,6 +737,11 @@ def _decode(data: bytes) -> Library:
             if bindings
             else {}
         )
+        style = (
+            dict(authored_styles[index] or {}) if index < len(authored_styles) else {}
+        )
+        if index < len(artwork) and artwork[index][1]:
+            style['image'] = artwork[index][1]
         songs.append(
             Song.model_validate(
                 {
@@ -667,9 +751,6 @@ def _decode(data: bytes) -> Library:
                     if binding != 0xFFFFFFFF
                     else None,
                     'display_name': artwork[index][0] or None
-                    if index < len(artwork)
-                    else None,
-                    'image': artwork[index][1] or None
                     if index < len(artwork)
                     else None,
                     'patches': patches,
@@ -684,14 +765,36 @@ def _decode(data: bytes) -> Library:
                         for n, r in (('enter', enter), ('exit', exit))
                         if r != 0xFFFFFFFF
                     },
-                    'style': (authored_styles[index] or None)
-                    if index < len(authored_styles)
-                    else None,
+                    'style': style or None,
                 }
             )
         )
-    result = Library.model_validate(context | {'songs': songs, 'setlists': sets})
-    return result
+    for index, item in enumerate(sets):
+        style = dict(setlist_styles[index] or {}) if index < len(setlist_styles) else {}
+        caption, image, _ = (
+            setlist_artwork[index] if index < len(setlist_artwork) else ('', '', b'')
+        )
+        if image:
+            style['image'] = image
+        sets[index] = Setlist.model_validate(
+            item.model_dump()
+            | {'display_name': caption or None, 'style': style or None}
+        )
+    names = {
+        original: name
+        for source in sources
+        for original, name in resolved.artwork_files(source)[0].items()
+    }
+    names.update(
+        {
+            path: scene_artwork[i][1]
+            for n, path in scene_image_sources.items()
+            if (i := int(n)) < len(scene_artwork) and scene_artwork[i][1]
+        }
+    )
+    result = context | {'songs': [s.model_dump() for s in songs], 'setlists': sets}
+    display.remap_artwork(result, names)
+    return Library.model_validate(result)
 
 
 def reindex(data: bytes, names: list[str]) -> bytes:
@@ -1253,7 +1356,11 @@ def run(command: New | Copy | Download) -> None:
                 for record in binary_format.unpack(
                     data, binary_format.Kind.songs
                 ).records:
-                    if record.tag == binary_format.SONG_ARTWORK:
+                    if record.tag in (
+                        binary_format.SONG_ARTWORK,
+                        binary_format.SETLIST_ARTWORK,
+                        binary_format.SCENE_ARTWORK,
+                    ):
                         files.update(
                             {
                                 Path(n): b
@@ -1262,6 +1369,7 @@ def run(command: New | Copy | Download) -> None:
                             }
                         )
             for source in _parse(data)[4]:
+                files.update(resolved.artwork_files(source)[1])
                 if (snapshot := source_archive.identifier(source)) is not None:
                     manifest, entries = source_archive.read(
                         client.download_source(snapshot)

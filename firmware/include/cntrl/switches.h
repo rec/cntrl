@@ -31,6 +31,15 @@ public:
         return true;
     }
     void refresh() { rendering_ = dirty_ = true; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_artwork_document)
+#endif
+    const Document *artwork_document(uint32_t generation) const {
+        if (!open_) return nullptr;
+        if (document_.valid() && document_.artwork_generation() == generation) return &document_;
+        if (scope_source_ && scope_source_->document.artwork_generation() == generation) return &scope_source_->document;
+        return nullptr;
+    }
     uint8_t page_chord(unsigned direction) const {
         if (!open_ || !bindings_) return 0;
         if (auto mask = bindings_.page_chord(direction)) return mask;
@@ -679,11 +688,11 @@ private:
                     std::strcpy(pane.lines[1].text, " ");
                 }
                 auto &title = panes[1].lines[1];
-                title.graphics = styled_graphics(view);
+                style_line(title, document_, view);
                 title.centered = true;
                 std::snprintf(title.text, sizeof(title.text), "%s", bindings_.title());
                 auto &status = panes[2].lines[1];
-                status.graphics = styled_graphics(view + 16);
+                style_line(status, document_, view + 16);
                 status.x = 2;
                 status.y = int16_t(hardware_.display_height() * 2 / 3 - status.graphics.line_height);
                 document_.counter_text(status.text, sizeof(status.text), view[33] ? reinterpret_cast<const char *>(view + 33) : " ", hardware_.counters, bank_, bank_page_);
@@ -691,7 +700,7 @@ private:
                     const auto &s = states_[i];
                     const uint8_t *visual = s.visual;
                     auto &line = panes[i % 3].lines[i < 3 ? 2 : 0];
-                    line.graphics = styled_graphics(visual ? visual : view);
+                    style_line(line, visual ? *s.document : document_, visual ? visual : view);
                     line.x = 4;
                     line.centered = view[32] & 1;
                     char label[64];
@@ -701,7 +710,7 @@ private:
                     else std::snprintf(line.text, sizeof(line.text), "%s", label);
                     if (last_pressed_ == int(i)) {
                         auto &detail = panes[0].lines[1];
-                        detail.graphics = styled_graphics(visual ? visual + 16 : view);
+                        style_line(detail, visual ? *s.document : document_, visual ? visual + 16 : view);
                         detail.centered = true;
                         s.document->counter_text(detail.text, sizeof(detail.text), visual ? reinterpret_cast<const char *>(visual + 32) : label, hardware_.counters);
                     }
@@ -715,6 +724,7 @@ private:
                 for (auto &line : pane.lines) line.graphics = pane.graphics;
             }
             std::snprintf(panes[1].lines[0].text, 64, "%s", bindings_.title());
+            if (bindings_.style()) style_line(panes[1].lines[0], document_, bindings_.style());
             for (unsigned i = 0; i < count_; ++i) {
                 const auto &s = states_[i];
                 auto &pane = panes[i % 3];
@@ -764,9 +774,9 @@ private:
         const auto *view = bindings_.view();
         auto base = bindings_.style() ? styled_graphics(bindings_.style()) : document_.graphics(1);
         if (!bindings_.style()) outputs_.song_style(base);
-        TextLine song, setlist;
-        Bitmap bitmap;
-        outputs_.scene_titles(song, bitmap, setlist);
+        ScenePanel scene, song, setlist;
+        std::snprintf(scene.title.text, sizeof(scene.title.text), "%s", bindings_.title());
+        outputs_.scene_panels(scene, song, setlist, document_, bindings_.data - 4);
         const auto *navigation = hardware_.setup_navigation();
         const unsigned columns = (hardware_.input_count() + 1) / 2;
         for (unsigned w = 0; w < windows; ++w) {
@@ -776,21 +786,24 @@ private:
             pane.graphics.pad = 0;
             auto &middle = pane.lines[1];
             if (!w) {
-                std::snprintf(middle.text, sizeof(middle.text), "%s", bindings_.title());
+                middle = scene.title; pane.bitmap = scene.bitmap;
                 if (windows == 1) {
-                    pane.split_middle = true; pane.bitmap = bitmap; pane.lines[3] = song;
+                    pane.split_middle = true; pane.second_bitmap = song.bitmap; pane.lines[3] = song.title;
                 }
-            } else if (w == 1) { middle = song; pane.bitmap = bitmap; }
-            else if (w == windows - 1) middle = setlist;
-            for (auto &line : pane.lines) { line.graphics = base; line.centered = true; }
-            if (pane.bitmap.source && song.artwork_foreground)
-                pane.lines[pane.split_middle ? 3 : 1].graphics.foreground = song.graphics.foreground;
+            } else if (w == 1) { middle = song.title; pane.bitmap = song.bitmap; }
+            else if (w == windows - 1) { middle = setlist.title; pane.bitmap = setlist.bitmap; }
+            for (auto &line : pane.lines) {
+                const auto graphics = line.graphics;
+                line.graphics = base; line.centered = true;
+                if (line.artwork_foreground) line.graphics.foreground = graphics.foreground;
+                if (line.artwork_background) line.graphics.background = graphics.background;
+            }
             for (unsigned i = 0; i < count_; ++i) {
                 const auto &state = states_[i];
                 const unsigned input = state.record[0];
                 if (!columns || input >= hardware_.input_count() || input % columns != w) continue;
                 auto &line = pane.lines[input < columns ? 2 : 0];
-                if (state.visual) line.graphics = styled_graphics(state.visual);
+                if (state.visual) style_line(line, *state.document, state.visual);
                 line.centered = !view || (view[32] & 1);
                 char label[64];
                 state.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(state.record + 6), hardware_.counters);
@@ -825,6 +838,10 @@ private:
                 line.graphics.size = line.graphics.line_height = button || pane.split_middle ? 16 : 20;
                 line.fit = true;
             }
+            if (!w && !pane.bitmap.source && bindings_.style()) {
+                middle.artwork_index = uint16_t(u32(bindings_.style() + 12));
+                middle.artwork_generation = document_.artwork_generation();
+            }
             hardware_.show(w, pane);
         }
     }
@@ -839,6 +856,7 @@ private:
     }
     ScreenGraphics styled_graphics(const uint8_t *bytes) const {
         auto result = Document::read_graphics(bytes);
+        result.asset = 0;
         ScreenGraphics song;
         if (outputs_.song_style(song)) {
             const unsigned authored = bytes[3] & 8 ? bytes[3] & 7 : 7;
@@ -847,6 +865,14 @@ private:
             if (!(authored & 4)) result.font = song.font;
         }
         return result;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(switches_style_line)
+#endif
+    void style_line(TextLine &line, const Document &document, const uint8_t *style) const {
+        line.graphics = styled_graphics(style);
+        line.artwork_index = uint16_t(u32(style + 12));
+        if (line.artwork_index) line.artwork_generation = document.artwork_generation();
     }
 };
 } // namespace cntrl

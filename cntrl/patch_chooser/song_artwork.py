@@ -26,14 +26,25 @@ class TitleContrast(IntEnum):
 
 
 def prepare(
-    path: Path, target: Target, snapshots: dict[Path, bytes] | None
+    path: Path, target: Target, snapshots: dict[Path, bytes] | None, *, window: int = 1
 ) -> tuple[int, int, bytes]:
-    screen = target.displays[1 if len(target.displays) > 1 else 0]
+    screen = target.displays[
+        -1 if window == 2 else min(window, len(target.displays) - 1)
+    ]
     top = screen.height // 4
     bottom = screen.height * 3 // 4
     if len(target.displays) == 1:
-        top = screen.height // 2
+        if window == 0:
+            bottom = screen.height // 2
+        else:
+            top = screen.height // 2
     size = screen.width, bottom - top
+    return *size, prepare_bitmap(path, size, snapshots)
+
+
+def prepare_bitmap(
+    path: Path, size: tuple[int, int], snapshots: dict[Path, bytes] | None
+) -> bytes:
     with Image.open(BytesIO(source_files.read(path, snapshots))) as image:
         scaled = ImageOps.pad(
             image.convert('RGB'), size, method=Image.Resampling.LANCZOS
@@ -42,7 +53,7 @@ def prepare(
         struct.pack('<H', rgb565(p))
         for p in struct.iter_unpack('BBB', scaled.tobytes())
     )
-    return *size, pixels
+    return pixels
 
 
 def unpack(data: bytes) -> list[tuple[str, str, bytes]]:
@@ -61,18 +72,21 @@ def unpack(data: bytes) -> list[tuple[str, str, bytes]]:
         name = ''
         png = b''
         if width:
-            raw = data[position:end]
-            stream = BytesIO()
-            Image.frombytes('RGB', (width, height), raw, 'raw', 'BGR;16').save(
-                stream, format='PNG'
-            )
-            png = stream.getvalue()
-            name = f'images/{sha256(png).hexdigest()}.png'
+            name, png = png_asset(width, height, data[position:end])
         result.append((label.split(b'\0')[0].decode(), name, png))
         offset = end
     if offset != len(data):
         raise ValueError('unexpected trailing song artwork')
     return result
+
+
+def png_asset(width: int, height: int, bitmap: bytes) -> tuple[str, bytes]:
+    stream = BytesIO()
+    Image.frombytes('RGB', (width, height), bitmap, 'raw', 'BGR;16').save(
+        stream, format='PNG'
+    )
+    png = stream.getvalue()
+    return f'images/{sha256(png).hexdigest()}.png', png
 
 
 def title_contrast(

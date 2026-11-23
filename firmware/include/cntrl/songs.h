@@ -215,6 +215,7 @@ public:
         char requested[64]; std::snprintf(requested, 64, "%s", name);
         for (unsigned i = 0; i < counts_.sets; ++i) {
             if (!set_at(i, set_cache_, &set_offset_)) return nullptr;
+            set_cache_index_ = i;
             if (!std::strcmp(set_cache_.name, requested)) return &set_cache_;
         }
         return nullptr;
@@ -444,37 +445,110 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(song_presentation)
 #endif
-    void presentation(TextLine &line, Bitmap &bitmap) const {
-        std::snprintf(line.text, sizeof(line.text), "%s", current_song_);
+    void presentation(ScenePanel &scene, ScenePanel &song, ScenePanel &set, const Document &document, const uint8_t *binding) const {
+        std::snprintf(song.title.text, sizeof(song.title.text), "%s", current_song_);
+        std::snprintf(set.title.text, sizeof(set.title.text), "%s", active_set());
         const auto &view = slots_[active_].view;
+        if (view.artwork_offset) if (const auto *current = this->song(current_song_)) {
+            presentation_record(song, view.artwork_offset, view.artwork_length, song_cache_index_);
+            const unsigned contrast = view.title_contrast_offset;
+            uint8_t mode = 0, length[4];
+            if (song.bitmap.source && song.title.text[0] && contrast && read_payload(contrast - 4, length, 4)
+                && song_cache_index_ < binary::read32(length)
+                && read_payload(contrast + song_cache_index_, &mode, 1))
+                title_contrast(song.title, mode, current->foreground);
+        }
+        const auto artwork = extended_artwork(view.auxiliary_record_offset);
+        if (artwork.set.offset && setlist(active_set())) {
+            presentation_record(set, artwork.set.offset, artwork.set.length, set_cache_index_);
+            uint8_t fields[6];
+            if (set_cache_index_ < artwork.set_style.length / sizeof(fields)
+                && read_payload(artwork.set_style.offset + set_cache_index_ * sizeof(fields), fields, sizeof(fields))) {
+                artwork_style(set, fields);
+            }
+        }
+        if (artwork.scene.offset && artwork.scene_style.offset) {
+            unsigned index = 0;
+            while (index < document.nodes() && document.node(index) != binding) ++index;
+            uint8_t fields[10];
+            if (index < document.nodes() && index < artwork.scene_style.length / sizeof(fields)
+                && read_payload(artwork.scene_style.offset + index * sizeof(fields), fields, sizeof(fields))
+                && binary::read32(fields + 6) == binary::crc(binding, 4 + u16(binding + 2))) {
+                presentation_record(scene, artwork.scene.offset, artwork.scene.length, index);
+                artwork_style(scene, fields);
+            }
+        }
+    }
+private:
+    struct ArtworkRecords {
+        struct Record { unsigned offset = 0, length = 0; };
+        Record set, set_style, scene, scene_style;
+    };
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_extended_artwork)
+#endif
+    ArtworkRecords extended_artwork(unsigned position) const {
+        ArtworkRecords result;
+        uint8_t header[8];
+        while (position && read_payload(position, header, sizeof(header))) {
+            const unsigned tag = binary::read16(header), size = binary::read32(header + 4);
+            position += sizeof(header);
+            if (size > length() - position) break;
+            switch (tag) {
+            case 8: result.set = {position, size}; break;
+            case 9: result.set_style = {position, size}; break;
+            case 10: result.scene = {position, size}; break;
+            case 11: result.scene_style = {position, size}; break;
+            }
+            position += size;
+        }
+        return result;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_artwork_style)
+#endif
+    static void artwork_style(ScenePanel &panel, const uint8_t *fields) {
+        auto &line = panel.title;
+        line.artwork_foreground = fields[1] & 1;
+        line.artwork_background = fields[1] & 2;
+        line.graphics.foreground = binary::read16(fields + 2);
+        line.graphics.background = binary::read16(fields + 4);
+        if (panel.bitmap.source) title_contrast(line, fields[0], line.graphics.foreground);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_artwork_record)
+#endif
+    void presentation_record(ScenePanel &panel, unsigned directory, unsigned length, unsigned index) const {
+        auto &line = panel.title;
+        auto &bitmap = panel.bitmap;
         uint8_t entry[72], header[4];
-        const auto *current = song(current_song_);
-        if (!view.artwork_offset || !current || !read_payload(view.artwork_offset, header, 4)) return;
+        if (!read_payload(directory, header, 4)) return;
         const unsigned count = binary::read32(header);
-        if (song_cache_index_ >= count || !read_payload(view.artwork_offset + 4 + 72 * song_cache_index_, entry, sizeof(entry))) return;
+        if (index >= count || !read_payload(directory + 4 + 72 * index, entry, sizeof(entry))) return;
         const unsigned offset = binary::read32(entry + 68);
         const uint16_t width = binary::read16(entry + 64), height = binary::read16(entry + 66);
-        if (width && height && offset >= 4 + 72 * count && offset <= view.artwork_length
-            && uint64_t(width) * height * 2 <= view.artwork_length - offset)
-            bitmap = {this, generation_, view.artwork_offset + offset, width, height};
+        if (width && height && offset >= 4 + 72 * count && offset <= length
+            && uint64_t(width) * height * 2 <= length - offset)
+            bitmap = {this, generation_, directory + offset, width, height};
         if ((entry[0] || bitmap.source) && std::memchr(entry, 0, 64))
             std::memcpy(line.text, entry, 64);
-        const unsigned contrast = view.title_contrast_offset;
-        uint8_t mode = 0;
-        if (!bitmap.source || !line.text[0] || !contrast || !read_payload(contrast - 4, header, 4)
-            || song_cache_index_ >= binary::read32(header)
-            || !read_payload(contrast + song_cache_index_, &mode, 1) || !mode || mode > 5) return;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_artwork_contrast)
+#endif
+    static void title_contrast(TextLine &line, uint8_t mode, uint16_t foreground) {
         enum class TitleContrast : uint8_t { unchanged, black, white, black_outlined, white_outlined, authored };
         switch (TitleContrast(mode)) {
         case TitleContrast::black_outlined: line.outline = TextOutline::white; [[fallthrough]];
         case TitleContrast::black: line.graphics.foreground = 0; break;
         case TitleContrast::white_outlined: line.outline = TextOutline::black; [[fallthrough]];
         case TitleContrast::white: line.graphics.foreground = 0xffff; break;
-        case TitleContrast::authored: line.graphics.foreground = current->foreground; break;
-        case TitleContrast::unchanged: return;
+        case TitleContrast::authored: line.graphics.foreground = foreground; break;
+        default: return;
         }
         line.artwork_foreground = true;
     }
+public:
     bool read_bitmap(uint32_t generation, unsigned offset, uint16_t *pixels, unsigned count) const override {
         return generation == generation_ && read_payload(offset, reinterpret_cast<uint8_t *>(pixels), count * 2);
     }
@@ -680,7 +754,7 @@ private:
     mutable Song song_cache_;
     mutable unsigned song_cache_index_ = 0;
     mutable Setlist set_cache_;
-    mutable unsigned set_offset_ = 0;
+    mutable unsigned set_offset_ = 0, set_cache_index_ = 0;
     uint32_t generation_ = 0, crc_ = checksum(reinterpret_cast<const uint8_t *>(&counts_), sizeof(counts_));
     unsigned active_ = 0, length_ = 12, undo_slot_ = 0;
     unsigned source_count_ = 0, records_end_ = 8;

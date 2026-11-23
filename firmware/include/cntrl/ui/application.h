@@ -27,8 +27,32 @@ struct ApplicationServices {
 };
 // Coordinates configured pages and menus independently of controller
 // storage placement and the platform's physical controls.
-class Application {
+class Application : public BitmapLookup {
 public:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_bitmap_for)
+#endif
+    Bitmap bitmap_for(uint32_t generation, unsigned index) const override {
+        const auto *document = artwork_document(generation);
+        return document ? document->bitmap_for(this, index) : Bitmap{};
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_bitmap_read)
+#endif
+    bool read_bitmap(uint32_t generation, unsigned offset, uint16_t *pixels, unsigned count) const override {
+        const auto *document = artwork_document(generation);
+        if (!document || offset > document->length() || count > (document->length() - offset) / 2) return false;
+        std::memcpy(pixels, document->data() + offset, count * 2);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_artwork_document)
+#endif
+    const Document *artwork_document(uint32_t generation) const {
+        const auto &document = documents_.document();
+        if (document.valid() && generation == document.artwork_generation()) return &document;
+        return outputs_.artwork_document(generation);
+    }
 #if UINTPTR_MAX == UINT32_MAX
     static_assert(sizeof(Pages::ViewState) <= 320, "Update layout.estimate_ram for larger page state");
     static_assert(sizeof(BankedPage) <= 1024, "Update banked.estimate_ram for larger banked page state");
@@ -120,9 +144,8 @@ public:
         return songs_.performing() && !menu.open() && !setups.open() && (song_ui.performing() || binding_return_songs);
     }
     bool song_boundary() const { return song_navigation_active() && songs_.boundary(); }
-    void scene_titles(TextLine &song, Bitmap &bitmap, TextLine &setlist) const {
-        songs_.presentation(song, bitmap);
-        std::snprintf(setlist.text, sizeof(setlist.text), "%s", songs_.active_set());
+    void scene_panels(ScenePanel &scene, ScenePanel &song, ScenePanel &setlist, const Document &document, const uint8_t *binding) const {
+        songs_.presentation(scene, song, setlist, document, binding);
     }
     void startup() {
         const char *name = documents_.startup_set();

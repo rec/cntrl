@@ -69,7 +69,9 @@ def test_repeated_scenes_keep_song_presentation_and_navigation(
     source = Path('examples/patch-chooser/scenes.toml')
     values = compiler_inputs.read_document(source)
     values['songs'][0].update(
-        display_name='Light', image='art.png', navigation={'page_forward': 'D+E'}
+        display_name='Light',
+        style={'image': 'art.png'},
+        navigation={'page_forward': 'D+E'},
     )
     values['patches']['chorus']['navigation'] = {'page_back': 'A+B'}
     image = Image.new('RGB', (20, 8), 'red')
@@ -82,7 +84,7 @@ def test_repeated_scenes_keep_song_presentation_and_navigation(
     recovered = songs.decode(encoded)
     song = recovered.songs[0]
     assert song.display_name == 'Light'
-    assert song.image and song.image.endswith('.png')
+    assert song.style and song.style.image and song.style.image.endswith('.png')
     assert song.navigation == models.PageNavigation(page_forward='D+E')
     assert song.patches[0] == song.patches[2]
     assert recovered.patches['chorus']['navigation'] == {'page_back': 'A+B'}

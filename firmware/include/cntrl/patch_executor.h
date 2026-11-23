@@ -49,7 +49,8 @@ struct PatchOutputs {
     virtual bool binding_context(const Document * = nullptr, unsigned = ~0u) { return true; }
     virtual bool expression_available(unsigned) const { return true; }
     virtual bool song_navigation_active() const { return false; }
-    virtual void scene_titles(TextLine &, Bitmap &, TextLine &) const {}
+    virtual void scene_panels(ScenePanel &, ScenePanel &, ScenePanel &, const Document &, const uint8_t *) const {}
+    virtual const Document *artwork_document(uint32_t) const { return nullptr; }
     virtual bool song_boundary() const { return false; }
     virtual bool song_style(ScreenGraphics &) const { return false; }
     virtual bool stock(uint8_t buttons, PatchExecutor &invocation) = 0;

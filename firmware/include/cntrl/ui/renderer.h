@@ -13,7 +13,7 @@ namespace cntrl::ui {
 class Renderer {
 public:
 #if UINTPTR_MAX == UINT32_MAX
-    static_assert(sizeof(Pane) == 1816, "Update display.estimate_frame_ram for changed transition snapshots");
+    static_assert(sizeof(Pane) == 1960, "Update display.estimate_frame_ram for changed transition snapshots");
 #endif
     Renderer(Display &display, const Fonts &fonts, uint16_t *work, unsigned work_capacity)
         : display_(display), fonts_(fonts), raster_(fonts, work), screens_(display.count()) {
@@ -45,6 +45,7 @@ public:
         pending_count_ = count; pending_animations_ = animations; prepared_ = true;
         return true;
     }
+    void artwork_source(const BitmapLookup &source) { artwork_source_ = &source; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_finish)
 #endif
@@ -267,18 +268,26 @@ private:
     uint32_t started_ = 0;
     uint8_t brightness_ = 128, requested_brightness_ = 128;
     unsigned bitmap_row_ = 0;
+    const BitmapLookup *artwork_source_ = nullptr;
+    Bitmap line_bitmap_;
+    unsigned line_bitmap_row_ = 0;
+    bool line_bitmap_loaded_ = false;
+    bool second_bitmap_ = false;
     bool outline_painted_ = false;
     void damage(Screen &screen, const Pane &content) {
         const auto &before = screen.requested;
         bool full = before.three_bands != content.three_bands || before.split_middle != content.split_middle || before.scene != content.scene || before.heading_band != content.heading_band || before.focused != content.focused
             || before.bitmap.source != content.bitmap.source || before.bitmap.offset != content.bitmap.offset
+            || before.second_bitmap.source != content.second_bitmap.source || before.second_bitmap.offset != content.second_bitmap.offset
+            || before.second_bitmap.generation != content.second_bitmap.generation
             || before.bitmap.generation != content.bitmap.generation || std::memcmp(&before.graphics, &content.graphics, sizeof(content.graphics));
         // Compare values, not TextLine/Rectangle padding, when deciding damage.
         for (unsigned i = 0; i < max_lines && !full; ++i) {
             const auto &a = before.lines[i], &b = content.lines[i];
             full = std::strcmp(a.text, b.text) || std::memcmp(&a.graphics, &b.graphics, sizeof(a.graphics))
                 || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.fit != b.fit || a.stippled != b.stippled
-                || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color || a.outline != b.outline;
+                || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color || a.outline != b.outline
+                || a.artwork_index != b.artwork_index || a.artwork_generation != b.artwork_generation;
 #ifdef CNTRL_EMULATOR
             if (!translation_regions_.empty())
                 full = full || a.translation_id != b.translation_id || a.translation_short != b.translation_short
@@ -321,6 +330,8 @@ private:
         column_ = unsigned(painting_region_.left); field_ = letter_ = 0;
         raster_.configure(v, painting_.graphics, painting_region_); backgrounds();
         bitmap_row_ = 0;
+        line_bitmap_loaded_ = false;
+        second_bitmap_ = false;
         outline_painted_ = false;
 #ifdef CNTRL_EMULATOR
         if (!translation_regions_.empty()) {
@@ -436,9 +447,9 @@ private:
     CNTRL_FLASH_ROUTINE(renderer_paint_step)
 #endif
     void paint_step() {
-        const auto &bitmap = painting_.bitmap;
+        const auto &bitmap = second_bitmap_ ? painting_.second_bitmap : painting_.bitmap;
         const auto v = screens_[unsigned(drawing_)].viewport;
-        const unsigned field = painting_.split_middle ? 3 : 1;
+        const unsigned field = second_bitmap_ ? 3 : 1;
         const unsigned start = band_edge(painting_, field, v.height, false);
         const unsigned height = band_edge(painting_, field, v.height, true) - start;
         if (bitmap.source && bitmap.width == v.width && bitmap.height <= height && bitmap_row_ < bitmap.height) {
@@ -448,8 +459,13 @@ private:
                                        raster_.pixels() + (top + row) * v.width, bitmap.width);
             return;
         }
+        if (!second_bitmap_ && painting_.split_middle) {
+            second_bitmap_ = true; bitmap_row_ = 0;
+            return;
+        }
         const auto &line = painting_.lines[field_];
         const int y = text_y(field_);
+        if (line.artwork_index && paint_line_artwork(line, v, y)) return;
         const bool heavier = painting_.scene && (field_ == 0 || field_ == 2);
         if (!outline_painted_ && line.text[0] && line.outline != TextOutline::none) {
             if (raster_.letter(line, letter_, y, false, true)) ++letter_;
@@ -457,10 +473,37 @@ private:
             return;
         }
         if ((letter_ || raster_.intersects(line, y, heavier)) && raster_.letter(line, letter_, y, heavier)) ++letter_;
-        else { letter_ = 0; outline_painted_ = false; if (++field_ == max_lines) {
+        else { letter_ = 0; outline_painted_ = false; line_bitmap_loaded_ = false; if (++field_ == max_lines) {
             backgrounds(true);
             raster_.corners(painting_.focused); rendering_ = false;
         } }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(renderer_line_artwork)
+#endif
+    bool paint_line_artwork(const TextLine &line, Viewport viewport, int y) {
+        if (!line_bitmap_loaded_) {
+            line_bitmap_ = artwork_source_ ? artwork_source_->bitmap_for(line.artwork_generation, line.artwork_index) : Bitmap{};
+            line_bitmap_loaded_ = true;
+            line_bitmap_row_ = 0;
+        }
+        if (!line_bitmap_.source || line_bitmap_.width != viewport.width) return false;
+        const unsigned top = painting_.three_bands
+            ? band_edge(painting_, field_, viewport.height, false)
+            : unsigned(std::max(0, y - int(line.graphics.top)));
+        const unsigned bottom = std::min(viewport.height, painting_.three_bands
+            ? band_edge(painting_, field_, viewport.height, true)
+            : top + line.graphics.line_height);
+        if (top >= bottom) return false;
+        const unsigned height = std::min(unsigned(line_bitmap_.height), bottom - top);
+        if (line_bitmap_row_ >= height) return false;
+        const unsigned row = line_bitmap_row_++;
+        const unsigned source_row = (line_bitmap_.height - height) / 2 + row;
+        const unsigned target_row = top + (bottom - top - height) / 2 + row;
+        line_bitmap_.source->read_bitmap(line_bitmap_.generation,
+            line_bitmap_.offset + source_row * viewport.width * 2,
+            raster_.pixels() + target_row * viewport.width, viewport.width);
+        return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_start_animation)

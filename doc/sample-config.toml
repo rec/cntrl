@@ -227,7 +227,7 @@ cycles = "right"
 
 [style]
 
-icon = "sample"
+image = "sample"
 background_color = "sample"
 foreground_color = "sample"
 font_name = "sample"
@@ -241,7 +241,7 @@ pad = 0
 
 [windows.next.style]
 
-icon = "sample"
+image = "sample"
 background_color = "sample"
 foreground_color = "sample"
 font_name = "sample"
@@ -254,7 +254,7 @@ pad = 0
 
 [windows.sent.style]
 
-icon = "sample"
+image = "sample"
 background_color = "sample"
 foreground_color = "sample"
 font_name = "sample"
@@ -267,7 +267,7 @@ pad = 0
 
 [windows.undo.style]
 
-icon = "sample"
+image = "sample"
 background_color = "sample"
 foreground_color = "sample"
 font_name = "sample"
@@ -279,7 +279,7 @@ fields = ["patch_cycle.name", "display_name"]
 
 [patch_views.patch.style]
 
-icon = "sample"
+image = "sample"
 background_color = "sample"
 foreground_color = "sample"
 font_name = "sample"

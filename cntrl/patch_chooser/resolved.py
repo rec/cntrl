@@ -1,6 +1,7 @@
 """Export editable authoring from the authoritative compiled Patch graph."""
 
 import struct
+from pathlib import Path
 from typing import cast
 from zlib import crc32
 
@@ -492,6 +493,13 @@ def patch(data: bytes, node: int) -> dict[str, object]:
     return _patch(data, offset, node, metadata, set(), labels)
 
 
+def artwork_files(data: bytes) -> tuple[dict[str, str], dict[Path, bytes]]:
+    data = binary_format.core(data)
+    if data[-8:-4] != b'AEND':
+        return {}, {}
+    return display.artwork_files(data, read_source(data, graph_offset(data)))
+
+
 def binding_scopes(data: bytes) -> list[tuple[int, str, int]]:
     data = binary_format.core(data)
     graph = graph_offset(data)
@@ -547,6 +555,7 @@ def _decode(data: bytes) -> dict[str, object]:
     source.pop('program_tags', None)
     source.pop('patch_styles', None)
     source.pop('patch_tags', None)
+    source.pop('artwork_sources', None)
     authored_switches = cast(dict[str, object], source.pop('switches', {}))
     result: dict[str, object] = {
         'brightness': flags & 255,

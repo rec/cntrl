@@ -51,6 +51,8 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | Tag 1 | Required, first, singleton core snapshot |
 | Tag 4, kind 3 | Optional singleton TOML song formatting preferences and authored song styles |
 | Tag 7, kind 3 | Optional singleton song artwork title contrast modes in song record order |
+| Tags 8–9, kind 3 | Setlist artwork directory and title styles in setlist record order |
+| Tags 10–11, kind 3 | Scene artwork directory and title styles indexed by binding node |
 | Tag 6, kind 1 | Optional authoring metadata for a local patch created by the setup editor |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
@@ -147,6 +149,13 @@ mean use scene colors, black, white, black with a white outline, white with a
 black outline, and use the explicitly authored song foreground, respectively.
 The record applies to titles over artwork. Songs captured on the pedal after
 the record was written use their normal scene colors.
+
+Setlist title style records contain a contrast mode byte, foreground and
+background presence bits in one byte, and two RGB565 colors. Scene title
+styles append the CRC32 of the binding node, so unrelated nodes cannot
+select the artwork by index alone. Setup cores may append a `CART` directory
+after the display source with RGB565 bitmaps for binding styles and display
+field styles. The `AEND` footer stores the artwork section's byte length.
 
 Host backup readers also accept the preceding `CSP5`, `CSP6`, `CSP7` and `CSP8`
 library layouts that contain no setlist binding maps.

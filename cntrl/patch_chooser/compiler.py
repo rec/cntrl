@@ -62,6 +62,7 @@ def compile_show(
     source_snapshots: dict[Path, bytes] | None = None,
     setting_overrides: dict[str, object] | None = None,
     binding_scopes: list[tuple[int, str, dict[str, object]]] | None = None,
+    scene_images: dict[int, tuple[str, models.Style, int]] | None = None,
 ) -> bytes:
     errors: list[str] = []
     generated: dict[int, bytes] = {}
@@ -477,6 +478,8 @@ def compile_show(
             generated,
             compiler.display_metadata(),
             source_snapshots=source_snapshots,
+            include_artwork=scene_images is None,
+            binding_images=compiler.binding_images,
         )
         packed_pages = page_settings.pack(show, target)
         clock = page_settings.pack_clock(show, target)
@@ -650,6 +653,29 @@ def compile_show(
     )
     if errors:
         raise CompilationError(errors)
+    if scene_images is not None:
+        for i, node in enumerate(compiler.nodes):
+            if node[0] != 10:
+                continue
+            target_node, presentation = compiler.presentation(i)
+            program = compiler.programs.get(target_node)
+            program_style = program[4] if program else None
+            style = display.merge_style(
+                show.style,
+                display.tag_style(
+                    (program_style.program_tags if program_style else [])
+                    + presentation.tags,
+                    show.tag_styles,
+                ),
+                program_style.program_style if program_style else None,
+                presentation.style,
+            )
+            if style.image:
+                scene_images[i] = (
+                    node[6:70].split(b'\0')[0].decode(),
+                    style,
+                    crc32(node),
+                )
     result = pack_document(
         show,
         body,

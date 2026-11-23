@@ -146,13 +146,20 @@ class Instrument(BaseModel, frozen=True):
 
 
 class Style(BaseModel, frozen=True):
-    icon: str | None = None
+    image: str | None = None
     background_color: str | None = None
     foreground_color: str | None = None
     font_name: str | None = None
     horizontal_scale: (
         Annotated[float, Field(strict=True, gt=0, allow_inf_nan=False)] | None
     ) = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def artwork_field(cls, value: object) -> object:
+        if isinstance(value, dict) and 'icon' in value:
+            raise ValueError('rename style.icon to style.image')
+        return value
 
     model_config = ConfigDict(extra='forbid')
 

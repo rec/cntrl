@@ -4,6 +4,7 @@ import struct
 from functools import cached_property
 from pathlib import Path
 from random import Random
+from typing import cast
 
 import tomlkit
 from pydantic import BaseModel, Field
@@ -33,6 +34,8 @@ def compile_display(
     assets: dict[int, bytes] | None = None,
     patch_metadata: dict[str, object] | None = None,
     source_snapshots: dict[Path, bytes] | None = None,
+    include_artwork: bool = True,
+    binding_images: list[str] | None = None,
 ) -> tuple[list[bytes], list[list[int]], bytes]:
     if show.fill_in_styles and show.seed is None:
         # Persist the one-time choice so downloaded configurations recompile to
@@ -271,7 +274,7 @@ def compile_display(
     show, keys, generated = prepared.finish()
     if assets is not None:
         assets.update(generated)
-    styles: list[bytes] = []
+    styles: list[tuple[bytes, str]] = []
     records: list[bytes] = []
     texts: list[bytes] = []
     for index, ((code, text, style, pad, _count, stipple), (face, size)) in enumerate(
@@ -283,15 +286,16 @@ def compile_display(
             face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top
         )
         packed = packed[:12] + struct.pack('<I', keys.get(face.name, face.asset))
-        if packed not in styles:
-            styles.append(packed)
+        key = packed, style.image or ''
+        if key not in styles:
+            styles.append(key)
         left, width = graphics.bounds(text, metrics)
         x = pad + (target.display_width - 2 * pad - width) // 2 - left
         encoded = counter_names.get(index, text).encode('utf-8') + b'\0'
         if encoded not in texts:
             texts.append(encoded)
         records.append(
-            LINE.pack(code, stipple, styles.index(packed), x, texts.index(encoded))
+            LINE.pack(code, stipple, styles.index(key), x, texts.index(encoded))
         )
     # Window records supply the outer background and padding, including empty panes.
     window_records: list[bytes] = []
@@ -320,7 +324,7 @@ def compile_display(
             indexes = instances[i * 3 + slot]
             page = bytes([len(indexes)]) + b''.join(records[j] for j in indexes)
             heights = sum(
-                struct.unpack_from('<H', styles[LINE.unpack(records[j])[2]], 8)[0]
+                struct.unpack_from('<H', styles[LINE.unpack(records[j])[2]][0], 8)[0]
                 for j in indexes
             )
             if heights > target.display_height - 2 * (
@@ -368,6 +372,9 @@ def compile_display(
         if p.program_style is not None
     }
     source['patch_tags'] = {str(i): p.tags for i, p in enumerate(patches) if p.tags}
+    images = (binding_images or []) + [n if include_artwork else '' for _, n in styles]
+    if any(images):
+        source['artwork_sources'] = images
     authored = tomlkit.dumps(source).encode('utf-8')
     text_data = b''.join(struct.pack('<H', len(t)) + t for t in texts)
     page_data = b''.join(pages)
@@ -376,10 +383,89 @@ def compile_display(
     block = HEADER.pack(
         b'CDSP', len(styles), len(pages), len(texts), len(page_data), len(authored)
     )
-    block += b''.join(styles) + page_data + text_data + authored
+    block += b''.join(s for s, _ in styles) + page_data + text_data + authored
     if len(block) > 65535:
         raise ValueError('display metadata exceeds 65535 bytes')
+    if any(images):
+        from .song_artwork import prepare_bitmap
+
+        if len(images) > 65535:
+            raise ValueError('artwork directory exceeds 65535 entries')
+
+        width, height = target.display_width, (target.display_height + 2) // 3
+        directory = bytearray(
+            b'CART' + struct.pack('<II', len(images), len(binding_images or []))
+        )
+        pixels = bytearray()
+        offsets: dict[str, int] = {}
+        start = 12 + 8 * len(images)
+        for name in images:
+            if not name:
+                directory.extend(bytes(8))
+                continue
+            if name not in offsets:
+                offsets[name] = start + len(pixels)
+                pixels.extend(
+                    prepare_bitmap(Path(name), (width, height), source_snapshots)
+                )
+            directory.extend(struct.pack('<HHI', width, height, offsets[name]))
+        block += (
+            directory
+            + pixels
+            + struct.pack('<4sI', b'AEND', len(directory) + len(pixels) + 8)
+        )
     return window_records, references, block
+
+
+def artwork_files(
+    data: bytes, source: dict[str, object]
+) -> tuple[dict[str, str], dict[Path, bytes]]:
+    from . import binary_format
+    from .song_artwork import png_asset
+
+    data = binary_format.core(data)
+    if data[-8:-4] != b'AEND':
+        return {}, {}
+    length = struct.unpack_from('<I', data, len(data) - 4)[0]
+    start = len(data) - length
+    if start < 0 or length < 20 or data[start : start + 4] != b'CART':
+        raise binary_format.DocumentFormatError('invalid setup artwork directory')
+    count = struct.unpack_from('<I', data, start + 4)[0]
+    paths = source.get('artwork_sources')
+    if not isinstance(paths, list) or len(paths) != count or count > (length - 20) // 8:
+        raise binary_format.DocumentFormatError('invalid setup artwork source paths')
+    names: dict[str, str] = {}
+    files: dict[Path, bytes] = {}
+    for i, original in enumerate(paths):
+        width, height, offset = struct.unpack_from('<HHI', data, start + 12 + i * 8)
+        if not offset:
+            continue
+        end = offset + width * height * 2
+        if (
+            not isinstance(original, str)
+            or not original
+            or not width
+            or not height
+            or offset < 12 + count * 8
+            or end > length - 8
+        ):
+            raise binary_format.DocumentFormatError('invalid setup artwork entry')
+        name, png = png_asset(width, height, data[start + offset : start + end])
+        names[original] = name
+        files[Path(name)] = png
+    return names, files
+
+
+def remap_artwork(value: object, names: dict[str, str]) -> None:
+    if isinstance(value, dict):
+        fields = cast(dict[str, object], value)
+        if isinstance(image := fields.get('image'), str) and image in names:
+            fields['image'] = names[image]
+        for item in fields.values():
+            remap_artwork(item, names)
+    elif isinstance(value, list):
+        for item in value:
+            remap_artwork(item, names)
 
 
 def estimate_frame_ram(setup: models.Setup, target: models.Target) -> int:
@@ -387,8 +473,8 @@ def estimate_frame_ram(setup: models.Setup, target: models.Target) -> int:
     pixels = 2 * sum(d.width * d.height for d in target.displays)
     total = setup.frame_buffers * (((pixels + 7) & ~7) + 8)
     if setup.frame_buffers == 1 and setup.use_animations:
-        # ARM Pane is 1816 bytes; Renderer checks this against sizeof(Pane).
-        total += ((len(target.displays) * 1816 + 7) & ~7) + 8
+        # ARM Pane is 1960 bytes; Renderer checks this against sizeof(Pane).
+        total += ((len(target.displays) * 1960 + 7) & ~7) + 8
     return total
 
 
@@ -469,10 +555,31 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
             raise binary_format.DocumentFormatError('truncated display text')
         size = struct.unpack_from('<H', data, offset)[0]
         offset += 2 + size
-    if offset + source_size != len(data):
+    end = offset + source_size
+    if end > len(data) or (end < len(data) and data[end : end + 4] != b'CART'):
         raise binary_format.DocumentFormatError('invalid display source size')
     try:
-        return tomlkit.parse(data[offset:].decode('utf-8')).unwrap()
+        source = tomlkit.parse(data[offset:end].decode('utf-8')).unwrap()
+        stack = [source]
+        while stack:
+            fields = stack.pop()
+            if isinstance(fields, dict):
+                for key, value in fields.items():
+                    if key in ('style', 'status_style') and isinstance(value, dict):
+                        value.pop('icon', None)
+                    if key in (
+                        'line_styles',
+                        'tag_styles',
+                        'patch_styles',
+                        'program_styles',
+                    ) and isinstance(value, dict):
+                        for item in value.values():
+                            if isinstance(item, dict):
+                                item.pop('icon', None)
+                    stack.append(value)
+            elif isinstance(fields, list):
+                stack.extend(fields)
+        return source
     except (UnicodeDecodeError, ParseError) as error:
         raise binary_format.DocumentFormatError(
             f'invalid display source: {error}'
