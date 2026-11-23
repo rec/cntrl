@@ -467,7 +467,7 @@ public:
     void set_target_pulse(unsigned period, uint8_t low, uint8_t high, unsigned delay) {
         throb_.configure(period, low, high, delay);
     }
-    void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false, bool panorama = true, bool fixed_heading = false) {
+    void transition(bool undo, std::optional<unsigned> duration_ms, int pane, bool vertical = false, bool panorama = true) {
         if (!application_.visible() || application_.feature_open(platform_)) return;
         unsigned region_index = application_.layout.page_region(application_.layout.controller_page(application_.rendering()));
         if (region_index == application_.layout.regions()) return;
@@ -477,8 +477,8 @@ public:
             pane = application_.allocation.controller_window(application_.rendering(),unsigned(pane));
             if (pane < 0) return;
         } else if (region.count == 1) pane = int(region.first);
-        if (pane >= 0) renderer_.transition(undo,duration_ms,pane,0,vertical,panorama,1,fixed_heading);
-        else renderer_.transition(undo,duration_ms,int(region.first),0,vertical,panorama,region.count,fixed_heading);
+        if (pane >= 0) renderer_.transition(undo,duration_ms,pane,0,vertical,panorama,1);
+        else renderer_.transition(undo,duration_ms,int(region.first),0,vertical,panorama,region.count);
     }
     void set_brightness(uint8_t value, bool temporary = false) {
         brightness_feedback_ = temporary;

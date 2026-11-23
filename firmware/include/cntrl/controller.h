@@ -357,7 +357,7 @@ private:
     unsigned counter_revision_ = 0;
     void scroll(unsigned action, bool reverse, int pane = -1) {
         const unsigned direction = document_.scroll_direction(action);
-        hardware_.transition(reverse != bool(direction & 1), document_.scroll_ms(direction >= 2), pane, direction >= 2, direction == 0, action == 1);
+        hardware_.transition(reverse != bool(direction & 1), document_.scroll_ms(direction >= 2), pane, direction >= 2, direction == 0);
     }
     Hardware &hardware_;
     PatchOutputs &outputs_;

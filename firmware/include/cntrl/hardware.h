@@ -143,7 +143,7 @@ struct Hardware : RelayDriver {
     virtual const char *control_label(ControlRole) const { return ""; }
     // Pane indices follow physical left-to-right order: 0, 1, 2.
     virtual void show(unsigned pane, const Pane &content) = 0;
-    virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true, bool fixed_heading = false) { (void)undo; (void)duration_ms; (void)pane; (void)vertical; (void)panorama; (void)fixed_heading; }
+    virtual void transition(bool undo, std::optional<unsigned> duration_ms, int pane = -1, bool vertical = false, bool panorama = true) { (void)undo; (void)duration_ms; (void)pane; (void)vertical; (void)panorama; }
     virtual void configure_page_settings(const PageSettings &) {}
     virtual void configure_pages(const Document &) {}
     virtual bool prepare_pages(const Document &) { return true; }
