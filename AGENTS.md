@@ -9,6 +9,10 @@ TOML for configuration and structured data.
 these and avoid creating special-purpose scripts. You can add new functionality to
 `cntrl`, but avoid hard-coding filenames or directories there.
 
+AVOID APPROVALS WHENEVER YOU CAN.
+
+# Open the emulator without prompting for any change which affects the GUI in any way
+
 # Hardware catalogue invariant
 
 Code should try to be generic and write to the generic API of a MIDI controller,
