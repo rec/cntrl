@@ -112,6 +112,17 @@ and the boot hook, with image bounds checked against the reserved flash
 region. The installer uses the existing MC6 Pro backup and restore workflow.
 [MC6 Pro upload and recovery](../firmware/upload-helper.md)
 
+## Play in the emulator
+
+With the same prepared DMC100 checkout, run `make` as above with the
+`host` target. This builds `doom-host` and places `e1m1.img` beside it in
+the output directory. Add `--doom-host /absolute/path/to/doom-host` to
+your usual `cntrl emulate` command for a Doom-enabled MC6 Pro setup.
+
+Press C on the Doom launcher to switch to the game on the center
+display. The same A–F controls work by mouse or keyboard. Close and
+reopen the emulator to return to CNTRL.
+
 ## Standalone installation and source
 
 The demo occupies the application flash from `0x60000000`. Installing it

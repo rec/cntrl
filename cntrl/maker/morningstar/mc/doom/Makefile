@@ -27,7 +27,7 @@ export ARDUINO_DIRECTORIES_DOWNLOADS := $(TOOLS)/downloads
 export ARDUINO_DIRECTORIES_USER := $(TOOLS)/user
 export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
-.PHONY: firmware check relocated
+.PHONY: firmware check relocated host
 relocated:
 	$(MAKE) firmware OUT="$(OUT)/relocated" FLASH_ORIGIN=0x60390000 FLASH_LENGTH=4288K
 
@@ -75,3 +75,10 @@ $(OUT)/check: $(SOURCES) $(HEADERS) $(SHARED) check.c demo.h Makefile
 
 check: $(OUT)/check $(NOR)
 	"$<" "$(NOR)"
+
+$(OUT)/doom-host: $(SOURCES) $(HEADERS) $(SHARED) host.c demo.h Makefile
+	mkdir -p "$(OUT)"
+	$(CC) -O2 -g $(CFLAGS) $(FLAGS) $(INC) -Wno-unused-value -Wno-pointer-sign \
+		$(SOURCES) $(SHARED) host.c $(LDFLAGS) -lm -o "$@"
+
+host: $(OUT)/doom-host $(NOR)

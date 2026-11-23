@@ -14,6 +14,7 @@ from types import TracebackType
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import models
+from ..maker.morningstar.mc.emulator import doom
 from .backend import Session
 from .corrections import Correction, CorrectionBatch, TranslationRegion, issue_body
 from .host_midi import MIDI_ERRORS, HostMidi
@@ -171,6 +172,7 @@ class ControllerCanvas(QtWidgets.QWidget):
         super().__init__()
         self.session = session
         self.submit = submit
+        self.doom_controls = False
         self.frames = session.frames.copy()
         self.editing_name = session.editing_name
         self.edit_caption: Callable[[QtCore.QPointF], bool] | None = None
@@ -397,8 +399,9 @@ class ControllerCanvas(QtWidgets.QWidget):
 
     def synchronize(self) -> None:
         active = self.pointer | self.keyboard | self.latched
-        for n in sorted(self.active ^ active):
-            self.submit(partial(self.session.button, n, n in active))
+        if not self.doom_controls:
+            for n in sorted(self.active ^ active):
+                self.submit(partial(self.session.button, n, n in active))
         self.active = active
         self.update()
 
@@ -552,9 +555,18 @@ class AuxiliaryContact(QtWidgets.QPushButton):
 class EmulatorWindow(QtWidgets.QMainWindow):
     request_done = QtCore.Signal()
 
-    def __init__(self, session: Session, *, caret_blink_interval: int = 500) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        caret_blink_interval: int = 500,
+        doom_host: Path | None = None,
+    ) -> None:
         super().__init__()
         self.session = session
+        self.doom_host = doom_host
+        self.doom_process: doom.DoomHost | None = None
+        self.doom_display = ''
         self.package_directory = Path(__file__).resolve().parents[1]
         self.worker = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix='cntrl-native'
@@ -1278,6 +1290,15 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.log.appendPlainText(str(error))
 
     def tick(self) -> None:
+        if self.doom_process is not None:
+            self.doom_process.advance(
+                {
+                    c.name.upper()
+                    for c in self.session.controller.controls
+                    if c.id in self.canvas.active
+                }
+            )
+            return
         if self.request is not None or self.stopped or self.closing:
             return
         if (status := self.session.poll_exit()) is not None:
@@ -1385,13 +1406,63 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.running.setChecked(False)
             self.running.setEnabled(False)
             self.recording.setEnabled(False)
-            self.canvas.setEnabled(False)
+            if self.session.doom:
+                if self.doom_process is None and not self.closing:
+                    self.start_doom()
+            else:
+                self.canvas.setEnabled(False)
             self.clock_label.setText(
                 'Doom' if self.session.doom else self.text('stock')
             )
             return
         self.clock_label.setText(f'{self.session.time_us / 1_000_000:.3f} s')
         self.canvas.update()
+
+    def start_doom(self) -> None:
+        self.canvas.setEnabled(False)
+        if self.doom_host is None:
+            self.log.appendPlainText(
+                'Use --doom-host with a built MC6 Pro Doom demo to play.'
+            )
+            return
+        displays = self.session.target.displays
+        if len(displays) != 3 or (displays[1].width, displays[1].height) != (
+            doom.WIDTH,
+            doom.HEIGHT,
+        ):
+            self.log.appendPlainText('Doom requires a 160 by 128 center display.')
+            return
+        self.doom_display = displays[1].id
+        process = doom.DoomHost(self.doom_host, self)
+        self.doom_process = process
+        process.stopped.connect(self.stop_doom)
+        process.frame.connect(self.present_doom)
+        self.canvas.doom_controls = True
+        self.canvas.editing_name = False
+        self.canvas.release()
+        self.canvas.setEnabled(True)
+        self.canvas.setFocus()
+        self.close_host_connections()
+        self.timer.start(29)
+        process.start()
+
+    def present_doom(self, pixels: bytes) -> None:
+        self.canvas.frames = {self.doom_display: pixels}
+        self.canvas.update()
+
+    def stop_doom(self, message: str = '') -> None:
+        process = self.doom_process
+        if process is None:
+            return
+        self.doom_process = None
+        self.timer.stop()
+        self.canvas.setEnabled(False)
+        if process.state() != QtCore.QProcess.ProcessState.NotRunning:
+            process.kill()
+            process.waitForFinished(1000)
+        process.deleteLater()
+        if message:
+            self.log.appendPlainText(message)
 
     def host_failed(self, endpoint: str, error: BaseException) -> None:
         self.close_host(endpoint)
@@ -1485,6 +1556,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 return
             self.leave_corrections()
         self.timer.stop()
+        self.stop_doom()
         self.release_inputs()
         self.closing = True
         self.start_request()
@@ -1562,7 +1634,9 @@ def port_description(
     return str(port)
 
 
-def run_window(session: Session, *, caret_blink_interval: int = 500) -> None:
+def run_window(
+    session: Session, *, caret_blink_interval: int = 500, doom_host: Path | None = None
+) -> None:
     application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     previous_hook = sys.excepthook
     window: EmulatorWindow | None = None
@@ -1586,13 +1660,16 @@ def run_window(session: Session, *, caret_blink_interval: int = 500) -> None:
 
     sys.excepthook = unhandled
     try:
-        window = EmulatorWindow(session, caret_blink_interval=caret_blink_interval)
+        window = EmulatorWindow(
+            session, caret_blink_interval=caret_blink_interval, doom_host=doom_host
+        )
         window.show()
         result = application.exec()
     finally:
         sys.excepthook = previous_hook
         if window is not None and not window.session_closed:
             window.timer.stop()
+            window.stop_doom()
             window.closing = True
             window.requests.clear()
             window.worker.shutdown(cancel_futures=True)

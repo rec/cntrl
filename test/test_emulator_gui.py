@@ -1006,6 +1006,46 @@ def test_simulated_firmware_transition_is_visible_and_stops_controls(
     wait_for(window.close)
 
 
+def test_doom_handoff_displays_game_frames_and_accepts_pedals(
+    application: QtWidgets.QApplication,
+) -> None:
+    host = (
+        Path(__file__).resolve().parents[1]
+        / 'cntrl/maker/morningstar/mc/doom/build/doom-host'
+    )
+    if not host.is_file():
+        pytest.skip('Build the MC6 Pro Doom host to exercise the game handoff')
+    session = CapturedSession()
+    session.target.displays[:] = [
+        TargetDisplay(id=name, label=name, width=160, height=128)
+        for name in ('left', 'center', 'right')
+    ]
+    session.layout.displays.clear()
+    session.layout.displays.update(
+        {
+            name: Placement(x=30 * i, y=10, width=20, height=16)
+            for i, name in enumerate(('left', 'center', 'right'))
+        }
+    )
+    window = EmulatorWindow(session, doom_host=host)
+    window.running.setChecked(False)
+    try:
+        session.doom = True
+        window.display_updates()
+        wait_for(lambda: 'center' in window.canvas.frames)
+        initial = window.canvas.frames['center']
+        assert set(window.canvas.frames) == {'center'}
+        assert len(initial) == 160 * 128 * 2
+        assert len(set(initial)) > 1
+        click(window.canvas, 'b', QtCore.Qt.MouseButton.RightButton)
+        wait_for(lambda: window.canvas.frames['center'] != initial)
+        assert not session.inputs
+        assert window.canvas.isEnabled()
+    finally:
+        wait_for(window.close)
+    assert window.doom_process is None and session.closed
+
+
 @pytest.mark.parametrize(
     'language,caption',
     [

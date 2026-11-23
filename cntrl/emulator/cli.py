@@ -49,6 +49,10 @@ class Emulate(BaseModel, frozen=True):
     source_root: Path = Field(default_factory=Path.cwd)
     scenario: Path | None = None
     output: Path | None = None
+    doom_host: Path | None = Field(
+        default=None,
+        description='Built MC6 Pro doom-host executable next to e1m1.img',
+    )
     compare_status_fonts: bool = Field(
         default=False,
         description='Preview native-size Status fonts; F cycles samples',
@@ -297,4 +301,8 @@ def emulate_locked(
         if command.scenario is None or command.interactive:
             from .gui import run_window
 
-            run_window(session, caret_blink_interval=command.caret_blink_interval)
+            run_window(
+                session,
+                caret_blink_interval=command.caret_blink_interval,
+                doom_host=command.doom_host,
+            )
