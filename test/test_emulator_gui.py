@@ -1020,6 +1020,8 @@ def test_doom_handoff_displays_game_frames_and_accepts_pedals(
         TargetDisplay(id=name, label=name, width=160, height=128)
         for name in ('left', 'center', 'right')
     ]
+    session.controller.controls.append(Button(id='f', name='F'))
+    session.layout.controls['f'] = Placement(x=80, y=50, width=15, height=20)
     session.frames = {
         d.id: b'\xf8\x00' * (d.width * d.height) for d in session.target.displays
     }
@@ -1054,6 +1056,10 @@ def test_doom_handoff_displays_game_frames_and_accepts_pedals(
         wait_for(lambda: window.canvas.frames['center'] != initial)
         assert not session.inputs
         assert window.canvas.isEnabled()
+        click(window.canvas, 'f', QtCore.Qt.MouseButton.RightButton)
+        QtTest.QTest.qWait(2100)
+        wait_for(lambda: window.session_closed)
+        assert window.restart_requested
     finally:
         wait_for(window.close)
     assert window.doom_process is None and session.closed

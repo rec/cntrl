@@ -166,6 +166,8 @@ class CaptionEditor(QtWidgets.QLineEdit):
 
 
 class ControllerCanvas(QtWidgets.QWidget):
+    doom_button = QtCore.Signal(str, bool)
+
     def __init__(
         self, session: Session, submit: Callable[[Callable[[], None]], None]
     ) -> None:
@@ -399,8 +401,10 @@ class ControllerCanvas(QtWidgets.QWidget):
 
     def synchronize(self) -> None:
         active = self.pointer | self.keyboard | self.latched
-        if not self.doom_controls:
-            for n in sorted(self.active ^ active):
+        for n in sorted(self.active ^ active):
+            if self.doom_controls:
+                self.doom_button.emit(n, n in active)
+            else:
                 self.submit(partial(self.session.button, n, n in active))
         self.active = active
         self.update()
@@ -566,6 +570,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.session = session
         self.doom_host = doom_host
         self.doom_process: doom.DoomHost | None = None
+        self.restart_requested = False
         self.doom_display = ''
         self.package_directory = Path(__file__).resolve().parents[1]
         self.worker = ThreadPoolExecutor(
@@ -1440,19 +1445,32 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         process = doom.DoomHost(self.doom_host, self)
         self.doom_process = process
         process.stopped.connect(self.stop_doom)
+        process.flee.connect(self.return_to_cntrl)
         process.frame.connect(self.present_doom)
         self.canvas.doom_controls = True
         self.canvas.editing_name = False
         self.canvas.release()
+        self.canvas.doom_button.connect(self.doom_button_changed)
         self.canvas.setEnabled(True)
         self.canvas.setFocus()
         self.close_host_connections()
         self.timer.start(29)
         process.start()
 
+    def doom_button_changed(self, control_id: str, pressed: bool) -> None:
+        if self.doom_process is not None and any(
+            c.id == control_id and c.name.upper() == 'F'
+            for c in self.session.controller.controls
+        ):
+            self.doom_process.press_f(pressed)
+
     def present_doom(self, pixels: bytes) -> None:
         self.canvas.frames[self.doom_display] = pixels
         self.canvas.update()
+
+    def return_to_cntrl(self) -> None:
+        self.restart_requested = True
+        self.close()
 
     def stop_doom(self, message: str = '') -> None:
         process = self.doom_process
@@ -1640,7 +1658,7 @@ def port_description(
 
 def run_window(
     session: Session, *, caret_blink_interval: int = 500, doom_host: Path | None = None
-) -> None:
+) -> bool:
     application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     QtWidgets.QApplication.setWindowIcon(
         QtGui.QIcon(str(Path(__file__).with_name('eq-dial.png')))
@@ -1687,3 +1705,4 @@ def run_window(
                 window.finish_close()
     if result:
         sys.exit(result)
+    return window.restart_requested

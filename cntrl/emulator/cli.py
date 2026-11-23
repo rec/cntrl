@@ -292,17 +292,22 @@ def emulate_locked(
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     copyfile(asset, destination)
     executable = build(target, storage / '.emulator-build', command.source_root)
-    with Session(layout, target, executable, storage, setup) as session:
-        if command.compare_status_fonts:
-            session.compare_status_fonts()
-        if command.scenario is not None:
-            Scenario.load(command.scenario).run(session)
-            save(session, command.output or storage / 'replay-output')
-        if command.scenario is None or command.interactive:
+    scenario = command.scenario
+    while True:
+        with Session(layout, target, executable, storage, setup) as session:
+            if command.compare_status_fonts:
+                session.compare_status_fonts()
+            if scenario is not None:
+                Scenario.load(scenario).run(session)
+                save(session, command.output or storage / 'replay-output')
+                if not command.interactive:
+                    return
+                scenario = None  # A pedal restart does not replay the launch gesture.
             from .gui import run_window
 
-            run_window(
+            if not run_window(
                 session,
                 caret_blink_interval=command.caret_blink_interval,
                 doom_host=command.doom_host,
-            )
+            ):
+                return

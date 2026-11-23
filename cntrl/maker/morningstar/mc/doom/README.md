@@ -122,8 +122,8 @@ the output directory. Add `--doom-host /absolute/path/to/doom-host` to
 your usual `cntrl emulate` command for a Doom-enabled MC6 Pro setup.
 
 Press C on the Doom launcher to switch to the game on the center
-display. The same A–F controls work by mouse or keyboard. Close and
-reopen the emulator to return to CNTRL.
+display. The same A–F controls work by mouse or keyboard. Tap F to use
+a door or switch, or hold F for two seconds to restart into CNTRL.
 
 ## Standalone installation and source
 
