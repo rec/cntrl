@@ -588,7 +588,8 @@ public:
                 , cntrl::Panic::Status::ready
 #endif
                 , i, region.count, documents_.name_and_contact(),
-                !application_.song_navigation_active() || application_.layout.navigation()
+                !application_.song_navigation_active() || application_.layout.navigation(),
+                documents_.document().contact_style(), documents_.document().contact_artwork(&application_)
             );
                 if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language && pages_.page() != Pages::Page::time) content = Pages::display_view(content,i,region.count);
                 content.focused = r == application_.allocation.focus() && pages_.page() != Pages::Page::pong; renderer_.show(screen,content);

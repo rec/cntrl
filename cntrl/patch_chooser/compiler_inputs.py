@@ -98,7 +98,7 @@ def normalize_references(
                 isinstance(image := fields.get('image'), str)
                 and image
                 and (
-                    context[-1:] in (('style',), ('status_style',))
+                    context[-1:] in (('style',), ('status_style',), ('contact_style',))
                     or context[-2:-1] in (('line_styles',), ('tag_styles',))
                 )
             ):

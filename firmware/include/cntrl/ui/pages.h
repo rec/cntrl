@@ -288,14 +288,14 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_view)
 #endif
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned display = 0, unsigned count = 1, const char *contact = "", bool direct_page_switch = true) {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned display = 0, unsigned count = 1, const char *contact = "", bool direct_page_switch = true, const uint8_t *contact_style = nullptr, Bitmap contact_artwork = {}) {
         using R = cntrl::PageSettings;
         const auto &status = status_snapshot ? status_snapshot->performance : live_status;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
-        if (page_ == Page::status && contact_) { contact_view(pane, contact); return pane; }
+        if (page_ == Page::status && contact_) { contact_view(pane, contact, contact_style, contact_artwork); return pane; }
         if (page_ == Page::time && display == 0) { time_view(pane); return pane; }
         if (page_ == Page::doom) {
             pane.bitmap = {&doom_artwork, 0, 0, DoomArtwork::width, DoomArtwork::height};
@@ -498,22 +498,27 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(status_contact_view)
 #endif
-    void contact_view(Pane &pane, const char *contact) {
-        char heading[64];
-        std::snprintf(heading, sizeof(heading), "%s / %s %s", i18n::text(i18n::Message::owner_contact), label(controls_.confirm), i18n::text(i18n::Message::status));
-        page_heading(pane, heading, true);
+    void contact_view(Pane &pane, const char *contact, const uint8_t *style, Bitmap artwork) {
+        const unsigned font = style ? style[0] : localized_face;
+        if (style) {
+            pane.graphics.foreground = u16(style + 4);
+            pane.graphics.background = u16(style + 6);
+        }
+        page_heading(pane, i18n::text(i18n::Message::owner_contact), true);
+        pane.bitmap = artwork;
+        pane.styled_body = style != nullptr;
         if (!*contact) contact = i18n::text(i18n::Message::empty);
-        const unsigned top = pane.lines[0].graphics.line_height + pane.graphics.pad;
+        const unsigned top = pane.lines[0].graphics.line_height + std::max(2u, unsigned(pane.graphics.pad));
         const unsigned width = viewport_.width > 2 * pane.graphics.pad ? viewport_.width - 2 * pane.graphics.pad : 0;
-        for (unsigned size = 16; size >= 8; --size) {
-            if (!fonts_.supports(localized_face, size)) continue;
+        for (unsigned size = style ? style[1] : 16; size >= 8; --size) {
+            if (!fonts_.supports(font, size)) continue;
             const char *cursor = contact;
             unsigned y = top, row = 1;
             for (; row < max_lines && *cursor && y + size <= viewport_.height; ++row, y += size) {
                 auto &text = pane.lines[row];
                 text = {};
                 text.graphics = pane.graphics;
-                text.graphics.font = localized_face;
+                text.graphics.font = uint8_t(font);
                 text.graphics.size = uint8_t(size);
                 text.graphics.line_height = uint16_t(size);
                 text.centered = true;
@@ -525,13 +530,13 @@ private:
                     const unsigned length = unsigned(next - cursor);
                     std::memcpy(text.text, cursor, length);
                     text.text[length] = 0;
-                    if (end != cursor && fonts_.bounds(localized_face, size, 0, text.text).width > int(width)) {
+                    if (end != cursor && fonts_.bounds(font, size, 0, text.text).width > int(width)) {
                         text.text[end - cursor] = 0;
                         break;
                     }
                     end = next;
                 }
-                const auto bounds = fonts_.bounds(localized_face, size, 0, text.text);
+                const auto bounds = fonts_.bounds(font, size, 0, text.text);
                 text.y = int16_t(int(y) + (int(size) - bounds.height) / 2 - bounds.top);
                 cursor = *end == '\n' ? end + 1 : end;
             }

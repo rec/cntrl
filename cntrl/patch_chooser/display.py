@@ -10,6 +10,7 @@ import tomlkit
 from pydantic import BaseModel, Field
 from tomlkit.exceptions import ParseError
 
+from ..fonts.catalogue import UI_FONTS
 from . import formatting, graphics, models
 
 
@@ -372,7 +373,45 @@ def compile_display(
         if p.program_style is not None
     }
     source['patch_tags'] = {str(i): p.tags for i, p in enumerate(patches) if p.tags}
+    if contact := show.page_settings.contact_style:
+        font = 253
+        size = 16
+        if name := contact.font_name:
+            font = UI_FONTS.get(name, 0)
+            size = max(
+                (
+                    s
+                    for f in target.fonts
+                    if f.id == font
+                    for s in f.sizes
+                    if 8 <= s <= 16
+                ),
+                default=0,
+            )
+            if name not in target.ui_fonts or not size:
+                raise ValueError(
+                    f'page_settings.contact_style: unavailable UI font {name!r}'
+                )
+        foreground = graphics.rgb565(
+            graphics.color(contact.foreground_color or 'black')
+        )
+        background = graphics.rgb565(
+            graphics.color(
+                contact.background_color or show.page_settings.background_color
+            )
+        )
+        styles.append(
+            (
+                graphics.SCREEN.pack(
+                    font, size, 0, CONTACT_STYLE, foreground, background, size, 0
+                ),
+                contact.image or '',
+            )
+        )
+        source['contact_style'] = contact.model_dump(exclude_none=True)
     images = (binding_images or []) + [n if include_artwork else '' for _, n in styles]
+    if contact and contact.image:
+        images[-1] = contact.image
     if any(images):
         source['artwork_sources'] = images
     authored = tomlkit.dumps(source).encode('utf-8')
@@ -392,23 +431,40 @@ def compile_display(
         if len(images) > 65535:
             raise ValueError('artwork directory exceeds 65535 entries')
 
-        width, height = target.display_width, (target.display_height + 2) // 3
+        width = target.display_width
+        height = target.display_height
+        page_settings = show.page_settings
+        contact_height = max(
+            1,
+            height
+            - min(
+                page_settings.title_height * 3 // 2,
+                (height - 2 * page_settings.padding) // 2,
+            )
+            - 6,
+        )
         directory = bytearray(
             b'CART' + struct.pack('<II', len(images), len(binding_images or []))
         )
         pixels = bytearray()
-        offsets: dict[str, int] = {}
+        offsets: dict[tuple[str, int], int] = {}
         start = 12 + 8 * len(images)
-        for name in images:
+        for i, name in enumerate(images):
             if not name:
                 directory.extend(bytes(8))
                 continue
-            if name not in offsets:
-                offsets[name] = start + len(pixels)
+            image_height = (
+                contact_height
+                if contact and i == len(images) - 1
+                else (height + 2) // 3
+            )
+            key = name, image_height
+            if key not in offsets:
+                offsets[key] = start + len(pixels)
                 pixels.extend(
-                    prepare_bitmap(Path(name), (width, height), source_snapshots)
+                    prepare_bitmap(Path(name), (width, image_height), source_snapshots)
                 )
-            directory.extend(struct.pack('<HHI', width, height, offsets[name]))
+            directory.extend(struct.pack('<HHI', width, image_height, offsets[key]))
         block += (
             directory
             + pixels
@@ -436,6 +492,7 @@ def artwork_files(
         raise binary_format.DocumentFormatError('invalid setup artwork source paths')
     names: dict[str, str] = {}
     files: dict[Path, bytes] = {}
+    contact = source.get('contact_style')
     for i, original in enumerate(paths):
         width, height, offset = struct.unpack_from('<HHI', data, start + 12 + i * 8)
         if not offset:
@@ -451,18 +508,27 @@ def artwork_files(
         ):
             raise binary_format.DocumentFormatError('invalid setup artwork entry')
         name, png = png_asset(width, height, data[start + offset : start + end])
-        names[original] = name
+        key = (
+            f'contact:{original}'
+            if i == count - 1 and isinstance(contact, dict) and contact.get('image')
+            else original
+        )
+        names[key] = name
         files[Path(name)] = png
     return names, files
 
 
-def remap_artwork(value: object, names: dict[str, str]) -> None:
+def remap_artwork(
+    value: object, names: dict[str, str], *, contact: bool = False
+) -> None:
     if isinstance(value, dict):
         fields = cast(dict[str, object], value)
-        if isinstance(image := fields.get('image'), str) and image in names:
-            fields['image'] = names[image]
-        for item in fields.values():
-            remap_artwork(item, names)
+        if isinstance(image := fields.get('image'), str):
+            key = f'contact:{image}' if contact else image
+            if key in names:
+                fields['image'] = names[key]
+        for key, item in fields.items():
+            remap_artwork(item, names, contact=key == 'contact_style')
     elif isinstance(value, list):
         for item in value:
             remap_artwork(item, names)
@@ -601,6 +667,7 @@ DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22, 23, 24)
 DISPLAY_NAMES = ('next', 'sent', 'undo')
 LINE = struct.Struct('<BBHHH')
 HEADER = struct.Struct('<4sHHHHI')
+CONTACT_STYLE = 0x80
 PATCH_FIELDS = (
     'display_name',
     'name',

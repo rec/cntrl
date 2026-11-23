@@ -91,6 +91,7 @@ struct Pane {
     bool split_middle = false;
     bool scene = false;
     SwitchLabelAlignment switch_label_alignment = SwitchLabelAlignment::center;
+    bool styled_body = false;
     TextLine lines[max_lines];
     Circle circles[4];
     Rectangle rectangles[4];

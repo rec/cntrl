@@ -277,7 +277,7 @@ private:
     void damage(Screen &screen, const Pane &content) {
         const auto &before = screen.requested;
         bool full = before.three_bands != content.three_bands || before.split_middle != content.split_middle || before.scene != content.scene || before.heading_band != content.heading_band || before.focused != content.focused
-            || before.switch_label_alignment != content.switch_label_alignment
+            || before.switch_label_alignment != content.switch_label_alignment || before.styled_body != content.styled_body
             || before.bitmap.source != content.bitmap.source || before.bitmap.offset != content.bitmap.offset
             || before.second_bitmap.source != content.second_bitmap.source || before.second_bitmap.offset != content.second_bitmap.offset
             || before.second_bitmap.generation != content.second_bitmap.generation
@@ -463,9 +463,10 @@ private:
     void paint_step() {
         const auto &bitmap = second_bitmap_ ? painting_.second_bitmap : painting_.bitmap;
         const auto v = screens_[unsigned(drawing_)].viewport;
-        if (bitmap.source && !painting_.three_bands && bitmap_row_ < v.height) {
-            const unsigned y = bitmap_row_++;
-            const unsigned offset = bitmap.offset + (y * bitmap.height / v.height) * bitmap.width * 2;
+        const unsigned bitmap_top = painting_.styled_body ? painting_.lines[0].graphics.line_height + 2 : 0;
+        if (bitmap.source && !painting_.three_bands && bitmap_top + bitmap_row_ < v.height) {
+            const unsigned y = bitmap_top + bitmap_row_;
+            const unsigned offset = bitmap.offset + (bitmap_row_++ * bitmap.height / (v.height - bitmap_top)) * bitmap.width * 2;
             auto *row = raster_.pixels() + y * v.width;
             if (bitmap.width == v.width) bitmap.source->read_bitmap(bitmap.generation, offset, row, v.width);
             else for (unsigned x = 0; x < v.width; ++x)
@@ -486,8 +487,10 @@ private:
             second_bitmap_ = true; bitmap_row_ = 0;
             return;
         }
-        const auto &line = painting_.lines[field_];
+        auto &line = painting_.lines[field_];
         const int y = text_y(field_);
+        if (field_ && painting_.styled_body && !letter_ && !outline_painted_ && line.text[0])
+            raster_.artwork_contrast(line, y);
         if (line.artwork_index && paint_line_artwork(line, v, y)) return;
         const bool heavier = painting_.scene && (field_ == 0 || field_ == 2);
         if (!outline_painted_ && line.text[0] && line.outline != TextOutline::none) {

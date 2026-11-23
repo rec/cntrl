@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 import tomlkit
+from PIL import Image
 
 from cntrl.animation import asset
 from cntrl.emulator import backend, cli
@@ -296,12 +297,29 @@ def test_exported_profiles_build_without_the_physical_sdk(
         ]
 
 
-def test_status_switch_c_toggles_the_saved_owner_contact(tmp_path: Path) -> None:
+@pytest.mark.parametrize('styled', [False, True])
+def test_status_switch_c_toggles_the_saved_owner_contact(
+    tmp_path: Path, styled: bool
+) -> None:
     target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
     layout = EmulatorLayout.load(Path(__file__).parents[1] / 'emulator/mc6-pro.toml')
-    source = {'pages': {'status': {'type': 'status'}}, 'use_animations': False}
+    source: dict[str, object] = {
+        'pages': {'status': {'type': 'status'}},
+        'use_animations': False,
+    }
+    if styled:
+        image = tmp_path / 'contact.png'
+        Image.new('RGB', (160, 104), '#000080').save(image)
+        style = {'image': str(image), 'foreground_color': 'black', 'font_name': 'Arimo'}
+        source['page_settings'] = {'contact_style': style}
     setup = tmp_path / 'status.bin'
     raw = compiler.compile_show(source, {}, [], target)
+    if styled:
+        exported = tomlkit.parse(resolved.export(raw)).unwrap()
+        assert exported['page_settings']['contact_style'] == style
+        assert compiler.compile_show(exported, {}, [], target) == raw
+        _, artwork = resolved.artwork_files(raw)
+        assert len(artwork) == 1
     setup.write_bytes(
         setup_bundle.build({'status': raw}, {'status': source}, target.memory).pack()
     )
@@ -324,9 +342,20 @@ def test_status_switch_c_toggles_the_saved_owner_contact(tmp_path: Path) -> None
     with backend.Session(layout, target, executable, storage, setup) as session:
         session.advance(150_000)
         diagnostics = dict(session.frames)
+        session.capture_corrections(True)
         press_c(session)
         multiline = dict(session.frames)
         assert multiline != diagnostics
+        assert [
+            r.original
+            for r in session.correction_regions
+            if r.message == 'owner_contact'
+        ] == ['Contact']
+        if styled:
+            frame = multiline['lcd-1']
+            body = frame[30 * 160 * 2 : 53 * 160 * 2]
+            colors = {body[i : i + 2] for i in range(0, len(body), 2)}
+            assert {b'\0\x10', b'\xff\xff'} <= colors
         assert not [m for m in session.messages if m.kind in ('midi', 'error')]
         press_c(session)
         assert session.frames == diagnostics

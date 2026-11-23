@@ -465,8 +465,15 @@ public:
         unsigned page_start = styles + ns * 16, texts = page_start + page_bytes;
         if (!pages || texts > length) return false;
         for (unsigned i = 0; i < switch_count; ++i) if (u16(bytes + switch_start + i * 72 + 70) >= pages) return false;
-        for (unsigned i = 0; i < ns; ++i)
-            if (!graphics_valid(bytes + styles + i * 16, hardware)) return false;
+        unsigned contact_style = 0;
+        for (unsigned i = 0; i < ns; ++i) {
+            const auto *style = bytes + styles + i * 16;
+            if (i + 1 == ns && style[3] == contact_style_flag) {
+                if (style[0] == 255) return false;
+                contact_style = i + 1;
+            }
+            if (!graphics_valid(style, hardware, false, contact_style ? contact_style_flag : 0)) return false;
+        }
         unsigned cursor = page_start;
         for (unsigned i = 0; i < pages; ++i) {
             if (cursor >= texts || bytes[cursor] > max_lines) return false;
@@ -476,6 +483,7 @@ public:
                 const uint8_t *p = bytes + cursor;
                 if ((p[0] > 7 && (p[0] < 16 || p[0] > 24) && p[0] != 255)
                     || p[1] > 1 || u16(p + 2) >= ns || u16(p + 6) >= nt) return false;
+                if (contact_style == unsigned(u16(p + 2)) + 1) return false;
                 const uint8_t *g = bytes + styles + u16(p + 2) * 16;
                 if (u16(p + 4) < g[2] || u16(p + 4) >= hardware.display_width() - g[2]) return false;
             }
@@ -572,6 +580,7 @@ public:
         instruments_ = ni; patch_cycles_ = nc; patches_ = np;
         styles_ = styles + core_; pages_ = page_start + core_; texts_ = texts + core_;
         artwork_ = artwork ? artwork + core_ : 0;
+        contact_style_ = contact_style;
         graph_ = graph + core_; streams_ = streams ? streams + core_ : 0;
         pickup_ = pickup ? pickup + core_ : 0; looper_ = looper ? looper + core_ : 0;
         loop_reset_ = loop_reset ? loop_reset + core_ : 0;
@@ -652,6 +661,10 @@ public:
     unsigned core_offset() const { return core_; }
     unsigned core_length() const { return core_length_; }
     uint32_t artwork_generation() const { return artwork_ ? u32(data_ + core_ + 20) : 0; }
+    const uint8_t *contact_style() const { return contact_style_ ? data_ + styles_ + (contact_style_ - 1) * 16 : nullptr; }
+    Bitmap contact_artwork(const BitmapSource *source) const {
+        return contact_style_ && artwork_ ? bitmap_for(source, u32(data_ + artwork_ + 8) + contact_style_) : Bitmap{};
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(document_bitmap_for)
 #endif
@@ -1155,9 +1168,9 @@ private:
         }
         return true;
     }
-    static bool graphics_valid(const uint8_t *p, const Hardware &hardware, bool binding = false) {
+    static bool graphics_valid(const uint8_t *p, const Hardware &hardware, bool binding = false, unsigned flags = 0) {
         return (p[0] == 255 ? u32(p + 12) && hardware.supports_font_asset(u32(p + 12), p[1])
-                           : (binding ? u32(p + 12) <= 65535 : !u32(p + 12)) && hardware.supports_font(p[0], p[1])) && !(p[3] & (binding ? ~15u : 255u))
+                           : (binding ? u32(p + 12) <= 65535 : !u32(p + 12)) && hardware.supports_font(p[0], p[1])) && !(p[3] & ~(binding ? 15u : flags))
             && 2u * p[2] < hardware.display_width()
             && 2u * p[2] + u16(p + 8) <= hardware.display_height()
             && u16(p + 8) && u16(p + 10) < u16(p + 8);
@@ -1207,6 +1220,8 @@ private:
     unsigned length_ = 0, instruments_ = 0, patch_cycles_ = 0, patches_ = 0;
     unsigned core_ = 0, core_length_ = 0;
     bool opaque_ = false;
+    uint16_t contact_style_ = 0;
+    static constexpr unsigned contact_style_flag = 0x80;
     unsigned styles_ = 0, pages_ = 0, texts_ = 0, artwork_ = 0;
     unsigned graph_ = 0, streams_ = 0, pickup_ = 0, looper_ = 0, loop_reset_ = 0;
     const GlobalSettings::Values *globals_ = nullptr;

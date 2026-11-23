@@ -33,6 +33,28 @@ public:
     }
     uint16_t *pixels() { return pixels_; }
     const uint16_t *pixels() const { return pixels_; }
+    static unsigned luminance(uint16_t pixel) {
+        // Linear sRGB contributions for RGB565, scaled by 10000.
+        static constexpr uint16_t red[] = {
+            0, 5, 11, 20, 32, 47, 66, 89, 115, 146, 181, 220,
+            264, 312, 366, 424, 487, 556, 630, 710, 795, 885, 982, 1084,
+            1193, 1307, 1428, 1554, 1688, 1827, 1973, 2126,
+        };
+        static constexpr uint16_t green[] = {
+            0, 9, 18, 27, 38, 51, 67, 85, 105, 129, 155, 184,
+            216, 251, 289, 331, 375, 423, 475, 529, 588, 650, 715, 785,
+            858, 934, 1015, 1100, 1188, 1281, 1378, 1479, 1584, 1693, 1807, 1925,
+            2047, 2174, 2305, 2441, 2581, 2726, 2875, 3029, 3188, 3351, 3520, 3693,
+            3871, 4054, 4242, 4435, 4633, 4836, 5044, 5257, 5476, 5699, 5928, 6162,
+            6402, 6646, 6896, 7152,
+        };
+        static constexpr uint16_t blue[] = {
+            0, 2, 4, 7, 11, 16, 22, 30, 39, 49, 61, 75,
+            90, 106, 124, 144, 166, 189, 214, 241, 270, 301, 333, 368,
+            405, 444, 485, 528, 573, 621, 670, 722,
+        };
+        return red[pixel >> 11] + green[(pixel >> 5) & 63] + blue[pixel & 31];
+    }
     unsigned rows(const TextLine &line) const {
         if (!line.wrap || !line.text[0]) return 1;
         return position(line, unsigned(std::strlen(line.text) - 1)).row + 1;
@@ -92,6 +114,38 @@ public:
         if (line.wrap) { const auto p = position(line, index); x += p.x - glyph.x; y += p.row * line.graphics.line_height; }
         const int origin_x = x + glyph.x, origin_y = y + glyph.y;
         return {origin_x, origin_y, origin_x + int(glyph.width), origin_y + int(glyph.height)};
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(raster_artwork_contrast)
+#endif
+    void artwork_contrast(TextLine &line, int y) const {
+        // Match song artwork: sample only glyph ink, require 4.5:1 on 95%
+        // of the samples, and outline the better color on mixed artwork.
+        const unsigned preferred = luminance(line.graphics.foreground);
+        unsigned samples = 0, black = 0, white = 0, authored = 0;
+        Glyph glyph;
+        for (unsigned index = 0; fonts_.glyph(line.graphics.font, line.graphics.size,
+                line.graphics.asset, line.text, index, glyph); ++index) {
+            const auto ink = glyph_region(line, glyph, index, y);
+            for (int row = std::max(ink.top, int(settings_.pad));
+                 row < std::min(ink.bottom, int(viewport_.height) - settings_.pad); ++row) {
+                for (int col = std::max(ink.left, int(settings_.pad));
+                     col < std::min(ink.right, int(viewport_.width) - settings_.pad); ++col) {
+                    const unsigned gx = unsigned(col - ink.left), gy = unsigned(row - ink.top);
+                    if (!(glyph.pixels[gy * ((glyph.width + 7) / 8) + gx / 8] & (0x80 >> (gx % 8)))) continue;
+                    const unsigned background = luminance(pixels_[unsigned(row) * viewport_.width + unsigned(col)]);
+                    ++samples;
+                    black += 2 * (background + 500) >= 9 * 500;
+                    white += 2 * 10500 >= 9 * (background + 500);
+                    authored += 2 * (std::max(preferred, background) + 500) >= 9 * (std::min(preferred, background) + 500);
+                }
+            }
+        }
+        if (authored * 100 >= samples * 95) return;
+        const bool dark = black >= white;
+        line.graphics.foreground = dark ? 0 : 0xffff;
+        if (std::max(black, white) * 100 < samples * 95)
+            line.outline = dark ? TextOutline::white : TextOutline::black;
     }
 #ifdef CNTRL_EMULATOR
     Region text_region(const TextLine &line, int y, std::vector<Region> &glyphs,

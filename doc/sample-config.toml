@@ -111,6 +111,13 @@ background_color = "0xFFF085"
 digits = 3
 decimals = 2
 
+[page_settings.contact_style]
+
+image = "contact.png"
+background_color = "navy"
+foreground_color = "white"
+font_name = "Arimo"
+
 [page_settings.arpeggiator]
 
 inputs = ["usb"]

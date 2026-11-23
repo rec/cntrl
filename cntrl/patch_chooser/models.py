@@ -1040,7 +1040,17 @@ class ArpeggiatorSettings(LooperSettings, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+class ContactStyle(BaseModel, frozen=True):
+    image: str | None = None
+    background_color: str | None = None
+    foreground_color: str | None = None
+    font_name: str | None = None
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class PageSettings(BaseModel, frozen=True):
+    contact_style: ContactStyle | None = None
     arpeggiator: ArpeggiatorSettings | None = None
     looper: LooperSettings | None = None
     expression: dict[str, ExpressionAssignment] = Field(default_factory=dict)

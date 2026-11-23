@@ -246,6 +246,22 @@ To clear both copies, run `cntrl global clear name_and_contact` with the pedal c
 Clearing it offline saves an empty value to apply on the next sync.
 The translated Contact caption requires the language packs built for this firmware.
 
+For the appearance of the Contact body, add an optional style to the setup.
+The image sits behind the text. CNTRL checks the contrast under the lettering
+and uses black or white with an outline where needed. Choose a built-in UI font
+or omit the font to use the current language's font.
+
+```toml
+[page_settings.contact_style]
+image = 'contact.png'
+background_color = 'navy'
+foreground_color = 'white'
+font_name = 'Arimo'
+```
+
+The style and its image travel with the compiled setup. The owner text still
+comes from the pedal's device settings.
+
 Compiled setups and song libraries contain no contact text. Pedal settings
 backups can include it in `device-globals.toml`, so share those files only if you
 want to share the contact details. The text is an editable owner label.

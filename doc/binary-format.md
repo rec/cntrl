@@ -156,7 +156,10 @@ background presence bits in one byte, and two RGB565 colors. Scene title
 styles append the CRC32 of the binding node, so unrelated nodes cannot
 select the artwork by index alone. Setup cores may append a `CART` directory
 after the display source with RGB565 bitmaps for binding styles and display
-field styles. The `AEND` footer stores the artwork section's byte length.
+field styles. The optional final `CDSP` style record uses flag `0x80` for the
+Contact body. Its `CART` entry contains a body-sized bitmap when an image is
+configured. Contact text comes from the device settings journal. The `AEND`
+footer stores the artwork section's byte length.
 
 Host backup readers also accept the preceding `CSP5`, `CSP6`, `CSP7` and `CSP8`
 library layouts that contain no setlist binding maps.

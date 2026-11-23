@@ -9,6 +9,12 @@ pytest_plugins = ['reccy.pytest_plugin']
 
 
 class ExamplePageSettings(models.PageSettings, frozen=True):
+    contact_style: models.ContactStyle | None = models.ContactStyle(
+        image='contact.png',
+        foreground_color='white',
+        background_color='navy',
+        font_name='Arimo',
+    )
     arpeggiator: models.ArpeggiatorSettings | None = models.ArpeggiatorSettings(
         inputs=['usb'], outputs=['usb']
     )

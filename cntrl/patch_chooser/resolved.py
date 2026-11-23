@@ -625,6 +625,8 @@ def _decode(data: bytes) -> dict[str, object]:
     repeat = struct.unpack_from('<H', data, meta + 12)[0]
     result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
     pages = page_settings.unpack(data, meta + 16)
+    if 'contact_style' in source:
+        pages['contact_style'] = source.pop('contact_style')
     cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
     if flags & page_settings.EXPRESSION_FLAG:
         pages['expression'] = page_settings.unpack_expression(
