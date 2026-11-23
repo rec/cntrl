@@ -89,9 +89,11 @@ verification.
 Compile the setup against the Doom-enabled target. In the default utility
 rotation, **Doom** appears immediately before the empty page. Setups with
 explicit page rotations can add a page of type `doom` to their tools region.
-Cycle to the illustrated **Doom** page, then press C to start the game. The boot selector
-consumes the request before entering Doom, so a power cycle returns to the
-ordinary CNTRL startup. The launcher requires CNTRL to be the default
+Cycle to the illustrated **Doom** page, then press C to start the game.
+Tap F to open doors and activate switches. Hold F for two seconds to
+restart into the ordinary CNTRL startup without cycling power. A power
+cycle also returns to CNTRL because the boot selector consumes the
+one-time Doom request. The launcher requires CNTRL to be the default
 firmware.
 
 Use the same DMC100 inputs as above and replace `firmware` with

@@ -35,6 +35,8 @@ ifneq ($(FLASH_ORIGIN),)
 CORE_LINKER := $(TOOLS)/data/packages/teensy/hardware/avr/1.62.0/cores/teensy4/imxrt1062_t41.ld
 LINKER := $(OUT)/doom.ld
 LINK_PROPERTY := --build-property 'build.flags.ld=-Wl,--gc-sections,--relax,--no-warn-rwx-segments "-T$(LINKER)"'
+RETURN_FLAGS := -DCNTRL_DOOM_RETURN "-I$(ROOT)/../firmware"
+RETURN_HEADERS := return_button.h $(ROOT)/../firmware/boot_switch/selection.h
 
 $(LINKER): $(CORE_LINKER) Makefile
 	mkdir -p "$(OUT)"
@@ -47,10 +49,10 @@ firmware: $(OUT)/elf/doom_demo.ino.elf
 	"$(SDK)/arm-none-eabi-objcopy" -I ihex -O binary "$(OUT)/elf/doom_demo.ino.hex" "$(OUT)/hex.bin"
 	cmp "$(OUT)/elf.bin" "$(OUT)/hex.bin"
 
-$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h Makefile $(NOR) $(FLASH_CONFIG) $(LINKER)
+$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h Makefile $(NOR) $(FLASH_CONFIG) $(LINKER) $(RETURN_HEADERS)
 	mkdir -p "$(SKETCH)/src"
 	touch "$(SKETCH)/doom_demo.ino"
-	cp $(SHARED) board.cpp demo.h "$(FLASH_CONFIG)" "$(SKETCH)/src/"
+	cp $(SHARED) board.cpp demo.h return_button.h "$(FLASH_CONFIG)" "$(SKETCH)/src/"
 	cd "$(DMC)" && for source in $(patsubst $(DMC)/%,%,$(SOURCES)); do \
 		mkdir -p "$(SKETCH)/src/$$(dirname "$$source")" && \
 		cp "$$source" "$(SKETCH)/src/$$source" || exit; done
@@ -59,7 +61,7 @@ $(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h M
 		--build-path "$(OUT)/elf" \
 		$(LINK_PROPERTY) \
 		--build-property 'build.flags.c=$(FLAGS) -DCNTRL_EXTERNAL_FLASH_CONFIG $(INC)' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fno-rtti $(INC)' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fno-rtti $(INC) $(RETURN_FLAGS)' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=' \
 		--build-property 'recipe.hooks.postbuild.4.pattern=' "$(SKETCH)"
@@ -73,8 +75,13 @@ $(OUT)/check: $(SOURCES) $(HEADERS) $(SHARED) check.c demo.h Makefile
 	$(CC) -O2 -g $(CFLAGS) $(FLAGS) $(INC) -Wno-unused-value -Wno-pointer-sign \
 		$(SOURCES) $(SHARED) check.c $(LDFLAGS) -lm -o "$@"
 
-check: $(OUT)/check $(NOR)
+$(OUT)/test-return: test_return.cpp return_button.h Makefile
+	mkdir -p "$(OUT)"
+	$(CXX) $(CXXFLAGS) -std=c++17 test_return.cpp -o "$@"
+
+check: $(OUT)/check $(NOR) $(OUT)/test-return
 	"$<" "$(NOR)"
+	"$(OUT)/test-return"
 
 $(OUT)/doom-host: $(SOURCES) $(HEADERS) $(SHARED) host.c demo.h Makefile
 	mkdir -p "$(OUT)"

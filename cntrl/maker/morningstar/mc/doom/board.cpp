@@ -3,12 +3,31 @@
 #include <SPI.h>
 
 #include "demo.h"
+#if defined(CNTRL_DOOM_RETURN)
+#include "return_button.h"
+#include "boot_switch/selection.h"
+#endif
 
 namespace {
 constexpr uint8_t CENTER_CS = 24;
 constexpr uint8_t CENTER_DC = 23;
 constexpr uint8_t CENTER_RESET = 22;
 constexpr uint8_t BACKLIGHT = 6;
+
+#if defined(CNTRL_DOOM_RETURN)
+[[noreturn]] void return_to_cntrl()
+{
+    USB1_USBCMD = 2;
+    USBPHY1_CTRL_SET = 0x80000000;
+    delay(100);
+    __disable_irq();
+    *reinterpret_cast<volatile uint32_t *>(boot_request_register) = request_cntrl;
+    __asm__ volatile("dsb" ::: "memory");
+    SCB_AIRCR = 0x05fa0004;
+    __asm__ volatile("dsb" ::: "memory");
+    while (true) __asm__ volatile("wfi");
+}
+#endif
 
 void panel_command(uint8_t command, const uint8_t *args = nullptr, unsigned count = 0)
 {
@@ -136,6 +155,14 @@ uint8_t demo_buttons()
             stable ^= mask;
     }
     candidate = sample;
+#if defined(CNTRL_DOOM_RETURN)
+    static ReturnButton return_button;
+    switch (return_button.sample(stable & ReturnButton::mask, now)) {
+    case ReturnButton::Action::restart: return_to_cntrl();
+    case ReturnButton::Action::use: return stable | ReturnButton::mask;
+    case ReturnButton::Action::none: return stable & ~ReturnButton::mask;
+    }
+#endif
     return stable;
 }
 
