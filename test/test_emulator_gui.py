@@ -24,6 +24,7 @@ from cntrl.emulator.host_midi import HostMidi
 from cntrl.emulator.layout import EmulatorLayout, Placement
 from cntrl.emulator.localization import dialog_messages, messages
 from cntrl.localization import catalogue
+from cntrl.maker.morningstar.mc.emulator.profiles import built_doom_host
 from cntrl.models import Button, Controller
 from cntrl.patch_chooser.models import MidiEndpoint, Target, TargetDisplay
 
@@ -1006,14 +1007,13 @@ def test_simulated_firmware_transition_is_visible_and_stops_controls(
     wait_for(window.close)
 
 
+@pytest.mark.parametrize('dispatch_during_hold', [True, False])
 def test_doom_handoff_displays_game_frames_and_accepts_pedals(
     application: QtWidgets.QApplication,
+    dispatch_during_hold: bool,
 ) -> None:
-    host = (
-        Path(__file__).resolve().parents[1]
-        / 'cntrl/maker/morningstar/mc/doom/build/doom-host'
-    )
-    if not host.is_file():
+    host = built_doom_host(Path(__file__).resolve().parents[1])
+    if host is None:
         pytest.skip('Build the MC6 Pro Doom host to exercise the game handoff')
     session = CapturedSession()
     session.target.displays[:] = [
@@ -1056,8 +1056,20 @@ def test_doom_handoff_displays_game_frames_and_accepts_pedals(
         wait_for(lambda: window.canvas.frames['center'] != initial)
         assert not session.inputs
         assert window.canvas.isEnabled()
-        click(window.canvas, 'f', QtCore.Qt.MouseButton.RightButton)
-        QtTest.QTest.qWait(2100)
+        point = (
+            window.canvas.placement_rect(session.layout.controls['f'])
+            .center()
+            .toPoint()
+        )
+        button = QtCore.Qt.MouseButton.LeftButton
+        QtTest.QTest.mousePress(window.canvas, button, pos=point)
+        if dispatch_during_hold:
+            QtTest.QTest.qWait(2100)
+            assert window.restart_requested
+        else:
+            # Deliver the release before Qt gets to dispatch the expired hold timer.
+            QtTest.QTest.qSleep(2100)
+        QtTest.QTest.mouseRelease(window.canvas, button, pos=point)
         wait_for(lambda: window.session_closed)
         assert window.restart_requested
     finally:

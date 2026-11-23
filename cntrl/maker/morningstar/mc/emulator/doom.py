@@ -34,8 +34,12 @@ class DoomHost(QtCore.QProcess):
         if pressed:
             self.hold.start(2000)
         elif self.hold.isActive():
+            expired = self.hold.remainingTime() == 0
             self.hold.stop()
-            self.use_pending = True
+            if expired:
+                self.flee.emit()
+            else:
+                self.use_pending = True
 
     def advance(self, pedals: set[str]) -> None:
         if self.requested_at is not None:
