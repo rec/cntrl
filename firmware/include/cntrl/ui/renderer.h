@@ -452,7 +452,8 @@ private:
         }
         const auto &line = painting_.lines[field_];
         const int y = text_y(field_);
-        if ((letter_ || raster_.intersects(line, y)) && raster_.letter(line, letter_, y)) ++letter_;
+        const bool heavier = painting_.scene && (field_ == 0 || field_ == 2);
+        if ((letter_ || raster_.intersects(line, y, heavier)) && raster_.letter(line, letter_, y, heavier)) ++letter_;
         else { letter_ = 0; if (++field_ == max_lines) {
             backgrounds(true);
             raster_.corners(painting_.focused); rendering_ = false;

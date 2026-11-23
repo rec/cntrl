@@ -61,11 +61,11 @@ public:
         }
         return result;
     }
-    bool intersects(const TextLine &line, int y) const {
+    bool intersects(const TextLine &line, int y, bool heavier = false) const {
         if (!line.text[0]) return false;
         const auto b = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);
         const int x = line.wrap ? 0 : line.centered ? (int(viewport_.width) - b.width) / 2 : line.x + b.left;
-        const int width = line.wrap ? int(viewport_.width) : b.width;
+        const int width = line.wrap ? int(viewport_.width) : b.width + int(heavier);
         const int height = b.height + (line.wrap ? int(rows(line) - 1) * line.graphics.line_height : 0);
         return x < clip_.right && x + width > clip_.left && y + b.top < clip_.bottom && y + b.top + height > clip_.top;
     }
@@ -111,18 +111,20 @@ public:
         return result;
     }
 #endif
-    bool letter(const TextLine &line, unsigned index, int y) {
+    bool letter(const TextLine &line, unsigned index, int y, bool heavier = false) {
         Glyph glyph;
         if (!fonts_.glyph(line.graphics.font, line.graphics.size, line.graphics.asset, line.text, index, glyph)) return false;
         const auto region = glyph_region(line, glyph, index, y);
         const auto color = index < 64 && (line.color_mask & (uint64_t(1) << index)) ? line.alternate_color : line.graphics.foreground;
         const int origin_x = region.left, origin_y = region.top;
-        const int first_x = std::max(0, std::max(int(settings_.pad), clip_.left) - origin_x), first_y = std::max(0, std::max(int(settings_.pad), clip_.top) - origin_y);
+        const int first_x = std::max(0, std::max(int(settings_.pad), clip_.left) - origin_x - int(heavier)), first_y = std::max(0, std::max(int(settings_.pad), clip_.top) - origin_y);
         const int end_x = std::min(int(glyph.width), std::min(int(viewport_.width) - int(settings_.pad), clip_.right) - origin_x);
         const int end_y = std::min(int(glyph.height), std::min(int(viewport_.height) - int(settings_.pad), clip_.bottom) - origin_y);
         for (int row = first_y; row < end_y; ++row) for (int col = first_x; col < end_x; ++col)
-            if (glyph.pixels[row * ((glyph.width + 7) / 8) + col / 8] & (0x80 >> (col % 8)))
+            if (glyph.pixels[row * ((glyph.width + 7) / 8) + col / 8] & (0x80 >> (col % 8))) {
                 pixel(origin_x + col, origin_y + row, color, settings_.pad);
+                if (heavier) pixel(origin_x + col + 1, origin_y + row, color, settings_.pad);
+            }
         return true;
     }
     void pixel(int x, int y, uint16_t color, unsigned inset = 0) {
