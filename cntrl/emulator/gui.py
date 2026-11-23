@@ -1337,7 +1337,8 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         # A step can finish after the user resumes the live clock.
         elapsed_us = (monotonic_ns() - self.origin) // 1000
         self.origin_us = max(self.origin_us, self.time_us - elapsed_us)
-        self.canvas.frames = self.session.frames.copy()
+        if not self.session.doom:
+            self.canvas.frames = self.session.frames.copy()
         if self.correction_mode.isChecked():
             self.correction_regions = self.session.correction_regions
             self.correction_language_name = self.session.correction_language_name
@@ -1419,6 +1420,8 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.canvas.update()
 
     def start_doom(self) -> None:
+        self.canvas.frames.clear()
+        self.canvas.update()
         self.canvas.setEnabled(False)
         if self.doom_host is None:
             self.log.appendPlainText(
@@ -1447,7 +1450,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         process.start()
 
     def present_doom(self, pixels: bytes) -> None:
-        self.canvas.frames = {self.doom_display: pixels}
+        self.canvas.frames[self.doom_display] = pixels
         self.canvas.update()
 
     def stop_doom(self, message: str = '') -> None:

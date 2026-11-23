@@ -1020,6 +1020,9 @@ def test_doom_handoff_displays_game_frames_and_accepts_pedals(
         TargetDisplay(id=name, label=name, width=160, height=128)
         for name in ('left', 'center', 'right')
     ]
+    session.frames = {
+        d.id: b'\xf8\x00' * (d.width * d.height) for d in session.target.displays
+    }
     session.layout.displays.clear()
     session.layout.displays.update(
         {
@@ -1032,6 +1035,7 @@ def test_doom_handoff_displays_game_frames_and_accepts_pedals(
     try:
         session.doom = True
         window.display_updates()
+        assert not window.canvas.frames
         wait_for(lambda: 'center' in window.canvas.frames)
         initial = window.canvas.frames['center']
         assert set(window.canvas.frames) == {'center'}
