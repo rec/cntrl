@@ -90,6 +90,10 @@ button-e = 'E cycles the timing source'
 window-1 = 'Calibrate'
 button-c = 'Press heel, then toe. Press C at each position.'
 
+[doom.en]
+window-1 = 'Doom launcher'
+button-c = 'C switches to Doom'
+
 [main-menu.en]
 window-1 = 'Menu controls'
 window-2 = 'Pages and tools'

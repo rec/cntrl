@@ -91,7 +91,7 @@ def review_report(binary: str, title: str, body: str, prefilled: bool) -> bool:
                     'Report Issue', QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole
                 )
                 close_button = buttons.addButton(
-                    QtWidgets.QDialogButtonBox.StandardButton.Close
+                    'Close', QtWidgets.QDialogButtonBox.ButtonRole.RejectRole
                 )
                 report_button.setAutoDefault(False)
                 close_button.setDefault(True)

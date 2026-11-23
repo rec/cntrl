@@ -212,6 +212,7 @@ def test_crash_dialog_shows_report_before_opening_browser(
 ) -> None:
     previews: list[tuple[str, bool]] = []
     urls: list[str] = []
+    labels: list[set[str]] = []
     monkeypatch.setattr(crashes, 'build_ref', lambda: 'build-ref')
 
     def open_browser(url: str) -> bool:
@@ -225,15 +226,10 @@ def test_crash_dialog_shows_report_before_opening_browser(
         preview = dialog.findChild(QtWidgets.QPlainTextEdit)
         if preview is not None:
             previews.append((preview.toPlainText(), bool(urls)))
-        button = next(
-            (
-                b
-                for b in dialog.findChildren(QtWidgets.QPushButton)
-                if b.text() == 'Report Issue'
-            ),
-            None,
-        )
-        if approve and button is not None:
+        buttons = {b.text(): b for b in dialog.findChildren(QtWidgets.QPushButton)}
+        labels.append(set(buttons))
+        button = buttons.get('Report Issue' if approve else 'Close')
+        if button is not None:
             button.click()
         else:
             dialog.reject()
@@ -244,6 +240,7 @@ def test_crash_dialog_shows_report_before_opening_browser(
     ((preview, browser_already_open),) = previews
     assert 'RuntimeError: previewed locally' in preview
     assert not browser_already_open
+    assert labels == [{'Close', 'Report Issue'}]
     assert len(urls) == int(approve)
 
 
@@ -1158,6 +1155,24 @@ def test_hover_uses_screen_page_button_focus_and_active_language(
         '<p>fr screen</p>',
         '<p>fr time</p>',
     ]
+
+
+def test_hover_shows_the_doom_launcher_tooltip(
+    application: QtWidgets.QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = CapturedSession()
+    session.tooltip_context = ('doom', (('doom', 1),))
+    canvas = ControllerCanvas(session, lambda action: action())
+    shown: list[str] = []
+    monkeypatch.setattr(
+        QtWidgets.QToolTip, 'showText', lambda position, text, *args: shown.append(text)
+    )
+    screen = canvas.placement_rect(session.layout.displays['screen']).center().toPoint()
+    event = QtGui.QHelpEvent(
+        QtCore.QEvent.Type.ToolTip, screen, canvas.mapToGlobal(screen)
+    )
+    application.sendEvent(canvas, event)
+    assert shown == ['<p>Doom launcher</p>']
 
 
 def test_replay_controls_require_recording_before_save(
