@@ -783,6 +783,8 @@ private:
             } else if (w == 1) { middle = song; pane.bitmap = bitmap; }
             else if (w == windows - 1) middle = setlist;
             for (auto &line : pane.lines) { line.graphics = base; line.centered = true; }
+            if (pane.bitmap.source && song.artwork_foreground)
+                pane.lines[pane.split_middle ? 3 : 1].graphics.foreground = song.graphics.foreground;
             for (unsigned i = 0; i < count_; ++i) {
                 const auto &state = states_[i];
                 const unsigned input = state.record[0];

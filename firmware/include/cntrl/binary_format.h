@@ -37,6 +37,7 @@ struct View {
     uint64_t global_explicit_mask = UINT64_MAX;
     unsigned global_mask_offset = 0;
     unsigned artwork_offset = 0, artwork_length = 0;
+    unsigned title_contrast_offset = 0;
 };
 inline bool prefix(uint8_t (&bytes)[28], Kind kind, unsigned core_length, unsigned extensions = 0) {
     if (core_length > maximum_payload - record_size || extensions > maximum_payload - record_size - core_length) return false;
@@ -114,6 +115,9 @@ public:
                 if (view_.artwork_offset || n < 4 || !reader.read(position_, bytes, 4)
                     || read32(bytes) > (n - 4) / 72) return false;
                 view_.artwork_offset = position_; view_.artwork_length = n;
+            } else if (tag == 7 && kind_ == Kind::songs) {
+                if (view_.title_contrast_offset || !n) return false;
+                view_.title_contrast_offset = position_;
             } else if (tag == patch_edit_origins && kind_ == Kind::setup) {
                 if (n < 8 || n % 4) return false;
             } else view_.opaque = true;

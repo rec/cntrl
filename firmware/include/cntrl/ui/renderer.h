@@ -267,6 +267,7 @@ private:
     uint32_t started_ = 0;
     uint8_t brightness_ = 128, requested_brightness_ = 128;
     unsigned bitmap_row_ = 0;
+    bool outline_painted_ = false;
     void damage(Screen &screen, const Pane &content) {
         const auto &before = screen.requested;
         bool full = before.three_bands != content.three_bands || before.split_middle != content.split_middle || before.scene != content.scene || before.heading_band != content.heading_band || before.focused != content.focused
@@ -277,7 +278,7 @@ private:
             const auto &a = before.lines[i], &b = content.lines[i];
             full = std::strcmp(a.text, b.text) || std::memcmp(&a.graphics, &b.graphics, sizeof(a.graphics))
                 || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.fit != b.fit || a.stippled != b.stippled
-                || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color;
+                || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color || a.outline != b.outline;
 #ifdef CNTRL_EMULATOR
             if (!translation_regions_.empty())
                 full = full || a.translation_id != b.translation_id || a.translation_short != b.translation_short
@@ -320,6 +321,7 @@ private:
         column_ = unsigned(painting_region_.left); field_ = letter_ = 0;
         raster_.configure(v, painting_.graphics, painting_region_); backgrounds();
         bitmap_row_ = 0;
+        outline_painted_ = false;
 #ifdef CNTRL_EMULATOR
         if (!translation_regions_.empty()) {
             auto &regions = translation_regions_[screen];
@@ -449,8 +451,13 @@ private:
         const auto &line = painting_.lines[field_];
         const int y = text_y(field_);
         const bool heavier = painting_.scene && (field_ == 0 || field_ == 2);
+        if (!outline_painted_ && line.text[0] && line.outline != TextOutline::none) {
+            if (raster_.letter(line, letter_, y, false, true)) ++letter_;
+            else { outline_painted_ = true; letter_ = 0; }
+            return;
+        }
         if ((letter_ || raster_.intersects(line, y, heavier)) && raster_.letter(line, letter_, y, heavier)) ++letter_;
-        else { letter_ = 0; if (++field_ == max_lines) {
+        else { letter_ = 0; outline_painted_ = false; if (++field_ == max_lines) {
             backgrounds(true);
             raster_.corners(painting_.focused); rendering_ = false;
         } }

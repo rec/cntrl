@@ -4,6 +4,7 @@ import struct
 from pathlib import Path
 from zlib import crc32
 
+import pytest
 from PIL import Image
 from pytest_regressions.file_regression import FileRegressionFixture
 
@@ -49,6 +50,10 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
     }
     artwork = tmp_path / 'light.png'
     Image.new('RGB', (160, 64), 'red').save(artwork)
+    mixed_artwork = tmp_path / 'mixed.png'
+    mixed = Image.new('RGB', (160, 64), 'red')
+    mixed.paste('blue', (80, 0, 160, 64))
+    mixed.save(mixed_artwork)
     library = songs.Library.model_validate(
         {
             'patches': {
@@ -89,6 +94,8 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
                 },
                 {
                     'name': 'Final song',
+                    'display_name': 'Final song',
+                    'image': str(mixed_artwork),
                     'patches': ['scene'],
                     'style': {'background_color': 'blue', 'font_name': 'CourierPrime'},
                 },
@@ -98,7 +105,8 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
             ],
         }
     )
-    data = songs.encode(library, target)
+    with pytest.warns(UserWarning, match='configured title color has low contrast'):
+        data = songs.encode(library, target)
     header = struct.pack('<4sIIII', b'CSG8', 1, len(data), crc32(data), 0)
     storage = tmp_path / 'session'
     folder = storage / 'cntrl/songs'
@@ -186,7 +194,7 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         assert len([m for m in session.messages if m.kind == 'midi']) == count
         press('a')
         assert any(m.kind == 'midi' and m.data[:1] == b'\xc0' for m in session.messages)
-        press('f')  # Explicit patch foreground overrides the song foreground.
+        press('f')  # Explicit patch colors style the scene around the song title.
         snapshot(2)
         assert session.frames != first
         press('f')  # Ordinary switch views inherit the same song defaults.
@@ -199,7 +207,13 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         assert session.frames['lcd-2'][(48 * 160 + 8) * 2 :][:2] == b'\0\x10'
         press('f')  # The shared boundary separates the songs.
         press('f')  # Final song installs its own display defaults.
-        assert session.frames['lcd-2'][(48 * 160 + 8) * 2 :][:2] == b'\0\x1f'
+        song_body = session.frames['lcd-2'][32 * 160 * 2 : 96 * 160 * 2]
+        assert {pixel for (pixel,) in struct.iter_unpack('>H', song_body)} == {
+            0xF800,
+            0x001F,
+            0x0000,
+            0xFFFF,
+        }
         midi_count = len([m for m in session.messages if m.kind == 'midi'])
         session.button('c', True)
         session.advance(session.time_us + 600000)

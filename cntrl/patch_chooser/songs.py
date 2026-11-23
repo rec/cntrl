@@ -464,6 +464,7 @@ def encode(
         assert target is not None
         directory = bytearray(struct.pack('<I', len(library.songs)))
         pixels = bytearray()
+        contrast = bytearray()
         start = 4 + song_artwork.ENTRY.size * len(library.songs)
         for song in library.songs:
             width = height = 0
@@ -474,6 +475,19 @@ def encode(
                     root / song.image, target, trace.files if trace else None
                 )
             label = label_text(song.display_name) if song.display_name else bytes(64)
+            foreground = song.style.foreground_color if song.style else None
+            contrast.append(
+                song_artwork.title_contrast(
+                    song.display_name,
+                    width,
+                    height,
+                    bitmap,
+                    graphics.rgb565(graphics.color(foreground)) if foreground else None,
+                    compact=len(target.displays) == 1,
+                )
+                if bitmap and song.display_name
+                else 0
+            )
             directory.extend(
                 song_artwork.ENTRY.pack(label, width, height, start + len(pixels))
             )
@@ -484,6 +498,12 @@ def encode(
                 tag=binary_format.SONG_ARTWORK, data=bytes(directory + pixels)
             )
         )
+        if any(contrast):
+            document.records.append(
+                binary_format.Record(
+                    tag=binary_format.SONG_TITLE_CONTRAST, data=bytes(contrast)
+                )
+            )
         data = document.pack()
     return data
 

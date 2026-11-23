@@ -22,10 +22,31 @@ from cntrl.patch_chooser import (
     global_config,
     graphics,
     models,
+    song_artwork,
     songs,
     transport,
 )
 from scripts import native_tests
+
+
+@pytest.mark.parametrize(
+    ('title_background', 'mode'),
+    [
+        (0xFFFF, song_artwork.TitleContrast.black),
+        (0x0000, song_artwork.TitleContrast.white),
+    ],
+)
+def test_automatic_title_color_uses_the_pixels_under_the_letters(
+    title_background: int, mode: song_artwork.TitleContrast
+) -> None:
+    outer = struct.pack('<H', title_background ^ 0xFFFF)
+    inner = struct.pack('<H', title_background)
+    row = outer * 48 + inner * 64 + outer * 48
+    bitmap = outer * (160 * 20) + row * 24 + outer * (160 * 20)
+    assert (
+        song_artwork.title_contrast('Title', 160, 64, bitmap, None, compact=False)
+        == mode
+    )
 
 
 def test_new_song_reuses_scene_definitions(

@@ -97,9 +97,14 @@ def unpack(data: bytes, kind: Kind) -> Document:
         elif tag == PATCH_EDIT_ORIGINS and kind == Kind.setup:
             if flags or size < 8 or size % 4:
                 raise DocumentFormatError('invalid local patch origins')
-        elif tag in (SONG_FORMATTING, SONG_ARTWORK) and kind == Kind.songs:
+        elif (
+            tag in (SONG_FORMATTING, SONG_ARTWORK, SONG_TITLE_CONTRAST)
+            and kind == Kind.songs
+        ):
             if flags or any(r.tag == tag for r in records):
                 raise DocumentFormatError('invalid song presentation record')
+            if tag == SONG_TITLE_CONTRAST and not size:
+                raise DocumentFormatError('empty song title contrast record')
         elif flags & REQUIRED:
             raise DocumentFormatError(f'unsupported required persistent record {tag}')
         records.append(
@@ -157,7 +162,7 @@ def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
             kind == Kind.setup
             and r.tag in (SOURCE, SETTING_OVERRIDES, PATCH_EDIT_ORIGINS)
             or kind == Kind.songs
-            and r.tag in (SONG_FORMATTING, SONG_ARTWORK)
+            and r.tag in (SONG_FORMATTING, SONG_ARTWORK, SONG_TITLE_CONTRAST)
         )
         for r in unpack(data, kind).records[1:]
     )
@@ -191,6 +196,7 @@ PATCH_EDIT_ORIGINS = 6
 SETTING_OVERRIDES = 3
 SONG_FORMATTING = 4
 SONG_ARTWORK = 5
+SONG_TITLE_CONTRAST = 7
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096

@@ -23,6 +23,7 @@ struct ScreenGraphics {
     uint32_t asset = 0;
 };
 
+enum class TextOutline : uint8_t { none, black, white };
 struct TextLine {
     char text[64] = {};
     ScreenGraphics graphics;
@@ -34,6 +35,8 @@ struct TextLine {
     bool stippled = false;
     uint64_t color_mask = 0; // Characters using alternate_color instead of foreground.
     uint16_t alternate_color = 0;
+    TextOutline outline = TextOutline::none;
+    bool artwork_foreground = false;
 #ifdef CNTRL_EMULATOR
     uint16_t translation_id = 0; // Catalogue index plus one, or zero for other text.
     bool translation_short = false;

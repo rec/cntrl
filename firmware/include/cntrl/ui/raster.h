@@ -111,19 +111,29 @@ public:
         return result;
     }
 #endif
-    bool letter(const TextLine &line, unsigned index, int y, bool heavier = false) {
+    bool letter(const TextLine &line, unsigned index, int y, bool heavier = false, bool outline = false) {
         Glyph glyph;
         if (!fonts_.glyph(line.graphics.font, line.graphics.size, line.graphics.asset, line.text, index, glyph)) return false;
         const auto region = glyph_region(line, glyph, index, y);
         const auto color = index < 64 && (line.color_mask & (uint64_t(1) << index)) ? line.alternate_color : line.graphics.foreground;
         const int origin_x = region.left, origin_y = region.top;
-        const int first_x = std::max(0, std::max(int(settings_.pad), clip_.left) - origin_x - int(heavier)), first_y = std::max(0, std::max(int(settings_.pad), clip_.top) - origin_y);
-        const int end_x = std::min(int(glyph.width), std::min(int(viewport_.width) - int(settings_.pad), clip_.right) - origin_x);
-        const int end_y = std::min(int(glyph.height), std::min(int(viewport_.height) - int(settings_.pad), clip_.bottom) - origin_y);
+        const int first_x = std::max(0, std::max(int(settings_.pad), clip_.left) - origin_x - int(heavier || outline));
+        const int first_y = std::max(0, std::max(int(settings_.pad), clip_.top) - origin_y - int(outline));
+        const int end_x = std::min(int(glyph.width), std::min(int(viewport_.width) - int(settings_.pad), clip_.right) - origin_x + int(outline));
+        const int end_y = std::min(int(glyph.height), std::min(int(viewport_.height) - int(settings_.pad), clip_.bottom) - origin_y + int(outline));
         for (int row = first_y; row < end_y; ++row) for (int col = first_x; col < end_x; ++col)
             if (glyph.pixels[row * ((glyph.width + 7) / 8) + col / 8] & (0x80 >> (col % 8))) {
-                pixel(origin_x + col, origin_y + row, color, settings_.pad);
-                if (heavier) pixel(origin_x + col + 1, origin_y + row, color, settings_.pad);
+                const int x = origin_x + col, y = origin_y + row;
+                if (outline) {
+                    const uint16_t edge = line.outline == TextOutline::white ? 0xffff : 0;
+                    pixel(x - 1, y, edge, settings_.pad);
+                    pixel(x + 1, y, edge, settings_.pad);
+                    pixel(x, y - 1, edge, settings_.pad);
+                    pixel(x, y + 1, edge, settings_.pad);
+                } else {
+                    pixel(x, y, color, settings_.pad);
+                    if (heavier) pixel(x + 1, y, color, settings_.pad);
+                }
             }
         return true;
     }

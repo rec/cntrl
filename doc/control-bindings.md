@@ -64,6 +64,11 @@ over the image, or use it alone for a shorter title. Without either field the
 song name appears. A single-song file can omit the name and use its filename
 stem. Setlists refer to the song name.
 
+When a song has both an image and a display name, CNTRL checks the contrast
+under the title at compile time. It keeps an explicit song foreground color
+and warns if the contrast is low. With an automatic color, it chooses black
+or white and adds a one-pixel outline if both colors need more contrast.
+
 This setup uses F and C for song navigation and two button combinations for
 page navigation.
 

@@ -448,7 +448,8 @@ public:
         std::snprintf(line.text, sizeof(line.text), "%s", current_song_);
         const auto &view = slots_[active_].view;
         uint8_t entry[72], header[4];
-        if (!view.artwork_offset || !song(current_song_) || !read_payload(view.artwork_offset, header, 4)) return;
+        const auto *current = song(current_song_);
+        if (!view.artwork_offset || !current || !read_payload(view.artwork_offset, header, 4)) return;
         const unsigned count = binary::read32(header);
         if (song_cache_index_ >= count || !read_payload(view.artwork_offset + 4 + 72 * song_cache_index_, entry, sizeof(entry))) return;
         const unsigned offset = binary::read32(entry + 68);
@@ -458,6 +459,21 @@ public:
             bitmap = {this, generation_, view.artwork_offset + offset, width, height};
         if ((entry[0] || bitmap.source) && std::memchr(entry, 0, 64))
             std::memcpy(line.text, entry, 64);
+        const unsigned contrast = view.title_contrast_offset;
+        uint8_t mode = 0;
+        if (!bitmap.source || !line.text[0] || !contrast || !read_payload(contrast - 4, header, 4)
+            || song_cache_index_ >= binary::read32(header)
+            || !read_payload(contrast + song_cache_index_, &mode, 1) || !mode || mode > 5) return;
+        enum class TitleContrast : uint8_t { unchanged, black, white, black_outlined, white_outlined, authored };
+        switch (TitleContrast(mode)) {
+        case TitleContrast::black_outlined: line.outline = TextOutline::white; [[fallthrough]];
+        case TitleContrast::black: line.graphics.foreground = 0; break;
+        case TitleContrast::white_outlined: line.outline = TextOutline::black; [[fallthrough]];
+        case TitleContrast::white: line.graphics.foreground = 0xffff; break;
+        case TitleContrast::authored: line.graphics.foreground = current->foreground; break;
+        case TitleContrast::unchanged: return;
+        }
+        line.artwork_foreground = true;
     }
     bool read_bitmap(uint32_t generation, unsigned offset, uint16_t *pixels, unsigned count) const override {
         return generation == generation_ && read_payload(offset, reinterpret_cast<uint8_t *>(pixels), count * 2);

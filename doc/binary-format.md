@@ -50,6 +50,7 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | Kind 3 | Song library, with the counts/records/`CSP9` core described below |
 | Tag 1 | Required, first, singleton core snapshot |
 | Tag 4, kind 3 | Optional singleton TOML song formatting preferences and authored song styles |
+| Tag 7, kind 3 | Optional singleton song artwork title contrast modes in song record order |
 | Tag 6, kind 1 | Optional authoring metadata for a local patch created by the setup editor |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
@@ -140,6 +141,12 @@ contains only authored properties; an empty or absent entry has no overrides.
 Renames and setlist edits preserve this order, and new pedal captures append.
 Keeping authored properties separate from resolved core graphics lets later
 host recompilation change generated defaults without replacing explicit styles.
+
+The song title contrast record has one byte per compiled song. Values 0–5
+mean use scene colors, black, white, black with a white outline, white with a
+black outline, and use the explicitly authored song foreground, respectively.
+The record applies to titles over artwork. Songs captured on the pedal after
+the record was written use their normal scene colors.
 
 Host backup readers also accept the preceding `CSP5`, `CSP6`, `CSP7` and `CSP8`
 library layouts that contain no setlist binding maps.
