@@ -211,8 +211,25 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         press('c')
         assert dict(session.frames) == first
         assert len([m for m in session.messages if m.kind == 'midi']) == count
-        press('a')
-        assert any(m.kind == 'midi' and m.data[:1] == b'\xc0' for m in session.messages)
+        # The song's D+E override frees B from the setup's B+E chord.
+        session.button('b', True)
+        session.advance(session.time_us + 10000)
+        assert [m.data for m in session.messages if m.kind == 'midi'][count:] == [
+            b'\xc0\x01'
+        ]
+        session.button('b', False)
+        session.advance(session.time_us + 120000)
+        assert len([m for m in session.messages if m.kind == 'midi']) == count + 1
+        # A is still part of A+D. A by itself fires when released.
+        session.button('a', True)
+        session.advance(session.time_us + 60000)
+        assert len([m for m in session.messages if m.kind == 'midi']) == count + 1
+        session.button('a', False)
+        session.advance(session.time_us + 120000)
+        assert [m.data for m in session.messages if m.kind == 'midi'][count:] == [
+            b'\xc0\x01',
+            b'\xc0\x00',
+        ]
         press('f')  # Explicit patch colors style the scene around the song title.
         snapshot(2)
         assert session.frames != first

@@ -101,6 +101,11 @@ combination for a song or a single scene, add a `navigation` table to that
 song or patch, such as `navigation = {page_forward = 'B+E'}`. The scene's
 setting takes precedence, followed by the song's and then the setup's.
 
+An ordinary scene press runs when the controller accepts the down edge.
+If the switch belongs to an active navigation chord, a press by itself runs
+on release. Completing the chord runs its navigation action instead.
+Hold and multi-press bindings follow their own gesture timing.
+
 ## Binding scopes and inheritance
 
 Bindings can also live at the top level of the existing `global.toml` defaults,
