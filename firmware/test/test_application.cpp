@@ -425,7 +425,8 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     assert(std::find(hardware.operations.begin(), hardware.operations.end(), 8u) != hardware.operations.end());
     hardware.operations.clear(); click(4, 1300);
     assert(std::find(hardware.operations.begin(), hardware.operations.end(), 5u) != hardware.operations.end());
-    const unsigned taps = hardware.taps; click(2, 1400); assert(hardware.taps == taps + 1);
+    const unsigned taps = hardware.taps; click(2, 1400);
+    assert(host.pages_.page() == cntrl::ui::Pages::Page::status && hardware.taps == taps); // C stays within Status.
     const auto performance = primary.navigation();
     std::vector<uint8_t> performance_bytes(performance.encoded_size());
     assert(performance.encode(performance_bytes.data(), unsigned(performance_bytes.size())));

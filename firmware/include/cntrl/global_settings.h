@@ -1,6 +1,7 @@
 #pragma once
 #include "filesystem.h"
 #include "binary_format.h"
+#include "ui/utf8.h"
 #include <cstring>
 #include <cstdio>
 #include <limits>
@@ -16,6 +17,7 @@ public:
         uint32_t values[count] = {};
         char language[16] = {};
         char startup_set[64] = {};
+        char name_and_contact[128] = {};
     };
     explicit GlobalSettings(files::FileSystem &filesystem) : filesystem_(filesystem) {}
     const Values &values() const { return values_; }
@@ -49,6 +51,13 @@ public:
         if (!std::memchr(values.language, 0, sizeof(values.language)) || !language_valid(values.language)) return false;
         if (!std::memchr(values.startup_set, 0, sizeof(values.startup_set))) return false;
         for (const char *p = values.startup_set; *p; ++p) if (*p < 32 || *p > 126) return false;
+        if (!std::memchr(values.name_and_contact, 0, sizeof(values.name_and_contact))) return false;
+        const char *contact = values.name_and_contact;
+        while (*contact) {
+            uint32_t code;
+            if (!ui::utf8::next(contact, code) || (code < 32 && code != '\n') || (code >= 127 && code < 160))
+                return false;
+        }
         for (unsigned i = 0; i < count; ++i)
             if ((values.known & (uint64_t(1) << i)) ? !valid(i, values.values[i]) : values.values[i] != 0) return false;
         return true;
@@ -102,28 +111,33 @@ public:
         if (!ready_ || !valid(values) || sequence_ == std::numeric_limits<uint32_t>::max()) return false;
         if (!filesystem_.exists("/cntrl/global") && !filesystem_.make_directory("/cntrl/global")) return false;
         uint8_t bytes[record_size] = {};
-        std::memcpy(bytes, "CGLO", 4); bytes[4] = 3;
+        const unsigned size = values.name_and_contact[0] ? record_size : startup_record_size;
+        std::memcpy(bytes, "CGLO", 4); bytes[4] = size == record_size ? 4 : 3;
         binary::write32(bytes + 8, sequence_ + 1);
         for (unsigned i = 0; i < 8; ++i) bytes[12 + i] = uint8_t(values.known >> (8 * i));
         for (unsigned i = 0; i < count; ++i) binary::write32(bytes + 20 + i * 4, values.values[i]);
         std::memcpy(bytes + language_offset, values.language, sizeof(values.language));
         std::memcpy(bytes + startup_offset, values.startup_set, sizeof(values.startup_set));
-        binary::write32(bytes + record_size - 8, binary::crc(bytes, record_size - 8));
-        std::memcpy(bytes + record_size - 4, "DONE", 4);
+        if (size == record_size) std::memcpy(bytes + contact_offset, values.name_and_contact, sizeof(values.name_and_contact));
+        binary::write32(bytes + size - 8, binary::crc(bytes, size - 8));
+        std::memcpy(bytes + size - 4, "DONE", 4);
         const unsigned slot = slot_ == 0 ? 1 : 0; char path[32]; filename(slot, path);
         auto file = filesystem_.file();
-        if (!file || !file->open(path, files::Mode::create) || !file->write(0, bytes, sizeof(bytes)) || !file->sync()) return false;
+        if (!file || !file->open(path, files::Mode::truncate) || !file->write(0, bytes, size) || !file->sync()) return false;
         file->close(); Values checked; uint32_t sequence;
         if (!read(slot, checked, sequence) || sequence != sequence_ + 1 || checked.known != values.known
             || std::memcmp(checked.values, values.values, sizeof(values.values)) || std::strcmp(checked.language, values.language)
-            || std::strcmp(checked.startup_set, values.startup_set)) return false;
+            || std::strcmp(checked.startup_set, values.startup_set)
+            || std::strcmp(checked.name_and_contact, values.name_and_contact)) return false;
         values_ = values; ++sequence_; slot_ = int(slot); return true;
     }
     static constexpr unsigned language_offset = 20 + count * 4;
     static constexpr unsigned old_record_size = language_offset + 8;
     static constexpr unsigned language_record_size = language_offset + 16 + 8;
     static constexpr unsigned startup_offset = language_offset + 16;
-    static constexpr unsigned record_size = startup_offset + 64 + 8;
+    static constexpr unsigned contact_offset = startup_offset + 64;
+    static constexpr unsigned startup_record_size = contact_offset + 8;
+    static constexpr unsigned record_size = contact_offset + 128 + 8;
 private:
     friend class Documents;
     files::FileSystem &filesystem_;
@@ -139,17 +153,19 @@ private:
         char path[32]; filename(slot, path); auto file = filesystem_.file(); uint8_t bytes[record_size];
         if (!file || !file->open(path, files::Mode::read)) return false;
         const unsigned size = file->size();
-        if ((size != old_record_size && size != language_record_size && size != record_size) || !file->read(0, bytes, size)) return false;
+        unsigned version = size == old_record_size ? 1 : size == language_record_size ? 2 : size == startup_record_size ? 3 : size == record_size ? 4 : 0;
+        if (!version || !file->read(0, bytes, size)) return false;
         file->close();
-        if (std::memcmp(bytes, "CGLO", 4) || bytes[4] != (size == old_record_size ? 1 : size == language_record_size ? 2 : 3) || bytes[5] || bytes[6] || bytes[7]
+        if (std::memcmp(bytes, "CGLO", 4) || bytes[4] != version || bytes[5] || bytes[6] || bytes[7]
             || std::memcmp(bytes + size - 4, "DONE", 4)
             || binary::read32(bytes + size - 8) != binary::crc(bytes, size - 8)) return false;
         sequence = binary::read32(bytes + 8); if (!sequence) return false;
         values = Values();
         for (unsigned i = 0; i < 8; ++i) values.known |= uint64_t(bytes[12 + i]) << (8 * i);
         for (unsigned i = 0; i < count; ++i) values.values[i] = binary::read32(bytes + 20 + i * 4);
-        if (size != old_record_size) std::memcpy(values.language, bytes + language_offset, sizeof(values.language));
-        if (size == record_size) std::memcpy(values.startup_set, bytes + startup_offset, sizeof(values.startup_set));
+        if (version >= 2) std::memcpy(values.language, bytes + language_offset, sizeof(values.language));
+        if (version >= 3) std::memcpy(values.startup_set, bytes + startup_offset, sizeof(values.startup_set));
+        if (version >= 4) std::memcpy(values.name_and_contact, bytes + contact_offset, sizeof(values.name_and_contact));
         return valid(values);
     }
 };

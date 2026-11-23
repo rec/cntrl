@@ -109,6 +109,19 @@ void inherited_settings_remain_separate_from_authored_setups(const char *bundle,
     board.globals = &commands; board.values = &settings.values();
     assert(!std::strcmp(documents.selected(), "a") && documents.document().brightness() == 192);
     {
+        assert(commands.command("CNTRL GLOBAL SET name_and_contact 416ec3a90a61406578616d706c652e6f7267"));
+        assert(board.last_reply == "CNTRL OK" && std::string(settings.values().name_and_contact) == "Ané\na@example.org");
+        assert(commands.command("CNTRL GLOBAL PUT") && board.last_reply == "CNTRL OK");
+        cntrl::GlobalSettings restarted(filesystem); assert(restarted.boot());
+        assert(std::string(restarted.values().name_and_contact) == "Ané\na@example.org");
+        assert(commands.command("CNTRL GLOBAL GET"));
+        assert(board.last_reply == "CNTRL GLOBAL name_and_contact=416ec3a90a61406578616d706c652e6f7267");
+        assert(commands.command("CNTRL GLOBAL SET name_and_contact ff"));
+        assert(board.last_reply == "CNTRL ERROR global-value");
+        assert(commands.command("CNTRL GLOBAL CLEAR name_and_contact"));
+        assert(board.last_reply == "CNTRL OK" && !settings.values().name_and_contact[0]);
+    }
+    {
         const auto *data = documents.document().data(); const unsigned prepared = board.prepared_pages;
         assert(commands.command("CNTRL GLOBAL PUT 7=1 language=fr")); commands.poll(true);
         assert(board.last_reply == "CNTRL ERROR global-busy" && !settings.values().language[0] && !settings.values().known);

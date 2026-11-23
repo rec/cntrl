@@ -43,6 +43,7 @@ public:
     bool dirty() const { return dirty_; }
     void bind_globals(GlobalSettings &globals) { globals_ = &globals; document_.bind_globals(&globals.values()); }
     const char *startup_set() const { return globals_ ? globals_->values().startup_set : ""; }
+    const char *name_and_contact() const { return globals_ ? globals_->values().name_and_contact : ""; }
     bool startup_set(const char *name) {
         if (!globals_ || busy() || dirty_) return false;
         auto values = globals_->values();
@@ -71,8 +72,10 @@ public:
             if (target->values().values[i] != values.values[i]) changed |= uint64_t(1) << i;
         const bool language_changed = std::strcmp(target->values().language, values.language) != 0;
         const bool startup_changed = std::strcmp(target->values().startup_set, values.startup_set) != 0;
-        if (!changed && !language_changed && !startup_changed) { last_error_[0] = 0; return true; }
+        const bool contact_changed = std::strcmp(target->values().name_and_contact, values.name_and_contact) != 0;
+        if (!changed && !language_changed && !startup_changed && !contact_changed) { last_error_[0] = 0; return true; }
         if (startup_changed && (busy() || dirty_ || activity_busy)) return global_error("global-busy");
+        if (contact_changed && busy()) return global_error("global-busy");
         if (changed && (busy() || dirty_ || ((changed & ~uint64_t(3)) && activity_busy))) return global_error("global-busy");
         if (changed & ~uint64_t(7)) {
             if (!validate_globals(values)) return false;
@@ -888,7 +891,7 @@ private:
         if (!std::strcmp(line_, "CNTRL STATUS")) {
             if (boot_error_[0]) { error(boot_error_); return; }
             char response[112]; std::snprintf(response, sizeof(response), "CNTRL READY %u %u %08lx%s", document_version, document_.length(),
-                document_.valid() ? (unsigned long)checksum(active_.data, document_.length()) : 0ul, globals_ && globals_->ready() ? " device_globals=1 language=1" : "");
+                document_.valid() ? (unsigned long)checksum(active_.data, document_.length()) : 0ul, globals_ && globals_->ready() ? " device_globals=1 language=1 name_and_contact=1" : "");
             replies_.reply(response); return;
         }
         if (!std::strcmp(line_, "CNTRL SETUP CURRENT")) {

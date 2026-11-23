@@ -84,9 +84,23 @@ public:
                 length += unsigned(std::snprintf(response + length, sizeof(response) - length, " startup_set="));
                 for (const char *p = values.startup_set; *p; ++p) length += unsigned(std::snprintf(response + length, sizeof(response) - length, "%02x", unsigned(uint8_t(*p))));
             }
+            if (values.name_and_contact[0]) {
+                length += unsigned(std::snprintf(response + length, sizeof(response) - length, " name_and_contact="));
+                for (const char *p = values.name_and_contact; *p; ++p)
+                    length += unsigned(std::snprintf(response + length, sizeof(response) - length, "%02x", unsigned(uint8_t(*p))));
+            }
             replies_.reply(response); return true;
         }
         if (staging && std::strncmp(line, "CNTRL GLOBAL PUT", 16)) return error("global-staging");
+        constexpr char contact_set[] = "CNTRL GLOBAL SET name_and_contact ";
+        if (!std::strncmp(line, contact_set, sizeof(contact_set) - 1) || !std::strcmp(line, "CNTRL GLOBAL CLEAR name_and_contact")) {
+            if (pending_ || language_pending_) return error("global-busy");
+            auto values = settings_.values();
+            const char *p = line[13] == 'S' ? line + sizeof(contact_set) - 1 : "";
+            if (!unhex(p, values.name_and_contact) || *p) return error("global-contact");
+            if (!documents_.global_replace(values, false)) return error(documents_.last_error());
+            replies_.reply("CNTRL OK"); return true;
+        }
         constexpr char language_set[] = "CNTRL GLOBAL SET language ";
         if (!std::strncmp(line, language_set, sizeof(language_set) - 1)) {
             const char *tag = line + sizeof(language_set) - 1;
@@ -115,23 +129,22 @@ public:
         }
         if (!std::strncmp(line, "CNTRL GLOBAL PUT", 16) && (!line[16] || line[16] == ' ')) {
             GlobalSettings::Values values; const char *p = line + 16;
+            std::memcpy(values.name_and_contact, settings_.values().name_and_contact, sizeof(values.name_and_contact));
+            bool contact_seen = false;
             while (*p) {
                 if (*p++ != ' ') return error("global-values");
                 if (!std::strncmp(p, "startup_set=", 12)) {
                     if (values.startup_set[0]) return error("global-values");
-                    p += 12; unsigned n = 0;
-                    while (*p && *p != ' ') {
-                        if (n == sizeof(values.startup_set) - 1 || !p[1] || p[1] == ' ') return error("global-values");
-                        unsigned value = 0;
-                        for (unsigned i = 0; i < 2; ++i) {
-                            char c = *p++;
-                            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return error("global-values");
-                            value = value * 16 + unsigned(c <= '9' ? c - '0' : c - 'a' + 10);
-                        }
-                        if (value < 32 || value > 126) return error("global-values");
-                        values.startup_set[n++] = char(value);
-                    }
-                    if (!n) return error("global-values");
+                    p += 12;
+                    if (!unhex(p, values.startup_set) || !values.startup_set[0]) return error("global-values");
+                    for (const char *name = values.startup_set; *name; ++name)
+                        if (*name < 32 || *name > 126) return error("global-values");
+                    continue;
+                }
+                if (!std::strncmp(p, "name_and_contact=", 17)) {
+                    if (contact_seen) return error("global-contact");
+                    contact_seen = true; p += 17;
+                    if (!unhex(p, values.name_and_contact)) return error("global-contact");
                     continue;
                 }
                 if (!std::strncmp(p, "language=", 9)) {
@@ -163,6 +176,23 @@ public:
         return error("global-command");
     }
 private:
+    template<unsigned size>
+    static bool unhex(const char *&p, char (&text)[size]) {
+        unsigned n = 0;
+        while (*p && *p != ' ') {
+            if (n == sizeof(text) - 1 || !p[1] || p[1] == ' ') return false;
+            unsigned value = 0;
+            for (unsigned i = 0; i < 2; ++i) {
+                const char c = *p++;
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+                value = value * 16 + unsigned(c <= '9' ? c - '0' : c - 'a' + 10);
+            }
+            if (!value) return false;
+            text[n++] = char(value);
+        }
+        std::memset(text + n, 0, sizeof(text) - n);
+        return true;
+    }
     GlobalSettings &settings_; Documents &documents_; Hardware &hardware_; Replies &replies_;
     unsigned field_ = 0; uint32_t value_ = 0;
     bool pending_ = false, clear_ = false;

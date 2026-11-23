@@ -23,6 +23,53 @@ from cntrl.patch_chooser import (
 from cntrl.patch_chooser.setup_compiler import compile_inputs
 
 
+def test_contact_saves_offline_and_syncs_with_later_compiles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(global_config, 'user_path', lambda: tmp_path / 'global.toml')
+    connected: list[devices.Device] = []
+    monkeypatch.setattr(devices, 'connected', lambda: connected)
+    contact = 'Éloïse\nowner@example.org'
+
+    def run(*arguments: str) -> None:
+        monkeypatch.setattr(sys, 'argv', ['cntrl', *arguments])
+        cli.main()
+
+    run('global', 'set', 'name_and_contact', contact)
+    run('global', 'list', 'name_and_contact')
+    assert capsys.readouterr().out == contact + '\n'
+
+    commands: list[str] = []
+
+    def request(client: transport.SetupClient, command: str) -> str:
+        commands.append(command)
+        if command == 'CNTRL STATUS':
+            return 'CNTRL READY name_and_contact=1'
+        return 'CNTRL OK'
+
+    connected.append(devices.Device(port=Path('/unused'), name='CNTRL'))
+    monkeypatch.setattr(transport, 'SerialConnection', nullcontext)
+    monkeypatch.setattr(transport.SetupClient, 'request', request)
+    source = tmp_path / 'show.toml'
+    source.write_text('brightness = 160\n')
+    output = tmp_path / 'show.bin'
+    run(
+        'compile',
+        str(source),
+        '--target',
+        str(ROOT / 'firmware/test/target.json'),
+        '--output',
+        str(output),
+    )
+    assert contact.encode() not in output.read_bytes()
+    assert commands == [
+        'CNTRL STATUS',
+        f'CNTRL GLOBAL SET name_and_contact {contact.encode().hex()}',
+    ]
+    run('global', 'clear', 'name_and_contact')
+    assert commands[-1] == 'CNTRL GLOBAL CLEAR name_and_contact'
+
+
 @pytest.mark.parametrize('content', [None, '[invalid', 'format = 12'])
 def test_global_restore_rejects_bad_files_before_opening_usb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str | None

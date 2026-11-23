@@ -384,3 +384,6 @@ text = 'Upravit tuto položku'
 
 [messages.instrument_channel]
 text = 'Kanál nástroje'
+
+[messages.owner_contact]
+text = 'Kontakt'

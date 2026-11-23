@@ -384,3 +384,6 @@ text = 'Edytuj ten wpis'
 
 [messages.instrument_channel]
 text = 'Kanał instrumentu'
+
+[messages.owner_contact]
+text = 'Kontakt'

@@ -28,6 +28,7 @@ from . import (
     compiler_inputs,
     compiler_wire,
     data_files,
+    device_globals,
     device_settings,
     display,
     formatting,
@@ -1346,6 +1347,8 @@ def run(command: New | Copy | Download) -> None:
             if companion_names:
                 client.copy_bundle(bundle.pack(), overwrite=True)
             upload(client, data, command.overwrite)
+            if (contact := device_globals.saved_contact()) is not None:
+                device_globals.sync_contact(contact, client=client)
         print('Song library copied and verified')
     else:
         with transport.SerialConnection(command.port) as connection:

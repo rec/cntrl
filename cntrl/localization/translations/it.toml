@@ -384,3 +384,6 @@ text = 'Modifica questa voce'
 
 [messages.instrument_channel]
 text = 'Canale dello strumento'
+
+[messages.owner_contact]
+text = 'Contatti'

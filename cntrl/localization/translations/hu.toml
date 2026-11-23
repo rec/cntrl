@@ -384,3 +384,6 @@ text = 'Bejegyzés szerkesztése'
 
 [messages.instrument_channel]
 text = 'Hangszer csatornája'
+
+[messages.owner_contact]
+text = 'Elérhetőség'

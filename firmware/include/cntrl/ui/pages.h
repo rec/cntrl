@@ -72,7 +72,7 @@ public:
     struct ViewState {
         unsigned index = 0, language = 0;
         Page page = Page::none;
-        bool dirty = true, flashing = false, held = false;
+        bool dirty = true, flashing = false, held = false, contact = false;
         uint32_t refreshed = 0;
         char looper_prompt[96] = {};
         Pong pong;
@@ -82,6 +82,7 @@ public:
         view.index = index_; view.page = page_;
         view.language = language;
         view.dirty = dirty_; view.flashing = flashing_; view.held = held_; view.refreshed = refreshed_;
+        view.contact = contact_;
         std::memcpy(view.looper_prompt,looper_prompt,sizeof(looper_prompt));
         view.pong = pong;
         return view;
@@ -90,6 +91,7 @@ public:
         index_ = view.index; page_ = view.page;
         language = view.language;
         dirty_ = view.dirty; flashing_ = view.flashing; held_ = view.held; refreshed_ = view.refreshed;
+        contact_ = view.contact;
         std::memcpy(looper_prompt,view.looper_prompt,sizeof(looper_prompt));
         pong = view.pong;
     }
@@ -180,6 +182,7 @@ public:
         return sending_clock_ && selected_clock_ && input == clock_input(selected_clock_) ? clock_outputs() : 0;
     }
     Page page() const { return page_; }
+    void toggle_contact() { contact_ = !contact_; revisit(); }
     void revisit() {
         dirty_ = true;
     }
@@ -284,13 +287,14 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_view)
 #endif
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1) {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1, const char *contact = "") {
         using R = cntrl::PageSettings;
         const auto &status = status_snapshot ? status_snapshot->performance : live_status;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
+        if (page_ == Page::status && contact_) { contact_view(pane, contact); return pane; }
         if (page_ == Page::time && window == 0) { time_view(pane); return pane; }
         if (page_ == Page::doom) {
             i18n::format(prompt_, sizeof(prompt_), i18n::Message::control_action, "", label(controls_.confirm), "Doom");
@@ -331,10 +335,15 @@ public:
         const unsigned heading_text_height = std::min(title * 3 / 2, (viewport_.height - 2 * pad) / 2);
         const unsigned heading_height = heading_text_height + 4;
         const char *heading = page_ == Page::time ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : "";
+        char status_heading[64];
+        if (page_ == Page::status && *contact) {
+            std::snprintf(status_heading, sizeof(status_heading), "%s / %s %s", heading, label(controls_.confirm), i18n::text(i18n::Message::owner_contact));
+            heading = status_heading;
+        }
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) heading = preview_label_;
 #endif
-        page_heading(pane, heading);
+        page_heading(pane, heading, page_ == Page::status && *contact);
         if (page_ == Page::cable) {
             const bool active = cable.enabled;
             const unsigned font = 16; // Preserve Cable Test's Atkinson font.
@@ -484,6 +493,51 @@ public:
         return pane;
     }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(status_contact_view)
+#endif
+    void contact_view(Pane &pane, const char *contact) {
+        char heading[64];
+        std::snprintf(heading, sizeof(heading), "%s / %s %s", i18n::text(i18n::Message::owner_contact), label(controls_.confirm), i18n::text(i18n::Message::status));
+        page_heading(pane, heading, true);
+        if (!*contact) contact = i18n::text(i18n::Message::empty);
+        const unsigned top = pane.lines[0].graphics.line_height + pane.graphics.pad;
+        const unsigned width = viewport_.width > 2 * pane.graphics.pad ? viewport_.width - 2 * pane.graphics.pad : 0;
+        for (unsigned size = 16; size >= 8; --size) {
+            if (!fonts_.supports(localized_face, size)) continue;
+            const char *cursor = contact;
+            unsigned y = top, row = 1;
+            for (; row < max_lines && *cursor && y + size <= viewport_.height; ++row, y += size) {
+                auto &text = pane.lines[row];
+                text = {};
+                text.graphics = pane.graphics;
+                text.graphics.font = localized_face;
+                text.graphics.size = uint8_t(size);
+                text.graphics.line_height = uint16_t(size);
+                text.centered = true;
+                const char *end = cursor;
+                while (*end && *end != '\n') {
+                    const char *next = end;
+                    uint32_t code;
+                    if (!utf8::next(next, code) || unsigned(next - cursor) >= sizeof(text.text)) break;
+                    const unsigned length = unsigned(next - cursor);
+                    std::memcpy(text.text, cursor, length);
+                    text.text[length] = 0;
+                    if (end != cursor && fonts_.bounds(localized_face, size, 0, text.text).width > int(width)) {
+                        text.text[end - cursor] = 0;
+                        break;
+                    }
+                    end = next;
+                }
+                const auto bounds = fonts_.bounds(localized_face, size, 0, text.text);
+                text.y = int16_t(int(y) + (int(size) - bounds.height) / 2 - bounds.top);
+                cursor = *end == '\n' ? end + 1 : end;
+            }
+            for (unsigned i = row; i < max_lines; ++i) pane.lines[i] = {};
+            if (!*cursor) break;
+        }
+    }
+
     const ClockTempo &observed_clock() const {
         if (selected_clock_) return clocks_[selected_clock_ - 1];
         if (clocks_[0].measured() || !clocks_[1].period_us()) return clocks_[0];
@@ -835,11 +889,11 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_heading)
 #endif
-    void page_heading(cntrl::Pane &pane, const char *text) {
+    void page_heading(cntrl::Pane &pane, const char *text, bool fit_title = false) {
         using R = cntrl::PageSettings;
         const unsigned pad = pane.graphics.pad;
         const unsigned height = std::min(unsigned(settings_[R::title_height]) * 3 / 2, (viewport_.height - 2 * pad) / 2);
-        const char *sample = i18n::text(i18n::Message::midi_cable_test);
+        const char *sample = fit_title ? nullptr : i18n::text(i18n::Message::midi_cable_test);
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) sample = nullptr;
 #endif
@@ -858,6 +912,7 @@ private:
     cntrl::TapTempo tap_;
     cntrl::ClockTempo clocks_[2];
     Page page_ = Page::status;
+    bool contact_ = false;
     uint64_t uptime_ = 0;
     uint32_t previous_ = 0, refreshed_ = 0;
     bool dirty_ = false, flashing_ = false, held_ = false;

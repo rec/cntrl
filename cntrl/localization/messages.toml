@@ -1457,3 +1457,7 @@ context = 'Switch from editing the shared named patch to editing this occurrence
 en = 'Instrument channel'
 context = 'Setup editor field for the shared instrument MIDI channel'
 
+[messages.owner_contact]
+en = 'Contact'
+context = 'Status page owner contact information view'
+

@@ -427,6 +427,10 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_tap)
 #endif
     bool time_button(unsigned input, uint8_t events, uint32_t now) {
+        if (pages_.page() == Pages::Page::status && input == controls_.confirm) {
+            if (events & press_event) pages_.toggle_contact();
+            return true;
+        }
         if (pages_.page() != Pages::Page::time) return false;
         if (input == controls_.confirm) {
             if (events & press_event) pages_.tap(now);
@@ -576,7 +580,7 @@ public:
 #else
                 , cntrl::Panic::Status::ready
 #endif
-                , i, region.count
+                , i, region.count, documents_.name_and_contact()
             );
                 if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language && pages_.page() != Pages::Page::time) content = Pages::window_view(content,i,region.count);
                 content.focused = r == application_.allocation.focus() && pages_.page() != Pages::Page::pong; renderer_.show(screen,content);

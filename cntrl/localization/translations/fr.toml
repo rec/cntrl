@@ -1106,3 +1106,6 @@ text = 'Modifier cette entrée'
 
 [messages.instrument_channel]
 text = 'Canal de l’instrument'
+
+[messages.owner_contact]
+text = 'Coordonnées'

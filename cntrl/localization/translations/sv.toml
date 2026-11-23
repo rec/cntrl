@@ -384,3 +384,6 @@ text = 'Redigera den här posten'
 
 [messages.instrument_channel]
 text = 'Instrumentkanal'
+
+[messages.owner_contact]
+text = 'Kontakt'

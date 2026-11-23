@@ -384,3 +384,6 @@ text = 'Muokkaa tätä kohtaa'
 
 [messages.instrument_channel]
 text = 'Soittimen kanava'
+
+[messages.owner_contact]
+text = 'Yhteystiedot'

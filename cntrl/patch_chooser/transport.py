@@ -474,8 +474,16 @@ class SetupClient:
         result: dict[int, int] = {}
         language: str | None = None
         startup_set: str | None = None
+        name_and_contact: str | None = None
         for item in fields[2:]:
             key, separator, value = item.partition('=')
+            if key == 'name_and_contact' and separator:
+                if name_and_contact is not None:
+                    raise UsbReplyError('duplicate name_and_contact response')
+                name_and_contact = _reply_hex_text(
+                    value, 'invalid name_and_contact response', 'utf-8'
+                )
+                continue
             if key == 'startup_set' and separator:
                 if startup_set is not None:
                     raise UsbReplyError('duplicate startup set response')
@@ -501,7 +509,12 @@ class SetupClient:
             result[field] = raw
         try:
             return global_overlay.Overlay.model_validate(
-                {'values': result, 'language': language, 'startup_set': startup_set}
+                {
+                    'values': result,
+                    'language': language,
+                    'startup_set': startup_set,
+                    'name_and_contact': name_and_contact,
+                }
             )
         except ValidationError as error:
             raise UsbReplyError(
@@ -518,6 +531,12 @@ class SetupClient:
     def clear_language(self) -> None:
         self.ok('CNTRL GLOBAL CLEAR language')
 
+    def set_name_and_contact(self, value: str) -> None:
+        if value:
+            self.ok(f'CNTRL GLOBAL SET name_and_contact {value.encode().hex()}')
+        else:
+            self.ok('CNTRL GLOBAL CLEAR name_and_contact')
+
     def set_global(self, field: int, value: int) -> None:
         device_settings.decode_value(field, value)
         self.ok(f'CNTRL GLOBAL SET {field} {value}')
@@ -532,6 +551,8 @@ class SetupClient:
             suffix += f' language={overlay.language}'
         if overlay.startup_set is not None:
             suffix += f' startup_set={overlay.startup_set.encode().hex()}'
+        if overlay.name_and_contact is not None:
+            suffix += f' name_and_contact={overlay.name_and_contact.encode().hex()}'
         self.ok('CNTRL GLOBAL PUT' + suffix)
 
     def catalogue(self) -> list[SetupEntry]:
@@ -971,9 +992,9 @@ def _reply_integer(text: str, message: str, base: int = 10) -> int:
         raise UsbReplyError(message) from error
 
 
-def _reply_hex_text(text: str, message: str) -> str:
+def _reply_hex_text(text: str, message: str, encoding: str = 'ascii') -> str:
     try:
-        return bytes.fromhex(text).decode('ascii')
+        return bytes.fromhex(text).decode(encoding)
     except ValueError as error:
         raise UsbReplyError(message) from error
 

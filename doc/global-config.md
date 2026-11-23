@@ -219,6 +219,37 @@ as `startup_set` in version-3 portable snapshots and restored with the other
 device preferences. A missing saved set reports an error rather than choosing a
 different set.
 
+## Owner name and contact
+
+`name_and_contact` is one device-wide text field with up to 127 UTF-8 bytes.
+Set it on your computer with a quoted multiline value.
+
+```sh
+cntrl global set name_and_contact 'Alex Example
+owner@example.org
++1 555 0100'
+cntrl global list name_and_contact
+```
+
+CNTRL saves the text in `owner.toml` beside your computer's `global.toml`.
+Setting or clearing it updates a single connected CNTRL pedal immediately.
+`cntrl compile` also applies the saved value if one pedal is connected.
+Use `--port PORT` to choose a pedal explicitly when more than one is connected.
+Setup and song uploads apply the saved value to the pedal receiving the upload.
+With no pedal connected, the computer keeps the value for the next compile or
+upload. The pedal needs firmware that supports the field.
+
+The pedal saves the text in its SD-card settings journal. On the MC6 Pro, open
+Status and press C to switch between the diagnostics and the contact view.
+Use `cntrl global list name_and_contact --from-pedal` to read the full text over USB.
+To clear both copies, run `cntrl global clear name_and_contact` with the pedal connected.
+Clearing it offline saves an empty value to apply on the next sync.
+The translated Contact caption requires the language packs built for this firmware.
+
+Compiled setups and song libraries contain no contact text. Pedal settings
+backups can include it in `device-globals.toml`, so share those files only if you
+want to share the contact details. The text is an editable owner label.
+
 ## Default boot firmware
 
 On an MC6 Pro with the combined image installed, connect over USB while CNTRL is

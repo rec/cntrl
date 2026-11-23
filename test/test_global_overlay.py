@@ -11,7 +11,10 @@ def test_old_overlay_defaults_to_english_and_current_overlay_preserves_language(
     old = device_globals.load(b'format=1\n[values]\n"0"=160\n')
     assert old == global_overlay.Overlay(values={0: 160})
     selected = global_overlay.Overlay(
-        values={0: 160}, language='fr', startup_set='Friday Show'
+        values={0: 160},
+        language='fr',
+        startup_set='Friday Show',
+        name_and_contact='Éloïse\nowner@example.org',
     )
     assert device_globals.load(device_globals.dump(selected)) == selected
     assert device_globals.load(b'format=2\nlanguage="fr"\n') == global_overlay.Overlay(

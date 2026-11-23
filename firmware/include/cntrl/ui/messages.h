@@ -368,9 +368,10 @@ enum class Message : uint16_t {
     edit_original_patch,
     edit_patch_entry,
     instrument_channel,
+    owner_contact,
 };
-inline constexpr unsigned message_count = 365;
-inline constexpr uint32_t catalogue_schema = 0x4da968f5u;
+inline constexpr unsigned message_count = 366;
+inline constexpr uint32_t catalogue_schema = 0xb5528525u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -1535,6 +1536,8 @@ inline const char edit_patch_entry_text[] CNTRL_I18N_STORAGE = "Edit this entry"
 inline const char edit_patch_entry_short[] CNTRL_I18N_STORAGE = "";
 inline const char instrument_channel_text[] CNTRL_I18N_STORAGE = "Instrument channel";
 inline const char instrument_channel_short[] CNTRL_I18N_STORAGE = "";
+inline const char owner_contact_text[] CNTRL_I18N_STORAGE = "Contact";
+inline const char owner_contact_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {patch_chooser_text, patch_chooser_short, nullptr, 0},
     {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
@@ -1901,6 +1904,7 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {edit_original_patch_text, edit_original_patch_short, nullptr, 0},
     {edit_patch_entry_text, edit_patch_entry_short, nullptr, 0},
     {instrument_channel_text, instrument_channel_short, nullptr, 0},
+    {owner_contact_text, owner_contact_short, nullptr, 0},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

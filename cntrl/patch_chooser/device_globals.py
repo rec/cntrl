@@ -1,6 +1,7 @@
 """Host commands and portable snapshots of the pedal's sparse global overlay."""
 
 import struct
+import sys
 from pathlib import Path
 from typing import Annotated, Literal
 from zlib import crc32
@@ -8,6 +9,7 @@ from zlib import crc32
 import tomlkit
 import tyro
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -17,7 +19,7 @@ from pydantic import (
 )
 from tomlkit.exceptions import ParseError
 
-from . import device_settings, devices, global_overlay, transport
+from . import device_settings, devices, global_config, global_overlay, transport
 
 
 class GlobalRestoreError(ValueError):
@@ -25,7 +27,10 @@ class GlobalRestoreError(ValueError):
 
 
 class Snapshot(BaseModel, frozen=True):
-    format: Literal[1, 2, 3]
+    format: Literal[1, 2, 3, 4]
+    name_and_contact: (
+        Annotated[str, AfterValidator(global_overlay.contact_text)] | None
+    ) = None
     startup_set: (
         Annotated[str, Field(min_length=1, max_length=63, pattern=r'^[ -~]+$')] | None
     ) = None
@@ -50,6 +55,8 @@ class Snapshot(BaseModel, frozen=True):
             raise ValueError('version-1 globals cannot contain a language')
         if self.format < 3 and self.startup_set is not None:
             raise ValueError('startup sets require version-3 globals')
+        if self.format < 4 and self.name_and_contact is not None:
+            raise ValueError('name_and_contact requires version-4 globals')
         return self
 
     @field_validator('values')
@@ -69,8 +76,11 @@ class Snapshot(BaseModel, frozen=True):
 
 
 class List(BaseModel, frozen=True):
-    setting: Annotated[Literal['default_firmware'] | None, tyro.conf.Positional] = None
+    setting: Annotated[
+        Literal['default_firmware', 'name_and_contact'] | None, tyro.conf.Positional
+    ] = None
     port: Path | None = None
+    from_pedal: bool = False
 
 
 class Set(BaseModel, frozen=True):
@@ -102,7 +112,8 @@ class GlobalCLI(BaseModel, frozen=True):
 
 def dump(overlay: global_overlay.Overlay) -> bytes:
     snapshot = Snapshot(
-        format=3,
+        format=4 if overlay.name_and_contact else 3,
+        name_and_contact=overlay.name_and_contact or None,
         startup_set=overlay.startup_set,
         values={str(k): v for k, v in sorted(overlay.values.items())},
         language=overlay.language,
@@ -116,24 +127,85 @@ def load(data: bytes) -> global_overlay.Overlay:
         values={int(k): v for k, v in snapshot.values.items()},
         language=snapshot.language,
         startup_set=snapshot.startup_set,
+        name_and_contact=snapshot.name_and_contact or None,
     )
 
 
 def journal(overlay: global_overlay.Overlay) -> bytes:
     """Bootstrap an empty emulator store from a portable overlay snapshot."""
     known = sum(1 << i for i in overlay.values)
-    body = struct.pack('<4sIIQ', b'CGLO', 3, 1, known)
+    body = struct.pack(
+        '<4sIIQ', b'CGLO', 4 if overlay.name_and_contact else 3, 1, known
+    )
     body += struct.pack(
         '<' + 'I' * len(device_settings.SETTINGS),
         *(overlay.values.get(i, 0) for i in range(len(device_settings.SETTINGS))),
     )
     body += (overlay.language or '').encode().ljust(16, b'\0')
     body += (overlay.startup_set or '').encode().ljust(64, b'\0')
+    if overlay.name_and_contact:
+        body += overlay.name_and_contact.encode().ljust(128, b'\0')
     return body + struct.pack('<I4s', crc32(body), b'DONE')
 
 
 def supported(status: str) -> bool:
     return 'device_globals=1' in status.split()
+
+
+def saved_contact() -> str | None:
+    path = global_config.user_path().with_name('owner.toml')
+    try:
+        value = tomlkit.parse(path.read_text(encoding='utf-8'))['name_and_contact']
+        if not isinstance(value, str):
+            raise ValueError('name_and_contact must be text')
+        return global_overlay.contact_text(value)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, KeyError, ParseError) as error:
+        raise GlobalRestoreError(f'{path}: {error}') from error
+
+
+def sync_contact(
+    value: str, *, client: transport.SetupClient | None = None, port: Path | None = None
+) -> None:
+    if client is None:
+        if port is None:
+            connected = devices.connected()
+            if not connected:
+                return
+            if len(connected) > 1:
+                print(
+                    'Connect one CNTRL pedal or use --port to sync name_and_contact.',
+                    file=sys.stderr,
+                )
+                return
+            port = connected[0].port
+        with transport.SerialConnection(port) as connection:
+            sync_contact(value, client=transport.SetupClient(connection))
+        return
+    status = client.request('CNTRL STATUS')
+    if 'name_and_contact=1' not in status.split():
+        print('Update the pedal firmware to sync name_and_contact.', file=sys.stderr)
+        return
+    client.set_name_and_contact(value)
+
+
+def save_contact(value: str, port: Path | None) -> None:
+    from . import setup_sync_store
+
+    path = global_config.user_path().with_name('owner.toml')
+    try:
+        value = global_overlay.contact_text(value)
+    except ValueError as error:
+        raise device_settings.DeviceSettingError(str(error)) from error
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        setup_sync_store.replace(
+            path, tomlkit.dumps({'name_and_contact': value}).encode()
+        )
+    except OSError as error:
+        raise GlobalRestoreError(f'{path}: {error}') from error
+    sync_contact(value, port=port)
 
 
 def capture(client: transport.SetupClient) -> global_overlay.Overlay | None:
@@ -150,6 +222,17 @@ def load_saved(path: Path, data: bytes) -> global_overlay.Overlay:
 
 
 def run(command: List | Set | Clear | Restore) -> None:
+    if isinstance(command, (Set, Clear)) and command.setting == 'name_and_contact':
+        save_contact(command.value if isinstance(command, Set) else '', command.port)
+        return
+    if (
+        isinstance(command, List)
+        and command.setting == 'name_and_contact'
+        and not command.from_pedal
+        and command.port is None
+    ):
+        print(saved_contact() or '')
+        return
     restore = None
     if isinstance(command, Restore):
         try:
@@ -179,6 +262,9 @@ def run(command: List | Set | Clear | Restore) -> None:
                 print(f'default_firmware = {response.rsplit(" ", 1)[1]}')
                 return
             values = client.global_settings()
+            if command.setting == 'name_and_contact':
+                print(values.name_and_contact or '')
+                return
             print(f'language = {values.language or "en (default)"}')
             for field, setting in enumerate(device_settings.SETTINGS):
                 if setting is None:

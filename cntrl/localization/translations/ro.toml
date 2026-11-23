@@ -384,3 +384,6 @@ text = 'Editează această intrare'
 
 [messages.instrument_channel]
 text = 'Canalul instrumentului'
+
+[messages.owner_contact]
+text = 'Contact'

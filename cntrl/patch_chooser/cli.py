@@ -50,9 +50,10 @@ from .setup_compiler import compile_inputs, document_references
 
 
 class Compile(data_files.Sources, frozen=True):
-    """Compile one data-file expression without accessing a device."""
+    """Compile a setup and sync saved owner contact details if a pedal is connected."""
 
     output: Path
+    port: Path | None = None
 
 
 class CompileOutputError(ValueError):
@@ -357,6 +358,8 @@ def setup_transfer(
                             unexpected.add_note(message)
             if failures:
                 raise compiler_errors.CompilationError(failures)
+            if (contact := device_globals.saved_contact()) is not None:
+                device_globals.sync_contact(contact, client=client)
             setup_sync.capture_assets(
                 client, {n: bundle.setups[n] for n in uploaded_names}, upload_snapshot
             )
@@ -669,6 +672,8 @@ def main() -> None:
             font_coverage.run(command)
         elif isinstance(command, Compile):
             report_bundle(compile_to_file(command, command.output))
+            if (contact := device_globals.saved_contact()) is not None:
+                device_globals.sync_contact(contact, port=command.port)
         elif isinstance(command, Songs):
             songs.run(command.command)
         elif isinstance(command, SetupCLI):

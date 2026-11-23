@@ -2,12 +2,22 @@
 
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 from . import device_settings
 
 
+def contact_text(value: str) -> str:
+    value = value.replace('\r\n', '\n').replace('\r', '\n')
+    if len(value.encode()) > 127:
+        raise ValueError('name_and_contact must fit in 127 UTF-8 bytes')
+    if any((ord(c) < 32 and c != '\n') or 127 <= ord(c) < 160 for c in value):
+        raise ValueError('name_and_contact may contain text and line breaks')
+    return value
+
+
 class Overlay(BaseModel, frozen=True):
+    name_and_contact: Annotated[str, AfterValidator(contact_text)] | None = None
     startup_set: (
         Annotated[str, Field(min_length=1, max_length=63, pattern=r'^[ -~]+$')] | None
     ) = None

@@ -991,10 +991,13 @@ def verify_after_flashing(
         client = transport.SetupClient(connection)
         status = client.request('CNTRL STATUS')
         overlay = directory / 'device-globals.toml'
-        if _exists(overlay) and client.global_settings() != device_globals.load_saved(
-            overlay, read_sync_file(overlay)
-        ):
-            raise BackupError('device-global settings differ from the backup')
+        if _exists(overlay):
+            expected = device_globals.load_saved(overlay, read_sync_file(overlay))
+            actual = client.global_settings()
+            if expected.name_and_contact is None:
+                actual = actual.model_copy(update={'name_and_contact': None})
+            if actual != expected:
+                raise BackupError('device-global settings differ from the backup')
         parts = status.split()
         if len(parts) < 5 or parts[:3] != [
             'CNTRL',

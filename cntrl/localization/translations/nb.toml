@@ -384,3 +384,6 @@ text = 'Rediger denne oppføringen'
 
 [messages.instrument_channel]
 text = 'Instrumentkanal'
+
+[messages.owner_contact]
+text = 'Kontakt'

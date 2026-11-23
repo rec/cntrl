@@ -384,3 +384,6 @@ text = 'Bu girdiyi düzenle'
 
 [messages.instrument_channel]
 text = 'Enstrüman kanalı'
+
+[messages.owner_contact]
+text = 'İletişim'

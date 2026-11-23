@@ -11,8 +11,15 @@ from cntrl.emulator.backend import bind_target
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.emulator.replay import Scenario
 from cntrl.maker.morningstar.mc.emulator.profiles import adapt, export
-from cntrl.patch_chooser import compiler, data_files, models, setup_bundle
+from cntrl.patch_chooser import (
+    compiler,
+    data_files,
+    device_globals,
+    models,
+    setup_bundle,
+)
 from cntrl.patch_chooser.cli import compile_to_file
+from cntrl.patch_chooser.global_overlay import Overlay
 
 
 @pytest.fixture
@@ -271,6 +278,49 @@ def test_exported_profiles_build_without_the_physical_sdk(
             b'\x02\0\x04\0\0\0\0\0',
             bytes(8),
         ]
+
+
+def test_status_switch_c_toggles_the_saved_owner_contact(tmp_path: Path) -> None:
+    target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
+    layout = EmulatorLayout.load(Path(__file__).parents[1] / 'emulator/mc6-pro.toml')
+    source = {'pages': {'status': {'type': 'status'}}, 'use_animations': False}
+    setup = tmp_path / 'status.bin'
+    raw = compiler.compile_show(source, {}, [], target)
+    setup.write_bytes(
+        setup_bundle.build({'status': raw}, {'status': source}, target.memory).pack()
+    )
+    storage = tmp_path / 'storage'
+    journal = storage / 'cntrl/global/0.bin'
+    journal.parent.mkdir(parents=True)
+    journal.write_bytes(
+        device_globals.journal(
+            Overlay(name_and_contact='Alex Example\nowner@example.org')
+        )
+    )
+    executable = backend.build(target, tmp_path / 'native', Path(__file__).parents[5])
+
+    def press_c(session: backend.Session) -> None:
+        session.button('c', True)
+        session.advance(session.time_us + 60_000)
+        session.button('c', False)
+        session.advance(session.time_us + 80_000)
+
+    with backend.Session(layout, target, executable, storage, setup) as session:
+        session.advance(150_000)
+        diagnostics = dict(session.frames)
+        press_c(session)
+        multiline = dict(session.frames)
+        assert multiline != diagnostics
+        assert not [m for m in session.messages if m.kind in ('midi', 'error')]
+        press_c(session)
+        assert session.frames == diagnostics
+
+    journal.write_bytes(
+        device_globals.journal(Overlay(name_and_contact='Alex Example'))
+    )
+    with backend.Session(layout, target, executable, storage, setup) as session:
+        press_c(session)
+        assert session.frames != multiline
 
 
 def test_starter_status_labels_remain_editable_with_the_real_time_clock(
