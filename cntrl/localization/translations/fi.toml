@@ -10,7 +10,6 @@ panic = { text = 'Paniikki' }
 language_scroll = { text = '{up:s} ja {down:s}: selaa' }
 language_select = { text = '{button:s}: valitse' }
 language_next_page = { text = '{button:s}: seuraava sivu' }
-pages_and_tools = { text = 'Sivut ja työkalut' }
 browse = { text = 'selaa' }
 ok = { text = 'OK' }
 back = { text = 'takaisin' }
@@ -196,7 +195,6 @@ next_patch = { text = 'Seuraava askel' }
 empty_position = { text = 'Tyhjä paikka' }
 startup_set = { text = 'Vaihda aloitussetti' }
 perform_song = { text = 'Soita kappale' }
-hold_menu = { text = 'Pidä {control:s}: valikko' }
 perform_setlist = { text = 'Soita soittolista' }
 setlists = { text = 'Soittolistat' }
 songs = { text = 'Kappaleet' }

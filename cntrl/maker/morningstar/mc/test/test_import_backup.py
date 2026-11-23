@@ -264,8 +264,6 @@ def test_imported_bank_runs_counters_and_bank_transitions(
         chord('ab')  # Wrap from bank 0 to the original last bank, 127.
         snapshot()
         chord('bc')
-        chord('df')  # cntrl menu.
-        press('f')  # Return to the Banked Page.
         assert (
             len(
                 [

@@ -3,18 +3,23 @@
 A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
 `patch-chooser`, `status`, `time`, `cable-test`, `panic`,
-`midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`, `menu`, and `None`.
-Select a region or a page in the Pages and tools menu. In Patch mode, press F
+`midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`,
+`setups`, `songs-and-setlists`, `switches`, and `None`.
+In Patch mode, press F
 to cycle pages in the focused region. In Song and Setlist modes, the default
 controls are hold F to browse utility pages forward, or click F and hold the
 second press to browse backward.
 Page and region names contain 1 to 31 printable ASCII characters.
 
-The default utility-page cycle is Status, MIDI Cable Test, Panic,
-Time, Pong, Language, None, then Calibration. Language appears immediately
-before None; Pong appears immediately before Language on targets with three
-or more displays. Time and Language require at least two displays and are omitted from
-the defaults on one-display targets.
+The default utility pages are Status, MIDI Cable Test, Panic, Time, Pong,
+Language, Setups, Songs and setlists, Switches, and Calibration, in that order.
+Press C on Setups, Songs and setlists, or Switches to open its editor.
+Pong requires three displays. Time and Language require two.
+When the setup inherits the whole default cycle, Patch Chooser mode puts one
+Empty stop at the end and Setlist mode puts it at the start. Empty gives the
+performance view the full display. Authored page and region lists use only the
+Empty entries explicitly listed, in their authored positions. A utility cycle
+with no Empty moves directly between its configured pages when it wraps.
 Setups using the default pages and automatically generated regions start with
 the tools region focused, so F browses this utility cycle. Explicit layout focus
 settings take precedence.
@@ -61,16 +66,16 @@ once, in physical display order. When omitted or empty, it follows region declar
 order. Any page type can occupy any region.
 
 `layout.focus` names the region receiving page-specific controls. It defaults
-to the first physical region. A thin border marks its visible windows, and the
-menu marks its region with `*`. Changing focus preserves all page selections.
+to the first physical region for authored layouts. A thin border marks its
+visible windows. Changing focus preserves all page selections.
 Selecting a page also focuses its region. Held gestures are cancelled when
 focus changes. Management and emergency controls remain global.
 
 When regions are omitted or empty, multi-display targets put Patch Choosers and Banked pages in a
 `performance` region and other pages in a `tools` region, omitting empty groups.
 A single-display target uses one `main` region containing the entire catalogue.
-Omitting `pages` uses the built-in catalogue. These defaults focus the first
-physical region, usually the Patch Chooser on a multi-display target.
+Omitting `pages` uses the built-in catalogue. An authored region list can
+pick from that catalogue by page name.
 
 Pong requires three windows. The default Patch Chooser can yield all its
 windows while Pong is selected, preserving its state and background execution.
@@ -82,12 +87,10 @@ Doom, then None. Doom uses one window. Press C on that page to start the
 standalone game. An explicit page catalogue can include `type = 'doom'`
 in its chosen rotation. [Doom build and launch](../cntrl/maker/morningstar/mc/doom/README.md)
 
-Pages and tools is available as the optional Menu page. It uses one utility
-window on the right of the performance view. Press the confirm control (C on MC Pro) to
-open Pages and tools, including Setups and Songs and setlists. Back returns to
-the Menu page, and the usual page controls continue cycling the tools region.
-Explicit page catalogues can include it with `type = 'menu'`; it is omitted from
-the default cycle. The TRS Ports and Expression utility pages have been removed.
+Setups, Songs and setlists, and Switches each use one utility window. Back from
+an editor returns to its page. To switch from a set to the Patch Chooser, open
+Songs and setlists and choose **Patch Chooser**. Replace references to the retired
+`menu` page with the individual pages you want, then recompile the setup.
 TRS roles and expression assignments remain setup configuration.
 
 ## Pong
@@ -197,8 +200,7 @@ by `[windows.NAME]` through `view = 'NAME'`.
 ## Empty setups
 
 `pages = {}` configures no pages. Animations may still run when configured with
-`splash_movie`, `idle_movie` and a positive `screensaver_timeout`. Management tools
-remain available for selecting another setup.
+`splash_movie`, `idle_movie` and a positive `screensaver_timeout`.
 
 ## Compiled format
 

@@ -1,6 +1,5 @@
 #include "input_hardware.h"
 #include <cntrl/ui/presentation.h>
-#include <cntrl/module_menu.h>
 #include <cassert>
 #include <string>
 #include <vector>
@@ -41,11 +40,4 @@ int main() {
         if (count == 3) for (unsigned i = 0; i < 3; ++i) assert(std::memcmp(&hardware.shown[i], &panes[i], sizeof(cntrl::Pane)) == 0);
         if (count == 5) assert(std::strcmp(hardware.shown[2].lines[0].text, "Selection") == 0);
     }
-    Hardware single(1); const char *names[] = {"Setups"}; cntrl::ModuleMenu menu(single, names, 1);
-    menu.enter(); std::vector<std::string> text;
-    for (const auto &line : single.shown[0].lines) if (line.text[0]) text.emplace_back(line.text);
-    assert(std::find(text.begin(), text.end(), "Left/Right browse") != text.end());
-    assert(std::find(text.begin(), text.end(), "Select OK") != text.end());
-    assert(std::find(text.begin(), text.end(), "Pages and tools") != text.end());
-
 }

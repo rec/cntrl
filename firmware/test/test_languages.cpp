@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
     assert(languages.boot("en"));
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "é", 0, glyph));
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
-    assert(!std::strcmp(cntrl::ui::i18n::text(Message::pages_and_tools), "Pages and tools"));
+    assert(!std::strcmp(cntrl::ui::i18n::text(Message::setups), "Setups"));
     assert(languages.prepare("fr") == Result::failed);
     languages.finish(false);
     std::filesystem::copy_file(argv[5], filesystem.path("/cntrl/languages/fr.bin"));
@@ -34,14 +34,14 @@ int main(int argc, char **argv) {
     auto result = languages.prepare("fr");
     while (result == Result::pending) {
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
-        assert(!std::strcmp(cntrl::ui::i18n::text(Message::pages_and_tools), "Pages and tools"));
+        assert(!std::strcmp(cntrl::ui::i18n::text(Message::setups), "Setups"));
         result = languages.prepare("fr"); assert(++work < 4096);
     }
     assert(result == Result::ready && work > 10);
     languages.finish(true);
     assert(fonts.glyph(cntrl::ui::status_face, 13, 0, "’", 0, glyph));
     assert(!std::strcmp(languages.current(), "fr"));
-    assert(std::strcmp(cntrl::ui::i18n::text(Message::pages_and_tools), "Pages and tools"));
+    assert(std::strcmp(cntrl::ui::i18n::text(Message::setups), "Setups"));
     result = languages.prepare("en");
     while (result == Result::pending) result = languages.prepare("en");
     assert(result == Result::ready); languages.finish(false);

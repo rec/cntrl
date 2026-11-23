@@ -10,7 +10,6 @@ panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} und {down:s} zum Blättern' }
 language_select = { text = '{button:s} zum Auswählen' }
 language_next_page = { text = '{button:s} zur nächsten Seite' }
-pages_and_tools = { text = 'Seiten und Werkzeuge', short = 'Seiten / Werkzeuge' }
 browse = { text = 'durchsuchen' }
 ok = { text = 'OK' }
 back = { text = 'zurück' }
@@ -196,7 +195,6 @@ next_patch = { text = 'Nächster Schritt' }
 empty_position = { text = 'Leere Position' }
 startup_set = { text = 'Start-Set umschalten' }
 perform_song = { text = 'Song spielen' }
-hold_menu = { text = '{control:s} halten: Menü' }
 perform_setlist = { text = 'Setliste spielen' }
 setlists = { text = 'Setlisten' }
 songs = { text = 'Songs' }

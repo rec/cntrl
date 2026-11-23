@@ -588,7 +588,7 @@ def test_caption_edits_follow_the_field_across_display_updates(
     second = first.model_copy(
         update={
             'index': 1,
-            'message': 'pages_and_tools',
+            'message': 'setups',
             'left': 5,
             'right': 7,
         }

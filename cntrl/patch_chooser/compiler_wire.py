@@ -84,7 +84,7 @@ STATE_OPERATIONS = {
             'previous-patch-cycle',
             'activate-selection',
             'undo',
-            'menu',
+            '',
             'back',
             'shift',
             'unshift',
@@ -96,6 +96,7 @@ STATE_OPERATIONS = {
             'previous-song-step',
         )
     )
+    if n
 }
 
 

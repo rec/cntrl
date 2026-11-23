@@ -1,9 +1,7 @@
 # Optional feature modules
 
-Status: setup management and songs/setlists use the Pages and tools menu. Panic,
-the MIDI cable tester and stock-firmware switching use the
-page cycle. The menu contains Setups, Songs and setlists, Switches, and the setup's
-named pages. See [Pages](pages.md) for page selection and
+Setups, Songs and setlists, Switches, Panic, and the MIDI cable tester
+have individual pages. See [Pages](pages.md) for page selection and
 window allocation. The broader organization below remains guidance for
 subsequent features.
 

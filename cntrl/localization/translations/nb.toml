@@ -10,7 +10,6 @@ panic = { text = 'Panikk' }
 language_scroll = { text = '{up:s} og {down:s} for å bla' }
 language_select = { text = '{button:s} for å velge' }
 language_next_page = { text = '{button:s} for neste side' }
-pages_and_tools = { text = 'Sider og verktøy' }
 browse = { text = 'bla' }
 ok = { text = 'OK' }
 back = { text = 'tilbake' }
@@ -196,7 +195,6 @@ next_patch = { text = 'Neste trinn' }
 empty_position = { text = 'Tom posisjon' }
 startup_set = { text = 'Bytt oppstartssett' }
 perform_song = { text = 'Spill sang' }
-hold_menu = { text = 'Hold {control:s}: meny' }
 perform_setlist = { text = 'Spill settliste' }
 setlists = { text = 'Settlister' }
 songs = { text = 'Låter' }

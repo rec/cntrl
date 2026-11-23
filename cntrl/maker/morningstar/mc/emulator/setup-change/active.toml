@@ -1,14 +1,14 @@
-# System generators keep running while the Setups menu is open.
+# System generators keep running while the Setups editor is open.
 fill_in_styles = false
+
+[layout]
+focus = 'tools'
 
 [pages.performance]
 type = 'patch-chooser'
 
-[patches.menu]
-operation = 'menu'
-
-[patch_cycles]
-main = ['menu']
+[pages.setups]
+type = 'setups'
 
 [midi.backing]
 to = 'din'

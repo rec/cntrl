@@ -3,8 +3,11 @@ use_animations = false
 [pages.patches]
 type = 'patch-chooser'
 
-[pages.menu]
-type = 'menu'
+[pages.songs]
+type = 'songs-and-setlists'
+
+[pages.empty]
+type = 'None'
 
 [regions.main]
-pages = ['patches', 'menu']
+pages = ['patches', 'songs', 'empty']

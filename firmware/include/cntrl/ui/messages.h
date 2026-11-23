@@ -4,7 +4,6 @@
 namespace cntrl::ui::i18n {
 enum class Message : uint16_t {
     patch_chooser,
-    pages_and_tools,
     browse,
     ok,
     back,
@@ -358,7 +357,6 @@ enum class Message : uint16_t {
     empty_position,
     startup_set,
     perform_song,
-    hold_menu,
     calibration_heel,
     calibration_toe,
     press_heel_then_toe,
@@ -370,14 +368,12 @@ enum class Message : uint16_t {
     instrument_channel,
     owner_contact,
 };
-inline constexpr unsigned message_count = 366;
-inline constexpr uint32_t catalogue_schema = 0xb5528525u;
+inline constexpr unsigned message_count = 364;
+inline constexpr uint32_t catalogue_schema = 0x3fd310a2u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
 inline const char patch_chooser_short[] CNTRL_I18N_STORAGE = "";
-inline const char pages_and_tools_text[] CNTRL_I18N_STORAGE = "Pages and tools";
-inline const char pages_and_tools_short[] CNTRL_I18N_STORAGE = "";
 inline const char browse_text[] CNTRL_I18N_STORAGE = "browse";
 inline const char browse_short[] CNTRL_I18N_STORAGE = "";
 inline const char ok_text[] CNTRL_I18N_STORAGE = "OK";
@@ -1492,13 +1488,6 @@ inline const char startup_set_text[] CNTRL_I18N_STORAGE = "Toggle startup set";
 inline const char startup_set_short[] CNTRL_I18N_STORAGE = "";
 inline const char perform_song_text[] CNTRL_I18N_STORAGE = "Perform song";
 inline const char perform_song_short[] CNTRL_I18N_STORAGE = "";
-inline const char hold_menu_text[] CNTRL_I18N_STORAGE = "Hold {control:s}: menu";
-inline const char hold_menu_short[] CNTRL_I18N_STORAGE = "";
-inline const char hold_menu_control_name[] CNTRL_I18N_STORAGE = "control";
-inline const char hold_menu_control_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field hold_menu_fields[] CNTRL_I18N_STORAGE = {
-    {hold_menu_control_name, hold_menu_control_spec},
-};
 inline const char calibration_heel_text[] CNTRL_I18N_STORAGE = "Heel";
 inline const char calibration_heel_short[] CNTRL_I18N_STORAGE = "";
 inline const char calibration_toe_text[] CNTRL_I18N_STORAGE = "Toe";
@@ -1540,7 +1529,6 @@ inline const char owner_contact_text[] CNTRL_I18N_STORAGE = "Contact";
 inline const char owner_contact_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {patch_chooser_text, patch_chooser_short, nullptr, 0},
-    {pages_and_tools_text, pages_and_tools_short, nullptr, 0},
     {browse_text, browse_short, nullptr, 0},
     {ok_text, ok_short, nullptr, 0},
     {back_text, back_short, nullptr, 0},
@@ -1894,7 +1882,6 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {empty_position_text, empty_position_short, nullptr, 0},
     {startup_set_text, startup_set_short, nullptr, 0},
     {perform_song_text, perform_song_short, nullptr, 0},
-    {hold_menu_text, hold_menu_short, hold_menu_fields, 1},
     {calibration_heel_text, calibration_heel_short, nullptr, 0},
     {calibration_toe_text, calibration_toe_short, nullptr, 0},
     {press_heel_then_toe_text, press_heel_then_toe_short, nullptr, 0},

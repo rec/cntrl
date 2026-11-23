@@ -5,7 +5,7 @@
 
 namespace cntrl::ui {
 enum class Operation : unsigned {
-    menu_previous = 128, menu_next, menu_activate, menu_back, menu_open, performance_show,
+    performance_show = 133,
     setup_previous, setup_next, setup_confirm, setup_back,
     songs_previous, songs_next, songs_confirm, songs_previous_section, songs_next_section, songs_back,
     switches_return = 153,
@@ -30,14 +30,7 @@ public:
             // Editors must receive release even when navigation locks input.
             if (services.switches_open() && release) services.switch_button(i, false, now);
             if (services.controls_locked()) continue;
-            if (!utility && services.menu_open()) {
-                if (press) {
-                    if (i == controls_.previous) services.invoke(Operation::menu_previous);
-                    else if (i == controls_.next) services.invoke(Operation::menu_next);
-                    else if (i == controls_.confirm) services.invoke(Operation::menu_activate);
-                    else if (i == controls_.back) services.invoke(Operation::menu_back);
-                }
-            } else if (!utility && services.switches_open()) {
+            if (!utility && services.switches_open() && !services.songs_open() && !services.setup_open()) {
                 if (press) services.switch_button(i, true, now);
                 if (release) services.switch_button(i, false, now);
             } else if (!utility && services.songs_open()) {
@@ -87,15 +80,15 @@ public:
     template<class Services>
     void finish(Services &services, unsigned &pending, bool &returning, bool &locked) {
         if (switches_open_ && !services.switches_open()) {
-            bool performance = services.leave_switches();
-            services.invoke(pending == 10 || (performance && pending != 9) ? Operation::performance_show : Operation::menu_open);
+            services.leave_switches();
+            services.invoke(Operation::performance_show);
             pending = 0; locked = true;
             if (services.abandoned()) services.error(i18n::text(i18n::Message::switch_state_unknown));
         }
         switches_open_ = services.switches_open();
         if ((pending || !services.patch_pending()) && !services.switches_open()) {
             if (pending) {
-                services.invoke(pending == 9 ? Operation::menu_open : Operation::performance_show);
+                services.invoke(Operation::performance_show);
                 pending = 0; returning = false; locked = true;
             } else if (returning) {
                 returning = false; services.invoke(Operation::switches_return);

@@ -55,7 +55,6 @@ def test_setup_change_stops_looping_file_and_lfo(tmp_path: Path) -> None:
         assert sum(e.data == b'\x90\x3c\x64' for e in playing) >= 3
         assert len({e.data[2] for e in playing if e.data[:2] == b'\xb0\x4a'}) > 10
         cli.save(session, tmp_path / 'playing')
-        press('a')  # Run the menu patch.
         press('c')  # Setups.
         press('b')  # Browse from active to quiet.
         press('c')  # Actions for quiet.

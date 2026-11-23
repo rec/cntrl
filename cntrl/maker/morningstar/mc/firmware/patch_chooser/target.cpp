@@ -47,7 +47,6 @@ extern "C" char cntrl_memory_budget;
 #include "usb_forward_device.h"
 #include <cntrl/usb_midi_forward.h>
 #include <cntrl/midi_runtime.h>
-#include <cntrl/module_menu.h>
 #include <cntrl/ui/languages.h>
 #if CNTRL_SWITCHES
 #include <cntrl/switches.h>
@@ -1298,8 +1297,7 @@ public:
 #endif
     }
     bool controls_locked() const { return application.controls_locked || history_import.busy(); }
-    bool menu_open() const { return application.menu.open(); }
-    bool songs_open() const { return application.song_ui.open(); }
+    bool songs_open() const { return !application.setups.open() && application.song_ui.open(); }
     bool setup_open() const { return application.setups.open(); }
     void invoke(cntrl::ui::Operation operation) { application.controller().executor().invoke(cntrl::StatePatch{unsigned(operation)}); }
     void browse(bool reverse) { board.browse_page(reverse); }

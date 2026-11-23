@@ -28,6 +28,8 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         for p in models.Setup.model_validate(source).pages.values()
         if p.type != 'patch-chooser'
     ]
+    # Inherited defaults also have one Empty stop in the compiled cycle.
+    steps_back_to_pong = len(utility_pages) if default_catalogue else 1
     source['page_settings'] = {'status_font': 'TamzenBold7x13'}
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'
@@ -67,7 +69,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         press('e')
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        for _ in range(len(utility_pages) - 1 if default_catalogue else 1):
+        for _ in range(steps_back_to_pong):
             press('f')
         advance(500000)
         assert ball_on('lcd-2')
@@ -135,7 +137,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         press('e')  # The default cycle advances to the Language page.
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        for _ in range(len(utility_pages) - 1 if default_catalogue else 1):
+        for _ in range(steps_back_to_pong):
             press('f')  # Cycle back to the paused game.
         advance(500000)
         assert ball_on('lcd-1')

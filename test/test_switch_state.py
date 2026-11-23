@@ -101,7 +101,7 @@ def test_shared_state_and_selection_hooks(tmp_path: Path) -> None:
     [
         {'enter': {'action': {'controller': 7, 'value': 1}, 'override': 'yes'}},
         {'enter': {'action': {'patch': 'missing'}}},
-        {'enter': {'action': {'operation': 'menu'}}},
+        {'enter': {'action': {'operation': 'back'}}},
         {'exit': {'operation': 'back'}},
     ],
 )

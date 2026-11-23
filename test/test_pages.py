@@ -29,7 +29,9 @@ def target() -> models.Target:
         {},
         {'live': {}},
         {'status': {'type': 'status'}},
-        {'menu': {'type': 'menu'}},
+        {'setups': {'type': 'setups'}},
+        {'songs': {'type': 'songs-and-setlists'}},
+        {'switches': {'type': 'switches'}},
         {'live': {}, 'status': {'type': 'status'}},
     ],
 )
@@ -112,11 +114,12 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     assert not {'menu', 'trs-ports', 'expression'} & pages.keys()
     assert pages['patch-chooser']['min_windows'] == 0
     if count == 3:
-        assert exported['regions']['tools']['pages'][-4:] == [
-            'pong',
-            'language',
-            'None',
+        assert exported['regions']['tools']['pages'][-5:] == [
+            'setups',
+            'songs-and-setlists',
+            'switches',
             'calibration',
+            'None',
         ]
         assert pages['pong']['min_windows'] == 3
     else:
@@ -161,7 +164,7 @@ def test_insert_doom_preserves_the_compiled_data_outside_the_layout() -> None:
     assert resolved.insert_doom_page(updated, 'tools', 'None') == updated
 
 
-@pytest.mark.parametrize('kind', ['trs-ports', 'expression'])
+@pytest.mark.parametrize('kind', ['trs-ports', 'expression', 'menu'])
 def test_removed_utility_pages_cannot_be_authored(kind: str) -> None:
     with pytest.raises(compiler_errors.CompilationError, match='type'):
         compiler.compile_show({'pages': {'removed': {'type': kind}}}, {}, [], target())
@@ -177,6 +180,28 @@ def test_saved_removed_utility_pages_require_recompilation(kind: int) -> None:
         ValueError, match='TRS Ports and Expression pages have been removed'
     ):
         layout.unpack(bytes(data), 0)
+
+
+@pytest.mark.parametrize('authored', [['status', 'time'], ['blank', 'time', 'status']])
+def test_authored_region_lists_preserve_empty_stops(authored: list[str]) -> None:
+    page_types = {'blank': 'None', 'status': 'status', 'time': 'time'}
+    source = {
+        'pages': {n: {'type': page_types[n]} for n in authored},
+        'regions': {'main': {'pages': authored}},
+    }
+    data = compiler.compile_show(source, {}, [], target())
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['regions']['main']['pages'] == authored
+    assert list(exported['pages']) == authored
+
+
+@pytest.mark.parametrize('authored', [['status', 'time'], ['status', 'None', 'time']])
+def test_authored_regions_can_select_from_default_pages(authored: list[str]) -> None:
+    source = {'regions': {'main': {'pages': authored}}}
+    data = compiler.compile_show(source, {}, [], target())
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['regions']['main']['pages'] == authored
+    assert set(exported['pages']) == set(authored)
 
 
 def test_default_tools_honor_explicit_performance_focus() -> None:

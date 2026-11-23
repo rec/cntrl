@@ -8,7 +8,7 @@ Hardware qualification of this format is pending. Song sections remain deferred 
 
 ## On the pedal
 
-Open Pages and tools from the Menu page and choose **Songs and setlists**. A/B browse,
+Browse to **Songs and setlists** and press C. A/B browse,
 C confirms and F returns. The module offers Perform setlist, Setlists, Songs,
 Save as song and Save reference.
 
@@ -31,8 +31,8 @@ keeps the picker open; A/B browse and D/E jump between initial letters. F return
 to the ordered performance view. Song names are unique; a setlist can contain
 the same name more than once.
 
-In the performance view, F selects the next song step on release, and C+F
-selects the previous step. C is a modifier, with either press order supported.
+In the performance view, click F for the next song step and double-click F
+for the previous step.
 These controls also work within a step's full-window patch interface, regardless
 of switch inheritance. A/B highlight an occurrence
 for editing; they do not recall it. D opens the edit menu:
@@ -51,7 +51,7 @@ for editing; they do not recall it. D opens the edit menu:
 
 Songs always have an **Empty position** before and after their authored patches.
 A set shares one empty position between songs: `. (A B C) . (one two three) .`.
-F advances and C+F reverses through those same positions. Leaving a song releases
+Click or double-click F to move through those same positions. Leaving a song releases
 its controls and runs its optional `exit` action; entering runs its optional
 `enter` action before the patch. These actions use the ordinary patch format.
 The boundary separates one song's exit from the next song's enter.
@@ -61,9 +61,9 @@ startup messages are sent until F is pressed. Reverse back to that position and
 advance to resend them. The song library's Perform song action starts a standalone
 song with the same leading and trailing empty positions.
 
-Hold C during performance to open Pages and tools and switch to Patch Chooser. Return through
-Songs and setlists, Perform setlist to continue the set. Full-pedal patches keep
-ownership of the surface while playing; the views are switched, not combined.
+Hold F during performance to browse utility pages. On **Songs and setlists**,
+press C and select **Patch Chooser**. To start setlist performance from the Patch
+Chooser, return to **Songs and setlists** and choose **Perform setlist**.
 
 Current and next songs remain visible while editing. Removing the current
 occurrence leaves its sound active, marks it removed and retains the continuation

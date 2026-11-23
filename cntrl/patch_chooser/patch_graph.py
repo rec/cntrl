@@ -1343,7 +1343,7 @@ class PatchCompiler:
                     or getattr(value, 'bindings', None) is not None
                     or isinstance(value, models.Navigation)
                     and value.operation
-                    in ('menu', 'back', 'next-song-step', 'previous-song-step')
+                    in ('back', 'next-song-step', 'previous-song-step')
                 ):
                     self.errors.append(
                         f'switches.{key}: {path} leaves the switch context; '

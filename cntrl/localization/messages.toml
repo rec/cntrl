@@ -1,10 +1,6 @@
 [messages.patch_chooser]
 en = 'Patch Chooser'
-context = 'Default patch chooser page name in the Pages and tools menu'
-
-[messages.pages_and_tools]
-en = 'Pages and tools'
-context = 'Main tools menu heading'
+context = 'Patch Chooser action in Songs and setlists'
 
 [messages.browse]
 en = 'browse'
@@ -1416,10 +1412,6 @@ context = 'Set edit action: save this set for startup, or clear it if already se
 [messages.perform_song]
 en = 'Perform song'
 context = 'Start a standalone song at its initial empty position'
-
-[messages.hold_menu]
-en = 'Hold {control:s}: menu'
-context = 'Hold the named physical control to open Pages and tools during song performance'
 
 [messages.calibration_heel]
 en = 'Heel'

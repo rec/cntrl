@@ -40,7 +40,7 @@ pages = ["patch-chooser"]
 
 [regions.tools]
 
-pages = ["status", "cable-test", "panic", "time", "pong", "language", "None", "calibration"]
+pages = ["status", "cable-test", "panic", "time", "pong", "language", "setups", "songs-and-setlists", "switches", "calibration"]
 
 [layout]
 
@@ -187,11 +187,27 @@ min_windows = 2
 give_up_windows = []
 patch = "sample"
 
-[pages.None]
+[pages.setups]
 
-type = "None"
+type = "setups"
 ram2_bytes = 0
-min_windows = 0
+min_windows = 1
+give_up_windows = []
+patch = "sample"
+
+[pages.songs-and-setlists]
+
+type = "songs-and-setlists"
+ram2_bytes = 0
+min_windows = 1
+give_up_windows = []
+patch = "sample"
+
+[pages.switches]
+
+type = "switches"
+ram2_bytes = 0
+min_windows = 1
 give_up_windows = []
 patch = "sample"
 

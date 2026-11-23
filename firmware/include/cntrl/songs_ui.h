@@ -19,10 +19,11 @@ public:
     bool open() const { return mode_ != closed; }
     bool performing() const { return mode_ == performance; }
     bool editing_name() const { return mode_ == naming; }
+    bool patch_chooser_requested = false;
     void refresh() { if (open()) { feedback_[0] = 0; render(); } }
     void leave() { mode_ = closed; }
     void perform() { mode_ = performance; cursor_ = 0; locked_ = true; ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error()); render(); }
-    void enter() { mode_ = root; cursor_ = 0; locked_ = true; render(); }
+    void enter() { mode_ = root; cursor_ = 0; locked_ = true; patch_chooser_requested = false; render(); }
     void poll(uint8_t held) {
         if (!held) locked_ = false;
         if (mode_ == performance && !songs_.busy() && std::strcmp(feedback_, songs_.last_error())) {
@@ -79,7 +80,7 @@ private:
             mode_ = mode_ == root ? closed : mode_ == adding ? performance : mode_ == patch_actions ? patches : mode_ == patches ? song_actions : root;
             cursor_ = 0; if (open()) render(); return;
         }
-        unsigned count = mode_ == root ? 5 : mode_ == sets ? songs_.counts().sets + 1
+        unsigned count = mode_ == root ? 5 + bool(documents_ && documents_->document().valid() && documents_->document().page_layout().controllers()) : mode_ == sets ? songs_.counts().sets + 1
             : mode_ == library || mode_ == adding ? songs_.counts().songs
             : mode_ == editing ? 9 : mode_ == song_actions ? 4 : mode_ == patch_actions ? 5 : mode_ == patches ? (songs_.song(song_name_) ? songs_.song(song_name_)->count : 0)
             : mode_ == moving || mode_ == performance ? (current_set() ? current_set()->count : 0) : 0;
@@ -93,6 +94,7 @@ private:
             if (action == 0) mode_ = performance;
             else if (action == 1) mode_ = sets;
             else if (action == 2) mode_ = library;
+            else if (action == 5) { patch_chooser_requested = true; mode_ = closed; }
             else {
                 Song item;
                 if (!capture_.capture(item, action == 4) || !songs_.save_song(item.name, item)) fail();
@@ -237,7 +239,7 @@ private:
             text(2, 0, ui::i18n::text(ui::i18n::Message::next_patch));
             text(2, 1, ui::i18n::text(ui::i18n::Message::empty_position));
         }
-        const char *roots[] = {ui::i18n::text(ui::i18n::Message::perform_setlist), ui::i18n::text(ui::i18n::Message::setlists), ui::i18n::text(ui::i18n::Message::songs), ui::i18n::text(ui::i18n::Message::save_as_song), ui::i18n::text(ui::i18n::Message::save_reference)};
+        const char *roots[] = {ui::i18n::text(ui::i18n::Message::perform_setlist), ui::i18n::text(ui::i18n::Message::setlists), ui::i18n::text(ui::i18n::Message::songs), ui::i18n::text(ui::i18n::Message::save_as_song), ui::i18n::text(ui::i18n::Message::save_reference), ui::i18n::text(ui::i18n::Message::patch_chooser)};
         const char *edits[] = {ui::i18n::text(ui::i18n::Message::add_next), ui::i18n::text(ui::i18n::Message::add_to_end), ui::i18n::text(ui::i18n::Message::remove_from_setlist), ui::i18n::text(ui::i18n::Message::move), ui::i18n::text(ui::i18n::Message::rename_setlist), ui::i18n::text(ui::i18n::Message::undo_edit), ui::i18n::text(ui::i18n::Message::restart_setlist), ui::i18n::text(ui::i18n::Message::startup_set), ui::i18n::text(ui::i18n::Message::done)};
         text(1, 0, mode_ == root ? ui::i18n::text(ui::i18n::Message::songs_and_setlists) : mode_ == naming ? ui::i18n::text(ui::i18n::Message::rename) : set ? set->name : ui::i18n::text(ui::i18n::Message::songs));
         if (mode_ == root) text(1, 1, roots[cursor_]);

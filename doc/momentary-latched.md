@@ -1,7 +1,7 @@
 # Switch assignments
 
 Switches is an optional module for press, momentary and latched Patch assignments.
-Open it from the module menu. Opening the page sends no MIDI. Indicators use
+Press C on the Switches page to open the editor. Opening the page sends no MIDI. Indicators use
 the shared known MIDI state, including writes made before opening the page.
 Held entry switches must be released before they activate an assignment.
 
@@ -254,7 +254,7 @@ These gesture slots use compiled setup format 41. Rebuild older compiled
 setups from their TOML sources before using them with this firmware.
 
 The gestures table is available only in `press` mode. Gesture patches stay in
-the switch context, so stock-firmware visits and menu/back navigation are
+the switch context, so stock-firmware visits and back navigation are
 rejected, including through references and sequences. F cancels pending
 recognition and queued gesture actions while already accepted work completes.
 Held entry switches require release before rearming. Disconnect or execution

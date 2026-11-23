@@ -4,10 +4,66 @@ import struct
 from pathlib import Path
 from zlib import crc32
 
+import pytest
+
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_chooser import compiler, setup_bundle, songs
+from cntrl.patch_chooser import compiler, device_globals, setup_bundle, songs
+from cntrl.patch_chooser.global_overlay import Overlay
+
+
+@pytest.mark.parametrize('include_empty', [False, True])
+def test_setlist_page_cycle_respects_an_explicit_empty(
+    tmp_path: Path, include_empty: bool
+) -> None:
+    target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
+    pages = {
+        **({'blank': {'type': 'None'}} if include_empty else {}),
+        'status': {'type': 'status'},
+        'language': {'type': 'language'},
+    }
+    source = {'pages': pages, 'use_animations': False}
+    raw = compiler.compile_show(source, {}, [], target)
+    bundle = tmp_path / 'setup.bin'
+    bundle.write_bytes(
+        setup_bundle.build({'show': raw}, {'show': source}, target.memory).pack()
+    )
+    library = songs.Library.model_validate(
+        {
+            'songs': [{'name': 'First', 'patches': [{'duration': '1 ms'}]}],
+            'setlists': [{'name': 'Tonight', 'songs': ['First']}],
+        }
+    )
+    data = songs.encode(library, target)
+    header = struct.pack('<4sIIII', b'CSG8', 1, len(data), crc32(data), 0)
+    storage = tmp_path / 'session'
+    folder = storage / 'cntrl/songs'
+    folder.mkdir(parents=True)
+    (folder / '0.bin').write_bytes(
+        header + struct.pack('<I', crc32(header)) + data + b'DONE'
+    )
+    folder = storage / 'cntrl/global'
+    folder.mkdir()
+    (folder / '0.bin').write_bytes(
+        device_globals.journal(Overlay(startup_set='Tonight'))
+    )
+
+    executable = backend.build(target, tmp_path / 'native', BASE.parents[3])
+    layout = EmulatorLayout.load(BASE / 'emulator/mc6-pro.toml')
+    with backend.Session(layout, target, executable, storage, bundle) as session:
+        session.advance(1_000_000)
+        expected = [
+            'status',
+            'language',
+            'songs-and-setlists' if include_empty else 'status',
+        ]
+        for page in expected:
+            session.button('f', True)
+            session.advance(session.time_us + 600_000)
+            session.button('f', False)
+            session.advance(session.time_us + 60_000)
+            assert session.tooltip_context[0] == page
 
 
 def test_song_lfo_keeps_phase_across_steps_and_stops_at_boundary(
@@ -16,8 +72,11 @@ def test_song_lfo_keeps_phase_across_steps_and_stops_at_boundary(
     target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
     song_routes = {'sweep': lfo(21, [0, 100], 127)}
     source = {
-        'pages': {'menu': {'type': 'menu'}, 'patches': {'type': 'patch-chooser'}},
-        'regions': {'main': {'pages': ['menu', 'patches']}},
+        'pages': {
+            'songs': {'type': 'songs-and-setlists'},
+            'patches': {'type': 'patch-chooser'},
+        },
+        'regions': {'main': {'pages': ['songs', 'patches']}},
         'patches': {
             'external': {'patches': [], 'midi': {'sweep': lfo(22, [24, 24], 0)}},
         },
@@ -60,7 +119,7 @@ def test_song_lfo_keeps_phase_across_steps_and_stops_at_boundary(
     layout = EmulatorLayout.load(BASE / 'emulator/mc6-pro.toml')
     with backend.Session(layout, target, executable, storage, bundle) as session:
         session.advance(1_000_000)
-        for button in ('c', 'b', 'c', 'b', 'c', 'c', 'd', *'bbbbbbb', 'c'):
+        for button in ('c', 'b', 'c', 'c', 'd', *'bbbbbbb', 'c'):
             press(session, button)
 
     with backend.Session(layout, target, executable, storage, bundle) as session:

@@ -186,7 +186,7 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!PageLayout::valid_name(p) || p[32] > PageLayout::doom || p[32] == 0 || p[32] == 2 || (p[32] >= 5 && p[32] <= 9)
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::switches || p[32] == 0 || p[32] == 2 || p[32] == 18 || (p[32] >= 5 && p[32] <= 9)
                 || p[33] > windows || (p[32] == 10 && p[33])
                 || ((p[32] == PageLayout::language || p[32] == PageLayout::time) && p[33] != 2)) return false;
             bool seen[256] = {};
@@ -971,7 +971,7 @@ private:
                 }
                 break;
             case 3:
-                if (n[1] || length != 5 || p[0] < 1 || p[0] > 18
+                if (n[1] || length != 5 || p[0] < 1 || p[0] > 18 || p[0] == 9
                     || (p[0] >= 11 && !hardware.switch_capacity())
                     || (p[0] == 1 && u32(p + 1) > 255) || (p[0] == 2 && u32(p + 1) > 1)
                     || (p[0] > 2 && u32(p + 1))) return false;

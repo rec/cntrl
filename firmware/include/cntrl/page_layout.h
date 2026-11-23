@@ -7,7 +7,7 @@ namespace cntrl {
 // Named page records belong to the active document. Display IDs are in physical order.
 struct PageLayout {
     // The layout header stores page counts in one byte.
-    static constexpr unsigned max_pages = UINT8_MAX, max_controllers = max_pages, patch_chooser = 11, midi_monitor = 12, midi_looper = 13, arpeggiator = 14, banked = 15, pong = 16, language = 17, menu = 18, time = 19, calibrate = 20, doom = 21;
+    static constexpr unsigned max_pages = UINT8_MAX, max_controllers = max_pages, patch_chooser = 11, midi_monitor = 12, midi_looper = 13, arpeggiator = 14, banked = 15, pong = 16, language = 17, time = 19, calibrate = 20, doom = 21, setups = 22, songs = 23, switches = 24;
     const uint8_t *records = nullptr;
     unsigned pages() const { return records ? records[4] : 0; }
     unsigned windows() const { return records ? records[5] : 0; }
@@ -38,6 +38,7 @@ struct PageLayout {
     const char *region_name(unsigned index) const { return reinterpret_cast<const char *>(region(index)); }
     unsigned region_size(unsigned index) const { return region(index)[33]; }
     unsigned region_page(unsigned index,unsigned position) const { return region(regions())[region(index)[32] + position]; }
+    unsigned ordered_page(unsigned position) const { return region(regions())[position]; }
     unsigned page_region(unsigned index) const {
         for (unsigned r = 0; r < regions(); ++r) for (unsigned p = 0; p < region_size(r); ++p)
             if (region_page(r,p) == index) return r;

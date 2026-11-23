@@ -94,7 +94,6 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> b
             settings.pages,
             instruments,
             cycles,
-            switches=bool(target.max_switches),
             regions=data[page + 7],
         )
         + midi_processing.estimate_ram(streams, endpoint_count=len(endpoints))
@@ -1135,9 +1134,12 @@ def _patch(
             value.update(midi_messages.decode(message))
     elif kind == 3:
         operation, argument = struct.unpack_from('<BI', data, cursor)
-        value['operation'] = next(
-            k for k, v in STATE_OPERATIONS.items() if v == operation
-        )
+        name = next((k for k, v in STATE_OPERATIONS.items() if v == operation), None)
+        if name is None:
+            raise binary_format.DocumentFormatError(
+                f'unsupported state operation {operation}; recompile the setup'
+            )
+        value['operation'] = name
         if operation == 1:
             value['value'] = argument
         if operation == 2:

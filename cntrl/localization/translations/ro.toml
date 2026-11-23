@@ -10,7 +10,6 @@ panic = { text = 'Panică' }
 language_scroll = { text = '{up:s} și {down:s} pentru derulare' }
 language_select = { text = '{button:s} pentru selectare' }
 language_next_page = { text = '{button:s} pentru pagina următoare' }
-pages_and_tools = { text = 'Pagini și instrumente' }
 browse = { text = 'răsfoire' }
 ok = { text = 'OK' }
 back = { text = 'înapoi' }
@@ -196,7 +195,6 @@ next_patch = { text = 'Pasul următor' }
 empty_position = { text = 'Poziție goală' }
 startup_set = { text = 'Comută setul inițial' }
 perform_song = { text = 'Cântă piesa' }
-hold_menu = { text = 'Ține {control:s}: meniu' }
 perform_setlist = { text = 'Redă lista de piese' }
 setlists = { text = 'Liste de piese' }
 songs = { text = 'Piese' }

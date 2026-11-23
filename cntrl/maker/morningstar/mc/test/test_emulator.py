@@ -459,7 +459,7 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
         'pages': {
             'performance': {'type': 'patch-chooser', 'min_windows': 0},
             'status': {'type': 'status'},
-            'menu': {'type': 'menu'},
+            'songs': {'type': 'songs-and-setlists'},
         },
         'layout': {'focus': 'tools'},
         'patch_cycles': {
@@ -506,18 +506,15 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
         assert not session.editing_name
         session.key(ord('x'))  # Typing outside Rename is ignored by the shared UI.
         session.advance(1000000)
-        press('f')  # Status to Menu in the right-hand utility region.
-        cli.save(session, tmp_path / 'menu-page')
-        menu = session.frames['lcd-3']
-        press('c')  # Open Pages and tools without a configured Menu action.
+        press('f')  # Status to Songs and setlists in the right-hand region.
+        launcher = session.frames['lcd-3']
+        press('c')  # Open the song library tools directly.
         press('f')  # Back restores the utility page.
-        assert session.frames['lcd-3'] == menu
+        assert session.frames['lcd-3'] == launcher
         press('f')  # Page cycling remains available.
-        assert session.frames['lcd-3'] != menu
+        assert session.frames['lcd-3'] != launcher
         press('f')
-        assert session.frames['lcd-3'] == menu
-        press('c')
-        press('b')
+        assert session.frames['lcd-3'] == launcher
         press('c')  # Songs and setlists.
         for _ in range(3):
             press('b')

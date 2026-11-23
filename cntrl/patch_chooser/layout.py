@@ -255,7 +255,6 @@ def estimate_ram(
     instruments: int,
     cycles: int,
     *,
-    switches: bool,
     regions: int,
 ) -> int:
     # Cortex-M7 ABI. Include checked storage and allocator overhead for each array.
@@ -263,12 +262,9 @@ def estimate_ram(
         return (size + 7) // 8 * 8 + 8 if size else 0
 
     controllers = max(1, sum(p.type == 'patch-chooser' for p in pages.values()))
-    labels = len(pages) + regions
     return (
         controllers * charge(instruments * 8 + cycles * 4)
         + charge((controllers - 1) * 456)
-        + charge((labels + (3 if switches else 2)) * 4 if pages else 0)
-        + charge(labels * 96)
         + charge(len(pages) * 320)
         + charge(regions * 12)
     )
@@ -305,6 +301,11 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
         if data[cursor + 32] in (2, 7, 8):
             raise DocumentFormatError(
                 'Clock and Firmware pages have been removed; recompile this setup'
+            )
+        if data[cursor + 32] == 18:
+            raise DocumentFormatError(
+                'Menu page has been removed. Recompile this setup with individual '
+                'tool pages'
             )
         if name in pages or data[cursor + 32] >= len(PAGE_TYPES):
             raise DocumentFormatError('invalid page record')
@@ -392,10 +393,13 @@ PAGE_TYPES = (
     'banked',
     'pong',
     'language',
-    'menu',
+    '',
     'time',
     'calibrate',
     'doom',
+    'setups',
+    'songs-and-setlists',
+    'switches',
 )
 
 RETIRED_CLOCK_PAGES = (0, 7, 8)

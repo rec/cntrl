@@ -30,7 +30,7 @@ public:
         bool consumed = services.animation_controls(pressed, now, replay);
         consumed = services.diagnostic_controls(events.data(), pressed, now) || consumed;
         if (consumed) application_.controller().cancel_gesture();
-        application_.setups.poll(pressed); application_.menu.poll(pressed); application_.song_ui.poll(pressed);
+        application_.setups.poll(pressed); application_.song_ui.poll(pressed);
         if (!pressed) application_.controls_locked = false;
         if (auto *visit = services.visit()) { visit->poll(!pressed); consumed = consumed || visit->busy(); }
         const bool performing = application_.song_navigation_active();

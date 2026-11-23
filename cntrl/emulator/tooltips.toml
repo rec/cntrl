@@ -35,7 +35,7 @@ window-1 = 'Combined'
 button-a = 'A/B History (when frozen)'
 button-b = 'A/B History (when frozen)'
 button-c = 'C Freeze / C Live'
-button-f = 'Open Pages and tools on MC8 Pro. Next page on MC6 Pro.'
+button-f = 'Next page.'
 
 [midi-looper.en]
 window-1 = 'MIDI Looper'
@@ -75,10 +75,6 @@ button-c = 'C to select'
 button-e = 'E and B to scroll'
 button-f = 'F for next page'
 
-[menu.en]
-window-1 = 'Pages and tools'
-button-c = 'C OK'
-
 [time.en]
 window-1 = 'Time'
 window-2 = 'Tap Tempo'
@@ -94,15 +90,6 @@ button-c = 'Press heel, then toe. Press C at each position.'
 window-1 = 'Doom launcher'
 button-c = 'C switches to Doom'
 
-[main-menu.en]
-window-1 = 'Menu controls'
-window-2 = 'Pages and tools'
-window-3 = 'Pages and tools'
-button-a = 'A/B browse'
-button-b = 'A/B browse'
-button-c = 'C OK'
-button-f = 'F back'
-
 [setups.en]
 window-1 = 'Setup controls'
 window-2 = 'Setups'
@@ -113,19 +100,19 @@ button-b = 'A/B browse or adjust'
 button-c = 'C OK'
 button-f = 'F back'
 
-[songs.en]
+[songs-and-setlists.en]
 window-1 = 'Current'
 window-2 = 'Songs and setlists'
 window-3 = 'Songs and setlists / Next'
 window-4 = 'Next'
 button-a = 'A/B browse, entry or letter'
 button-b = 'A/B browse, entry or letter'
-button-c = 'C OK or add. Hold C: menu in performance.'
+button-c = 'C OK or add'
 button-d = 'D/E jump or pos. D edit in performance.'
 button-e = 'D/E jump or pos'
 button-f = 'F back, done or next'
 
-[switch-editor.en]
+[switches.en]
 window-1 = 'Switches'
 window-2 = 'Switches'
 window-3 = 'Switches'

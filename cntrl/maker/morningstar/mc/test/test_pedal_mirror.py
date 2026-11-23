@@ -54,9 +54,8 @@ def test_mirrored_native_session_keeps_selection_language_and_installed_packs(
     physical_target = cli.load_target(BASE / 'patch-chooser-target.json')
     sources: dict[str, object] = {
         'first': {
-            'patches': {'menu': {'operation': 'menu'}},
-            'patch_cycles': {'main': ['menu']},
-            'pages': {'live': {}},
+            'pages': {'live': {}, 'setups': {'type': 'setups'}},
+            'layout': {'focus': 'tools'},
             'use_animations': False,
             'fill_in_styles': False,
         },
@@ -96,9 +95,9 @@ def test_mirrored_native_session_keeps_selection_language_and_installed_packs(
             session.button(button, False)
             session.advance(session.time_us + 80000)
 
-        # Open Setups from the performance patch, select the second setup,
+        # Open Setups, select the second setup,
         # then select French on its Language page using the real switches.
-        for button in ('a', 'c', 'b', 'c'):
+        for button in ('c', 'b', 'c', 'c'):
             press(button)
         session.advance(session.time_us + 1000000)
         english = session.frames['lcd-3']

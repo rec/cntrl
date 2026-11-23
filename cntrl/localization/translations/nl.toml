@@ -10,7 +10,6 @@ panic = { text = 'Paniek' }
 language_scroll = { text = '{up:s} en {down:s} om te bladeren' }
 language_select = { text = '{button:s} om te kiezen' }
 language_next_page = { text = '{button:s} voor de volgende pagina' }
-pages_and_tools = { text = 'Pagina’s en gereedschap', short = 'Pagina’s / tools' }
 browse = { text = 'bladeren' }
 ok = { text = 'OK' }
 back = { text = 'terug' }
@@ -196,7 +195,6 @@ next_patch = { text = 'Volgende stap' }
 empty_position = { text = 'Lege positie' }
 startup_set = { text = 'Opstartset wisselen' }
 perform_song = { text = 'Nummer spelen' }
-hold_menu = { text = '{control:s} vasthouden: menu' }
 perform_setlist = { text = 'Setlijst spelen' }
 setlists = { text = 'Setlijsten' }
 songs = { text = 'Nummers' }

@@ -422,7 +422,6 @@ class Navigation(Presentation, frozen=True):
         'previous-patch-cycle',
         'activate-selection',
         'undo',
-        'menu',
         'back',
         'next-song-step',
         'previous-song-step',
@@ -1158,8 +1157,10 @@ class Page(BaseModel, frozen=True):
         'doom',
         'language',
         'calibrate',
-        'menu',
         'None',
+        'setups',
+        'songs-and-setlists',
+        'switches',
     ] = 'patch-chooser'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
     min_windows: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
@@ -1305,7 +1306,9 @@ class Setup(BindingScope, frozen=True):
                     'time',
                     'pong',
                     'language',
-                    'None',
+                    'setups',
+                    'songs-and-setlists',
+                    'switches',
                 )
             },
             'calibration': Page(type='calibrate'),

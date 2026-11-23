@@ -10,7 +10,6 @@ panic = { text = 'Panika' }
 language_scroll = { text = '{up:s} a {down:s}: posun' }
 language_select = { text = '{button:s}: vybrat' }
 language_next_page = { text = '{button:s}: další stránka' }
-pages_and_tools = { text = 'Stránky a nástroje' }
 browse = { text = 'procházet' }
 ok = { text = 'OK' }
 back = { text = 'zpět' }
@@ -196,7 +195,6 @@ next_patch = { text = 'Další krok' }
 empty_position = { text = 'Prázdná pozice' }
 startup_set = { text = 'Přepnout úvodní set' }
 perform_song = { text = 'Hrát skladbu' }
-hold_menu = { text = 'Držet {control:s}: menu' }
 perform_setlist = { text = 'Hrát seznam' }
 setlists = { text = 'Seznamy skladeb' }
 songs = { text = 'Skladby' }

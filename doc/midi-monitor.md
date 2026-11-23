@@ -14,7 +14,7 @@ incoming and outgoing traffic. Its `min_windows` is forced to one, including
 for existing saved setups. Its region can appear on either side; see
 [Pages](pages.md). Background patches continue while the monitor is visible.
 
-Select the page through the usual Pages and tools menu or page-cycle control.
+Select the page with the page-cycle control.
 The monitor observes all enabled endpoints and USB cables exposed by the
 target. Opening it does not enable disabled transports or change routing.
 

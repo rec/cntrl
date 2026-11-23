@@ -69,7 +69,7 @@ public:
         if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, menu, time, calibrate, doom = PageLayout::doom };
+    enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, time = PageLayout::time, calibrate, doom, setups, songs, switches };
     struct ViewState {
         unsigned index = 0, language = 0;
         Page page = Page::none;
@@ -301,8 +301,10 @@ public:
             pane.bitmap = {&doom_artwork, 0, 0, DoomArtwork::width, DoomArtwork::height};
             return pane;
         }
-        if (page_ == Page::menu) {
-            page_heading(pane, i18n::text(i18n::Message::pages_and_tools));
+        if (page_ == Page::setups || page_ == Page::songs || page_ == Page::switches) {
+            const auto title = page_ == Page::setups ? i18n::Message::setups
+                : page_ == Page::songs ? i18n::Message::songs_and_setlists : i18n::Message::switches;
+            page_heading(pane, i18n::text(title));
             i18n::format(prompt_, sizeof(prompt_), i18n::Message::control_action, "", label(controls_.confirm), i18n::text(i18n::Message::ok));
             line(pane, 1, prompt_, vertical(64), vertical(24), settings_[R::status_font], true);
             return pane;

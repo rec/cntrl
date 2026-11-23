@@ -93,11 +93,8 @@ public:
             pages_.revisit();
             return true;
         }
-        if (pages_.page() == Pages::Page::menu && input == controls_.confirm) {
-            if (pressed) {
-                application_.pending_operation = 9;
-                application_.controls_locked = true;
-            }
+        if ((pages_.page() == Pages::Page::setups || pages_.page() == Pages::Page::songs || pages_.page() == Pages::Page::switches) && input == controls_.confirm) {
+            if (pressed) application_.open_tool(unsigned(pages_.page()), platform_);
             return true;
         }
         if (pages_.page() == Pages::Page::language) {
@@ -179,7 +176,7 @@ public:
         if (pages_.page() != Pages::Page::midi_monitor) return false;
         if (!pressed) return true;
         if (input == controls_.back) {
-            application_.operation_ui(Operation::menu_open, platform_); return true;
+            browse_page(false); return true;
         }
         if (!platform_.midi_monitor().active()) return true;
         if (input == controls_.confirm) platform_.midi_monitor().freeze();
@@ -357,23 +354,22 @@ public:
 #endif
     void browse_page(bool reverse) {
         if (!documents_.document().valid()) return;
-        if (application_.layout.navigation() || application_.song_navigation_active() || application_.feature_open(platform_) || application_.utility_visible()) {
+        if (application_.editing_tool) return;
+        if (application_.song_navigation_active() || application_.utility_visible()) {
             const auto &layout = application_.layout;
             const unsigned count = layout.pages();
-            unsigned index = application_.utility_visible() ? application_.utility_page : count;
-            for (unsigned i = 0; i <= count; ++i) {
-                index = (index + (reverse ? count : 1)) % (count + 1);
-                if (index == count) {
-                    if (!application_.utility_visible()) return;
-                    cancel_focus(); leave_page();
-                    application_.utility_page = PageLayout::max_pages;
-                    load_view(application_.allocation.selected()); pages_.revisit();
-                    application_.refresh(platform_); platform_.refresh_switches();
-                    application_.menu.refresh(); application_.setups.refresh(); application_.song_ui.refresh();
-                    return;
-                }
+            if (!count) return;
+            unsigned cursor = count;
+            for (unsigned i = 0; i < count; ++i) {
+                const unsigned page = layout.ordered_page(i);
+                if (page == application_.utility_page) { cursor = i; break; }
+                if (application_.utility_page >= count && layout.page(page)[0] == 10 && cursor == count) cursor = i;
+            }
+            for (unsigned i = 0; i < count; ++i) {
+                cursor = cursor == count ? (reverse ? count - 1 : 0) : (cursor + (reverse ? count - 1 : 1)) % count;
+                const unsigned index = layout.ordered_page(cursor);
                 const auto type = layout.page(index)[0];
-                if (type == 10 || type == PageLayout::patch_chooser || type == PageLayout::banked) continue;
+                if (type == PageLayout::patch_chooser || type == PageLayout::banked) continue;
 #if !CNTRL_CABLE_TEST
                 if (type == unsigned(Pages::Page::cable)) continue;
 #endif
@@ -382,10 +378,17 @@ public:
 #endif
                 cancel_focus(); leave_page(); save_view();
                 application_.utility_page = index;
+                if (type == 10) {
+                    load_view(application_.allocation.selected()); pages_.revisit();
+                    application_.refresh(platform_); platform_.refresh_switches();
+                    application_.song_ui.refresh();
+                    return;
+                }
                 load_view(index); enter_page(); pages_.revisit(); save_view();
                 platform_.blank_performance();
                 return;
             }
+            return;
         }
         auto previous = pages_.save_view();
         pages_.browse(reverse);
@@ -405,7 +408,7 @@ public:
         load_view(application_.allocation.region(region).selected); leave_page(); save_view();
         application_.allocation.select(index); load_view(index);
         focus_controller(); enter_page(); save_view();
-        application_.update_menu(); application_.refresh(platform_);
+        application_.refresh(platform_);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_focus_region)
@@ -421,7 +424,7 @@ public:
         if (pages_.page() == Pages::Page::panic) platform_.panic.enter(platform_.runtime.brightness);
 #endif
         application_.controls_locked = true;
-        application_.update_menu(); application_.refresh(platform_);
+        application_.refresh(platform_);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_tap)
@@ -523,8 +526,12 @@ public:
         if (application_.pending_page < application_.layout.pages()) {
             select_page(application_.pending_page); application_.pending_page = PageLayout::max_pages;
         }
-        if (application_.pending_region < application_.layout.regions()) {
-            focus_region(application_.pending_region); application_.pending_region = PageLayout::max_pages;
+        if (application_.editing_tool && !application_.tool_editor_open(platform_)) {
+            application_.finish_tool();
+            management_visible_ = false;
+            load_view(application_.utility_visible() ? application_.utility_page : application_.allocation.selected());
+            pages_.revisit();
+            application_.refresh(platform_); platform_.refresh_switches(); application_.song_ui.refresh();
         }
         if (management_visible_ && !application_.utility_visible() && !application_.feature_open(platform_)) {
             management_visible_ = false; enter_page(); pages_.revisit(); save_view();

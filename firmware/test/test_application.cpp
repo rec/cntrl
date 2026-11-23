@@ -211,8 +211,6 @@ static void monitor_page_controls_and_capture_follow_lifecycle(cntrl::Documents 
     assert(host.monitor_button(2, true) && !platform.monitor.frozen());
     host.leave_page(); assert(!platform.monitor.active());
     host.enter_page(); assert(platform.monitor.active() && platform.monitor.tail() == 0);
-    assert(host.monitor_button(5, true) && platform.monitor.active() && app.menu.open());
-    app.menu.leave(); host.enter_page(); assert(platform.monitor.active());
     host.configure_page_settings(cntrl::PageSettings{}); assert(!platform.monitor.active());
     const unsigned budget = cntrl::memory_budget; cntrl::memory_budget = cntrl::memory_used;
     host.enter_page(); assert(platform.monitor.active());
@@ -395,7 +393,6 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         PagePlatform &platform;
         bool switches_open() const { return false; }
         bool controls_locked() const { return app.controls_locked; }
-        bool menu_open() const { return app.menu.open(); }
         bool songs_open() const { return app.song_ui.open(); }
         bool setup_open() const { return app.setups.open(); }
         void invoke(cntrl::ui::Operation operation) { app.operation_ui(operation, platform); }
@@ -500,17 +497,6 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         assert(app.prepare_pages(document)); app.finish_pages(true);
         cntrl::memory_budget = budget;
         primary.activate(document); app.configure(document, hardware);
-        app.menu.enter(); app.menu.poll(0);
-        app.menu.button(1, true); app.menu.button(1, true);
-        assert(hardware.menu_name.find("Patch Chooser") != std::string::npos);
-        cntrl::ui::i18n::lookup = [](cntrl::ui::i18n::Message message, bool) -> const char * {
-            return message == cntrl::ui::i18n::Message::patch_chooser ? "Sélecteur de sons" : nullptr;
-        };
-        app.language_changed();
-        assert(hardware.menu_name.find("Sélecteur de sons") != std::string::npos);
-        for (unsigned i = 0; i < 8; ++i) app.menu.button(1, true);
-        assert(hardware.menu_name.find("rhythm") != std::string::npos);
-        cntrl::ui::i18n::lookup = nullptr; app.language_changed(); app.menu.leave();
         PagePlatform platform; PageFonts fonts; PageDisplay display;
         display.windows = 3;
         uint16_t work[4096] = {};
@@ -551,12 +537,6 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         host.display(100,false);
         assert(host.pages_.index() == 5); // Rendering a background view preserves control focus.
         host.focus_region(1); assert(host.pages_.index() == 4 && host.pages_.language == 7);
-        // Select region focus through the normal menu action, without changing either page.
-        assert(app.operation_ui(cntrl::ui::Operation::menu_open,hardware)); app.menu.poll(0);
-        for (unsigned i = 0; i < 2; ++i) app.operation_ui(cntrl::ui::Operation::menu_next,hardware);
-        app.operation_ui(cntrl::ui::Operation::menu_activate,hardware);
-        assert(app.pending_region == 0 && !app.menu.open());
-        host.display(101,false); assert(host.pages_.index() == 5 && app.allocation.region(1).selected == 4);
         host.focus_region(1);
         for (unsigned screen = 0; screen < 3; ++screen) {
             cntrl::Pane pane; pane.graphics.background = uint16_t(screen + 1); pane.graphics.pad = 0;
@@ -650,19 +630,18 @@ int main(int argc, char **argv) {
         monitor_page_controls_and_capture_follow_lifecycle(documents, app);
         looper_page_confirms_clear_but_explicit_bindings_execute_immediately(documents, app);
         assert(app.state(1, 91, hardware) && hardware.brightness == 91);
-        assert(app.state(9, 0, hardware) && app.pending_operation == 9);
+        assert(!app.state(9, 0, hardware));
         assert(!app.state(11, 0, hardware)); hardware.editor = true; assert(app.state(11, 0, hardware)); hardware.editor = false;
         using Op = cntrl::ui::Operation;
-        assert(app.operation_ui(Op::menu_open, hardware)); assert(app.menu.open() && app.feature_open(hardware));
-        app.menu.poll(0); assert(app.operation_ui(Op::menu_activate, hardware)); assert(!app.menu.open() && app.setups.open());
+        assert(app.open_tool(cntrl::PageLayout::setups, hardware) && app.setups.open());
         while (documents.busy()) documents.tick(0);
         app.setups.poll(0); app.setups.button(5, true, 0);
-        assert(app.operation_ui(Op::menu_open, hardware)); app.menu.poll(0);
-        assert(app.operation_ui(Op::menu_next, hardware)); assert(app.operation_ui(Op::menu_activate, hardware));
-        assert(app.song_ui.open() && !app.menu.open());
+        app.finish_tool();
+        assert(app.open_tool(cntrl::PageLayout::songs, hardware) && app.song_ui.open());
         assert(app.operation_ui(Op::performance_show, hardware)); assert(!app.song_ui.open());
-        assert(app.operation_ui(Op::menu_open, hardware)); app.menu.poll(0); app.operation_ui(Op::menu_next, hardware);
-        hardware.transfer_busy = true; app.operation_ui(Op::menu_activate, hardware); assert(app.menu.open() && !app.song_ui.open());
+        app.finish_tool();
+        hardware.transfer_busy = true;
+        assert(!app.open_tool(cntrl::PageLayout::songs, hardware) && !app.song_ui.open());
         hardware.transfer_busy = false; cntrl::Document empty; app.configure(empty, hardware); assert(hardware.blanks == 1);
         assert(&app.controller() == &primary);
         uint8_t pages[12 + 2 * 34] = {};

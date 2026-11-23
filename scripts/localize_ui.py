@@ -128,7 +128,6 @@ FILES = [
     'firmware/include/cntrl/ui/pages.h',
     'firmware/include/cntrl/ui/page_host.h',
     'firmware/include/cntrl/ui/application.h',
-    'firmware/include/cntrl/module_menu.h',
     'firmware/include/cntrl/setup_ui.h',
     'firmware/include/cntrl/songs_ui.h',
     'firmware/include/cntrl/controller.h',

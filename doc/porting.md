@@ -440,19 +440,19 @@ The input services are:
 | `actions()` | The action service consumed by `ControlRouter` |
 
 The coordinator always performs confirm-release cleanup before an animation or
-other focus owner can consume the frame. It also owns menu/setup/song polling,
+other focus owner can consume the frame. It also owns setup and song polling,
 release-to-unlock behavior, animation replay eligibility, firmware-visit focus
 and the choice to dispatch through `ControlRouter`. The diagnostic callback can
 inspect the `controls.count` event entries; event bits are `press_event`,
 `release_event`, `hold_event` and `double_press_event` from `cntrl/buttons.h`.
 
-The router's action service binds `controls_locked`, `menu_open`, `setup_open`,
+The router's action service binds `controls_locked`, `setup_open`,
 `songs_open`, `switches_open`, `switch_button`, `invoke(Operation)`, `browse`,
 `midi_reserved`, `expression`, `port`, `clock`, `has_controller`, `controller` and
 `tap` to the shared application and page objects. Its completion path additionally
 uses `leave_switches`, `abandoned`, `patch_pending` and `error`. Call
 `InputCoordinator::finish(actions)` during the runtime's navigation phase;
-that path owns deferred editor exits and pending menu/performance operations.
+that path owns deferred editor exits and pending performance operations.
 
 Construct `CooperativeRuntime(scan_interval_ms)` with the generated interval.
 It owns the wrapping scan deadline and last-scan timestamp. The runtime calls

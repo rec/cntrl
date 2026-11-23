@@ -10,7 +10,6 @@ panic = { text = 'Pánik' }
 language_scroll = { text = '{up:s} és {down:s}: görgetés' }
 language_select = { text = '{button:s}: kiválasztás' }
 language_next_page = { text = '{button:s}: következő oldal' }
-pages_and_tools = { text = 'Oldalak és eszközök' }
 browse = { text = 'böngészés' }
 ok = { text = 'OK' }
 back = { text = 'vissza' }
@@ -196,7 +195,6 @@ next_patch = { text = 'Következő lépés' }
 empty_position = { text = 'Üres pozíció' }
 startup_set = { text = 'Kezdő szett váltása' }
 perform_song = { text = 'Dal lejátszása' }
-hold_menu = { text = '{control:s} tartása: menü' }
 perform_setlist = { text = 'Műsorlista lejátszása' }
 setlists = { text = 'Műsorlisták' }
 songs = { text = 'Dalok' }

@@ -10,7 +10,6 @@ panic = { text = 'Panik' }
 language_scroll = { text = '{up:s} ve {down:s} ile kaydırın' }
 language_select = { text = '{button:s} ile seçin' }
 language_next_page = { text = '{button:s} ile sonraki sayfa' }
-pages_and_tools = { text = 'Sayfalar ve araçlar' }
 browse = { text = 'gözat' }
 ok = { text = 'Tamam' }
 back = { text = 'geri' }
@@ -196,7 +195,6 @@ next_patch = { text = 'Sonraki adım' }
 empty_position = { text = 'Boş konum' }
 startup_set = { text = 'Başlangıç setini değiştir' }
 perform_song = { text = 'Şarkıyı çal' }
-hold_menu = { text = '{control:s} basılı tut: menü' }
 perform_setlist = { text = 'Listeyi çal' }
 setlists = { text = 'Çalma listeleri' }
 songs = { text = 'Şarkılar' }

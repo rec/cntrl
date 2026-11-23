@@ -121,7 +121,7 @@ def test_shifted_actions_round_trip_and_execute(
             'off': {'operation': 'unshift'},
             'shifted': {'on': {'operation': 'shift'}},
         },
-        {'shifted': {'on': {'operation': 'menu'}}},
+        {'shifted': {'on': {'operation': 'back'}}},
         {'shifted': {'on': 'missing'}},
     ],
 )

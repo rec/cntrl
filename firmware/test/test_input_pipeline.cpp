@@ -54,7 +54,6 @@ struct Actions {
     cntrl::ui::Application &application;
     std::vector<bool> page_directions{};
     bool controls_locked() const { return application.controls_locked; }
-    bool menu_open() const { return application.menu.open(); }
     bool setup_open() const { return application.setups.open(); }
     bool songs_open() const { return application.song_ui.open(); }
     bool switches_open() const { return false; }
@@ -155,7 +154,7 @@ static void controller_storage_preserves_active_pages_on_failure() {
         records[4] = 1;
         records[12 + 32] = cntrl::PageLayout::patch_chooser;
         assert(application.prepare_layout({records})); application.finish_pages(true);
-        const unsigned single = initial + unsigned(cntrl::memory_charge(4 * sizeof(const char *)) + cntrl::memory_charge(96) + cntrl::memory_charge(sizeof(cntrl::ui::Pages::ViewState)));
+        const unsigned single = initial + unsigned(cntrl::memory_charge(sizeof(cntrl::ui::Pages::ViewState)));
         assert(cntrl::memory_used == single);
         records[4] = 4;
         for (unsigned i = 1; i < 4; ++i) records[12 + i * 34 + 32] = cntrl::PageLayout::patch_chooser;
@@ -166,7 +165,7 @@ static void controller_storage_preserves_active_pages_on_failure() {
         assert(application.prepare_layout({records})); application.finish_pages(false);
         assert(cntrl::memory_used == single);
         assert(application.prepare_layout({records})); application.finish_pages(true);
-        assert(cntrl::memory_used == initial + cntrl::memory_charge(7 * sizeof(const char *)) + cntrl::memory_charge(3 * sizeof(cntrl::Controller)) + cntrl::memory_charge(4 * 96) + cntrl::memory_charge(4 * sizeof(cntrl::ui::Pages::ViewState)));
+        assert(cntrl::memory_used == initial + cntrl::memory_charge(3 * sizeof(cntrl::Controller)) + cntrl::memory_charge(4 * sizeof(cntrl::ui::Pages::ViewState)));
         auto *fourth = &application.at(3);
         records[4] = 2; cntrl::memory_budget = cntrl::memory_used;
         assert(!application.prepare_layout({records})); application.finish_pages(false);

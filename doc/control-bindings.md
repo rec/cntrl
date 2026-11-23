@@ -80,9 +80,9 @@ gestures. In Patch mode, press F to cycle utility pages.
 | Press and hold | Page forward |
 | Click, then press and hold | Page back |
 
-The F caption reads **Next**. C is available for scene bindings. To open Pages
-and tools during performance, browse to the Menu utility page if the setup
-includes one.
+The F caption reads **Next**. C is available for scene bindings. To switch to
+Patch Chooser during performance, browse to Songs and setlists, press C, and
+choose **Patch Chooser**.
 
 You can supply explicit navigation chords in a setup. This example uses F and
 C for song navigation and two-button combinations for page navigation.

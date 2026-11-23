@@ -16,9 +16,6 @@ text = '{button:s} pour la page suivante'
 [messages.patch_chooser]
 text = 'Sélecteur de sons'
 
-[messages.pages_and_tools]
-text = 'Pages et outils'
-
 [messages.browse]
 text = 'parcourir'
 
@@ -593,9 +590,6 @@ text = 'Basculer le set initial'
 
 [messages.perform_song]
 text = 'Jouer le morceau'
-
-[messages.hold_menu]
-text = 'Maintenir {control:s} : menu'
 
 [messages.perform_setlist]
 text = 'Jouer la liste'

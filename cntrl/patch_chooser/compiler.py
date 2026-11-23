@@ -71,13 +71,20 @@ def compile_show(
     except ValidationError as error:
         raise CompilationError(validation_errors('show', error)) from error
     if 'pages' not in show.model_fields_set:
-        pages = {
-            n: p for n, p in show.pages.items() if p.min_windows <= len(target.displays)
-        }
-        if 'doom' in target.functions and not show.regions:
-            empty = pages.pop('None')
-            pages['doom'] = models.Page(type='doom')
-            pages['None'] = empty
+        if show.regions:
+            selected = {n for r in show.regions.values() for n in r.pages}
+            pages = {n: p for n, p in show.pages.items() if n in selected}
+            if 'None' in selected:
+                pages['None'] = models.Page(type='None')
+        else:
+            pages = {
+                n: p
+                for n, p in show.pages.items()
+                if p.min_windows <= len(target.displays)
+            }
+            if 'doom' in target.functions:
+                pages['doom'] = models.Page(type='doom')
+            pages['None'] = models.Page(type='None')
         show = show.model_copy(
             update={
                 'pages': pages,
@@ -604,7 +611,6 @@ def compile_show(
             show.pages,
             len(instruments),
             len(patch_cycles),
-            switches=bool(target.max_switches),
             regions=page_layout[7],
         )
         + midi_processing.estimate_ram(

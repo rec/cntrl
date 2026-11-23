@@ -10,7 +10,7 @@
 | Term | Meaning |
 | --- | --- |
 | **Set mode**, **set performance** | Performing a setlist in **Songs and setlists**. CNTRL keeps your place in the set and shows what's current and what's next. |
-| **Songs and setlists** | The menu in **Pages and tools** where you perform, create, and edit songs and setlists. |
+| **Songs and setlists** | The page where you open the editor to perform, create, and edit songs and setlists. |
 | **Song library** | Your saved collection of songs and setlists. The **Songs** picker browses songs alphabetically. **Jump** moves between initial letters. |
 | **Setlist**, **set** | An ordered list of songs to play. The same song can appear more than once. |
 | **Active setlist** | The set currently selected for performance. Choose it under **Setlists**. The song highlighted for editing can change while the playback position stays put. |
@@ -83,7 +83,6 @@
 | **Region** | A group of pages that you can browse independently. One page is selected per region. A multi-display setup can show a performance region and a tools region at the same time. |
 | **Focus** | The region currently receiving page-specific controls. A border marks its visible windows. Changing focus leaves the other regions on their selected pages. |
 | **Window**, **display** | A display is a physical screen. A window is a page's use of one screen. As pages change, the layout can give a page more or fewer windows. |
-| **Pages and tools / Menu** | **Pages and tools** opens configured pages, regions, and tools such as Setups and Songs and setlists. The optional **Menu** page provides another way to open it. |
 | **Banked page** | A performance page that groups control assignments into banks and pages within each bank. Navigating changes which assignments the same switches operate. |
 | **None** | A page choice that uses no windows, freeing screens for other regions. |
 | **Status** | The page for checking such details as the running firmware, memory and storage, setup patch counts, and clock status. |

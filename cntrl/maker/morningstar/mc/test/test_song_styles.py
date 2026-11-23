@@ -21,8 +21,12 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
     artwork = tmp_path / 'light.png'
     Image.new('RGB', (160, 64), 'red').save(artwork)
     source = {
-        'pages': {'menu': {'type': 'menu'}, 'patches': {'type': 'patch-chooser'}},
-        'regions': {'main': {'pages': ['menu', 'patches']}},
+        'pages': {
+            'songs': {'type': 'songs-and-setlists'},
+            'empty': {'type': 'None'},
+            'patches': {'type': 'patch-chooser'},
+        },
+        'regions': {'main': {'pages': ['songs', 'empty', 'patches']}},
         'patch_cycles': {
             'Sounds': [
                 {
@@ -150,8 +154,6 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
                     image.paste(panel, (i * 160, row * 128))
 
         session.advance(1000000)
-        press('c')  # Pages and tools.
-        press('b')
         press('c')  # Songs and setlists.
         press('b')
         press('c')  # Setlists.
@@ -251,19 +253,16 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
             0xFFFF,
         }
         midi_count = len([m for m in session.messages if m.kind == 'midi'])
-        chord('b', 'e')  # Browse to Menu from the active scene.
-        press('c')  # Open Pages and tools from the Menu page.
-        for _ in range(5):
-            press('b')
-        press('c')  # Switch to Patch Chooser through Pages and tools.
+        chord('b', 'e')  # Browse to Songs and setlists from the active scene.
+        press('c')
+        press('a')  # The root wraps to Patch Chooser.
+        press('c')
         press('a')  # Recall the chooser's patch using the pedal's physical label.
         snapshot(5)
         midi = [m.data for m in session.messages if m.kind == 'midi']
         assert len(midi) == midi_count + 1 and midi[-1] == b'\xc0\x62'
-        chord('b', 'e')  # Use the setup's page-forward assignment to open Menu.
+        chord('b', 'e')  # Use the setup's page-forward assignment to reach Songs.
         press('c')
-        press('b')
-        press('c')  # Songs and setlists.
         press('c')  # Resume performance without moving the cursor.
         assert len([m for m in session.messages if m.kind == 'midi']) == len(midi)
         assert not [m for m in session.messages if m.kind == 'error']

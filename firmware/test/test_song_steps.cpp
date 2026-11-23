@@ -63,7 +63,6 @@ struct Actions {
     bool switches_open() const { return board.switches.open(); }
     void switch_button(unsigned input, bool down, uint32_t now) { board.switches.button(input, down, now); }
     bool controls_locked() const { return board.app->controls_locked; }
-    bool menu_open() const { return board.app->menu.open(); }
     bool songs_open() const { return board.app->song_ui.open(); }
     bool setup_open() const { return board.app->setups.open(); }
     void invoke(cntrl::ui::Operation operation) { board.state(unsigned(operation), 0); }
@@ -207,7 +206,7 @@ int main(int argc, char **argv) {
     auto count = board.sent.size();
     press(2); wait(8); release(2);
     assert(board.sent.size() == count + 1 && board.sent.back() == std::make_pair(99u, 1u));
-    assert(!app.menu.open() && songs.continuation().patch == 0);
+    assert(songs.continuation().patch == 0);
     next(); next(); assert(songs.continuation().patch == 2 && board.sent.back().second == 3);
     previous(); assert(songs.continuation().patch == 1 && board.sent.back().second == 2);
     previous(); assert(songs.continuation().patch == 0 && board.sent.back().second == 1);

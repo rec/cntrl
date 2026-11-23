@@ -42,12 +42,11 @@ struct Services {
     void display(uint32_t) { order.push_back(7); }
 };
 struct Actions {
-    enum View { performance, menu, switches, songs, setup } view = performance;
+    enum View { performance, switches, songs, setup } view = performance;
     std::vector<unsigned> actions;
     bool locked = false, reserved = false;
     bool monitoring = false;
     bool switches_open() const { return view == switches; }
-    bool menu_open() const { return view == menu; }
     bool songs_open() const { return view == songs; }
     bool setup_open() const { return view == setup; }
     bool controls_locked() const { return locked; }
@@ -101,8 +100,8 @@ int main() {
     assert(actions.actions == std::vector<unsigned>{55}); // Its release reaches the controller too.
     actions.actions.clear(); events[0] = 1; router.route(actions, events, 5, 0);
     assert(actions.actions == std::vector<unsigned>{31}); // Holding forward reserves the reverse page gesture.
-    actions.actions.clear(); actions.view = Actions::menu; router.route(actions, events, 1, 0);
-    assert(actions.actions == std::vector<unsigned>{unsigned(cntrl::ui::Operation::menu_previous)});
+    actions.actions.clear(); actions.view = Actions::setup; router.route(actions, events, 1, 0);
+    assert(actions.actions == std::vector<unsigned>{unsigned(cntrl::ui::Operation::setup_previous)});
     actions.actions.clear(); actions.view = Actions::performance; events[0] = 0; events[1] = 1; router.route(actions, events, 2, 0);
     assert(actions.actions == std::vector<unsigned>{46}); // Adapter mapping, independent of physical index.
     actions.actions.clear(); actions.view = Actions::switches; actions.locked = true; events[1] = 2; router.route(actions, events, 0, 0);

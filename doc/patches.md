@@ -451,7 +451,6 @@ must support the named output; this format adds no output drivers.
 | `next-patch-cycle`, `previous-patch-cycle` | None | Move the browser to another patch cycle |
 | `activate-selection` | None | Execute the selected Patch through the same executor |
 | `undo` | None | Restore a known previous program selection, when available |
-| `menu` | None | Return to the module menu after the invocation and required cleanup |
 | `back` | None | Return to performance after the invocation and required cleanup |
 
 Brightness and USB interface state are runtime settings. Executing these patches

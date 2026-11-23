@@ -2,7 +2,6 @@
 #include "messages.h"
 #include <cntrl/controller.h>
 #include <cntrl/documents.h>
-#include <cntrl/module_menu.h>
 #include <cntrl/setup_ui.h>
 #include <cntrl/songs_ui.h>
 #include <cntrl/switches.h>
@@ -59,7 +58,7 @@ public:
 #endif
     Application(Hardware &hardware, Documents &documents, Controller &primary, PatchOutputs &outputs, PatchSources &sources,
                 Songs &songs, SongCapture &capture, bool switches)
-        : menu(hardware, tool_names_.data(), switches ? 3 : 2), setups(documents, hardware),
+        : setups(documents, hardware),
           song_ui(songs, hardware, capture, &documents), hardware_(hardware), documents_(documents), primary_(primary),
           outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) {}
     ~Application() { destroy_banked(pending_banked_); destroy_banked(banked_); destroy_controllers(pending_controllers_); destroy_controllers(controllers_); }
@@ -69,15 +68,8 @@ public:
     bool prepare_layout(PageLayout candidate) {
         prepared_ = false;
         destroy_controllers(pending_controllers_);
-        pending_names_.clear();
-        pending_labels_.release(); pending_views_.release();
-        if (!pending_views_.resize(candidate.pages()) || !pending_labels_.resize(candidate.regions() + candidate.pages()) || !allocation.prepare(candidate)) return false;
-        if (candidate.pages()) {
-            if (!pending_names_.resize((page_offset() + candidate.pages() + candidate.regions()) * sizeof(const char *))) return false;
-            auto **names = reinterpret_cast<const char **>(pending_names_.data);
-            for (unsigned i = 0; i < page_offset(); ++i) names[i] = tool_names_[i];
-            for (unsigned i = 0; i < candidate.regions() + candidate.pages(); ++i) names[page_offset() + i] = pending_labels_[i].data();
-        }
+        pending_views_.release();
+        if (!pending_views_.resize(candidate.pages()) || !allocation.prepare(candidate)) return false;
         const unsigned count = candidate.controllers();
         const unsigned extras = count ? count - 1 : 0;
         if (extras == controllers_.size / sizeof(Controller)) return true;
@@ -120,14 +112,8 @@ public:
         if (commit && prepared_) {
             destroy_controllers(controllers_); controllers_.swap(pending_controllers_);
         } else destroy_controllers(pending_controllers_);
-        if (commit) {
-            names_.swap(pending_names_);
-            labels_.swap(pending_labels_); views.swap(pending_views_);
-            menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(),
-                names_.data ? names_.size / sizeof(const char *) : page_offset());
-        }
-        pending_names_.clear();
-        pending_labels_.release(); pending_views_.release(); allocation.finish(commit);
+        if (commit) views.swap(pending_views_);
+        pending_views_.release(); allocation.finish(commit);
         prepared_ = false;
     }
     Controller &at(unsigned index) { return index ? *std::launder(reinterpret_cast<Controller *>(controllers_.data + (index - 1) * sizeof(Controller))) : primary_; }
@@ -141,7 +127,7 @@ public:
     }
     bool patch_pending() { return busy() || songs_.executing() || songs_.busy(); }
     bool song_navigation_active() const {
-        return songs_.performing() && !menu.open() && !setups.open() && (song_ui.performing() || binding_return_songs);
+        return songs_.performing() && !editing_tool && !setups.open() && (song_ui.performing() || binding_return_songs);
     }
     bool song_boundary() const { return song_navigation_active() && songs_.boundary(); }
     void scene_panels(ScenePanel &scene, ScenePanel &song, ScenePanel &setlist, const Document &document, const uint8_t *binding) const {
@@ -175,16 +161,45 @@ public:
         for (unsigned i = 1; i < layout.controllers(); ++i) at(i).stop();
         for (auto &bank : banked_) if (bank) bank->stop();
         songs_.stop_execution(); pending_song_step_ = 0; pending_operation = 0;
-        menu.leave(); song_ui.leave();
-        pending_page = pending_region = PageLayout::max_pages;
+        song_ui.patch_chooser_requested = false;
+        song_ui.leave();
+        pending_page = PageLayout::max_pages;
         utility_page = PageLayout::max_pages;
+        editing_tool = 0;
         binding_return_songs = false; controls_locked = true;
     }
-    bool utility_visible() const { return utility_page < layout.pages(); }
-    bool feature_open(const ApplicationServices &services) const { return !utility_visible() && (menu.open() || setups.open() || song_ui.open() || services.switch_editor_open()); }
+    bool utility_visible() const { return !editing_tool && utility_page < layout.pages() && layout.page(utility_page)[0] != 10; }
+    bool feature_open(const ApplicationServices &services) const { return !utility_visible() && (setups.open() || song_ui.open() || services.switch_editor_open()); }
+    bool tool_editor_open(const ApplicationServices &services) const {
+        if (song_ui.patch_chooser_requested) return true;
+        if (editing_tool == PageLayout::setups) return setups.open();
+        if (editing_tool == PageLayout::songs) return song_ui.open() && !song_ui.performing();
+        return editing_tool == PageLayout::switches && services.switch_editor_open();
+    }
+    bool open_tool(unsigned page, ApplicationServices &services) {
+        if (documents_.busy()) return false;
+        if (page == PageLayout::setups) setups.enter();
+        else if (page == PageLayout::songs) {
+            if (services.song_transfer_busy() || !services.output_idle()) return false;
+            resume_song_ui_ = song_ui.performing();
+            song_ui.enter();
+        } else if (page == PageLayout::switches) {
+            if (!has_switches_ || services.switch_editor_open() || busy() || documents_.dirty() || services.song_transfer_busy()
+                || !services.output_idle() || !documents_.document().valid()) return false;
+            services.open_switch_editor(documents_.document(), held);
+        } else return false;
+        controller().cancel_gesture(); editing_tool = page; controls_locked = true; return true;
+    }
+    void finish_tool() {
+        if (editing_tool == PageLayout::songs) {
+            if (song_ui.performing()) utility_page = PageLayout::max_pages;
+            else if (resume_song_ui_) song_ui.perform();
+        }
+        editing_tool = 0;
+    }
     void bindings_enter() {
         binding_return_songs = binding_return_songs || song_ui.open();
-        controller().cancel_gesture(); menu.leave(); song_ui.leave();
+        controller().cancel_gesture(); song_ui.leave();
         controls_locked = false;
     }
     void brightness(uint8_t value) { for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) at(i).runtime_brightness(value); }
@@ -194,15 +209,14 @@ public:
     void configure(const Document &document, ApplicationServices &services) {
         stopping_setup_ = false;
         layout = document.valid() ? document.page_layout() : PageLayout{}; visible_index = 0; pending_page = PageLayout::max_pages;
-        allocation.configure(layout); pending_region = PageLayout::max_pages;
+        allocation.configure(layout); utility_page = PageLayout::max_pages; editing_tool = 0;
         for (unsigned i = 1; i <= controllers_.size / sizeof(Controller); ++i) {
             processing_index = i;
             if (i < layout.controllers()) at(i).activate(document, false); else at(i).deactivate();
         }
         if (layout.controllers() <= 1) destroy_controllers(controllers_);
-        if (!layout.pages()) { names_.clear(); labels_.release(); views.release(); }
+        if (!layout.pages()) views.release();
         processing_index = PageLayout::max_controllers; services.blank_performance();
-        update_menu();
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_refresh)
@@ -215,33 +229,10 @@ public:
         processing_index = previous;
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(application_update_menu)
-#endif
-    void update_menu() {
-        const auto page_name = [&](unsigned index) {
-            const char *name = layout.name(index);
-            return layout.page(index)[0] == PageLayout::patch_chooser && !std::strcmp(name, "patch-chooser")
-                ? i18n::text(i18n::Message::patch_chooser) : name;
-        };
-        for (unsigned r = 0; r < layout.regions(); ++r) {
-            std::snprintf(labels_[r].data(),labels_[r].size(),"%s%s: %s",r == allocation.focus() ? "* " : "",layout.region_name(r),page_name(allocation.region(r).selected));
-        }
-        for (unsigned p = 0; p < layout.pages(); ++p) {
-            unsigned r = layout.page_region(p);
-            std::snprintf(labels_[layout.regions() + p].data(),labels_[0].size(),"%s / %s",layout.region_name(r),page_name(p));
-        }
-        menu.configure(names_.data ? reinterpret_cast<const char *const *>(names_.data) : tool_names_.data(), page_offset() + layout.regions() + layout.pages());
-    }
-#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_language_changed)
 #endif
     void language_changed() {
-        tool_names_ = {i18n::text(i18n::Message::setups), i18n::text(i18n::Message::songs_and_setlists), i18n::text(i18n::Message::switches)};
-        if (names_.data) {
-            auto **names = reinterpret_cast<const char **>(names_.data);
-            for (unsigned i = 0; i < page_offset(); ++i) names[i] = tool_names_[i];
-        }
-        update_menu(); menu.refresh(); setups.refresh(); song_ui.refresh();
+        setups.refresh(); song_ui.refresh();
         for (auto &view : views) { view.dirty = true; view.refreshed = 0; }
     }
     void tick(uint32_t now) {
@@ -251,9 +242,13 @@ public:
         processing_index = PageLayout::max_controllers;
         for (unsigned i = 0; i < banked_.size(); ++i) if (banked_[i]) { processing_banked_ = i; banked_[i]->tick(now, uint32_t(held)); }
         processing_banked_ = PageLayout::max_pages;
-        if (pending_operation == 9 && !patch_pending()) {
-            if (outputs_.prepare_leave(controller().executor()) == midi::Bridge::Delivery::cancelled) {
-                pending_operation = 0; hardware_.error("Control cleanup failed");
+        if (song_ui.patch_chooser_requested && !patch_pending()) {
+            const auto cleanup = outputs_.prepare_leave(controller().executor());
+            if (cleanup == midi::Bridge::Delivery::complete) pending_operation = 10;
+            else if (cleanup == midi::Bridge::Delivery::cancelled) {
+                song_ui.patch_chooser_requested = false;
+                pending_operation = 0;
+                hardware_.error("Control cleanup failed");
             }
         }
         if (pending_song_step_ && !patch_pending()) {
@@ -282,7 +277,7 @@ public:
             if ((operation == 7 || operation == 8) && (songs_.executing() || documents_.busy() || documents_.dirty())) return false;
             return controller().navigate(operation);
         }
-        if (operation == 9 || operation == 10) { pending_operation = operation; return true; }
+        if (operation == 10) { pending_operation = operation; return true; }
         if (operation == 13 || operation == 18) return request_song_step(operation == 18);
         return operation_ui(Operation(operation), services);
     }
@@ -291,44 +286,19 @@ public:
 #endif
     bool operation_ui(Operation operation, ApplicationServices &services) {
         switch (operation) {
-        case Operation::menu_previous:
-        case Operation::menu_next:
-            if (!menu.open()) return false;
-            menu.button(operation == Operation::menu_previous ? 0 : 1, true); return true;
-        case Operation::menu_back:
-            if (!menu.open()) return false;
-            if (menu.button(5, true) == -2) { documents_.redraw(); controls_locked = true; } return true;
-        case Operation::menu_open:
-            utility_page = PageLayout::max_pages;
-            binding_return_songs = false;
-            controller().cancel_gesture(); song_ui.leave(); menu.enter(); controls_locked = true; return true;
         case Operation::performance_show:
-            controller().cancel_gesture(); menu.leave(); song_ui.leave();
+            if (editing_tool == PageLayout::switches && song_ui.performing()) return true;
+            controller().cancel_gesture(); song_ui.leave();
+            if (song_ui.patch_chooser_requested) {
+                song_ui.patch_chooser_requested = false;
+                editing_tool = 0;
+                utility_page = PageLayout::max_pages;
+                binding_return_songs = false;
+                if (!visible()) pending_page = layout.controller_page(visible_index);
+            }
             if (binding_return_songs) { binding_return_songs = false; song_ui.perform(); }
             else documents_.redraw();
             controls_locked = true; return true;
-        case Operation::menu_activate: {
-            if (!menu.open()) return false;
-            const int selected = menu.button(2, true);
-            if (selected == -1) return true;
-            if (selected >= int(page_offset()) && unsigned(selected) - page_offset() < layout.regions()) {
-                at(visible_index).cancel_gesture(); pending_region = unsigned(selected) - page_offset(); controls_locked = true; return true;
-            }
-            if (selected >= int(page_offset() + layout.regions()) && unsigned(selected) - page_offset() - layout.regions() < layout.pages()) {
-                at(visible_index).cancel_gesture(); pending_page = unsigned(selected) - page_offset() - layout.regions(); controls_locked = true; return true;
-            }
-            if (selected == 1) {
-                if (!documents_.busy() && !services.song_transfer_busy() && services.output_idle()) { song_ui.enter(); controls_locked = true; }
-                else menu.enter();
-            } else if (selected == 2 && has_switches_) {
-                if (!busy() && !documents_.busy() && !documents_.dirty() && !services.song_transfer_busy() && services.output_idle() && documents_.document().valid())
-                    services.open_switch_editor(documents_.document(), held);
-                else menu.enter();
-            } else if (!selected) {
-                if (documents_.busy()) menu.enter(); else { setups.enter(); controls_locked = true; }
-            }
-            return true;
-        }
         case Operation::setup_previous:
         case Operation::setup_next:
         case Operation::setup_confirm:
@@ -345,7 +315,10 @@ public:
         case Operation::songs_back: {
             if (!song_ui.open()) return false;
             const unsigned button = operation == Operation::songs_previous ? 0 : operation == Operation::songs_next ? 1 : operation == Operation::songs_confirm ? 2 : operation == Operation::songs_previous_section ? 3 : operation == Operation::songs_next_section ? 4 : 5;
-            song_ui.button(button, true); if (!song_ui.open()) { documents_.redraw(); controls_locked = true; } return true;
+            song_ui.button(button, true);
+            if (!song_ui.open() && !song_ui.patch_chooser_requested) documents_.redraw();
+            if (!song_ui.open()) controls_locked = true;
+            return true;
         }
         case Operation::switches_return:
             if (!has_switches_) return false;
@@ -358,8 +331,8 @@ public:
     unsigned visible_index = 0, processing_index = PageLayout::max_controllers;
     unsigned pending_page = PageLayout::max_pages;
     unsigned utility_page = PageLayout::max_pages;
-    unsigned pending_region = PageLayout::max_pages;
     unsigned pending_operation = 0;
+    unsigned editing_tool = 0;
     bool return_to_switches = false, controls_locked = false;
     bool binding_return_songs = false;
     uint64_t held = 0;
@@ -378,13 +351,9 @@ public:
         return false;
     }
 private:
-    std::array<const char *, 3> tool_names_{i18n::text(i18n::Message::setups), i18n::text(i18n::Message::songs_and_setlists), i18n::text(i18n::Message::switches)};
-    MemoryBuffer names_, pending_names_;
-    CheckedArray<std::array<char,96>> labels_, pending_labels_;
     CheckedArray<Pages::ViewState> pending_views_;
 public:
     CheckedArray<Pages::ViewState> views;
-    ModuleMenu menu;
     SetupUi setups;
     SongsUi song_ui;
 private:
@@ -411,8 +380,8 @@ private:
     }
     Songs &songs_;
     bool has_switches_;
+    bool resume_song_ui_ = false;
     int pending_song_step_ = 0;
     bool stopping_setup_ = false;
-    unsigned page_offset() const { return has_switches_ ? 3 : 2; }
 };
 } // namespace cntrl::ui

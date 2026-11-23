@@ -8,8 +8,7 @@ Language is a device-wide preference and
 remains selected when you change setups. Patch names, filenames, MIDI messages
 and authored text stay as written.
 
-Open the **Language page** in the utility-page cycle, or select that page through
-**Pages and tools**. It uses exactly two windows: the first is a scrolling list
+Open the **Language page** in the utility-page cycle. It uses exactly two windows: the first is a scrolling list
 of installed languages in their native names, with small country flags; the
 second has the Language caption and controls. On the default three-display
 layout these are the center and right windows. English uses the UK flag.

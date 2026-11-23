@@ -423,8 +423,7 @@ struct Actions {
     bool switches_open() const { return board.switches->open(); }
     void switch_button(unsigned i,bool pressed,uint32_t now) { board.switches->button(i,pressed,now); }
     bool controls_locked() const { return board.app->controls_locked; }
-    bool menu_open() const { return board.app->menu.open(); }
-    bool songs_open() const { return board.app->song_ui.open(); }
+    bool songs_open() const { return !board.app->setups.open() && board.app->song_ui.open(); }
     bool setup_open() const { return board.app->setups.open(); }
     void invoke(ui::Operation operation) { board.app->controller().executor().invoke(StatePatch{unsigned(operation)}); }
     void browse(bool reverse) { board.browse_page(reverse); }
@@ -627,17 +626,24 @@ public:
         frame(state);
         // The focused page owns button help. Each screen has its own page and
         // one-based window number because the layout can show several pages.
-        enum : uint8_t { no_overlay = 0, main_menu = 21, setups, songs, switch_editor };
         std::vector<uint8_t> help(2 + 2 * target::display_count, 0);
         help[0] = 11;
         if (!board.firmware_exited && !board.stock_pending && !host.showing_splash()) {
-            const uint8_t overlay = board.switch_editor_open() ? switch_editor
-                : application.song_ui.open() ? songs : application.setups.open() ? setups
-                : application.menu.open() ? main_menu : no_overlay;
+            const uint8_t overlay = application.utility_visible() ? 0
+                : application.setups.open() ? PageLayout::setups
+                : application.song_ui.open() ? PageLayout::songs
+                : board.switch_editor_open() ? PageLayout::switches : 0;
             if (overlay) {
                 help[1] = overlay;
                 for (unsigned i = 0; i < target::display_count; ++i) {
                     help[2 + 2 * i] = overlay;
+                    help[3 + 2 * i] = uint8_t(i + 1);
+                }
+            } else if (application.utility_visible()) {
+                const auto type = application.layout.page(application.utility_page)[0];
+                help[1] = type;
+                for (unsigned i = 0; i < PageLayout::maximum_windows(type, target::display_count); ++i) {
+                    help[2 + 2 * i] = type;
                     help[3 + 2 * i] = uint8_t(i + 1);
                 }
             } else {

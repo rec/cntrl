@@ -11,7 +11,7 @@ from pydantic import TypeAdapter
 from ..localization import catalogue
 from ..patch_chooser.layout import PAGE_TYPES
 
-TOOLTIP_PAGES = (*PAGE_TYPES, 'main-menu', 'setups', 'songs', 'switch-editor')
+TOOLTIP_PAGES = PAGE_TYPES
 
 
 @cache

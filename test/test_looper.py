@@ -57,7 +57,6 @@ def test_looper_views_share_one_budget_and_round_trip(target: models.Target) -> 
             models.Setup.model_validate(source).pages,
             0,
             0,
-            switches=bool(target.max_switches),
             regions=1,
         )
         + midi_processing.estimate_ram(b'', endpoint_count=len(target.midi_endpoints))
@@ -78,13 +77,11 @@ def test_looper_views_share_one_budget_and_round_trip(target: models.Target) -> 
         models.Setup.model_validate(source).pages,
         0,
         0,
-        switches=bool(target.max_switches),
         regions=1,
     ) - layout.estimate_ram(
         models.Setup.model_validate(exported).pages,
         0,
         0,
-        switches=bool(target.max_switches),
         regions=1,
     )
     assert (
