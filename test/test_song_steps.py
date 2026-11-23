@@ -26,7 +26,7 @@ def test_song_step_navigation_and_boundaries(
             'off': {'controller': 64, 'value': 0},
         },
         'B': {'controller': 7, 'value': 100},
-        'C': {'controller': 99, 'value': 1},
+        'C': {'name': 'Accent', 'on': {'controller': 99, 'value': 1}},
         'F': {'controller': 98, 'value': 1},
     }
     library = songs.Library(
@@ -54,7 +54,7 @@ def test_song_step_navigation_and_boundaries(
                     {
                         'controller': 20,
                         'value': n,
-                        'bindings': common,
+                        'bindings': {k: v for k, v in common.items() if k != 'C'},
                         'binding_view': {'status': 'A'},
                     }
                     for n in (4, 5)

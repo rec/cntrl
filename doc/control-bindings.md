@@ -78,6 +78,10 @@ The default MC setup uses F for all four navigation gestures.
 | Press and hold | Page forward |
 | Click, then press and hold | Page back |
 
+The F caption reads **Next**. C is available for scene bindings. To open Pages
+and tools during performance, browse to the Menu utility page if the setup
+includes one.
+
 You can supply explicit navigation chords in a setup. This example uses F and
 C for song navigation and two-button combinations for page navigation.
 

@@ -234,10 +234,8 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
             0xFFFF,
         }
         midi_count = len([m for m in session.messages if m.kind == 'midi'])
-        session.button('c', True)
-        session.advance(session.time_us + 600000)
-        session.button('c', False)
-        session.advance(session.time_us + 120000)
+        chord('b', 'e')  # Browse to Menu from the active scene.
+        press('c')  # Open Pages and tools from the Menu page.
         for _ in range(5):
             press('b')
         press('c')  # Switch to Patch Chooser through Pages and tools.

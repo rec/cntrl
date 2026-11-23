@@ -94,7 +94,10 @@ public:
             return true;
         }
         if (pages_.page() == Pages::Page::menu && input == controls_.confirm) {
-            if (pressed) application_.operation_ui(Operation::menu_open, platform_);
+            if (pressed) {
+                application_.pending_operation = 9;
+                application_.controls_locked = true;
+            }
             return true;
         }
         if (pages_.page() == Pages::Page::language) {

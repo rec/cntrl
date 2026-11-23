@@ -133,6 +133,8 @@ int main(int argc, char **argv) {
     auto hold = [&]() { press(5); wait(8); release(5); };
     songs.choose("Set"); app.song_ui.perform(); sample(0);
     if (argc == 3) {
+        press(2); wait(8); release(2);
+        assert(songs.boundary() && board.sent.empty() && app.song_ui.performing());
         hold();
         click(); hold();
         wait(5);
@@ -184,8 +186,8 @@ int main(int argc, char **argv) {
     next(); assert(songs.continuation().patch == 0 && board.sent.back().second == 1);
     assert(!std::strcmp(board.panes[1].lines[1].text, "One"));
     assert(!std::strcmp(board.panes[2].lines[1].text, "Set"));
-    assert(!std::strcmp(board.panes[2].lines[0].text, "F next / 2x back"));
-    assert(!std::strcmp(board.panes[2].lines[2].text, "Hold C: menu"));
+    assert(!std::strcmp(board.panes[2].lines[0].text, "Next"));
+    assert(!std::strcmp(board.panes[2].lines[2].text, "Accent"));
     const std::string scene = board.panes[0].lines[1].text;
     for (auto windows : {1u, 2u, 3u}) {
         board.windows = windows; board.switches.refresh(); sample(0);
@@ -197,7 +199,10 @@ int main(int argc, char **argv) {
     assert(songs.continuation().patch == 1 && board.sent.back().second == 2);
     assert(board.entry.start(board.document, unsigned(board.document.named_patch("backward")))); sample(0);
     assert(songs.continuation().patch == 0 && board.sent.back().second == 1);
-    auto count = board.sent.size(); press(2); release(2); assert(board.sent.size() == count);
+    auto count = board.sent.size();
+    press(2); wait(8); release(2);
+    assert(board.sent.size() == count + 1 && board.sent.back() == std::make_pair(99u, 1u));
+    assert(!app.menu.open() && songs.continuation().patch == 0);
     next(); next(); assert(songs.continuation().patch == 2 && board.sent.back().second == 3);
     previous(); assert(songs.continuation().patch == 1 && board.sent.back().second == 2);
     previous(); assert(songs.continuation().patch == 0 && board.sent.back().second == 1);
@@ -211,6 +216,8 @@ int main(int argc, char **argv) {
     press(1); release(1); assert(board.sent.size() == count); // Hidden map cannot trigger an action.
     release(0); assert(board.sent.back() == std::make_pair(64u, 0u));
     next(); assert(!std::strcmp(songs.current_name(), "Two") && board.sent.back().second == 4);
+    assert(!board.panes[2].lines[2].text[0]);
+    count = board.sent.size(); press(2); release(2); assert(board.sent.size() == count);
     count = board.sent.size(); previous(); assert(songs.boundary() && board.sent.size() == count);
     previous(); assert(songs.continuation().patch == 2 && board.sent.back().second == 3);
     next(); next(); next(); assert(board.sent.back().second == 5);

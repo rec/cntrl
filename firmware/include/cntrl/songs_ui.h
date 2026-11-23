@@ -71,7 +71,7 @@ public:
     }
 private:
     void handle_button(unsigned button, bool down) {
-        if (!down || locked_ || !open()) return;
+        if (!down || locked_ || !open() || (mode_ == performance && button == 2)) return;
         uint32_t before = songs_.generation();
         feedback_[0] = 0;
         if (mode_ == naming) { name_button(button); render(); return; }
@@ -87,8 +87,7 @@ private:
         else if (button < 2 && count) cursor_ = (cursor_ + count + (button == 0 ? -1 : 1)) % count;
         else if ((mode_ == library || mode_ == adding) && (button == 3 || button == 4)) jump(button == 3);
         else if (mode_ == performance) {
-            if (button == 2) { if (!songs_.next()) ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error()); else capture_.recalled(); }
-            else if (button == 3) { mode_ = editing; entry_ = cursor_; cursor_ = 0; }
+            if (button == 3) { mode_ = editing; entry_ = cursor_; cursor_ = 0; }
         } else if (mode_ == root && button == 2) {
             unsigned action = cursor_; cursor_ = 0;
             if (action == 0) mode_ = performance;
@@ -283,15 +282,12 @@ private:
         else prompt.pair(Role::previous_section, Role::next_section, mode_ == naming ? ui::i18n::text(ui::i18n::Message::position_action) : ui::i18n::text(ui::i18n::Message::jump_action));
         text(0, 3, prompt.text());
         prompt.clear().add(mode_ == performance ? Role::back : Role::confirm, mode_ == performance ? ui::i18n::text(ui::i18n::Message::next_action) : mode_ == adding ? ui::i18n::text(ui::i18n::Message::add_action) : ui::i18n::text(ui::i18n::Message::ok));
-        if (mode_ == performance) {
+        if (mode_ == performance && !hardware_.setup_navigation()) {
             const char *back = hardware_.control_label(Role::back);
             const char *action = ui::i18n::text(ui::i18n::Message::back);
-            if (hardware_.setup_navigation())
-                std::snprintf(panes[2].lines[2].text, 64, "%s+%s %s", hardware_.control_label(Role::confirm), back, action);
-            else std::snprintf(panes[2].lines[2].text, 64, "2x %s %s", back, action);
+            std::snprintf(panes[2].lines[2].text, 64, "2x %s %s", back, action);
             ui::utf8::copy(panes[2].lines[2].text, sizeof(panes[2].lines[2].text), panes[2].lines[2].text);
-            ui::i18n::format(panes[1].lines[3].text, 64, ui::i18n::Message::hold_menu, hardware_.control_label(Role::confirm));
-        } else prompt.add(Role::back, mode_ == adding ? ui::i18n::text(ui::i18n::Message::done_action) : ui::i18n::text(ui::i18n::Message::back));
+        } else if (mode_ != performance) prompt.add(Role::back, mode_ == adding ? ui::i18n::text(ui::i18n::Message::done_action) : ui::i18n::text(ui::i18n::Message::back));
         text(2, 3, prompt.text());
         if (const auto *nav = hardware_.setup_navigation(); mode_ == performance && nav) {
             if (nav[0]) text(2, 3, prompt.clear().chord(nav[0], ui::i18n::text(ui::i18n::Message::next_action)).text());

@@ -39,18 +39,8 @@ public:
         const bool defaults = !setup && controls_.back < controls_.count;
         route_chords(services, events, pressed, performing, consumed, assigned_pages, setup);
         route_default_navigation(services.actions(), events, performing, consumed || !defaults, assigned_pages);
-        if (defaults && performing) {
-            if (controls_.confirm < controls_.count) {
-                if (!consumed && !application_.controls_locked && pressed == (1u << controls_.confirm)
-                    && (events[controls_.confirm] & hold_event)) {
-                    application_.pending_operation = 9;
-                    application_.controls_locked = true;
-                }
-                events[controls_.confirm] = 0;
-            }
-            if (application_.song_boundary() && application_.binding_return_songs)
-                for (auto &event : events) event &= release_event;
-        }
+        if (defaults && application_.song_boundary() && application_.binding_return_songs)
+            for (auto &event : events) event &= release_event;
         if (!consumed) router_.route(services.actions(), events.data(), pressed, now, application_.utility_visible(), assigned_pages, defaults);
     }
     template<class Actions>
@@ -114,13 +104,9 @@ private:
             for (unsigned i = 0; i < 2; ++i)
                 if (auto mask = application_services_.scene_page_chord(i)) chords[2 + i] = mask;
         }
-        if (performing) {
-            const auto bit = [](unsigned input) -> uint8_t { return input < 8 ? uint8_t(1u << input) : 0; };
-            const uint8_t back = bit(controls_.back);
-            if (setup) {
-                if (!chords[0]) chords[0] = back;
-                if (!chords[1]) chords[1] = back | bit(controls_.confirm);
-            }
+        if (performing && !application_.utility_visible()) {
+            const uint8_t back = controls_.back < 8 ? uint8_t(1u << controls_.back) : 0;
+            if (setup && !chords[0]) chords[0] = back;
             for (unsigned i = 2; i < 4; ++i) {
                 if (!setup && (chords[i] & back)) chords[i] = 0;
                 for (unsigned song = 0; song < 2; ++song)
@@ -133,12 +119,6 @@ private:
             for (unsigned i = 0; i < controls_.count; ++i)
                 if ((members & (1u << i)) && (events[i] & press_event)) pending_members_ |= uint8_t(1u << i);
             if (!chord_used_) {
-                if (performing && controls_.confirm < controls_.count && pressed == (1u << controls_.confirm)
-                    && (pending_members_ & pressed) && (events[controls_.confirm] & hold_event)) {
-                    application_.pending_operation = 9;
-                    application_.controls_locked = true;
-                    chord_used_ = pressed;
-                }
                 for (unsigned i = 0; i < 4; ++i) {
                     if (!chords[i] || pressed != chords[i] || (pressed & (pressed - 1)) == 0) continue;
                     if (i < 2) application_.request_song_step(i == 1);

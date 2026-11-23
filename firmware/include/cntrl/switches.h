@@ -814,13 +814,9 @@ private:
                 const unsigned input = w + row * columns;
                 if (input >= hardware_.input_count()) continue;
                 auto &line = pane.lines[row ? 0 : 2];
-                const auto back = hardware_.control_input(ControlRole::back), confirm = hardware_.control_input(ControlRole::confirm);
-                if (!navigation && input == confirm) {
-                    ui::i18n::format(line.text, sizeof(line.text), ui::i18n::Message::hold_menu, hardware_.input_label(input));
-                } else if (!navigation && input == back) {
-                    std::snprintf(line.text, sizeof(line.text), "%s %s / 2x %s", hardware_.input_label(input),
-                        ui::i18n::text(ui::i18n::Message::next_action), ui::i18n::text(ui::i18n::Message::back));
-                    line.wrap = true;
+                const auto back = hardware_.control_input(ControlRole::back);
+                if (!navigation && input == back) {
+                    ui::copy_caption(line, ui::i18n::text(ui::i18n::Message::next));
                 } else {
                     unsigned masks[4] = {back < 8 ? 1u << back : 0, 0, page_chord(0), page_chord(1)};
                     if (navigation) for (unsigned i = 0; i < 4; ++i)
