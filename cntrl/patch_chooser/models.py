@@ -96,6 +96,14 @@ def infer_patch_type(value: object) -> object:
     return value
 
 
+def default_switch_off_value(value: object) -> object:
+    if isinstance(value, dict) and 'controller' in value and 'value' not in value:
+        patch = infer_patch_type(value)
+        if isinstance(patch, dict) and patch.get('type') == 'control-change':
+            return patch | {'value': 0}
+    return value
+
+
 def parse_binding(value: object) -> 'Patch | SwitchBinding | ExpressionAssignment':
     if isinstance(value, (SwitchBinding, ExpressionAssignment)):
         return value
@@ -816,7 +824,7 @@ class SwitchEnter(BaseModel, frozen=True):
 
 class ShiftedActions(BaseModel, frozen=True):
     on: Patch
-    off: Patch | None = None
+    off: Annotated[Patch | None, BeforeValidator(default_switch_off_value)] = None
     gestures: SwitchGestures | None = None
 
     model_config = ConfigDict(extra='forbid')
@@ -828,7 +836,7 @@ class SwitchBinding(BaseModel, frozen=True):
     style: Style | None = None
     mode: Literal['press', 'momentary', 'latched'] = 'press'
     on: Patch
-    off: Patch | None = None
+    off: Annotated[Patch | None, BeforeValidator(default_switch_off_value)] = None
     gestures: SwitchGestures | None = None
     enter: SwitchEnter | None = None
     exit: Patch | None = None

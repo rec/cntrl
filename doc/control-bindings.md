@@ -212,7 +212,7 @@ The expanded form uses the existing switch options, without repeating `button`:
 name = 'Sustain'
 mode = 'momentary'
 on = {controller = 64, value = 127}
-off = {controller = 64, value = 0}
+off = {controller = 64}
 
 [patches.verse.bindings.C]
 on = 'boost'
@@ -220,7 +220,8 @@ gestures = {long_press = {controller = 7, value = 120}, long_delay = '500 ms'}
 ```
 
 The modes are `press` (default), `momentary`, and `latched`. Momentary and
-latched bindings require `off`. Press bindings support the existing release,
+latched bindings require `off`. An inline MIDI Control Change in `off` defaults
+to value 0 when `value` is omitted. Press bindings support the existing release,
 long-press, double-tap and repeat settings, plus entry/exit hooks and shifted
 actions. `name` supplies a display label. MIDI routing uses the same explicit
 outputs/channels or single-instrument inference as any other patch.

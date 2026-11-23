@@ -23,7 +23,7 @@ def test_song_step_navigation_and_boundaries(
         'A': {
             'mode': 'momentary',
             'on': {'controller': 64, 'value': 127},
-            'off': {'controller': 64, 'value': 0},
+            'off': {'controller': 64},
         },
         'B': {'controller': 7, 'value': 100},
         'C': {'name': 'Accent', 'on': {'controller': 99, 'value': 1}},

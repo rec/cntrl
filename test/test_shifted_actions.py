@@ -43,7 +43,7 @@ def test_shifted_actions_round_trip_and_execute(
                 'off': {'controller': 10, 'value': 0},
                 'shifted': {
                     'on': {'controller': 11, 'value': 100},
-                    'off': {'controller': 11, 'value': 0},
+                    'off': {'type': 'control-change', 'controller': 11},
                 },
             },
             'latched': {
