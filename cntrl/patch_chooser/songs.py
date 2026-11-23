@@ -56,6 +56,7 @@ class Song(models.BindingScope, frozen=True):
     display_name: str | None = None
     image: str | None = None
     style: models.Style | None = None
+    seed: Annotated[int, Field(strict=True)] | None = None
     enter: (
         Annotated[dict[str, object], BeforeValidator(models.infer_patch_type)] | None
     ) = None
@@ -124,7 +125,7 @@ class Library(models.BindingScope, frozen=True):
     fonts: dict[str, str] = Field(default_factory=dict)
     tag_styles: dict[str, models.Style] = Field(default_factory=dict)
     fill_in_styles: Annotated[bool, Field(strict=True)] = True
-    seed: Annotated[int, Field(strict=True)] | None = 0
+    seed: Annotated[int, Field(strict=True)] | None = 23
     background_color: str = '0xFFF8D8'
     songs: list[Song] = Field(default_factory=list)
     setlists: list[Setlist] = Field(default_factory=list)
@@ -181,30 +182,12 @@ def encode(
     trace: data_files.Trace | None = None,
     movie_assets: dict[int, bytes] | None = None,
 ) -> bytes:
-    if library.fill_in_styles and library.seed is None:
-        library = library.model_copy(update={'seed': Random().getrandbits(63)})
     for items in (library.songs, library.setlists):
         names = [s.name for s in items]
         if len(set(names)) != len(names):
             raise SongLibraryError(
                 'song and setlist names must be unique within each collection'
             )
-    preferences = models.Setup(
-        fill_in_styles=library.fill_in_styles,
-        seed=library.seed,
-        background_color=library.background_color,
-    )
-    styles = (
-        formatting.cycle_styles(
-            preferences,
-            [s.name for s in library.songs],
-            target.model_copy(
-                update={'fonts': [f for f in target.fonts if f.id != 255]}
-            ),
-        )
-        if target is not None
-        else {}
-    )
     positions: list[list[int]] = []
     values_for_source: list[dict[str, object]] = []
     paths: list[str] = []
@@ -280,6 +263,9 @@ def encode(
             )
             if errors:
                 raise compiler_errors.CompilationError(errors)
+            if 'seed' not in library.model_fields_set and 'seed' in context:
+                # The embedded setup compiler validates the inherited value.
+                library = library.model_copy(update={'seed': context['seed']})
         port_modes = cast(dict[str, models.TrsMode], context['trs_ports'])
         auxiliary_switches = cast(dict[str, str], context['auxiliary_switches'])
         scopes = [
@@ -344,6 +330,25 @@ def encode(
             struct.unpack_from('<H', source, offset + (first + i) * 2)[0]
             for i in range(len(values_for_source))
         ]
+    if library.fill_in_styles and library.seed is None:
+        library = library.model_copy(update={'seed': Random().getrandbits(63)})
+    preferences = models.Setup(
+        fill_in_styles=library.fill_in_styles,
+        seed=library.seed,
+        background_color=library.background_color,
+    )
+    styles = (
+        formatting.styles(
+            preferences,
+            ((s.name, s.seed) for s in library.songs),
+            target.model_copy(
+                update={'fonts': [f for f in target.fonts if f.id != 255]}
+            ),
+            'song',
+        )
+        if target is not None
+        else {}
+    )
     records = []
     scope_roots = (
         {(k, n): r for k, n, r in resolved.binding_scopes(source)} if source else {}
@@ -353,7 +358,7 @@ def encode(
             models.Style(
                 foreground_color='black', background_color='white', font_name='Arimo'
             ),
-            styles.get(song.name),
+            styles.get((song.name, song.seed)),
             song.style,
         )
         font = (
@@ -438,6 +443,10 @@ def encode(
     ]
     if any(authored_styles):
         preferences['authored_styles'] = authored_styles
+    if song_seeds := {
+        str(i): s.seed for i, s in enumerate(library.songs) if s.seed is not None
+    }:
+        preferences['song_seeds'] = song_seeds
     if preferences:
         document = binary_format.unpack(data, binary_format.Kind.songs)
         data = document.model_copy(
@@ -524,6 +533,7 @@ def _decode(data: bytes) -> Library:
     _, song_headers, positions, sets, sources = _parse(data)
     context: dict[str, object] = {'instruments': {}, 'patches': {}}
     authored_styles: list[object] = []
+    song_seeds: dict[str, int] = {}
     artwork: list[tuple[str, str, bytes]] = []
     if data.startswith(binary_format.MAGIC):
         for record in binary_format.unpack(data, binary_format.Kind.songs).records:
@@ -532,6 +542,7 @@ def _decode(data: bytes) -> Library:
             if record.tag == binary_format.SONG_FORMATTING:
                 preferences = tomlkit.parse(record.data.decode()).unwrap()
                 authored_styles = preferences.pop('authored_styles', [])
+                song_seeds = preferences.pop('song_seeds', {})
                 context.update(preferences)
     instruments: dict[str, object] = {}
     definitions: dict[str, object] = {}
@@ -631,6 +642,7 @@ def _decode(data: bytes) -> Library:
             Song.model_validate(
                 {
                     'name': name,
+                    'seed': song_seeds.get(str(index)),
                     'navigation': resolved.patch(sources[0], binding).get('navigation')
                     if binding != 0xFFFFFFFF
                     else None,

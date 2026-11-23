@@ -155,11 +155,11 @@ def test_songs_fill_missing_styles_with_the_cycle_formatter(
     )
     value = library().model_copy(update={'seed': 42})
     first = value.songs[0].model_copy(
-        update={'style': models.Style(foreground_color='red')}
+        update={'style': models.Style(foreground_color='red'), 'seed': 7}
     )
     value = value.model_copy(update={'songs': [first, value.songs[1]]})
-    expected = formatting.cycle_styles(
-        models.Setup(seed=42), [s.name for s in value.songs], device
+    expected = formatting.styles(
+        models.Setup(seed=42), [(s.name, s.seed) for s in value.songs], device, 'song'
     )
     data = songs.encode(value, device, COMPANIONS)
     restored = songs.decode(data)
@@ -167,21 +167,38 @@ def test_songs_fill_missing_styles_with_the_cycle_formatter(
     assert restored.songs == value.songs
     core = binary_format.core(data, binary_format.Kind.songs)
     offset = 8
+    graphics_by_name: dict[str, tuple[int, int, int]] = {}
     for original in value.songs:
         header = songs.SONG.unpack_from(core, offset + songs.SELECTION.size)
+        graphics_by_name[original.name] = header[5:8]
+        generated = expected[original.name, original.seed]
         assert header[7] == next(
-            f.id for f in device.fonts if f.name == expected[original.name].font_name
+            f.id for f in device.fonts if f.name == generated.font_name
         )
-        assert header[6] == graphics.colors(expected[original.name], 0)[1]
+        assert header[6] == graphics.colors(generated, 0)[1]
         assert header[5] == graphics.rgb565(
             graphics.color(
                 original.style.foreground_color
                 if original.style is not None
-                else expected[original.name].foreground_color
+                else generated.foreground_color
             )
         )
         offset += songs.SELECTION.size * len(original.patches) + songs.SONG.size
     assert songs.encode(restored, device, COMPANIONS) == data
+    regrouped = value.model_copy(
+        update={
+            'songs': list(reversed(value.songs)),
+            'setlists': [songs.Setlist(name='Other', songs=['Simple'])],
+        }
+    )
+    reordered = binary_format.core(
+        songs.encode(regrouped, device, COMPANIONS), binary_format.Kind.songs
+    )
+    offset = 8
+    for original in regrouped.songs:
+        header = songs.SONG.unpack_from(reordered, offset + songs.SELECTION.size)
+        assert header[5:8] == graphics_by_name[original.name]
+        offset += songs.SELECTION.size * len(original.patches) + songs.SONG.size
     changed = restored.model_copy(update={'background_color': '0xE8F0FF'})
     updated = binary_format.core(
         songs.encode(changed, device, COMPANIONS), binary_format.Kind.songs
@@ -214,7 +231,7 @@ def test_song_authoring_inherits_the_rig_without_selecting_an_inherited_cycle(
 ) -> None:
     defaults = tmp_path / 'global.toml'
     defaults.write_text(
-        '[instruments.piano]\noutput="din"\nchannel=3\n'
+        'seed=912\n[instruments.piano]\noutput="din"\nchannel=3\n'
         '[patch_cycles]\nEarlier=[{instrument="piano",program=12}]\n'
     )
     monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
@@ -236,6 +253,7 @@ def test_song_authoring_inherits_the_rig_without_selecting_an_inherited_cycle(
     assert result.songs[0].patches[0]['program'] == 34
     assert result.songs[0].patches[0]['display_name'] == 'Chosen'
     assert result.instruments['piano']['channel'] == 3
+    assert result.seed == 912
     # Low-level encoding of an already resolved library must not read host defaults.
     with pytest.raises(
         compiler_errors.CompilationError, match='unknown or invalid instrument'

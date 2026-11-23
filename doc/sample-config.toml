@@ -2,7 +2,7 @@ pickup = false
 pickup_pairing_ms = 2
 loop_stop_reset_controls = false
 loop_stop_neutral_values = []
-seed = 0
+seed = 23
 fill_in_styles = true
 inline_patches = true
 background_color = "0xFFF8D8"
@@ -56,6 +56,8 @@ focus = "tools"
 [patches]
 
 [patch_cycles]
+
+[patch_cycle_seeds]
 
 [definitions]
 

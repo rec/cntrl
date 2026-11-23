@@ -356,6 +356,13 @@ def compile_show(
     for index, patch_cycle, path in compiler.browser:
         patch, presentation = compiler.presentation(index)
         label = presentation.display_name or presentation.name or compiler.labels[patch]
+        value = compiler.values[index]
+        identity = presentation.name or (
+            value.patch if isinstance(value, models.Reference) else label
+        )
+        autostyle = (
+            (identity, presentation.seed) if presentation.seed is not None else None
+        )
         view = display.DisplayPatch(
             context=path,
             values={
@@ -369,6 +376,7 @@ def compile_show(
                 'instrument': None,
             },
             style=presentation.style,
+            autostyle=autostyle,
             tags=presentation.tags,
         )
         program = compiler.programs.get(patch)
@@ -389,6 +397,7 @@ def compile_show(
                 update={
                     'context': path,
                     'style': presentation.style,
+                    'autostyle': autostyle,
                     'tags': presentation.tags,
                     'values': program_view.values
                     | {'patch_cycle.name': patch_cycle, 'display_name': label},

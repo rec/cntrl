@@ -133,8 +133,9 @@ document, until the end of the core. External document selections use source
 index `0xffffffff`; captured source and node indices are zero based.
 Order, repetitions and node identities are significant.
 
-Song formatting metadata stores `fill_in_styles`, `seed`, `background_color`
-and an `authored_styles` list aligned with song record order. Each style table
+Song formatting metadata stores `fill_in_styles`, `seed`, `background_color`,
+an `authored_styles` list aligned with song record order, and a `song_seeds`
+table keyed by zero-based song record index. Each style table
 contains only authored properties; an empty or absent entry has no overrides.
 Renames and setlist edits preserve this order, and new pedal captures append.
 Keeping authored properties separate from resolved core graphics lets later

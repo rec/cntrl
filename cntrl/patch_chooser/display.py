@@ -16,6 +16,7 @@ class DisplayPatch(BaseModel, frozen=True):
     context: str = 'patch'
     values: dict[str, str | int | bool | None]
     style: models.Style | None = None
+    autostyle: tuple[str, int] | None = None
     program_style: models.Style | None = None
     tags: list[str] = Field(default_factory=list)
     program_tags: list[str] = Field(default_factory=list)
@@ -37,14 +38,19 @@ def compile_display(
         # Persist the one-time choice so downloaded configurations recompile to
         # the same appearance, even when the original input requested randomness.
         show = show.model_copy(update={'seed': Random().getrandbits(63)})
-    cycles = list(
-        dict.fromkeys(
-            str(p.values['patch_cycle.name'])
+    cycles = formatting.styles(
+        show,
+        (
+            (n, show.patch_cycle_seeds.get(n))
             for p in patches
-            if p.values.get('patch_cycle.name')
-        )
+            if isinstance(n := p.values.get('patch_cycle.name'), str) and n
+        ),
+        target,
+        'cycle',
     )
-    generated_styles = formatting.cycle_styles(show, cycles, target)
+    patch_styles = formatting.styles(
+        show, (p.autostyle for p in patches if p.autostyle is not None), target, 'patch'
+    )
     named_fields = {k for p in patches for k in p.values if k.startswith('names.')}
     counter_fields = {f'counters.{n}' for n in show.counters}
     overlap = set(show.parameters) & (set(FIELDS) | named_fields | counter_fields)
@@ -86,6 +92,13 @@ def compile_display(
     contexts: list[str] = []
     paired_lines: list[list[int]] = []
     for patch in patches:
+        cycle = str(patch.values.get('patch_cycle.name') or '')
+        cycle_style = cycles.get((cycle, show.patch_cycle_seeds.get(cycle)))
+        patch_style = (
+            patch_styles.get(patch.autostyle, cycle_style)
+            if patch.autostyle is not None
+            else cycle_style
+        )
         tag = tag_style(patch.program_tags + patch.tags, show.tag_styles)
         for window in windows:
             page = (
@@ -151,8 +164,10 @@ def compile_display(
                     )
                 content = name in PATCH_FIELDS or name.startswith(('switch.', 'names.'))
                 style = merge_style(
-                    generated_styles.get(str(patch.values.get('patch_cycle.name')))
-                    if content or name in ('patch_cycle.name', 'tags')
+                    patch_style
+                    if content or name == 'tags'
+                    else cycle_style
+                    if name == 'patch_cycle.name'
                     else None,
                     base,
                     window.style,
@@ -323,7 +338,7 @@ def compile_display(
     source = {
         k: v
         for k, v in show.model_dump(exclude_none=True).items()
-        if k in SOURCE_FIELDS and (k != 'bindings' or v)
+        if k in SOURCE_FIELDS and (k not in ('bindings', 'patch_cycle_seeds') or v)
     }
     if show.pickup_pairing_ms == 2:
         source.pop('pickup_pairing_ms', None)
@@ -510,6 +525,7 @@ SOURCE_FIELDS = (
     'idle_movie',
     'pages',
     'seed',
+    'patch_cycle_seeds',
     'fill_in_styles',
     'background_color',
     'foreground_brightness_limit',

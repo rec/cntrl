@@ -35,34 +35,45 @@ patch and field styles still override these generated defaults per property.
 Global parameter and switch fields keep their existing formatting.
 
 ```toml
-seed = 0
+seed = 23
 fill_in_styles = true
 background_color = '0xFFF8D8'
 ```
 
-Every cycle uses the same pale yellow background by default. Each cycle
-also gets a random available font, shared with its programs. All available font
-families are used before repeating, with adjacent repeats avoided when possible.
-Available families include target fonts and configured `[fonts]` entries.
+Every cycle uses the same pale yellow background by default. Its name and
+effective seed determine its font and foreground color. Available font families
+include target fonts and configured `[fonts]` entries. Reordering, adding or
+removing cycles leaves existing choices stable. Fonts and colors can repeat.
 
-For N cycles, foreground generation starts with the configured background
-color as an anchor. It greedily chooses N other colors,
-maximizing each new color's minimum squared RGB distance from the anchor and
-earlier choices. Candidates are a bounded RGB grid with channel values
+Foreground colors come from an RGB grid with channel values
 0, 32, 64, 96, 128, 160, 192, 224 and 255, restricted to weighted RGB brightness
 below 50%: `(0.299 R + 0.587 G + 0.114 B) / 255 < 0.5`. This is an approximate
-perceived-brightness measure, not linear-light luminance. Explicitly authored
-foreground colors are unchanged. This is a farthest-point heuristic,
-not a guarantee of the global optimum. The N foregrounds are distinct; the
-background anchor is not assigned to a cycle. Existing contrast warnings remain.
+perceived-brightness measure. The configured contrast threshold further
+restricts eligible colors.
 
-One local random generator controls all these choices. Integer `seed` defaults
-to 0, making repeated compilation deterministic. Python callers may pass
-`seed=None` for a fresh one-time seed; TOML has no null literal. The compiled
-setup records that chosen seed, so downloading and recompiling preserves the
-appearance. Set `fill_in_styles = false` to retain only authored styling and
-application defaults. Styles are generated during compilation, with no pedal
-random generator or new firmware record format.
+The top-level integer `seed` defaults to 23. Set it in `global.toml` for
+shared defaults or in the setup to override it. To change one cycle, put its
+seed under `[patch_cycle_seeds]`. Patch Chooser patch lines share their cycle's
+style by default. Give a patch its own `seed` to generate a style for those
+lines from the patch's name and seed. The cycle heading keeps its cycle style.
+Changing an object's name can change its generated style.
+
+```toml
+[patch_cycle_seeds]
+wind = 9
+
+[[patch_cycles.wind]]
+type = 'program-change'
+instrument = 'synth'
+program = 1
+name = 'Flute'
+seed = 42
+```
+
+Python callers may pass top-level `seed=None` for a fresh seed per compilation.
+TOML has no null literal. The compiled setup records the chosen seed, so
+downloading and recompiling preserves the appearance. Set
+`fill_in_styles = false` to use authored styling and application defaults.
 
 ## Automatic song styles
 
@@ -72,8 +83,10 @@ Put each scene's entry actions and button bindings in its named patch.
 See [Create a song from scenes](control-bindings.md#create-a-song-from-scenes).
 
 Song libraries also accept `fill_in_styles`, `seed` and `background_color`.
-The defaults match setups. The same cycle formatter assigns missing song
-foregrounds and font families, using the controller's embedded fonts. Authored
+The defaults match setups. Each song's name and effective seed determine its
+generated style, using the controller's embedded fonts. A song keeps its style
+across setlists and when its position changes. A song's own `seed` overrides
+the library seed for that song. Authored
 song style properties override generated properties individually. With
 `fill_in_styles = false`, unspecified song properties use black text, a white
 background and Arimo.

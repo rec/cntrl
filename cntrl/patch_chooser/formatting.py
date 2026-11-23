@@ -1,75 +1,51 @@
-"""Generate missing cycle formatting without changing authored styles."""
+"""Generate stable fallback styles for named objects."""
 
 import re
+from collections.abc import Iterable
+from hashlib import blake2b
 from itertools import product
 from random import Random
 
 from . import graphics, models
 
 
-def cycle_styles(
-    show: models.Setup, names: list[str], target: models.Target
-) -> dict[str, models.Style]:
-    if not show.fill_in_styles or not names:
+def styles(
+    show: models.Setup,
+    objects: Iterable[tuple[str, int | None]],
+    target: models.Target,
+    kind: str,
+) -> dict[tuple[str, int | None], models.Style]:
+    if not show.fill_in_styles or not (keys := dict.fromkeys(objects)):
         return {}
     background = graphics.color(show.background_color)
-    random = Random(show.seed)
-    # Keep weighted RGB brightness below the configured limit. Greedy maximin selection
-    # spreads colors away from both the background anchor and earlier choices.
+    channels = [*range(0, 256, 32), 255]
     candidates = [
         c
-        for c in product([*range(0, 256, 32), 255], repeat=3)
+        for c in product(channels, channels, channels)
         if 299 * c[0] + 587 * c[1] + 114 * c[2]
         < show.foreground_brightness_limit * 255_000
+        and graphics.distance(c, background) > show.contrast
     ]
-    random.shuffle(candidates)
-    # Preserve the random state used for font selection when filtering colors.
-    candidates = [
-        c
-        for c in candidates
-        if graphics.distance((c[0], c[1], c[2]), background) > show.contrast
-    ]
-    if len(candidates) < len(names):
+    if not candidates:
         raise ValueError(
-            'foreground brightness limit and contrast leave too few '
-            'distinct cycle colors'
+            'foreground brightness limit and contrast leave no eligible colors'
         )
-    distances = [
-        sum((a - b) ** 2 for a, b in zip(c, background, strict=True))
-        for c in candidates
-    ]
-    foregrounds: list[str] = []
-    for _ in names:
-        index = max(range(len(candidates)), key=lambda i: distances[i])
-        chosen = candidates.pop(index)
-        distances.pop(index)
-        foregrounds.append('0x%02X%02X%02X' % chosen)
-        distances = [
-            min(d, sum((a - b) ** 2 for a, b in zip(c, chosen, strict=True)))
-            for c, d in zip(candidates, distances, strict=True)
-        ]
-    fonts = list(
-        dict.fromkeys(
-            [
-                f.name
-                for f in target.fonts
-                if f.name not in ('AtkinsonNextSemiBold', 'TamzenBold7x13')
-            ]
-            + [re.sub(r'@[0-9.e+-]+x$', '', n) for n in show.fonts]
-        )
+    fonts = sorted(
+        {
+            f.name
+            for f in target.fonts
+            if f.name not in ('AtkinsonNextSemiBold', 'TamzenBold7x13')
+        }
+        | {re.sub(r'@[0-9.e+-]+x$', '', n) for n in show.fonts}
     )
-    available: list[str] = []
-    previous: str | None = None
-    result: dict[str, models.Style] = {}
-    for name, foreground in zip(names, foregrounds, strict=True):
-        if not available:
-            available = random.sample(fonts, len(fonts))
-            if len(available) > 1 and available[-1] == previous:
-                available[0], available[-1] = available[-1], available[0]
-        previous = available.pop()
-        result[name] = models.Style(
-            font_name=previous,
+    result: dict[tuple[str, int | None], models.Style] = {}
+    for name, local_seed in keys:
+        seed = show.seed if local_seed is None else local_seed
+        identity = blake2b(f'{seed}:{kind}:{name}'.encode(), digest_size=16)
+        random = Random(int.from_bytes(identity.digest(), 'big'))
+        result[name, local_seed] = models.Style(
+            font_name=random.choice(fonts),
             background_color=show.background_color,
-            foreground_color=foreground,
+            foreground_color='0x%02X%02X%02X' % random.choice(candidates),
         )
     return result

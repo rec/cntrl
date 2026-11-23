@@ -18,6 +18,7 @@ from cntrl.patch_chooser import (
     data_files,
     device_settings,
     display,
+    formatting,
     models,
     resolved,
     setup_bundle,
@@ -83,7 +84,7 @@ def test_switch_statuses_have_prepared_runs_and_unicode_labels() -> None:
         assert any(text in m.runs for f in faces for m in f.sizes.values())
 
 
-def test_autoformatting_prepares_every_bundled_outline_family() -> None:
+def test_autoformatting_prepares_the_selected_outline_families() -> None:
     target = models.Target.model_validate(
         data_files.load_target(
             data_files.DataFile(
@@ -96,7 +97,7 @@ def test_autoformatting_prepares_every_bundled_outline_family() -> None:
     source = compiler_inputs.read_document(ROOT / 'firmware/test/show.json')
     assert isinstance(source, dict)
     source['fill_in_styles'] = True
-    source['patch_cycles'] = {
+    cycles = {
         f'CYCLE {i}': [
             {
                 'type': 'program-change',
@@ -107,6 +108,7 @@ def test_autoformatting_prepares_every_bundled_outline_family() -> None:
         ]
         for i in range(len(target.fonts))
     }
+    source['patch_cycles'] = cycles
     font_data: dict[int, bytes] = {}
     data = compiler.compile_show(
         source,
@@ -116,10 +118,15 @@ def test_autoformatting_prepares_every_bundled_outline_family() -> None:
         font_data,
     )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
+    styles = formatting.styles(
+        models.Setup(), ((n, None) for n in cycles), target, 'cycle'
+    )
+    selected = {s.font_name for s in styles.values()}
+    assert exported['fonts']
     assert set(exported['fonts']) == {
         f.name if f.horizontal_scale == 1 else f'{f.name}@{f.horizontal_scale}x'
         for f in target.fonts
-        if f.name not in target.ui_fonts
+        if f.name in selected and f.name not in target.ui_fonts
     }
     for name, path in exported['fonts'].items():
         key = int(Path(path).stem, 16)

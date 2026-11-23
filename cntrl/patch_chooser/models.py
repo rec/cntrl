@@ -207,6 +207,7 @@ class Presentation(BindingScope, frozen=True):
     name: str | None = None
     display_name: str | None = None
     style: Style | None = None
+    seed: Annotated[int, Field(strict=True)] | None = None
     tags: Annotated[list[str], BeforeValidator(parse_tags)] = Field(
         default_factory=list
     )
@@ -1270,9 +1271,12 @@ class Setup(BindingScope, frozen=True):
     instruments: dict[str, object] = Field(default_factory=dict)
     patches: dict[str, object] = Field(default_factory=dict)
     patch_cycles: dict[str, object] = Field(default_factory=dict)
+    patch_cycle_seeds: dict[str, Annotated[int, Field(strict=True)]] = Field(
+        default_factory=dict
+    )
     definitions: Definitions | None = None
     fonts: dict[str, str] = Field(default_factory=dict)
-    seed: Annotated[int, Field(strict=True)] | None = 0
+    seed: Annotated[int, Field(strict=True)] | None = 23
     fill_in_styles: Annotated[bool, Field(strict=True)] = True
     inline_patches: Annotated[bool, Field(strict=True)] = True
     background_color: str = '0xFFF8D8'

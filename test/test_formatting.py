@@ -1,6 +1,5 @@
 """Seeded, optional cycle styles and their compiled presentation."""
 
-from collections import Counter
 from pathlib import Path
 from random import getstate
 
@@ -28,38 +27,37 @@ def target() -> models.Target:
 
 
 def test_custom_foreground_brightness_limit(target: models.Target) -> None:
-    styles = formatting.cycle_styles(
-        models.Setup(foreground_brightness_limit=0.3), ['a', 'b', 'c'], target
+    styles = formatting.styles(
+        models.Setup(foreground_brightness_limit=0.3),
+        [(n, None) for n in ('a', 'b', 'c')],
+        target,
+        'cycle',
     )
     for s in styles.values():
         assert s.foreground_color is not None
         red, green, blue = graphics.color(s.foreground_color)
         assert 299 * red + 587 * green + 114 * blue < 0.3 * 255000
-    with pytest.raises(ValueError, match='too few'):
-        formatting.cycle_styles(
-            models.Setup(foreground_brightness_limit=0.0001), ['a', 'b'], target
+    with pytest.raises(ValueError, match='no eligible colors'):
+        formatting.styles(
+            models.Setup(foreground_brightness_limit=0.0001, background_color='black'),
+            [('a', None)],
+            target,
+            'cycle',
         )
 
 
-def test_seeded_cycles_balance_fonts_and_keep_unique_colors(
+def test_seeded_cycles_keep_their_styles_when_neighbors_change(
     target: models.Target,
 ) -> None:
-    names = [str(i) for i in range(12)]
+    keys = [(str(i), None) for i in range(12)]
     state = getstate()
     show = models.Setup()
-    styles = formatting.cycle_styles(show, names, target)
-    assert formatting.cycle_styles(show, names, target) == styles
+    styles = formatting.styles(show, keys, target, 'cycle')
+    regrouped = formatting.styles(
+        show, [*reversed(keys[2:]), ('new cycle', None)], target, 'cycle'
+    )
+    assert {k: regrouped[k] for k in keys[2:]} == {k: styles[k] for k in keys[2:]}
     assert getstate() == state
-    counts = Counter(s.font_name for s in styles.values())
-    assert max(counts.values()) - min(counts.values()) <= 1
-    if len(target.fonts) > 1:
-        assert all(
-            a.font_name != b.font_name
-            for a, b in zip(
-                list(styles.values()), list(styles.values())[1:], strict=False
-            )
-        )
-    assert len({s.foreground_color for s in styles.values()}) == len(names)
     assert all(
         s.background_color == show.background_color == '0xFFF8D8'
         for s in styles.values()
@@ -72,14 +70,17 @@ def test_seeded_cycles_balance_fonts_and_keep_unique_colors(
         > show.contrast
         for s in styles.values()
     )
-    assert styles != formatting.cycle_styles(models.Setup(seed=1), names, target)
+    assert styles != formatting.styles(models.Setup(seed=1), keys, target, 'cycle')
 
 
 def test_background_anchor_excludes_its_color(
     target: models.Target,
 ) -> None:
-    styles = formatting.cycle_styles(
-        models.Setup(background_color='black'), ['a', 'b', 'c'], target
+    styles = formatting.styles(
+        models.Setup(background_color='black'),
+        [(n, None) for n in ('a', 'b', 'c')],
+        target,
+        'cycle',
     )
     assert all(s.background_color == 'black' for s in styles.values())
     assert all(s.foreground_color != '0x000000' for s in styles.values())
@@ -87,7 +88,7 @@ def test_background_anchor_excludes_its_color(
 
 def test_impossible_generated_contrast_is_reported(target: models.Target) -> None:
     with pytest.raises(ValueError, match='brightness limit and contrast'):
-        formatting.cycle_styles(models.Setup(contrast=1), ['a'], target)
+        formatting.styles(models.Setup(contrast=1), [('a', None)], target, 'cycle')
 
 
 @pytest.mark.parametrize('seed', [0, 1, 42])
@@ -95,8 +96,8 @@ def test_generated_foregrounds_stay_below_half_brightness(
     seed: int,
     target: models.Target,
 ) -> None:
-    styles = formatting.cycle_styles(
-        models.Setup(seed=seed), [str(i) for i in range(64)], target
+    styles = formatting.styles(
+        models.Setup(seed=seed), [(str(i), None) for i in range(64)], target, 'cycle'
     )
     for style in styles.values():
         assert style.foreground_color is not None
@@ -106,9 +107,12 @@ def test_generated_foregrounds_stay_below_half_brightness(
 
 def test_disabled_filling_does_not_generate_styles(target: models.Target) -> None:
     assert (
-        formatting.cycle_styles(models.Setup(fill_in_styles=False), ['a'], target) == {}
+        formatting.styles(
+            models.Setup(fill_in_styles=False), [('a', None)], target, 'cycle'
+        )
+        == {}
     )
-    assert formatting.cycle_styles(models.Setup(), [], target) == {}
+    assert formatting.styles(models.Setup(), [], target, 'cycle') == {}
 
 
 @pytest.mark.parametrize(
@@ -130,7 +134,9 @@ def test_formatting_settings_are_validated(values: dict[str, object]) -> None:
 
 def test_invalid_background_is_reported(target: models.Target) -> None:
     with pytest.raises(ValueError, match='unknown color'):
-        formatting.cycle_styles(models.Setup(background_color='wrong'), ['a'], target)
+        formatting.styles(
+            models.Setup(background_color='wrong'), [('a', None)], target, 'cycle'
+        )
 
 
 @pytest.mark.parametrize('seed', [0, None])
@@ -139,7 +145,8 @@ def test_generated_formatting_survives_export(
 ) -> None:
     show = compiler_inputs.read_document(FIXTURES / 'show.json')
     assert isinstance(show, dict)
-    show.update(fill_in_styles=True, seed=seed)
+    show.update(fill_in_styles=True, seed=seed, patch_cycle_seeds={'synth': 72})
+    show['patch_cycles']['wind'][0]['seed'] = 12
     data = compiler.compile_show(
         show, compiler_inputs.read_document(FIXTURES / 'definitions.json'), [], target
     )
@@ -147,6 +154,8 @@ def test_generated_formatting_survives_export(
     assert isinstance(exported['seed'], int)
     if seed is not None:
         assert exported['seed'] == seed
+    assert exported['patch_cycle_seeds'] == {'synth': 72}
+    assert exported['patch_cycles']['wind'][0]['seed'] == 12
     assert compiler.compile_show(exported, {}, [], target) == data
 
 
@@ -169,6 +178,32 @@ def test_cycle_formatting_is_shared_without_overriding_authored_properties(
     assert all(r[1][4] == graphics.rgb565((255, 0, 0)) for r in first + second)
     assert {r[1][5] for r in first + second} == {first[0][1][5]}
     assert second[1][1][0] == next(f.id for f in target.fonts if f.name == 'Arimo')
+
+
+def test_local_patch_seed_styles_only_its_content(target: models.Target) -> None:
+    patches = [
+        display.DisplayPatch(values={'patch_cycle.name': 'wind', 'display_name': n})
+        for n in ('Flute', 'Oboe')
+    ]
+    plain = models.Setup()
+    local = models.Setup(patch_cycle_seeds={'wind': 9})
+    _, default_refs, default_block = display.compile_display(plain, patches, target)
+    _, local_refs, local_block = display.compile_display(local, patches, target)
+    assert (
+        lines(local_block, local_refs[0][0])[0]
+        != lines(default_block, default_refs[0][0])[0]
+    )
+
+    patches[0] = patches[0].model_copy(update={'autostyle': ('Flute', 42)})
+    _, refs, block = display.compile_display(local, patches, target)
+    seeded = lines(block, refs[0][0])
+    inherited = lines(local_block, local_refs[0][0])
+    assert seeded[0] == inherited[0]
+    assert (seeded[1][1][0], seeded[1][1][4]) != (
+        inherited[1][1][0],
+        inherited[1][1][4],
+    )
+    assert lines(block, refs[1][0]) == lines(local_block, local_refs[1][0])
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / 'firmware/test'
