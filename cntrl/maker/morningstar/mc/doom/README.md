@@ -1,10 +1,19 @@
-# MC6 Pro Doom engine qualification
+# Standalone Doom demo for the MC6 Pro
 
-DMC100 Doom is the first engine candidate. It already supports single-map
-Freedoom packs and renders the 3D view at 160 logical columns. Its reported
-32 KiB RAM figure applies to the upstream build and its storage and overlay
-scheme. The MC6 Pro port still needs its own memory and timing measurements.
+The demo boots directly into Freedoom Phase 1 E1M1 and renders a 160×128
+image on the centre display. The firmware runs silently, reads game data
+from flash and uses USB Serial for diagnostics. It has no MIDI runtime
+or writable game storage.
 [DMC100 Doom](https://github.com/ArturBieniek4/DMC100-Doom)
+
+| Switch | Action |
+| --- | --- |
+| A | Turn left |
+| B | Move forward |
+| C | Turn right |
+| D | Fire |
+| E | Move backward |
+| F | Use doors and switches |
 
 ## Reproduce the asset check
 
@@ -42,12 +51,48 @@ pack, before the engine, any extra buffers represented in flash, alignment
 and other build overhead. Use a fresh linker map to decide the real budget.
 [Linker region](../boot_switch.py) · [Packaged application manifest](../distribution/manifest.toml)
 
-## Integration decision
+## Build and check the demo
 
-DMC100 Doom's engine is GPL-2.0-or-later. CNTRL's first-party licensing is
-still open in the issue inventory. Decide whether to use a standalone GPL
-demo build or approve GPL-compatible licensing for a combined CNTRL build
-before linking the engine into CNTRL. A standalone demo would return to
-normal controller operation by booting CNTRL again. Returning directly to
-the previous page requires in-process integration.
-[Open licensing issue](../../../../../plan/issues.md)
+With the E1M1 pack and generated sources in the pinned DMC100 checkout,
+apply [the arena patch](dmc100-arena.patch) there with `git apply`. The
+patch allows this build to size the level arena at 64 KiB. The engine's
+native overlay tables link directly into the standalone executable.
+
+Run this from the repository root with absolute paths for the DMC100
+checkout and output directory. Set `TOOLS` to the installed Teensy SDK
+directory if it lives outside this worktree. The build uses the patched
+Teensy 1.62.0 core and the validated MC6 Pro FlexSPI hardware configuration.
+[Toolchain setup](../firmware/README.md#historical-diagnostic-build)
+
+```sh
+make -C cntrl/maker/morningstar/mc/doom \
+  DMC=/absolute/path/to/DMC100-Doom OUT=/absolute/path/to/build \
+  TOOLS=/absolute/path/to/cntrl/cntrl/maker/morningstar/mc/firmware/.tools \
+  check firmware
+```
+
+`check` runs the same engine, storage reader, input mapping and pixel
+conversion on the host. It checks startup, rendering through tic 64, all six
+logical pedal inputs, and release of forward and use. `firmware` builds an ARM
+ELF and an Intel HEX in the output directory's `elf/` subdirectory, then
+compares the decoded HEX bytes against the ELF flash bytes. The build disables
+the Teensy Loader and encryption hooks.
+
+The first build produced a 4,345,856-byte flash image and passed the MC6 Pro
+upload helper's structural image validation. The linker reports 125,568 bytes
+for RAM1 stack and local variables and 511,840 bytes for the RAM2 heap. The
+demo's boot, display, switches and frame rate on the pedal still need live
+verification.
+
+## Installation and source
+
+The demo occupies the application flash from `0x60000000`. Installing it
+would replace the current boot image. Power cycling restarts the demo.
+Returning to CNTRL requires reinstalling the previous verified image, so
+keep that image and a way to enter PROGRAM mode available for hardware
+bring-up. [MC6 Pro upload and recovery](../firmware/upload-helper.md)
+
+The demo adapter and DMC100 Doom use GPL-2.0-or-later. The standalone
+build uses the open Teensy core and Freedoom assets. Keep their respective
+notices and the corresponding source with any distributed build. The
+firmware image and generated game pack are local build outputs.

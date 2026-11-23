@@ -5,6 +5,12 @@ build should start an original test map or a compatible Freedoom map, render
 on the centre display, and support movement, turning, firing and using doors
 from the six footswitches. Keep the first build silent and single-player.
 
+The standalone implementation now boots Freedoom E1M1 in a native check
+and builds an MC6 Pro firmware image. The build guide records the button
+layout and measured memory use. Hardware bring-up and recovery verification
+remain open. The in-CNTRL lifecycle below describes the original integration
+plan. [Standalone demo](../cntrl/maker/morningstar/mc/doom/README.md)
+
 ## Starting point
 
 - The MC6 Pro uses an i.MX RT1062 and has three 160×128 RGB565 drawing areas.

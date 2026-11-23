@@ -1,0 +1,13 @@
+diff --git a/port/obj/things.h b/port/obj/things.h
+--- a/port/obj/things.h
++++ b/port/obj/things.h
+@@ -174,7 +174,9 @@
+ // The level arena ends at O_ARENA_END: the end of SRAM on the meter, an
+ // array with room for the promote everything mode on the host.
+ #ifdef DMC_STATS
++#ifndef O_ARENA_MAX
+ #define O_ARENA_MAX	(512 * 1024)
++#endif
+ extern int		o_arena_words[O_ARENA_MAX / 4];
+ #define O_ARENA_END	((byte *) o_arena_words + O_ARENA_MAX)
+ #else
