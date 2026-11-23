@@ -1642,6 +1642,9 @@ def run_window(
     session: Session, *, caret_blink_interval: int = 500, doom_host: Path | None = None
 ) -> None:
     application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    QtWidgets.QApplication.setWindowIcon(
+        QtGui.QIcon(str(Path(__file__).with_name('eq-dial.png')))
+    )
     previous_hook = sys.excepthook
     window: EmulatorWindow | None = None
     reporting = False
