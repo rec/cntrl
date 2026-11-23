@@ -100,8 +100,7 @@ From the repository root, export the two separately linked applications
 and then use the standard MC6 Pro flash workflow.
 
 ```sh
-python -m cntrl.maker.morningstar.mc.build_target \
-  --source-root /absolute/path/to/cntrl \
+cntrl build --target-dir cntrl/maker/morningstar/mc \
   --output /absolute/path/to/doom-export \
   --doom-image /absolute/path/to/build/relocated/elf/doom_demo.ino.hex
 cntrl flash --controller mc6-pro \

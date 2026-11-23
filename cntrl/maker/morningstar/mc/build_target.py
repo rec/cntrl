@@ -78,12 +78,9 @@ def run(command: Build) -> None:
         command.output / 'compiler-options.toml',
     )
     release.export(command.output, command.source_root, components, doom=doom)
-    if doom is None:
-        release.prepare(command.output / 'distribution', command.output)
+    release.prepare(command.output / 'distribution', command.output)
     if command.publish:
         release.publish(command.output, command.source_root)
-    if doom is not None:
-        return  # The device installer composes the stock-dependent image.
     (command.output / 'build.toml').write_text(
         tomlkit.dumps(
             {

@@ -18,6 +18,8 @@ class Build(BaseModel, frozen=True):
     diagnostics: bool = False
     publish: bool = False
     """Publish verified own-code resources into the selected adapter's package."""
+    doom_image: Path | None = None
+    """Include a relocated Doom image in an MC6 Pro build."""
 
 
 class Artifacts(BaseModel, frozen=True):
@@ -82,6 +84,11 @@ def run(command: Build) -> Artifacts:
             str(output),
             *(['--diagnostics'] if command.diagnostics else []),
             *(['--publish'] if command.publish else []),
+            *(
+                ['--doom-image', str(command.doom_image.resolve())]
+                if command.doom_image
+                else []
+            ),
         ],
         check=True,
         env=environment,
