@@ -1035,10 +1035,19 @@ def test_doom_handoff_displays_game_frames_and_accepts_pedals(
     try:
         session.doom = True
         window.display_updates()
-        assert not window.canvas.frames
+        assert set(window.canvas.frames) == {'left', 'right'}
+        left = window.canvas.frames['left']
+        right = window.canvas.frames['right']
+        assert left != right
+        for card in (left, right):
+            assert len(card) == 160 * 128 * 2
+            assert card[2 * 160 * 64 : 2 * 160 * 65] == bytes(2 * 160)
+            assert any(card[: 2 * 160 * 40])
+            assert any(card[2 * 160 * 100 :])
         wait_for(lambda: 'center' in window.canvas.frames)
         initial = window.canvas.frames['center']
-        assert set(window.canvas.frames) == {'center'}
+        assert window.canvas.frames['left'] == left
+        assert window.canvas.frames['right'] == right
         assert len(initial) == 160 * 128 * 2
         assert len(set(initial)) > 1
         click(window.canvas, 'b', QtCore.Qt.MouseButton.RightButton)

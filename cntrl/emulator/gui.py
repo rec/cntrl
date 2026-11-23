@@ -14,7 +14,7 @@ from types import TracebackType
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .. import models
-from ..maker.morningstar.mc.emulator import doom
+from ..maker.morningstar.mc.emulator import doom, doom_cards
 from .backend import Session
 from .corrections import Correction, CorrectionBatch, TranslationRegion, issue_body
 from .host_midi import MIDI_ERRORS, HostMidi
@@ -1429,12 +1429,13 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             )
             return
         displays = self.session.target.displays
-        if len(displays) != 3 or (displays[1].width, displays[1].height) != (
-            doom.WIDTH,
-            doom.HEIGHT,
+        if len(displays) != 3 or any(
+            (d.width, d.height) != (doom.WIDTH, doom.HEIGHT) for d in displays
         ):
-            self.log.appendPlainText('Doom requires a 160 by 128 center display.')
+            self.log.appendPlainText('Doom requires three 160 by 128 displays.')
             return
+        left, right = doom_cards.control_cards()
+        self.canvas.frames.update({displays[0].id: left, displays[2].id: right})
         self.doom_display = displays[1].id
         process = doom.DoomHost(self.doom_host, self)
         self.doom_process = process
