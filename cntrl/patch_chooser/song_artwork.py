@@ -16,8 +16,8 @@ def prepare(
     path: Path, target: Target, snapshots: dict[Path, bytes] | None
 ) -> tuple[int, int, bytes]:
     screen = target.displays[1 if len(target.displays) > 1 else 0]
-    top = screen.height // 3
-    bottom = screen.height * 2 // 3
+    top = screen.height // 4
+    bottom = screen.height * 3 // 4
     if len(target.displays) == 1:
         top = screen.height // 2
     size = screen.width, bottom - top

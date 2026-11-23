@@ -436,12 +436,14 @@ private:
     void paint_step() {
         const auto &bitmap = painting_.bitmap;
         const auto v = screens_[unsigned(drawing_)].viewport;
-        const unsigned top = painting_.split_middle ? v.height / 2 : v.height / 3;
-        if (bitmap.source && bitmap.width == v.width && bitmap.height == v.height * 2 / 3 - top && bitmap_row_ < bitmap.height) {
+        const unsigned field = painting_.split_middle ? 3 : 1;
+        const unsigned start = band_edge(painting_, field, v.height, false);
+        const unsigned height = band_edge(painting_, field, v.height, true) - start;
+        if (bitmap.source && bitmap.width == v.width && bitmap.height <= height && bitmap_row_ < bitmap.height) {
+            const unsigned top = start + (height - bitmap.height) / 2;
             const unsigned row = bitmap_row_++;
             bitmap.source->read_bitmap(bitmap.generation, bitmap.offset + row * bitmap.width * 2,
                                        raster_.pixels() + (top + row) * v.width, bitmap.width);
-            const unsigned field = painting_.split_middle ? 3 : 1;
             const auto &caption = painting_.lines[field];
             if (bitmap_row_ == bitmap.height && caption.text[0]) {
                 const auto bounds = fonts_.bounds(caption.graphics.font, caption.graphics.size, caption.graphics.asset, caption.text);
@@ -514,6 +516,12 @@ private:
         if (submit_column(brightness_screen_, dim_column_, screen.viewport.height)) dim_column_ = (dim_column_ + 1) % screen.viewport.width;
     }
     static unsigned band_edge(const Pane &pane, unsigned field, unsigned height, bool end) {
+        if (pane.scene) {
+            if (pane.split_middle && field == 1) return end ? height / 2 : height / 4;
+            if (pane.split_middle && field == 3) return end ? height * 3 / 4 : height / 2;
+            const unsigned edge = field + unsigned(end);
+            return edge == 0 ? 0 : edge == 1 ? height / 4 : edge == 2 ? height * 3 / 4 : height;
+        }
         if (pane.split_middle && (field == 1 || field == 3)) {
             if (field == 1) return end ? height / 2 : height / 3;
             return end ? 2 * height / 3 : height / 2;
@@ -526,7 +534,8 @@ private:
         const unsigned height = screens_[unsigned(drawing_)].viewport.height;
         if (painting_.three_bands) {
             const unsigned start = band_edge(painting_, field, height, false), end = band_edge(painting_, field, height, true), used = raster_.rows(line) * line.graphics.line_height;
-            return int(start + (used < end - start ? (end - start - used) / 2 : 0) + line.graphics.top);
+            const int baseline_offset = painting_.scene && (field == 1 || field == 3) ? 2 : 0;
+            return int(start + (used < end - start ? (end - start - used) / 2 : 0) + line.graphics.top) + baseline_offset;
         }
         unsigned count = 0, used = 0, preceding = 0, index = 0;
         for (unsigned i = 0; i < max_lines; ++i) if (painting_.lines[i].text[0]) {

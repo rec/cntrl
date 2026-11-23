@@ -48,7 +48,7 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         'binding_view': {'status': 'Ready'},
     }
     artwork = tmp_path / 'light.png'
-    Image.new('RGB', (160, 43), 'red').save(artwork)
+    Image.new('RGB', (160, 64), 'red').save(artwork)
     library = songs.Library.model_validate(
         {
             'patches': {
@@ -148,6 +148,12 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         assert first['lcd-2'][(48 * 160 + 8) * 2 :][:2] == b'\xf8\x00'
         left = first['lcd-1']
         assert left[:2] == b'\0\0'  # The rounded corner is clipped.
+        upper_edge = (32 * 160 + 8) * 2
+        lower_edge = (96 * 160 + 8) * 2
+        assert left[upper_edge - 320 :][:2] == b'\0\x10'
+        assert left[upper_edge:][:2] != b'\0\x10'
+        assert left[lower_edge - 320 :][:2] != b'\0\x10'
+        assert left[lower_edge:][:2] == b'\0\x10'
         assert left[(8 * 160 + 8) * 2 :][:2] == b'\0\x10'
         assert left[(119 * 160 + 8) * 2 :][:2] == b'\0\x10'
         assert left[(48 * 160 + 8) * 2 :][:2] != b'\0\x10'
