@@ -320,7 +320,18 @@ public:
     bool gate_midi_stream(const char *name,bool enabled) override { return midi_runtime.streams().gate(name,enabled); }
     bool select_midi_streams(const Document &d,unsigned node) override {
         unsigned scope; if (!d.stream_scope(node,scope)) return false;
-        pickup(d.pickup(node),d.pickup_pairing_ms()); midi_runtime.streams().select(scope,time); return true;
+        pickup(d.pickup(node),d.pickup_pairing_ms());
+        const auto &active = documents->document();
+        if (d.midi_streams_size() != active.midi_streams_size()
+            || (d.midi_streams_size() && std::memcmp(d.midi_streams(), active.midi_streams(), d.midi_streams_size())))
+            return midi_runtime.streams().select_external(d.midi_streams(), d.midi_streams_size(), midi_outputs(), d.nodes(), scope, time);
+        midi_runtime.streams().select(scope,time); return true;
+    }
+    bool select_song_midi_streams(const Document *document, unsigned scope) override {
+        auto &streams = midi_runtime.streams();
+        if (!document) { streams.clear_song(); return true; }
+        return streams.select_external(document->midi_streams(), document->midi_streams_size(),
+            midi_outputs(), document->nodes(), scope, time, true);
     }
     void configure_midi_streams(const Document &d) override {
         pickup(d.pickup(),d.pickup_pairing_ms()); midi_runtime.streams().file_provider(files);
@@ -332,6 +343,7 @@ public:
     bool looper_action(unsigned action,const char *filename) override { return host->looper_action(action,filename); }
     bool activate(const SongSelection &s,const SongContinuation &c,bool resume) override { return song_sources->activate(s,c,resume); }
     SongExecution execution_status() const override { return song_sources->execution_status(); }
+    void clear_song_midi_streams() override { song_sources->clear_song_midi_streams(); }
     bool capture_source(const Document *&d) override { return song_sources->capture_source(d); }
     bool revision(const SongSelection &s,uint32_t &crc) override { return song_sources->revision(s,crc); }
     bool capture(Song &s,bool reference) override { return song_sources->capture(s,reference); }

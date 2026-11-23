@@ -91,6 +91,7 @@ struct SongResolver {
     virtual bool capture_source(const Document *&) = 0;
     virtual bool revision(const SongSelection &, uint32_t &crc) = 0;
     virtual midi::Bridge::Delivery leave() { return midi::Bridge::Delivery::complete; }
+    virtual void clear_song_midi_streams() {}
 };
 
 // Three committed generations permit an atomic edit or undo. Slot 3 is an
@@ -314,12 +315,14 @@ public:
     void choose(const char *set) {
         if (executing()) { error_ = "Patch pending"; return; }
         if (busy()) { std::snprintf(job_.choose, 64, "%s", set); return; }
+        resolver_.clear_song_midi_streams();
         current_song_[0] = 0; solo_ = false; patch_position_ = 0;
         if (set != active_set_) std::snprintf(active_set_, 64, "%s", set);
         position_ = 0; removed_ = false;
     }
     void choose_song(const char *name) {
         if (busy() || executing() || !song(name)) return;
+        resolver_.clear_song_midi_streams();
         std::snprintf(active_set_, sizeof(active_set_), "%s", name); solo_ = true;
         current_song_[0] = 0; position_ = patch_position_ = 0; removed_ = false;
     }
@@ -336,12 +339,14 @@ public:
         return result;
     }
     void stop_execution() {
+        resolver_.clear_song_midi_streams();
         pending_function_ = resume_pending_ = invocation_pending_ = false; transition_ = Transition::none;
         previous_cursor_ = {}; error_ = "";
     }
     void cancel_function() {
         if (!pending_function_) return;
         restore_cursor(previous_cursor_); removed_ = previous_removed_;
+        if (!current_song_[0]) resolver_.clear_song_midi_streams();
         pending_function_ = invocation_pending_ = false; transition_ = Transition::none; error_ = ui::i18n::text(ui::i18n::Message::firmware_switch_failed);
     }
     bool resume(const SongContinuation &saved) {
@@ -833,6 +838,7 @@ private:
             const auto delivery = resolver_.leave();
             if (delivery == midi::Bridge::Delivery::pending) return;
             if (delivery != midi::Bridge::Delivery::complete) { transition_ = Transition::none; error_ = "Song cleanup failed"; return; }
+            resolver_.clear_song_midi_streams();
             const auto *item = song(transition_song_);
             if (!item) { transition_ = Transition::none; error_ = "Song missing"; return; }
             if (item->exit != ~0u) { start_hook(item->exit, Transition::exiting); return; }
@@ -1210,6 +1216,7 @@ private:
         song_cache_ = Song(); set_cache_ = Setlist(); invalid_ = false;
         restore_cursor(job_.playback); removed_ = job_.removed;
         if (job_.choose[0]) {
+            resolver_.clear_song_midi_streams();
             current_song_[0] = 0; solo_ = false; patch_position_ = 0;
             std::snprintf(active_set_, 64, "%s", job_.choose); position_ = 0; removed_ = false;
         }

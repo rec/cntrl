@@ -53,6 +53,7 @@ class SongLibraryError(ValueError):
 class Song(models.BindingScope, frozen=True):
     navigation: models.PageNavigation | None = None
     bindings: dict[str, object] = Field(default_factory=dict)
+    midi: dict[str, object] | None = None
     name: str
     display_name: str | None = None
     style: models.Style | None = None
@@ -281,10 +282,12 @@ def encode(
             (
                 2,
                 s.name,
-                s.model_dump(include={'bindings', 'navigation'}, exclude_none=True),
+                s.model_dump(
+                    include={'bindings', 'navigation', 'midi'}, exclude_none=True
+                ),
             )
             for s in library.songs
-            if s.bindings or s.navigation
+            if s.bindings or s.navigation or s.midi
         ]
         pending: list[object] = [context, *(b for _, _, b in scopes)]
         while pending:
@@ -685,7 +688,7 @@ def _decode(data: bytes) -> Library:
         for kind, _name, root in resolved.binding_scopes(source):
             if kind == 0:
                 context['bindings'] = _rebind(
-                    {'bindings': resolved.binding_map(source, root)},
+                    {'bindings': resolved.binding_scope(source, root)['bindings']},
                     prefix,
                     renamed,
                     tag_names,
@@ -724,9 +727,11 @@ def _decode(data: bytes) -> Library:
                     source_tags[source],
                 )
             patches.append(value)
-        bindings = (
-            resolved.binding_map(sources[0], binding) if binding != 0xFFFFFFFF else {}
+        scope = (
+            resolved.binding_scope(sources[0], binding) if binding != 0xFFFFFFFF else {}
         )
+        bindings = scope.get('bindings', {})
+        scope_patches = cast(list[dict[str, object]], scope.get('patches', []))
         bindings = (
             _rebind(
                 {'bindings': bindings},
@@ -747,9 +752,8 @@ def _decode(data: bytes) -> Library:
                 {
                     'name': name,
                     'seed': song_seeds.get(str(index)),
-                    'navigation': resolved.patch(sources[0], binding).get('navigation')
-                    if binding != 0xFFFFFFFF
-                    else None,
+                    'navigation': scope.get('navigation'),
+                    'midi': scope_patches[0].get('midi') if scope_patches else None,
                     'display_name': artwork[index][0] or None
                     if index < len(artwork)
                     else None,

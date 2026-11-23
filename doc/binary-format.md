@@ -127,7 +127,8 @@ remaining selections. Each setlist
 has name[64], u32 entry count, a reserved u32 that must be `0xffffffff`, and
 that many song names[64].
 A binding-map or action node of `0xffffffff` means absent; other values
-refer to the corresponding node in captured source zero. These references survive
+refer to the corresponding node in captured source zero. A song's optional MIDI
+routes use an ordinary stream scope under its binding-map node. These references survive
 renames, occurrence edits and undo. All fixed text fields are zero padded
 and terminated. Names and external document/key references use the existing
 ASCII name rules; display labels are UTF-8. The four bytes `CSP9` follow the

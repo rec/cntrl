@@ -18,6 +18,7 @@ public:
         }
     }
     const cntrl::SongContinuation &context() const { return context_; }
+    void clear_song_midi_streams() override { outputs_.select_song_midi_streams(nullptr, midi::Streams::system_scope); }
     midi::Bridge::Delivery leave() override { return outputs_.prepare_leave(executor); }
     void recalled() override { application_.controller().cancel_gesture(); }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -100,8 +101,19 @@ public:
             auto previous = application_.controller().navigation();
             if (!resume) application_.controller().external_selection();
             valid = resume ? node == context.node && executor.resume(*source, node, context.completed, context.sources_crc)
-                           : executor.start(*source, node, false, true);
-            if (valid && !outputs_.binding_context(scope_source, song_bindings)) { executor.cancel(); valid = false; }
+                           : executor.start(*source, node);
+            if (valid) valid = outputs_.binding_context(scope_source, song_bindings);
+            const bool entering = context.caller == 1 && (resume || songs_.boundary());
+            if (valid && entering && song_bindings != ~0u) {
+                unsigned scope;
+                valid = scope_source->stream_scope(song_bindings, scope)
+                    && outputs_.select_song_midi_streams(scope_source, scope);
+            }
+            if (valid && !resume) valid = outputs_.select_midi_streams(*source, node);
+            if (!valid) {
+                executor.cancel();
+                if (entering) clear_song_midi_streams();
+            }
             if (!valid && !resume) application_.controller().navigation(previous);
         }
         sources_.end(); return valid;

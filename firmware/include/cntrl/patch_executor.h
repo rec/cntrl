@@ -32,6 +32,7 @@ struct PatchOutputs {
     virtual bool record_midi_file(const midi::RecordMidiFilePatch &) { return false; }
     virtual bool looper_action(unsigned, const char *) { return false; }
     virtual bool select_midi_streams(const Document &, unsigned) { return true; }
+    virtual bool select_song_midi_streams(const Document *, unsigned) { return true; }
     virtual bool gate_midi_stream(const char *, bool) { return false; }
     virtual void validation(bool) {}
     virtual void validation_context(PatchExecutor &, bool enabled) { validation(enabled); }

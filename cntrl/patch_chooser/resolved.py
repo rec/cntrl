@@ -513,7 +513,7 @@ def binding_scopes(data: bytes) -> list[tuple[int, str, int]]:
     return result
 
 
-def binding_map(data: bytes, root: int) -> dict[str, object]:
+def binding_scope(data: bytes, root: int) -> dict[str, object]:
     data = binary_format.core(data)
     graph = graph_offset(data)
     if root >= GRAPH.unpack_from(data, graph)[2]:
@@ -523,7 +523,7 @@ def binding_map(data: bytes, root: int) -> dict[str, object]:
         raise binary_format.DocumentFormatError(
             'scope must reference a binding-map node'
         )
-    return cast(dict[str, object], patch(data, root)['bindings'])
+    return patch(data, root)
 
 
 def export(data: bytes) -> str:

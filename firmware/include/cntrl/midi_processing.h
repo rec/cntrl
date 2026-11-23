@@ -262,12 +262,10 @@ public:
         using Event = typename Core::Event;
         using Processing = typename Core::Processing;
         using Capture = typename Core::Capture;
-        constexpr auto system_scope = Core::system_scope;
-
         bool synchronized = true;
         for (unsigned root = 0; root < core.routes_.size() && used < budget; ++root) {
             auto &route = core.routes_[root];
-            if (!route.lfo || (route.scope != system_scope && (route.scope != core.selected_ || route.foreign != core.external_selected_))) continue;
+            if (!route.lfo || !core.in_scope(root)) continue;
             auto &lfo = *route.lfo;
             lfo.advance(now, core.extension_.beat_, core.active(root) && route.started);
             if (!core.active(root)) continue;

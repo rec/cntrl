@@ -1,9 +1,11 @@
 # MIDI LFOs
 
 Use an `lfo` generator in a [MIDI route](midi-processing.md) to vary a typed
-parameter. System routes start with the setup and survive patch changes. Patch
-routes start when their patch is selected and stop when it is left. Selecting
-the same patch preserves its running state.
+parameter. System routes start with the setup and survive patch changes. Song
+routes start on the first step after any song entry action. They keep their phase
+across steps in either direction and apply their off policy when the song ends
+or is left. Patch routes start when their patch is selected and stop when it is
+left. Selecting the same patch preserves its running state.
 
 ```toml
 [patches.vibrato.midi.bend]
@@ -37,6 +39,29 @@ Endpoint aliases must exist in the target's registry. A bare stream name gates
 the selected patch's route; `system/name` gates a system route. Repeatedly
 enabling an enabled route does not restart it. Set `enabled = true` to start a
 new activation after stopping or completing a one-shot.
+
+Put a song's routes on the song itself. The same routes run when the song is
+performed on its own or from any setlist.
+
+```toml
+[[songs]]
+name = 'First Light'
+patches = ['verse', 'chorus']
+
+[songs.midi.sweep]
+to = 'din'
+generate = {lfo = {
+    target = {type = 'control-change', channel = 1, controller = 74},
+    shape = 'triangle',
+    range = [20, 100],
+    period = {beats = '4'},
+    off = {action = 'value', value = 64},
+}}
+```
+
+Entering the song from an empty position starts a new activation. Ordinary
+MIDI ownership rules still apply. For example, a patch that writes to the
+same controller can take ownership from the song LFO.
 
 ## Targets and values
 

@@ -165,6 +165,7 @@ public:
         processing_ = std::move(candidate.processing_);
         preparation_workspace_ = candidate.preparation_workspace_;
         base_routes_ = unsigned(routes_.size()); foreign_signature_ = 0; external_selected_ = false;
+        song_routes_end_ = base_routes_;
         explicit_system_ = candidate.explicit_system_;
         selected_ = system_scope;
         parsers_ = std::move(candidate.parsers_);
@@ -190,33 +191,48 @@ public:
     void select(unsigned scope, uint64_t now = 0) {
         if (scope == selected_ && !external_selected_) return;
         for (unsigned i = 0; i < routes_.size(); ++i)
-            if (routes_[i].scope != system_scope) { retire(i); if constexpr (ProcessingPolicy::advanced) routes_[i].file.reset(); }
+            if (routes_[i].scope != system_scope && !song_route(i)) { retire(i); if constexpr (ProcessingPolicy::advanced) routes_[i].file.reset(); }
         selected_ = scope;
-        if (external_selected_) { routes_.resize(base_routes_); external_selected_ = false; }
-        for (auto &route : routes_) if (route.scope == scope) {
+        if (external_selected_) { routes_.resize(song_routes_end_); external_selected_ = false; }
+        for (unsigned i = 0; scope != system_scope && i < base_routes_; ++i) if (routes_[i].scope == scope) {
+            auto &route = routes_[i];
             route.enabled = true; route.failed = false; route.failed_outputs = 0; route.next = now; route.started = false;
             if constexpr (ProcessingPolicy::advanced) if (route.lfo) route.lfo->scope(now, extension_.beat_);
+            route.activated = true; route.note_admission_closed = false;
         }
-        for (auto &route : routes_) if (route.scope == scope) { route.activated = true; route.note_admission_closed = false; }
         activation_pending_ = true;
+    }
+    void clear_song() {
+        if (song_routes_end_ == base_routes_) return;
+        select(system_scope);
+        for (unsigned i = base_routes_; i < song_routes_end_; ++i) retire(i);
+        routes_.resize(base_routes_);
+        song_routes_end_ = base_routes_;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(streams_select_external)
 #endif
-    bool select_external(const uint8_t *data, unsigned size, Outputs output_connections, unsigned nodes, unsigned scope, uint64_t now = 0) {
-        if (scope == system_scope) { select(system_scope, now); return true; }
+    bool select_external(const uint8_t *data, unsigned size, Outputs output_connections, unsigned nodes, unsigned scope,
+                         uint64_t now = 0, bool song = false) {
+        if (scope == system_scope) {
+            if (song) clear_song(); else select(system_scope, now);
+            return true;
+        }
         uint64_t signature = 14695981039346656037ull;
         for (unsigned i = 0; i < size; ++i) { signature ^= data[i]; signature *= 1099511628211ull; }
-        if (external_selected_ && foreign_signature_ == signature && foreign_scope_ == scope) return true;
+        if (song ? song_routes_end_ != base_routes_ && song_signature_ == signature && routes_[base_routes_].scope == scope
+                 : external_selected_ && foreign_signature_ == signature && foreign_scope_ == scope) return true;
+        // Keep song route indices stable while replacing the patch routes after them.
+        const unsigned retained = song ? base_routes_ : song_routes_end_;
         Routing candidate(limits_);
         if (!candidate.decode(data, size, output_connections, nodes)) return false;
         unsigned local_count = 0;
         for (const auto &route : candidate.routes_) if (route.scope == scope) ++local_count;
-        if (base_routes_ + local_count > max_routes) return false;
+        if (retained + local_count > max_routes) return false;
         CheckedArray<unsigned> mapping;
-        if (!mapping.resize(candidate.routes_.size()) || !routes_.reserve(base_routes_ + local_count)) return false;
+        if (!mapping.resize(candidate.routes_.size()) || !routes_.reserve(retained + local_count)) return false;
         std::fill(mapping.begin(), mapping.end(), max_routes);
-        unsigned next = base_routes_;
+        unsigned next = retained;
         for (unsigned i = 0; i < candidate.routes_.size(); ++i) {
             const auto &route = candidate.routes_[i];
             if (route.scope == scope) mapping[i] = next++;
@@ -228,8 +244,8 @@ public:
         for (const auto &route : candidate.routes_) if (route.scope == scope)
             for (const auto &input : route.inputs) if (input.kind && mapping[input.index] == max_routes) return false;
         CheckedArray<Route *> merged;
-        if (!merged.reserve(base_routes_ + local_count)) return false;
-        for (unsigned i = 0; i < base_routes_; ++i) if (!merged.append(&routes_[i])) return false;
+        if (!merged.reserve(retained + local_count)) return false;
+        for (unsigned i = 0; i < retained; ++i) if (!merged.append(&routes_[i])) return false;
         for (auto &route : candidate.routes_) if (route.scope == scope) {
             for (auto &input : route.inputs) if (input.kind) input.index = uint16_t(mapping[input.index]);
             if (!merged.append(&route)) return false;
@@ -246,13 +262,16 @@ public:
         unsigned workspace = 0;
         if (!prepare_processing(processing, merged.size(), [&](unsigned i) -> const Route & { return *merged[i]; }, workspace)) return false;
         if (!processing_.reserve(processing_.size() + terminal_credits() + processing.capacity())) return false;
-        for (unsigned i = 0; i < routes_.size(); ++i) if (routes_[i].scope != system_scope) { retire(i); if constexpr (ProcessingPolicy::advanced) routes_[i].file.reset(); }
+        for (unsigned i = 0; i < routes_.size(); ++i)
+            if (routes_[i].scope != system_scope && (song || !song_route(i))) {
+                retire(i); if constexpr (ProcessingPolicy::advanced) routes_[i].file.reset();
+            }
         owner_generation_ = prepared_paths;
         preparation_workspace_ = workspace;
         if constexpr (ProcessingPolicy::advanced) {
             extension_.binding_targets_ = std::move(targets); extension_.binding_owners_ = std::move(owners); extension_.downstream_reached_ = std::move(reached);
         }
-        routes_.resize(base_routes_);
+        routes_.resize(retained);
         for (auto &route : candidate.routes_) if (route.scope == scope) {
             route.foreign = true; route.next = now;
             route.preparation_epoch = ++preparation_epoch_;
@@ -261,6 +280,12 @@ public:
             routes_.back().activated = true;
         }
         activation_pending_ = true;
+        if (song) {
+            song_routes_end_ = unsigned(routes_.size());
+            song_signature_ = signature;
+            selected_ = system_scope; external_selected_ = false;
+            return true;
+        }
         selected_ = scope; foreign_scope_ = scope; foreign_signature_ = signature; external_selected_ = true; return true;
     }
     bool gate(const char *reference, bool enabled) {
@@ -268,7 +293,7 @@ public:
         const char *name = system ? reference + 7 : reference;
         unsigned scope = system ? system_scope : selected_;
         for (unsigned i = 0; i < routes_.size(); ++i)
-            if (routes_[i].scope == scope && (scope == system_scope || routes_[i].foreign == external_selected_) && !std::strcmp(routes_[i].name, name)) { gate(i, enabled); return true; }
+            if (!song_route(i) && routes_[i].scope == scope && (scope == system_scope || routes_[i].foreign == external_selected_) && !std::strcmp(routes_[i].name, name)) { gate(i, enabled); return true; }
         return false;
     }
     void gate(unsigned route, bool enabled) {
@@ -767,7 +792,8 @@ private:
     Diagnostics diagnostics_;
     bool explicit_system_ = false;
     unsigned selected_ = system_scope, sysex_outputs_ = 0;
-    unsigned external_clock_ = 0, base_routes_ = 0, foreign_scope_ = system_scope;
+    unsigned external_clock_ = 0, base_routes_ = 0, song_routes_end_ = 0, foreign_scope_ = system_scope;
+    uint64_t song_signature_ = 0;
     uint64_t foreign_signature_ = 0;
     bool external_selected_ = false;
     uint64_t serial_ = 0;
@@ -920,10 +946,13 @@ private:
         if (inserting_event_ && insertion_previous_output_ == event) insertion_previous_output_ = event->previous_output;
         return events_.erase(event);
     }
-    bool active(unsigned route) const {
+    bool song_route(unsigned route) const { return route >= base_routes_ && route < song_routes_end_; }
+    bool in_scope(unsigned route) const {
         const auto &entry = routes_[route];
-        return entry.enabled && !entry.failed && (entry.scope == system_scope || (entry.scope == selected_ && entry.foreign == external_selected_));
+        return entry.scope == system_scope || song_route(route)
+            || (entry.scope == selected_ && entry.foreign == external_selected_);
     }
+    bool active(unsigned route) const { return routes_[route].enabled && !routes_[route].failed && in_scope(route); }
     unsigned downstream_outputs(unsigned route) const {
         unsigned output_mask = routes_[route].outputs;
         std::fill(extension_.downstream_reached_.begin(), extension_.downstream_reached_.end(), uint8_t(0));

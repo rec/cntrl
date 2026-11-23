@@ -179,6 +179,12 @@ public:
         midi_runtime_.streams().select(scope, midi_runtime_.stream_time(micros()));
         return true;
     }
+    bool select_song_midi_streams(const cntrl::Document *document, unsigned scope) override {
+        auto &streams = midi_runtime_.streams();
+        if (!document) { streams.clear_song(); return true; }
+        return streams.select_external(document->midi_streams(), document->midi_streams_size(),
+            midi_outputs(), document->nodes(), scope, midi_runtime_.stream_time(micros()), true);
+    }
     cntrl::midi::TrsMode port_mode(unsigned jack) const { return trs_ports.mode(jack); }
     unsigned port_count() const { return cntrl::target::port_count; }
     auto &expression_controls() { return expression_.controls(); }

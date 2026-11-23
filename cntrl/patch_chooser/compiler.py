@@ -186,7 +186,11 @@ def compile_show(
             errors.append('binding scope names must contain fewer than 64 bytes')
             continue
         path = f'binding_scopes.{kind}.{name}'
-        child = compiler.parse({**bindings, 'inherits': 'none'}, path, name or 'Global')
+        scope = dict(bindings, inherits='none')
+        if midi := scope.pop('midi', None):
+            # Keep the binding map at the root and store the route scope beneath it.
+            scope['patches'] = [{'patches': [], 'midi': midi}]
+        child = compiler.parse(scope, path, name or 'Global')
         if child is not None:
             marker = len(compiler.nodes)
             compiler.nodes.append(
