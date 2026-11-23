@@ -145,7 +145,11 @@ def test_song_styles_supply_patch_defaults_and_preserve_overrides(
         assert [m.data for m in session.messages if m.kind == 'midi'] == [b'\xc0\x0a']
         snapshot(1)
         first = dict(session.frames)
-        assert first['lcd-2'][(48 * 160 + 8) * 2 :][:2] == b'\xf8\x00'
+        song_body = first['lcd-2'][32 * 160 * 2 : 96 * 160 * 2]
+        assert {pixel for (pixel,) in struct.iter_unpack('>H', song_body)} == {
+            0xF800,
+            0x0010,
+        }
         left = first['lcd-1']
         assert left[:2] == b'\0\0'  # The rounded corner is clipped.
         upper_edge = (32 * 160 + 8) * 2

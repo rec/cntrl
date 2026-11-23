@@ -444,12 +444,6 @@ private:
             const unsigned row = bitmap_row_++;
             bitmap.source->read_bitmap(bitmap.generation, bitmap.offset + row * bitmap.width * 2,
                                        raster_.pixels() + (top + row) * v.width, bitmap.width);
-            const auto &caption = painting_.lines[field];
-            if (bitmap_row_ == bitmap.height && caption.text[0]) {
-                const auto bounds = fonts_.bounds(caption.graphics.font, caption.graphics.size, caption.graphics.asset, caption.text);
-                raster_.rectangle((int(v.width) - bounds.width) / 2 - 1, text_y(field) + bounds.top,
-                                  bounds.width + 2, bounds.height, caption.graphics.background);
-            }
             return;
         }
         const auto &line = painting_.lines[field_];
