@@ -794,8 +794,10 @@ private:
             line(pane, 1, text, vertical(40), vertical(20), 17, true, nullptr, 0, 0, 12);
             i18n::format(text, sizeof(text), i18n::Message::language_select, labels[2]);
             line(pane, 2, text, vertical(70), vertical(20), 17, true, nullptr, 0, 0, 12);
-            i18n::format(text, sizeof(text), i18n::Message::language_next_page, labels[3]);
-            line(pane, 3, text, vertical(100), vertical(20), 17, true, nullptr, 0, 0, 12);
+            if (languages->setup_navigation()) {
+                i18n::format(text, sizeof(text), i18n::Message::language_next_page, labels[3]);
+                line(pane, 3, text, vertical(100), vertical(20), 17, true, nullptr, 0, 0, 12);
+            }
             return;
         }
         const unsigned count = languages->language_count();

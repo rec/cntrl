@@ -23,7 +23,8 @@ class ControlRouter {
 public:
     explicit ControlRouter(Controls controls) : controls_(controls) {}
     template<class Services>
-    void route(Services &services, const uint8_t *events, uint64_t held, uint32_t now, bool utility = false, uint8_t assigned_pages = 0) const {
+    void route(Services &services, const uint8_t *events, uint64_t held, uint32_t now,
+               bool utility = false, uint8_t assigned_pages = 0, bool default_navigation = false) const {
         for (unsigned i = 0; i < controls_.count; ++i) {
             const bool press = events[i] & 1, release = events[i] & 2;
             // Editors must receive release even when navigation locks input.
@@ -57,6 +58,7 @@ public:
                 }
             } else {
                 if (!services.midi_reserved() && (press || release) && services.looper(i, press)) continue;
+                if (default_navigation && i == controls_.back) continue;
                 if (i == controls_.next_page && !(assigned_pages & 1)) {
                     if (press) services.browse(!(assigned_pages & 2) && controls_.reverse_page < 64
                         && (held & (uint64_t(1) << controls_.reverse_page)));
@@ -66,7 +68,8 @@ public:
                     if (press) services.browse(true);
                     continue;
                 }
-                if (!(assigned_pages & 2) && i == controls_.reverse_page && controls_.next_page < 64
+                if (!(assigned_pages & 2) && !(default_navigation && controls_.back == controls_.next_page)
+                    && i == controls_.reverse_page && controls_.next_page < 64
                     && (held & (uint64_t(1) << controls_.next_page))) {
                     if (press) services.browse(true);
                     continue;

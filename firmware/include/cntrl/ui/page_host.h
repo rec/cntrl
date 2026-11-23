@@ -94,7 +94,8 @@ public:
             if (input != controls_.next && input != controls_.next_section && input != controls_.confirm && input != controls_.back) return false;
             if (!pressed) return true;
             if (input == controls_.back) {
-                browse_page(controls_.reverse_page < 64 && (application_.held & (uint64_t(1) << controls_.reverse_page)));
+                if (application_.layout.navigation())
+                    browse_page(controls_.reverse_page < 64 && (application_.held & (uint64_t(1) << controls_.reverse_page)));
                 return true;
             }
             const unsigned count = platform_.language_count();

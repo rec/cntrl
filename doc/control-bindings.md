@@ -43,8 +43,8 @@ when the entry operations complete.
 Pressing B selects `chorus`, replacing the map. Pressing A on `chorus` selects
 `verse`. Calling `boost`, which has no bindings, sends its MIDI while keeping
 the current map. E advances through the current song's patches, then to the
-next song in the selected setlist. With the default MC controls, release F
-to advance or press C+F to go back.
+next song in the selected setlist. With the default MC controls, click F to
+advance one step or double-click F to go back.
 
 ## Create a song from scenes
 
@@ -69,8 +69,17 @@ under the title at compile time. It keeps an explicit foreground color
 and warns if the contrast is low. With an automatic color, it chooses black
 or white and adds a one-pixel outline if both colors need more contrast.
 
-This setup uses F and C for song navigation and two button combinations for
-page navigation.
+The default MC setup uses F for all four navigation gestures.
+
+| F gesture | Action |
+| --- | --- |
+| Click | Song forward in song and set modes |
+| Double-click | Song backward in song and set modes |
+| Press and hold | Page forward |
+| Click, then press and hold | Page back |
+
+You can supply explicit navigation chords in a setup. This example uses F and
+C for song navigation and two-button combinations for page navigation.
 
 ```toml
 [navigation]

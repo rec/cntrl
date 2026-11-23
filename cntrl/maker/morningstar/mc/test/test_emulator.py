@@ -350,14 +350,14 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
         layout, target, executable, tmp_path / 'session', bundle
     ) as session:
 
-        def press(button: str) -> None:
+        def press(button: str, duration: int = 60000) -> None:
             session.button(button, True)
-            session.advance(session.time_us + 60000)
+            session.advance(session.time_us + duration)
             session.button(button, False)
             session.advance(session.time_us + 60000)
 
         session.advance(1000000)
-        press('f')
+        press('f', 600000)
         session.capture_corrections(True)
         panic = next(r for r in session.correction_regions if r.message == 'panic')
         assert panic.original == 'Panic'
@@ -377,7 +377,7 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
             e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xb0\x7b\0'
             for e in session.messages
         ), session.messages
-        press('f')
+        press('f', 600000)
         assert not any(e.kind == 'firmware' for e in session.messages)
         press('a')  # The stock-firmware patch remains available without its old page.
         assert len([e for e in session.messages if e.kind == 'firmware']) == 1
@@ -390,7 +390,7 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
             for e in session.messages[transition + 1 :]
         )
         before = dict(session.frames)
-        press('f')
+        press('f', 600000)
         session.advance(session.time_us + 1000000)
         assert session.frames == before
         assert len([e for e in session.messages if e.kind == 'firmware']) == 1
@@ -429,11 +429,11 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
     with backend.Session(layout, target, executable, storage, bundle) as session:
         session.record_replay(True)
 
-        def press(button: str) -> None:
+        def press(button: str, duration: int = 60000) -> None:
             session.button(button, True)
-            session.advance(session.time_us + 60000)
+            session.advance(session.time_us + duration)
             session.button(button, False)
-            session.advance(session.time_us + 60000)
+            session.advance(session.time_us + (400000 if button == 'f' else 60000))
 
         def rename(name: str) -> dict[str, bytes]:
             cli.save(session, tmp_path / name)
@@ -456,15 +456,15 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
         assert not session.editing_name
         session.key(ord('x'))  # Typing outside Rename is ignored by the shared UI.
         session.advance(1000000)
-        press('f')  # Status to Menu in the right-hand utility region.
+        press('f', 600000)  # Status to Menu in the right-hand utility region.
         cli.save(session, tmp_path / 'menu-page')
         menu = session.frames['lcd-3']
         press('c')  # Open Pages and tools without a configured Menu action.
         press('f')  # Back restores the utility page.
         assert session.frames['lcd-3'] == menu
-        press('f')  # Page cycling remains available.
+        press('f', 600000)  # Page cycling remains available.
         assert session.frames['lcd-3'] != menu
-        press('f')
+        press('f', 600000)
         assert session.frames['lcd-3'] == menu
         press('c')
         press('b')

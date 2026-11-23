@@ -70,9 +70,9 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
             now += duration
             session.advance(now)
 
-        def press(button: str) -> None:
+        def press(button: str, duration: int = 60000) -> None:
             session.button(button, True)
-            advance(60000)
+            advance(duration)
             session.button(button, False)
             advance(60000)
 
@@ -85,7 +85,7 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
 
         advance(1000000)
         for _ in range(language_position):
-            press('f')
+            press('f', 600000)
         if language_position:
             advance(500000)
         english = session.frames['lcd-3']
@@ -141,11 +141,11 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         now = 0
         advance(1000000)
         for _ in range(language_position):
-            press('f')
+            press('f', 600000)
         if language_position:
             advance(500000)
         assert session.frames['lcd-3'] == french
-        press('f')
+        press('f', 600000)
         advance(500000)
         assert session.frames['lcd-3'] != french
         center = session.frames['lcd-2']

@@ -266,6 +266,8 @@ def test_imported_bank_runs_counters_and_bank_transitions(
         chord('bc')
         chord('df')  # cntrl menu.
         press('f')  # Return to the Banked Page.
+        now += 400000
+        session.advance(now)
         assert (
             len(
                 [

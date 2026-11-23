@@ -35,55 +35,100 @@ public:
         if (auto *visit = services.visit()) { visit->poll(!pressed); consumed = consumed || visit->busy(); }
         const bool performing = application_.song_navigation_active();
         uint8_t assigned_pages = 0;
-        const bool configured = route_chords(services, events, pressed, performing, consumed, assigned_pages);
-        if (!configured && !consumed && performing && !application_.controls_locked
-            && controls_.back < controls_.count && controls_.confirm < controls_.count) {
-            const unsigned next = controls_.back, modifier = controls_.confirm;
-            if (events[modifier] & press_event) modifier_used_ = false;
-            if (events[next] & press_event) next_step_held_ = true;
-            if (next_step_held_ && (pressed & (1u << modifier))) previous_step_ = modifier_used_ = true;
-            if ((events[modifier] & hold_event) && !modifier_used_ && pressed == (1u << modifier)) {
-                application_.pending_operation = 9;
-                application_.controls_locked = true;
-                next_step_held_ = previous_step_ = false;
+        const auto *setup = application_.layout.navigation();
+        const bool defaults = !setup && controls_.back < controls_.count;
+        route_chords(services, events, pressed, performing, consumed, assigned_pages, setup);
+        route_default_navigation(services.actions(), events, performing, consumed || !defaults, assigned_pages);
+        if (defaults && performing) {
+            if (controls_.confirm < controls_.count) {
+                if (!consumed && !application_.controls_locked && pressed == (1u << controls_.confirm)
+                    && (events[controls_.confirm] & hold_event)) {
+                    application_.pending_operation = 9;
+                    application_.controls_locked = true;
+                }
+                events[controls_.confirm] = 0;
             }
-            if (next_step_held_ && (events[next] & release_event)) {
-                application_.request_song_step(previous_step_);
-                next_step_held_ = previous_step_ = false;
-            }
-            events[next] = events[modifier] = 0;
             if (application_.song_boundary() && application_.binding_return_songs)
                 for (auto &event : events) event &= release_event;
-        } else next_step_held_ = previous_step_ = false;
-        if (!consumed) router_.route(services.actions(), events.data(), pressed, now, application_.utility_visible(), assigned_pages);
+        }
+        if (!consumed) router_.route(services.actions(), events.data(), pressed, now, application_.utility_visible(), assigned_pages, defaults);
     }
     template<class Actions>
     void finish(Actions &actions) { router_.finish(actions, application_.pending_operation, application_.return_to_switches, application_.controls_locked); }
 private:
+    template<class Actions>
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(input_navigation_gestures)
+#endif
+    void route_default_navigation(Actions &actions, std::array<uint8_t, 8> &events,
+                                  bool performing, bool disabled, uint8_t assigned_pages) {
+        if (disabled || application_.controls_locked) {
+            navigation_pressed_ = navigation_tap_ = false;
+            return;
+        }
+        auto &event = events[controls_.back];
+        const auto &state = states_[controls_.back];
+        const bool feature = application_.feature_open(application_services_);
+        const bool defer_tap = performing || feature;
+        const auto edge = event;
+        if (defer_tap) event = 0;
+        // A short release stays pending so a second press can become a hold.
+        if (navigation_song_ != performing || navigation_feature_ != feature) navigation_tap_ = false;
+        const bool second = navigation_tap_ && (edge & double_press_event);
+        if (navigation_tap_ && !state.waiting_for_second) {
+            if (defer_tap && !second) {
+                if (performing) application_.request_song_step(false);
+                else event = press_event | release_event;
+            }
+            navigation_tap_ = false;
+        }
+        if (edge & press_event) {
+            navigation_pressed_ = true;
+            navigation_second_ = second;
+            navigation_song_ = performing;
+            navigation_feature_ = feature;
+        }
+        if (!navigation_pressed_) return;
+        if (edge & hold_event) {
+            if (!(assigned_pages & (navigation_second_ ? 2 : 1))) actions.browse(navigation_second_);
+        }
+        if (edge & release_event) {
+            navigation_pressed_ = false;
+            if (state.held || navigation_song_ != performing || navigation_feature_ != feature) return;
+            if (!navigation_second_) navigation_tap_ = true;
+            else if (performing) application_.request_song_step(true);
+            else if (feature) event = press_event | release_event;
+        }
+    }
+
     template<class Services>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(input_navigation_chords)
 #endif
-    bool route_chords(Services &services, std::array<uint8_t, 8> &events, uint8_t pressed, bool performing, bool consumed, uint8_t &assigned_pages) {
-        const auto *setup = application_.layout.navigation();
-        if (!setup && !performing && !pending_members_) return false;
+    void route_chords(Services &services, std::array<uint8_t, 8> &events, uint8_t pressed, bool performing,
+                      bool consumed, uint8_t &assigned_pages, const uint8_t *setup) {
+        if (!setup && !performing && !pending_members_) return;
         uint8_t chords[4] = {};
         if (setup) std::copy_n(setup, 4, chords);
         if (performing && !application_.song_boundary()) {
             for (unsigned i = 0; i < 2; ++i)
                 if (auto mask = application_services_.scene_page_chord(i)) chords[2 + i] = mask;
         }
-        const bool configured = setup || chords[2] || chords[3];
+        if (performing) {
+            const auto bit = [](unsigned input) -> uint8_t { return input < 8 ? uint8_t(1u << input) : 0; };
+            const uint8_t back = bit(controls_.back);
+            if (setup) {
+                if (!chords[0]) chords[0] = back;
+                if (!chords[1]) chords[1] = back | bit(controls_.confirm);
+            }
+            for (unsigned i = 2; i < 4; ++i) {
+                if (!setup && (chords[i] & back)) chords[i] = 0;
+                for (unsigned song = 0; song < 2; ++song)
+                    if (chords[song] && (chords[i] & chords[song]) == chords[song]) chords[i] = 0;
+            }
+        } else chords[0] = chords[1] = 0;
         assigned_pages = unsigned(chords[2] != 0) | unsigned(chords[3] != 0) << 1;
-        if (!consumed && configured && !application_.controls_locked) {
-            if (performing) {
-                const auto bit = [](unsigned input) -> uint8_t { return input < 8 ? uint8_t(1u << input) : 0; };
-                if (!chords[0]) chords[0] = bit(controls_.back);
-                if (!chords[1]) chords[1] = bit(controls_.back) | bit(controls_.confirm);
-                for (unsigned i = 2; i < 4; ++i)
-                    for (unsigned song = 0; song < 2; ++song)
-                        if (chords[song] && (chords[i] & chords[song]) == chords[song]) chords[i] = 0;
-            } else chords[0] = chords[1] = 0;
+        if (!consumed && !application_.controls_locked) {
             uint8_t members = chords[0] | chords[1] | chords[2] | chords[3];
             for (unsigned i = 0; i < controls_.count; ++i)
                 if ((members & (1u << i)) && (events[i] & press_event)) pending_members_ |= uint8_t(1u << i);
@@ -119,7 +164,6 @@ private:
             }
             if (!pending_members_) chord_used_ = 0;
         }
-        return configured;
     }
     ButtonState *states_;
     Controls controls_;
@@ -127,8 +171,8 @@ private:
     Application &application_;
     ApplicationServices &application_services_;
     ControlRouter router_;
-    bool next_step_held_ = false, previous_step_ = false;
-    bool modifier_used_ = false;
+    bool navigation_pressed_ = false, navigation_tap_ = false, navigation_second_ = false;
+    bool navigation_song_ = false, navigation_feature_ = false;
     uint8_t pending_members_ = 0, chord_used_ = 0;
 };
 } // namespace cntrl::ui
