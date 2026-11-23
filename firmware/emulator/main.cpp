@@ -625,7 +625,7 @@ public:
         state.insert(state.end(), language, language + std::strlen(language));
         frame(state);
         // The focused page owns button help. Each screen has its own page and
-        // one-based window number because the layout can show several pages.
+        // one-based display number because the layout can show several pages.
         std::vector<uint8_t> help(2 + 2 * target::display_count, 0);
         help[0] = 11;
         if (!board.firmware_exited && !board.stock_pending && !host.showing_splash()) {
@@ -642,7 +642,7 @@ public:
             } else if (application.utility_visible()) {
                 const auto type = application.layout.page(application.utility_page)[0];
                 help[1] = type;
-                for (unsigned i = 0; i < PageLayout::maximum_windows(type, target::display_count); ++i) {
+                for (unsigned i = 0; i < PageLayout::maximum_displays(type, target::display_count); ++i) {
                     help[2 + 2 * i] = type;
                     help[3 + 2 * i] = uint8_t(i + 1);
                 }

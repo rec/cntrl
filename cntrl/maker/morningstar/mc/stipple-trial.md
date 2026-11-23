@@ -16,7 +16,7 @@ After composing the glyphs, the display renderer restores each affected line's
 background at alternating checkerboard pixels. Pixels where `(x + y) & 1` is
 zero retain their original foreground coverage. Applying the mask after the
 whole line preserves overlapping italic strokes and keeps a common pattern
-across glyphs. Category headings, other windows and padding are unaffected.
+across glyphs. Category headings, other displays and padding are unaffected.
 
 Portable controller tests cover indication state across successful/failed sends,
 aliases and undo. Native renderer tests compare the full framebuffer with the
@@ -43,6 +43,6 @@ using only foreground and background colors. This cleanup has not been flashed.
 
 Cleanup verification: all 326 Python tests, portable controller tests, native
 renderer tests, Ruff, formatting, ty and pyupgrade checks pass. Native decoder
-tests reject format 11 and nonzero reserved bytes in both window and line-style
+tests reject format 11 and nonzero reserved bytes in both display and line-style
 records. The format-12 combined build passed its boot-envelope checks, SHA-256
 `1e1c1e48574bb7853f03a31f3d205e283e7c8772d681de5252cda1dc1c2d4af4`.

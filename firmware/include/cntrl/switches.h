@@ -770,7 +770,7 @@ private:
     CNTRL_FLASH_ROUTINE(switches_render_scene)
 #endif
     void render_scene() {
-        const unsigned windows = hardware_.display_count();
+        const unsigned displays = hardware_.display_count();
         const auto *view = bindings_.view();
         auto base = bindings_.style() ? styled_graphics(bindings_.style()) : document_.graphics(1);
         if (!bindings_.style()) outputs_.song_style(base);
@@ -779,23 +779,23 @@ private:
         outputs_.scene_panels(scene, song, setlist, document_, bindings_.data - 4);
         const auto *navigation = hardware_.setup_navigation();
         const unsigned columns = (hardware_.input_count() + 1) / 2;
-        for (unsigned w = 0; w < windows; ++w) {
+        for (unsigned w = 0; w < displays; ++w) {
             Pane pane;
             pane.scene = pane.three_bands = true;
-            if (windows > 1) {
+            if (displays > 1) {
                 if (!w) pane.switch_label_alignment = SwitchLabelAlignment::left;
-                else if (w == windows - 1) pane.switch_label_alignment = SwitchLabelAlignment::right;
+                else if (w == displays - 1) pane.switch_label_alignment = SwitchLabelAlignment::right;
             }
             pane.graphics = base;
             pane.graphics.pad = 0;
             auto &middle = pane.lines[1];
             if (!w) {
                 middle = scene.title; pane.bitmap = scene.bitmap;
-                if (windows == 1) {
+                if (displays == 1) {
                     pane.split_middle = true; pane.second_bitmap = song.bitmap; pane.lines[3] = song.title;
                 }
             } else if (w == 1) { middle = song.title; pane.bitmap = song.bitmap; }
-            else if (w == windows - 1) { middle = setlist.title; pane.bitmap = setlist.bitmap; }
+            else if (w == displays - 1) { middle = setlist.title; pane.bitmap = setlist.bitmap; }
             for (auto &line : pane.lines) {
                 const auto graphics = line.graphics;
                 line.graphics = base; line.centered = true;

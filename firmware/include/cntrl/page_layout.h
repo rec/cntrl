@@ -10,14 +10,14 @@ struct PageLayout {
     static constexpr unsigned max_pages = UINT8_MAX, max_controllers = max_pages, patch_chooser = 11, midi_monitor = 12, midi_looper = 13, arpeggiator = 14, banked = 15, pong = 16, language = 17, time = 19, calibrate = 20, doom = 21, setups = 22, songs = 23, switches = 24;
     const uint8_t *records = nullptr;
     unsigned pages() const { return records ? records[4] : 0; }
-    unsigned windows() const { return records ? records[5] : 0; }
+    unsigned displays() const { return records ? records[5] : 0; }
     unsigned regions() const { return records ? records[7] : 0; }
     bool left_wins() const { return records && records[8]; }
     unsigned initial_focus() const { return records ? records[9] : 0; }
-    unsigned length() const { return 12 + windows() * 32 + pages() * (35 + windows()) + regions() * 34 + (records ? records[10] : 0); }
+    unsigned length() const { return 12 + displays() * 32 + pages() * (35 + displays()) + regions() * 34 + (records ? records[10] : 0); }
     const uint8_t *navigation() const { return records && records[10] ? records + length() - 4 : nullptr; }
-    const char *window_name(unsigned index) const { return reinterpret_cast<const char *>(records + 12 + index * 32); }
-    const uint8_t *record(unsigned index) const { return records + 12 + windows() * 32 + index * (34 + windows()); }
+    const char *display_name(unsigned index) const { return reinterpret_cast<const char *>(records + 12 + index * 32); }
+    const uint8_t *record(unsigned index) const { return records + 12 + displays() * 32 + index * (34 + displays()); }
     const char *name(unsigned index) const { return reinterpret_cast<const char *>(record(index)); }
     const uint8_t *page(unsigned index) const { return record(index) + 32; }
     unsigned controllers() const {
@@ -34,7 +34,7 @@ struct PageLayout {
         for (unsigned i = 0; i < index; ++i) slot += page(i)[0] == patch_chooser;
         return slot;
     }
-    const uint8_t *region(unsigned index) const { return records + 12 + windows() * 32 + pages() * (34 + windows()) + index * 34; }
+    const uint8_t *region(unsigned index) const { return records + 12 + displays() * 32 + pages() * (34 + displays()) + index * 34; }
     const char *region_name(unsigned index) const { return reinterpret_cast<const char *>(region(index)); }
     unsigned region_size(unsigned index) const { return region(index)[33]; }
     unsigned region_page(unsigned index,unsigned position) const { return region(regions())[region(index)[32] + position]; }
@@ -44,12 +44,12 @@ struct PageLayout {
             if (region_page(r,p) == index) return r;
         return regions();
     }
-    static unsigned maximum_windows(unsigned type,unsigned available) {
+    static unsigned maximum_displays(unsigned type,unsigned available) {
         return type == 10 ? 0 : type == patch_chooser ? available : type == banked || type == pong ? std::min(3u, available) : std::min(type == language || type == time ? 2u : 1u,available);
     }
-    unsigned minimum_windows(unsigned index) const {
+    unsigned minimum_displays(unsigned index) const {
         const auto *p = page(index);
-        // Preserve stored records while overriding old tool-page window claims.
+        // Preserve stored records while overriding old tool-page display claims.
         return p[0] == 10 ? 0 : p[0] == language || p[0] == time ? 2 : p[0] == patch_chooser || p[0] == banked || p[0] == pong ? p[1] : 1;
     }
     static bool valid_name(const uint8_t *name) {
@@ -91,17 +91,17 @@ public:
         for (const auto &r : regions_) if (r.selected == page && r.count) return true;
         return false;
     }
-    int controller_window(unsigned slot,unsigned logical) const {
+    int controller_display(unsigned slot,unsigned logical) const {
         unsigned index = layout.controller_page(slot), r = layout.page_region(index);
         if (index == layout.pages() || r == layout.regions() || regions_[r].selected != index) return -1;
         const auto &region = regions_[r];
         unsigned visible = region.count;
         // The sent-patch pane is the sole view when only one screen is available.
         if (visible == 1) return logical == 1 ? int(region.first) : -1;
-        if (logical >= layout.windows()) return -1;
+        if (logical >= layout.displays()) return -1;
         const auto *p = layout.page(index);
         bool removed[256] = {};
-        for (unsigned i = 0; i < layout.windows() - visible; ++i) removed[p[2 + i]] = true;
+        for (unsigned i = 0; i < layout.displays() - visible; ++i) removed[p[2 + i]] = true;
         if (removed[logical]) return -1;
         unsigned physical = region.first;
         for (unsigned i = 0; i < logical; ++i) if (!removed[i]) ++physical;
@@ -114,11 +114,11 @@ private:
     CNTRL_FLASH_ROUTINE(page_allocation_allocate)
 #endif
     void allocate() {
-        unsigned spare = layout.windows();
-        for (auto &r : regions_) { r.count = layout.minimum_windows(r.selected); spare -= r.count; }
+        unsigned spare = layout.displays();
+        for (auto &r : regions_) { r.count = layout.minimum_displays(r.selected); spare -= r.count; }
         for (unsigned i = 0; i < regions_.size(); ++i) {
             auto &r = regions_[layout.left_wins() ? i : regions_.size() - i - 1];
-            unsigned extra = std::min(spare,PageLayout::maximum_windows(layout.page(r.selected)[0],layout.windows()) - r.count);
+            unsigned extra = std::min(spare,PageLayout::maximum_displays(layout.page(r.selected)[0],layout.displays()) - r.count);
             r.count += extra; spare -= extra;
         }
         unsigned first = 0;

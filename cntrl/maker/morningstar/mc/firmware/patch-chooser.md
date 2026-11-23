@@ -77,7 +77,7 @@ previous cycle slides it leftward. Browsing patches within a cycle scrolls
 rightward, as does sending a patch. The setup's `[scrolling]` table independently
 selects `send`, `patches`, and `cycles` directions (`left`, `right`, `up`, `down`).
 Backward browsing and undo reverse those directions. Vertical sends animate the
-candidate and current panes together while the page window stays still.
+candidate and current panes together while the page display stays still.
 Leftward sends slide each performance pane's new content into place; the default
 rightward send retains the continuous panorama movement.
 The transition-start routine resides in flash to keep the combined application
@@ -92,7 +92,7 @@ redrawing runs behind. `scrolling.horizontal_duration` defaults to 75 ms and
 `scrolling.vertical_duration` to 200 ms. Both accept seconds or duration strings
 such as `'200 ms'`. Actual duration can exceed
 the requested duration because a complete frame must finish before the next.
-The current-patch pane and page window stay in place during this motion.
+The current-patch pane and page display stay in place during this motion.
 
 ## Scrolling investigation
 
@@ -143,7 +143,7 @@ on the pedal; successful boot and read-back are not a visual test.
 
 The performance panes are candidate (left), current (centre), history (right).
 Pane indices are physical left-to-right throughout: 0 candidate, 1 current,
-2 history. Setup format 21 stores window graphics and page references in that
+2 history. Setup format 21 stores display graphics and page references in that
 same next/sent/undo order. The hardware adapter forwards pane indices directly,
 as it does for module screens. Recompile setups before uploading to format 21.
 A sends a patch: candidate moves right into current, and current into history.
@@ -514,10 +514,10 @@ buffered traffic, so it is not a latency measurement; no lost events were report
 ## Show graphics configuration
 
 See [show configuration](../../../../../firmware/README.md#screen-graphics).
-Windows display ordered page fields, defaulting to navigation group and patch
-name. Partial styles attach to shows, windows, pages, categories, programs,
+Displays show ordered page fields, defaulting to navigation group and patch
+name. Partial styles attach to shows, displays, pages, categories, programs,
 patches and fields. Each line independently fits its font to the padded width
-and allocated height; authors select font names, not sizes. Window padding may
+and allocated height; authors select font names, not sizes. Display padding may
 override the show default.
 Foreground/background color selection and warnings are resolved on the host.
 Rendering fills the whole background and clips all text to the padded rectangle.
@@ -652,14 +652,14 @@ editor text await user confirmation. No setup or animation data was uploaded.
 ## Display pages and per-line styles: 2026-10-26
 
 Compiled format 11 uses named pages with ordered field names, partial styles
-and window bindings. The default page contains `group.name` and
+and display bindings. The default page contains `group.name` and
 `display_name`, preserving the performance UI. Management, empty/error states
 and performance pages use the same generic line renderer. See the portable
 [display formatting guide](../../../../../doc/formatting.md) for configuration
 and inheritance rules.
 
 The saved pman setup was compared with its previous format 10 binary across all
-256 patches in all three windows. MIDI records, labels, font metrics, colors,
+256 patches in all three displays. MIDI records, labels, font metrics, colors,
 padding and centered cursor positions match. The format 11 setup is 34,583 bytes
 of the 65,536-byte document capacity. Its default vertical placement and
 transition behavior are also covered by native renderer tests. The ARM image
@@ -882,12 +882,12 @@ The pulse never changes the saved brightness setting.
 ## Patch and cycle navigation animation
 
 Changing patch cycles or browsing patches within a cycle slides the new card
-into the physical left target window:
+into the physical left target display:
 from the left when navigating forward, and from the right when navigating
-backward. The center and right windows stay fixed. This uses the setup's
+backward. The center and right displays stay fixed. This uses the setup's
 transition duration and the existing two-column hardware scroll scheduling.
 Each panel retains its own scroll offset so later send and undo animations
-continue to move all three windows together correctly.
+continue to move all three displays together correctly.
 
 ## Patch-manager vertical bands
 
@@ -1041,7 +1041,7 @@ releasing B/E stops that button's repeats. D alone still undoes, and A retains
 its existing send and hold-brightness feedback. Setup changes and leaving the
 page cancel held-button state. The displays and scrolling animations are unchanged.
 
-While any physical button is held, including C/F, the target window
+While any physical button is held, including C/F, the target display
 stays at full pixel brightness. The pulse starts from full brightness only after
 all buttons are released and the configured delay has elapsed. This also suppresses it throughout hold delays and
 auto-repeat in either direction.

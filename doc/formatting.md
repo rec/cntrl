@@ -10,7 +10,7 @@ parser, selector language or additional dependency is required.
 
 ## Styles
 
-Use the same optional `style` structure on setups, windows, pages,
+Use the same optional `style` structure on setups, displays, pages,
 programs, patches and shared parameters. Named tag styles live directly in
 `[tag_styles.NAME]`. Top-level `tags` classifies the setup itself. Keep page-specific field overrides in
 `pages.PAGE.line_styles.FIELD`.
@@ -57,10 +57,10 @@ fields = ['patch_cycle.name', 'display_name']
 [patch_views.patch.line_styles.'patch_cycle.name']
 foreground_color = 'blue'
 
-[windows.next]
+[displays.next]
 view = 'patch'
 
-[windows.next.style]
+[displays.next.style]
 background_color = 'white'
 ```
 
@@ -73,7 +73,7 @@ Resolve each property from lowest to highest precedence:
 
 1. Application defaults.
 2. Show style.
-3. Window style.
+3. Display style.
 4. Page style.
 5. Applicable tag styles, in the order described below.
 6. Program style, for patch-content fields.
@@ -83,10 +83,10 @@ Resolve each property from lowest to highest precedence:
 
 Only consult sources belonging to the displayed field. The `tags` field
 uses tag styles but not program or patch styles. Navigation headings such
-as `patch_cycle.name` use show, window, page and field styles. Global fields do not
+as `patch_cycle.name` use show, display, page and field styles. Global fields do not
 acquire the current patch's tags or appearance.
 
-The same page resolves against each window's own data item. Background color
+The same page resolves against each display's own data item. Background color
 follows the same partial-override rules as foreground color and font name.
 There is no separate transparency model or CSS inheritance behavior.
 
@@ -117,18 +117,18 @@ declarations; an undeclared tag contributes no style properties.
 ## Automatic text fitting and painting
 
 Each nonempty field independently chooses the largest available bitmap face
-that fits the drawable window width and its allocated vertical space. Preserve
+that fits the drawable display width and its allocated vertical space. Preserve
 glyph proportions. Short labels remain bounded by height so they cannot overlap
 other lines; unused horizontal space is acceptable.
 
 There are no authored `font_size` or `autoscale_fonts` controls. Selected raster
-sizes and metrics are compiler details. The patch-manager card divides the window
+sizes and metrics are compiler details. The patch-manager card divides the display
 into three equal vertical bands. Its first band is reversed, using the heading
 color as background and the page background as text color. The second and third
 lines share the smaller fitting size, while retaining their font families.
 Other pages, including switch pages, retain their own layout rules.
 
-Window padding, horizontal centering, field order and missing-value omission
+Display padding, horizontal centering, field order and missing-value omission
 remain part of the page model. Transitions end with the destination appearance.
 
 Already-sent text keeps its resolved foreground and uses alternating transparent
@@ -150,7 +150,7 @@ top-level `image` into its `style` table.
 ## Patch views and fields
 
 Patch views contain ordered field names, for example
-`fields = ['patch_cycle.name', 'names.vl70m', 'names.patchman']`. Each window supplies
+`fields = ['patch_cycle.name', 'names.vl70m', 'names.patchman']`. Each display supplies
 its own data item to the view. Missing and empty values are omitted; zero and
 false remain visible. Built-ins and shared parameters use one unique namespace.
 Unknown or duplicate field names are errors. Views are bounded by record capacity

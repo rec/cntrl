@@ -310,7 +310,7 @@ on the performance page: C cancels the idle fade and sends normally. Successful
 program-change feedback bypasses fading and applies at the button edges, including
 a quick press/release. Startup-animation dismissal still consumes its gesture.
 
-## Pages, windows and line styles
+## Pages, displays and line styles
 
 The default `patch` page reproduces the patch cycle and patch-name display. Undo,
 sent and next supply their own patch to that page. The same generic text-line
@@ -326,17 +326,17 @@ font_name = 'Arimo'
 [patch_views.patch]
 fields = ['patch_cycle.name', 'display_name']
 
-[windows.undo]
+[displays.undo]
 view = 'patch'
 
-[windows.sent]
+[displays.sent]
 view = 'patch'
 
-[windows.next]
+[displays.next]
 view = 'patch'
 
 # Optional overrides:
-# [windows.next.style]
+# [displays.next.style]
 # background_color = '0x002040'
 # [patch_views.patch.line_styles.display_name]
 # font_name = 'ComicRelief'
@@ -356,7 +356,7 @@ zero and false remain visible. A page supports at most 16 fields, further
 limited by the available display height.
 
 Each partial style supports `foreground_color`, `background_color`,
-`font_name` and `icon`. Resolve properties independently: show style, window, page,
+`font_name` and `icon`. Resolve properties independently: show style, display, page,
 ordered tags, program, patch, shared parameter (where applicable), then
 page field overrides. Omitted properties retain the earlier value.
 
@@ -401,7 +401,7 @@ fields = ['patch_cycle.name', 'tags', 'display_name']
 ```
 
 The default font is `Arimo`, default padding is 4, and default colors are
-black on white. Set the show font with `[style].font_name`; each window may
+black on white. Set the show font with `[style].font_name`; each display may
 override `pad`. Each line independently uses the largest available bitmap face
 that fits its width and equal share of the padded height, preserving proportions.
 There are no authored sizing controls. Performance pages reject initial overflow;
@@ -477,7 +477,7 @@ regardless of the buffer count; `target_pulse` remains independent.
 
 Format 30 adds independent horizontal and vertical scroll durations and the
 send, patch-browsing, and cycle-browsing directions.
-Format 31 introduced separate apps and pages with configurable window allocation.
+Format 31 introduced separate apps and pages with configurable display allocation.
 Format 36 unifies them into one ordered collection of named pages.
 Recompile older setups for format 36. See [Pages](../doc/pages.md)
 for configuration and the empty setup.
@@ -531,7 +531,7 @@ Zero (the default) disables the screensaver. Positive values enable `idle_movie`
 after no physical input for that interval, independently of `splash_movie`.
 Older documents are rejected; recompile the source setup and upload it after
 installing current firmware. Replace old `screens.NAME` color tables with
-`windows.NAME.style` tables before recompiling. No automatic
+`displays.NAME.style` tables before recompiling. No automatic
 conversion of stored documents is performed.
 
 Startup and idle playback use `splash_movie` and `idle_movie`: an empty string,
@@ -558,14 +558,14 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |
-| Page layout, after optional expression, clock, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 window count and one u8 surrender-order entry per display. At most four patch-choosers and 36 pages. Page types follow `layout.PAGE_TYPES`; ID 9 is unassigned |
+| Page layout, after optional expression, clock, gesture and hook sections | `CPAG`, u8 page count, u8 display count, version=1, reserved=0; display IDs are name[32]. Each page has name[32], u8 type, u8 display count and one u8 surrender-order entry per display. At most four patch-choosers and 36 pages. Page types follow `layout.PAGE_TYPES`; ID 9 is unassigned |
 | Movie lists, after page layout | `CMOV`, u16 startup count, u16 idle count, then startup and idle CRC32 asset keys as u32 values |
 | Name metadata | `CNAM`, then original `name`, program `display_name`, show `display_name` for each patch, in order; each value is u16 UTF-8 byte count followed by bytes, or `0xffff` for absent |
 | Display header, 16 bytes | `CDSP`, u16 style count, page count, text count, page-data byte count; u32 source-metadata byte count |
 | Resolved style, 16 bytes | Same layout as a screen record, one per distinct resolved style |
 | Resolved page | u8 line count followed by 8-byte line records: u8 field code, u8 already-sent indication flag, u16 style index, centered cursor x, literal-text index |
 | Literal text | u16 byte count including the final NUL, followed by ASCII text; at most 64 bytes |
-| Display source metadata | UTF-8 TOML preserving pages, windows, partial styles, shared tag definitions, explicit program/patch tags, global parameter values, show style, padding and icon references within partial styles |
+| Display source metadata | UTF-8 TOML preserving pages, displays, partial styles, shared tag definitions, explicit program/patch tags, global parameter values, show style, padding and icon references within partial styles |
 
 The existing firmware tag counters and target `max_patch_cycles` limit refer
 to navigation patch cycles. Classification tags are resolved by the host and
@@ -693,13 +693,13 @@ A zero channel denotes an unassigned jack.
 
 ### Pages
 
-By default the rightmost window starts on Status. F cycles through Status,
+By default the rightmost display starts on Status. F cycles through Status,
 Menu, MIDI Cable Test, Panic, TRS Ports, Expression, Time, Pong, Language and None using
 horizontal scrolling. Hold D to browse backward; pressing D while F is held also
 steps backward immediately. F never repeats automatically. C taps only on Time.
 Sending and undo keep an auxiliary page in place.
 
-Time occupies two windows. Its left window shows Tap, DIN and TRS tempos with
+Time occupies two displays. Its left display shows Tap, DIN and TRS tempos with
 a green outline around the selected source. E cycles sources; B toggles MIDI
 Clock sending, initially off. DIN and TRS are measured independently and become
 blank after `clock_timeout` seconds without ticks. Automatic source selection
@@ -707,7 +707,7 @@ keeps a valid selection, chooses a measured source when it expires, and falls
 back to Tap if none is measured. Set `autoselect_clock = false` to select manually.
 Selected input ticks are relayed directly when sending is on.
 
-The right window displays Tap Tempo in fixed-position Courier digits (`---.--` initially). Two taps
+The right display shows Tap Tempo in fixed-position Courier digits (`---.--` initially). Two taps
 produce the first result; subsequent taps average the latest four intervals.
 Intervals below 0.1 seconds are ignored. A gap longer than two established beat
 periods, or the configured reset gap (3 seconds by default), starts a fresh tap
@@ -736,7 +736,7 @@ All durations below are seconds and accept unit strings. Dimensions are pixels;
 title and tempo heights reserve layout bands, while font size is fitted automatically.
 
 Configure shared page preferences under `[page_settings]`. Select page types,
-order and window counts under the setup's named `[pages.NAME]` tables. See [Pages](../doc/pages.md).
+order and display counts under the setup's named `[pages.NAME]` tables. See [Pages](../doc/pages.md).
 
 ```toml
 [page_settings]

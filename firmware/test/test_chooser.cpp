@@ -142,7 +142,7 @@ void test_setup_applies_usb_ports(const std::vector<uint8_t> &source) {
     }
 }
 
-void test_empty_patch_windows_are_black(const std::vector<uint8_t> &source) {
+void test_empty_patch_displays_are_black(const std::vector<uint8_t> &source) {
     auto bytes = source;
     for (unsigned slot = 0; slot < 3; ++slot) {
         bytes[28 + slot * 16 + 6] = 0xe0; bytes[28 + slot * 16 + 7] = 0x07;
@@ -163,7 +163,7 @@ void test_empty_patch_windows_are_black(const std::vector<uint8_t> &source) {
     unsigned page = display + 16 + cntrl::u16(bytes.data() + display + 4) * 16;
     for (unsigned i = 0; i < cntrl::u16(bytes.data() + display + 6); ++i) {
         unsigned count = bytes[page++];
-        for (unsigned j = 0; j < count; ++j, page += 8) bytes[page] = 22; // No switch state in patch windows.
+        for (unsigned j = 0; j < count; ++j, page += 8) bytes[page] = 22; // No switch state in patch displays.
     }
     cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size()) - 28));
     assert(doc.load(bytes.data(), unsigned(bytes.size()), hw));
@@ -745,13 +745,13 @@ static void test_pages_run_independently(const std::string &path) {
     assert(layout.controllers() == 2 && layout.pages() == 7);
     assert(!std::strcmp(layout.name(layout.controller_page(0)), "lead") && !std::strcmp(layout.name(layout.controller_page(1)), "rhythm"));
     cntrl::PageAllocation allocation; assert(allocation.prepare(layout)); allocation.finish(true); allocation.configure(layout);
-    for (unsigned i = 0; i < 3; ++i) assert(allocation.controller_window(0,i) == int(i));
+    for (unsigned i = 0; i < 3; ++i) assert(allocation.controller_display(0,i) == int(i));
     allocation.select(1);
-    assert(allocation.controller_window(0,0) == 0 && allocation.controller_window(0,1) == 1 && allocation.controller_window(0,2) == -1);
+    assert(allocation.controller_display(0,0) == 0 && allocation.controller_display(0,1) == 1 && allocation.controller_display(0,2) == -1);
     allocation.select(6);
-    assert(allocation.controller_window(1,0) == -1 && allocation.controller_window(1,1) == 0 && allocation.controller_window(1,2) == 1);
+    assert(allocation.controller_display(1,0) == -1 && allocation.controller_display(1,1) == 0 && allocation.controller_display(1,2) == 1);
     allocation.select(2);
-    assert(allocation.controller_window(1,1) == 0 && allocation.controller_window(1,2) == 1);
+    assert(allocation.controller_display(1,1) == 0 && allocation.controller_display(1,2) == 1);
     assert(layout.page(0)[0] == 10 && layout.page(0)[1] == 0);
     cntrl::Controller first(hw, hw, hw, 5), second(hw, hw, hw, 6);
     hw.controller = hw.visible = &first; first.activate(document);
@@ -790,7 +790,7 @@ static void test_pages_run_independently(const std::string &path) {
         cntrl::Document rejected; assert(!rejected.load(corrupt.data(), unsigned(corrupt.size()), hw));
     }
     auto empty = bytes;
-    empty.erase(empty.begin() + offset + 12 + layout.windows() * 32, empty.begin() + offset + layout.length());
+    empty.erase(empty.begin() + offset + 12 + layout.displays() * 32, empty.begin() + offset + layout.length());
     empty[offset + 4] = empty[offset + 7] = empty[offset + 9] = 0;
     empty[19] &= ~1u;
     cntrl::put32(empty.data() + 8, unsigned(empty.size()));
@@ -899,7 +899,7 @@ int main(int argc, char **argv) {
             cntrl::Document rejected; assert(!rejected.load(invalid.data(), unsigned(invalid.size()), hw));
         }
     }
-    test_empty_patch_windows_are_black(bytes);
+    test_empty_patch_displays_are_black(bytes);
     {
         std::ifstream display_file(argv[2]);
         std::string display_hex; display_file >> display_hex;
@@ -996,7 +996,7 @@ int main(int argc, char **argv) {
     corrupt.back() ^= 1;
     cntrl::Document invalid;
     assert(!invalid.load(corrupt.data(), unsigned(corrupt.size()), hw));
-    // Reserved display bytes must be zero in both windows and line styles.
+    // Reserved display bytes must be zero in both displays and line styles.
     unsigned display = 0;
     for (unsigned i = 0; i + 4 <= bytes.size(); ++i)
         if (!std::memcmp(bytes.data() + i, "CDSP", 4)) { display = i; break; }

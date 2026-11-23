@@ -56,8 +56,8 @@
 | **Pending**, **unknown remote state** | Pending means CNTRL is still working on an action. Unknown remote state means CNTRL cannot tell which values the receiving instrument now has, for example after an output disconnects during a send. |
 | **Undo** | In Patch Chooser, recalls a previous known program selection when available. It cannot reverse arbitrary actions in a patch. The looper and setlist editor have their own Undo actions. |
 | **Binding**, **assignment** | What a control does in a setup, song, or patch. A binding can run a patch on a switch gesture or send MIDI as an expression pedal moves. |
-| **Scene** | A patch that takes over all the pedal's windows and supplies the control bindings for that part of a song. For example, a song can use a verse scene, a chorus scene, then the verse scene again. |
-| **Switch labels** | The top and bottom positions in each scene window. Each label shows what its corresponding switch does. A three-window pedal has six switch label positions. |
+| **Scene** | A patch that takes over all the pedal's displays and supplies the control bindings for that part of a song. For example, a song can use a verse scene, a chorus scene, then the verse scene again. |
+| **Switch labels** | The top and bottom positions in each scene display. Each label shows what its corresponding switch does. A three-display pedal has six switch label positions. |
 | **Binding map** | The assignments that determine what the pedal's controls do while a scene is active. |
 | **Song forward / song backward** | The setup's reserved controls for stepping forward or backward directly from any scene in a song or set. The defaults are F click and F double-click. |
 | **Page forward / page back** | Controls for browsing utility pages. In Patch mode, press F to advance. In Song and Setlist modes, hold F to advance or click F and hold the second press to go back by default. Songs and scenes can supply their own combinations. Returning to the empty page shows the current scene. |
@@ -81,13 +81,13 @@
 | --- | --- |
 | **Page**, **page type** | A named view in a setup. Its type determines what it does, for example Patch Chooser, Status, or Time. A setup can have more than one page of a type. |
 | **Region** | A group of pages that you can browse independently. One page is selected per region. A multi-display setup can show a performance region and a tools region at the same time. |
-| **Focus** | The region currently receiving page-specific controls. A border marks its visible windows. Changing focus leaves the other regions on their selected pages. |
-| **Window**, **display** | A display is a physical screen. A window is a page's use of one screen. As pages change, the layout can give a page more or fewer windows. |
+| **Focus** | The region currently receiving page-specific controls. A border marks its visible displays. Changing focus leaves the other regions on their selected pages. |
+| **Display** | One physical screen on the pedal, such as the left, center, or right screen. The layout determines which displays each page uses. |
 | **Banked page** | A performance page that groups control assignments into banks and pages within each bank. Navigating changes which assignments the same switches operate. |
-| **None** | A page choice that uses no windows, freeing screens for other regions. |
+| **None** | A page choice that uses no displays, freeing screens for other regions. |
 | **Status** | The page for checking such details as the running firmware, memory and storage, setup patch counts, and clock status. |
 | **Language**, **language pack** | The page for choosing the interface language. A language pack supplies translated captions and prompts. Names you give songs, patches, or setups stay as written. |
-| **Patch view**, **field** | A patch view defines what a patch window shows. Each field supplies a piece of content, such as the display name, program, or volume. |
+| **Patch view**, **field** | A patch view defines what a patch display shows. Each field supplies a piece of content, such as the display name, program, or volume. |
 | **Style**, **tag** | A style controls appearance, such as font and colors. Tags are reusable labels you can assign to patches or catalogue entries and use to apply shared styling. |
 | **Splash**, **screensaver** | The startup animation and the animation shown after a configured period of inactivity. |
 | **Text message**, **cue**, **warning** | A short caption sent to CNTRL over USB serial or MIDI SysEx. A cue can show a prompt from another device, and a warning draws attention to a problem. |

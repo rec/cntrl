@@ -14,9 +14,9 @@ song position or sequence.
 A sequence executes all its children in order on one activation. A song
 advances one position at a time.
 
-## Patch window presentation
+## Patch display presentation
 
-The patch-manager window is divided into three equal vertical bands. The top
+The patch-manager display is divided into three equal vertical bands. The top
 band is reversed across its full width. Its background uses the heading's
 resolved patch color and its text uses the page background. The second and third displayed
 lines use the smaller of their fitted sizes, retaining their font families.
@@ -30,7 +30,7 @@ defaults to 1.5; other fonts default to 1.0. Fitting includes the scaled width.
 ## Automatic cycle styles
 
 Setup-level `fill_in_styles = true` (the default) fills missing formatting for
-each cycle and its program lines. Explicit show, window, page, tag, program,
+each cycle and its program lines. Explicit show, display, page, tag, program,
 patch and field styles still override these generated defaults per property.
 Global parameter and switch fields keep their existing formatting.
 
@@ -605,7 +605,7 @@ unknown, rather than risk sending it twice.
 ## Required authoring and format changes
 
 Song records use the CSG8 journal and CSP9 core. Setup
-window graphics and page references use physical left-to-right order:
+display graphics and page references use physical left-to-right order:
 next (0), sent (1), undo (2). Recompile and
 upload matching setup and song documents together before using this firmware.
 Existing binary documents are rejected; no migration or dual execution path is

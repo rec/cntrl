@@ -380,7 +380,7 @@ use any filesystem and need not provide device identity or free-space counts.
 
 The current setup format is 35. Important portable sections are:
 
-- `CLAY` version 2: explicit logical window IDs and a priority permutation per
+- `CLAY` version 2: explicit logical display IDs and a priority permutation per
   app, followed by the ordered page cycle. There is no implied display count.
 - `CEND`: endpoint names, labels, routes, transport/capability flags and explicit
   configurable-port slot bindings.
@@ -395,7 +395,7 @@ The current setup format is 35. Important portable sections are:
 
 Existing protocol limits are sixteen MIDI routes, eight physical input IDs,
 five configured switch slots and four configurable-port/expression slots. Layout
-supports at most four patch-choosers, 36 named pages and 255 declared windows; setup/resource
+supports at most four patch-choosers, 36 named pages and 255 declared displays; setup/resource
 limits are declared separately by `Target`. These are format/product limits,
 not processor pins or implied transport positions.
 
@@ -488,8 +488,8 @@ the physical `Hardware` services and the platform methods consumed by
 `PageHost`; do not copy the facade or page behavior into the implementation.
 
 Management presentations describe logical context, selection and detail. The
-shared presentation helper preserves their three-window arrangement, combines
-their text when fewer windows exist, and spreads their roles when additional
-windows exist. Individual page geometry comes from the destination viewport.
+shared presentation helper preserves their three-display arrangement, combines
+their text when fewer displays exist, and spreads their roles when additional
+displays exist. Individual page geometry comes from the destination viewport.
 Configured pixel values, including tap-flasher diameter and annulus, retain
 their physical pixel units rather than being stretched with the layout.

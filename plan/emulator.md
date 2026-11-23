@@ -54,7 +54,7 @@ The layout does not define MIDI assignments, page allocation, display resolution
 switch gestures, firmware behavior or setup contents. Those belong to the
 existing hardware/application records and running software. A switch's screen
 position must never determine its action. The existing page layout continues to
-allocate logical display windows independently of the drawing of the enclosure.
+allocate logical displays independently of the drawing of the enclosure.
 
 All generic emulator code and models belong under `cntrl/emulator/`, with shared
 native adapter code under `firmware/` where appropriate. All Morningstar-specific
@@ -184,7 +184,7 @@ not silently invent physical display specifications.
   exist. A capability requiring software support must be reported as unsupported
   until implemented, rather than reduced silently to a generic button.
 - Keep debug controls, MIDI logs and connection selection outside the emulated
-  enclosure, so they do not alter its layout or claim firmware display windows.
+  enclosure, so they do not alter its layout or claim firmware displays.
 
 ## Clock, MIDI and storage
 

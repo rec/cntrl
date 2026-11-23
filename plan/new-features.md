@@ -2,7 +2,7 @@
 
 ## Data-driven page buttons and emulator tooltips
 
-Deferred. Keep the current fixed button and window tooltip slots for now.
+Deferred. Keep the current fixed button and display tooltip slots for now.
 
 Give each built-in page one definition of its button bindings. Each binding
 would name a controller role, an event such as press or hold, and a stable

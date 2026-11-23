@@ -492,7 +492,7 @@ def encode(
         scene_images.get(i, ('', None, 0))
         for i in range(max(scene_images, default=-1) + 1)
     ]
-    for collection, tag, contrast_tag, window in (
+    for collection, tag, contrast_tag, display_index in (
         (
             [(s.display_name, s.style, 0) for s in library.songs],
             binary_format.SONG_ARTWORK,
@@ -512,7 +512,9 @@ def encode(
             0,
         ),
     ):
-        if not any((s and (s.image or window == 2)) or n for n, s, _ in collection):
+        if not any(
+            (s and (s.image or display_index == 2)) or n for n, s, _ in collection
+        ):
             continue
         if target is None and any(s and s.image for _, s, _ in collection):
             raise SongLibraryError('artwork requires --target')
@@ -530,7 +532,7 @@ def encode(
                     root / style.image,
                     target,
                     trace.files if trace else None,
-                    window=window,
+                    display=display_index,
                 )
             label = label_text(caption) if caption else bytes(64)
             foreground = style.foreground_color if style else None
@@ -546,7 +548,7 @@ def encode(
                 if bitmap and caption
                 else 0
             )
-            if window != 1:
+            if display_index != 1:
                 background = style.background_color if style else None
                 contrast.extend(
                     struct.pack(
@@ -561,7 +563,7 @@ def encode(
                         else 0,
                     )
                 )
-                if window == 0:
+                if display_index == 0:
                     contrast.extend(struct.pack('<I', node_crc))
             else:
                 contrast.append(mode)

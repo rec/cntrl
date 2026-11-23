@@ -2,7 +2,7 @@
 
 Setups, Songs and setlists, Switches, Panic, and the MIDI cable tester
 have individual pages. See [Pages](pages.md) for page selection and
-window allocation. The broader organization below remains guidance for
+display allocation. The broader organization below remains guidance for
 subsequent features.
 
 ## Purpose

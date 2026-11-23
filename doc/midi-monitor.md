@@ -6,11 +6,11 @@ written to its local output drivers. Add it to the setup's named pages:
 ```toml
 [pages.monitor]
 type = 'midi-monitor'
-min_windows = 1
+min_displays = 1
 ```
 
-Like the other tool pages, the monitor uses exactly one window, showing combined
-incoming and outgoing traffic. Its `min_windows` is forced to one, including
+Like the other tool pages, the monitor uses exactly one display, showing combined
+incoming and outgoing traffic. Its `min_displays` is forced to one, including
 for existing saved setups. Its region can appear on either side; see
 [Pages](pages.md). Background patches continue while the monitor is visible.
 
@@ -18,7 +18,7 @@ Select the page with the page-cycle control.
 The monitor observes all enabled endpoints and USB cables exposed by the
 target. Opening it does not enable disabled transports or change routing.
 
-## Reading the windows
+## Reading the displays
 
 Each event uses three compact rows:
 
@@ -59,7 +59,7 @@ endpoint, cable and direction.
 - Back opens the normal menu. The page-cycle control continues to select other
   pages. If those roles share a button, page cycling keeps its usual priority.
 
-The history holds 128 entries, shared by every window. Dense clock or SysEx
+The history holds 128 entries, shared by every display. Dense clock or SysEx
 traffic can fill it quickly. `Hist-N` counts entries overwritten in monitor
 history, independently of actual MIDI delivery or routing drop counters.
 Capture continues while frozen; if the frozen position is overwritten, the

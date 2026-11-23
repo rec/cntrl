@@ -5,19 +5,19 @@
 #include <vector>
 
 struct Hardware : TestInputHardware {
-    unsigned windows;
+    unsigned displays;
     std::vector<cntrl::Pane> shown;
-    explicit Hardware(unsigned count) : windows(count), shown(count) {}
+    explicit Hardware(unsigned count) : displays(count), shown(count) {}
     bool send(const char *, const uint8_t *, unsigned) override { return true; }
     bool supports(const char *) const override { return true; }
     bool supports_font(unsigned, unsigned) const override { return true; }
     unsigned display_width() const override { return 200; }
     unsigned display_height() const override { return 160; }
-    unsigned display_count() const override { return windows; }
+    unsigned display_count() const override { return displays; }
     const char *control_label(cntrl::ControlRole role) const override {
         const char *labels[] = {"Left", "Right", "Select", "", "", ""}; return labels[unsigned(role)];
     }
-    void show(unsigned index, const cntrl::Pane &pane) override { assert(index < windows); shown[index] = pane; }
+    void show(unsigned index, const cntrl::Pane &pane) override { assert(index < displays); shown[index] = pane; }
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
     void error(const char *) override {}

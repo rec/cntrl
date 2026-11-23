@@ -152,7 +152,7 @@ state, manual time stepping, expression/auxiliary inputs and display snapshots.
 The enclosure drawing retains
 its aspect ratio when resized, and each display retains its native aspect ratio
 and pixels within its placement rectangle. The inspectors do not take firmware
-display windows.
+displays.
 
 Host MIDI connections use middy and are opened only after explicit selection.
 Loading a profile does not connect or send to a real MIDI destination. MIDI
@@ -188,8 +188,8 @@ require additional application support; they are not silently mapped to buttons.
 ### Page tooltips
 
 The internal [tooltip catalogue](../cntrl/emulator/tooltips.toml) contains
-editable English defaults for display windows and pedal buttons. The emulator
-shows the text on hover. Clear the entry to hide it. Windows are numbered
+editable English defaults for displays and pedal buttons. The emulator
+shows the text on hover. Clear the entry to hide it. Displays are numbered
 from left to right within their page's visible region. A button uses the
 focused page's entry and its control ID, such as `button-a`.
 

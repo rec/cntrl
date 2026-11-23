@@ -26,15 +26,15 @@ class TitleContrast(IntEnum):
 
 
 def prepare(
-    path: Path, target: Target, snapshots: dict[Path, bytes] | None, *, window: int = 1
+    path: Path, target: Target, snapshots: dict[Path, bytes] | None, *, display: int = 1
 ) -> tuple[int, int, bytes]:
     screen = target.displays[
-        -1 if window == 2 else min(window, len(target.displays) - 1)
+        -1 if display == 2 else min(display, len(target.displays) - 1)
     ]
     top = screen.height // 4
     bottom = screen.height * 3 // 4
     if len(target.displays) == 1:
-        if window == 0:
+        if display == 0:
             bottom = screen.height // 2
         else:
             top = screen.height // 2

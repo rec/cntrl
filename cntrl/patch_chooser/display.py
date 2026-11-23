@@ -73,18 +73,18 @@ def compile_display(
         )
         if unknown:
             raise ValueError(f'patch_views.{name}: unknown fields {sorted(unknown)}')
-    windows = [getattr(show.windows, n) for n in WINDOW_NAMES]
+    displays = [getattr(show.displays, n) for n in DISPLAY_NAMES]
     errors: list[str] = []
-    for name, window in zip(WINDOW_NAMES, windows, strict=True):
-        if window.view not in show.patch_views:
-            raise ValueError(f'windows.{name}: unknown patch view {window.view!r}')
+    for name, display in zip(DISPLAY_NAMES, displays, strict=True):
+        if display.view not in show.patch_views:
+            raise ValueError(f'displays.{name}: unknown patch view {display.view!r}')
         try:
-            if window.style:
+            if display.style:
                 for key in ('foreground_color', 'background_color'):
-                    if value := getattr(window.style, key):
+                    if value := getattr(display.style, key):
                         graphics.color(value)
         except ValueError as error:
-            errors.append(f'windows.{name}.style: {error}')
+            errors.append(f'displays.{name}.style: {error}')
     if errors:
         raise ValueError('\n'.join(errors))
     base = show.style
@@ -103,7 +103,7 @@ def compile_display(
             else cycle_style
         )
         tag = tag_style(patch.program_tags + patch.tags, show.tag_styles)
-        for window in windows:
+        for display in displays:
             page = (
                 show.patch_views.get(
                     'switches',
@@ -112,7 +112,7 @@ def compile_display(
                     ),
                 )
                 if 'switch.name' in patch.values
-                else show.patch_views[window.view]
+                else show.patch_views[display.view]
             )
             if 'switch.name' in patch.values and (
                 len(page.fields) > 3
@@ -128,8 +128,8 @@ def compile_display(
                     'switch pages support at most three action or parameter fields'
                 )
             pad = (
-                window.pad
-                if window.pad is not None
+                display.pad
+                if display.pad is not None
                 else (4 if show.pad is None else show.pad)
             )
             if 2 * pad >= min(target.display_width, target.display_height):
@@ -173,7 +173,7 @@ def compile_display(
                     if name == 'patch_cycle.name'
                     else None,
                     base,
-                    window.style,
+                    display.style,
                     page.style,
                     tag if content or name == 'tags' else None,
                     patch.program_style if content else None,
@@ -214,7 +214,7 @@ def compile_display(
                 )
     from ..fonts.assets import SWITCH_STATES, Preparation
 
-    window_face = next(f for f in target.fonts if f.name == 'Arimo')
+    display_face = next(f for f in target.fonts if f.name == 'Arimo')
     prepared = Preparation(show, target, requests, contexts, source_snapshots)
     target = prepared.target
     choices = [
@@ -297,20 +297,20 @@ def compile_display(
         records.append(
             LINE.pack(code, stipple, styles.index(key), x, texts.index(encoded))
         )
-    # Window records supply the outer background and padding, including empty panes.
-    window_records: list[bytes] = []
-    for window in windows:
+    # Display records supply the outer background and padding, including empty panes.
+    display_records: list[bytes] = []
+    for display in displays:
         pad = (
-            window.pad
-            if window.pad is not None
+            display.pad
+            if display.pad is not None
             else (4 if show.pad is None else show.pad)
         )
-        style = merge_style(base, window.style)
-        face = window_face
+        style = merge_style(base, display.style)
+        face = display_face
         size = 8
         metrics = face.sizes[size]
         fg, bg = graphics.colors(style, show.contrast)
-        window_records.append(
+        display_records.append(
             graphics.SCREEN.pack(
                 face.id, size, pad, 0, fg, bg, metrics.line_height, metrics.top
             )[:12]
@@ -328,12 +328,12 @@ def compile_display(
                 for j in indexes
             )
             if heights > target.display_height - 2 * (
-                windows[slot].pad
-                if windows[slot].pad is not None
+                displays[slot].pad
+                if displays[slot].pad is not None
                 else (4 if show.pad is None else show.pad)
             ):
                 raise ValueError(
-                    f'windows.{WINDOW_NAMES[slot]}: page text exceeds drawable height'
+                    f'displays.{DISPLAY_NAMES[slot]}: page text exceeds drawable height'
                 )
             if page not in pages:
                 pages.append(page)
@@ -414,7 +414,7 @@ def compile_display(
             + pixels
             + struct.pack('<4sI', b'AEND', len(directory) + len(pixels) + 8)
         )
-    return window_records, references, block
+    return display_records, references, block
 
 
 def artwork_files(
@@ -479,12 +479,12 @@ def estimate_frame_ram(setup: models.Setup, target: models.Target) -> int:
 
 
 def estimate_font_ram(
-    windows: list[bytes], block: bytes, fonts: dict[int, bytes]
+    displays: list[bytes], block: bytes, fonts: dict[int, bytes]
 ) -> int:
     from ..fonts import assets
 
     styles = HEADER.unpack_from(block)[1]
-    records = windows + [
+    records = displays + [
         block[
             HEADER.size + i * graphics.SCREEN.size : HEADER.size
             + (i + 1) * graphics.SCREEN.size
@@ -560,6 +560,15 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
         raise binary_format.DocumentFormatError('invalid display source size')
     try:
         source = tomlkit.parse(data[offset:end].decode('utf-8')).unwrap()
+        # Older compiled setups retain the authoring keys used at compile time.
+        if 'windows' in source:
+            source['displays'] = source.pop('windows')
+        for page in source.get('pages', {}).values():
+            if isinstance(page, dict):
+                if 'min_windows' in page:
+                    page['min_displays'] = page.pop('min_windows')
+                if 'give_up_windows' in page:
+                    page['give_up_displays'] = page.pop('give_up_windows')
         stack = [source]
         while stack:
             fields = stack.pop()
@@ -589,7 +598,7 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
 MAX_LINES = 16
 CONSTANT = 255
 DYNAMIC_FIELDS = (2, 3, 4, 5, 16, 17, 18, 19, 20, 21, 22, 23, 24)
-WINDOW_NAMES = ('next', 'sent', 'undo')
+DISPLAY_NAMES = ('next', 'sent', 'undo')
 LINE = struct.Struct('<BBHHH')
 HEADER = struct.Struct('<4sHHHHI')
 PATCH_FIELDS = (
@@ -640,7 +649,7 @@ SOURCE_FIELDS = (
     'style',
     'pad',
     'contrast',
-    'windows',
+    'displays',
     'patch_views',
     'tags',
     'tag_styles',

@@ -5,13 +5,13 @@ screensaver_timeout = 0
 pad = 4
 contrast = 0.6
 
-[windows.undo]
+[displays.undo]
 view = "patch"
 
-[windows.sent]
+[displays.sent]
 view = "patch"
 
-[windows.next]
+[displays.next]
 view = "patch"
 
 [patch_views.patch]

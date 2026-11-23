@@ -247,7 +247,7 @@ def convert(document: dict, bank: int) -> models.Setup:
     return models.Setup.model_validate(
         {
             'pages': {
-                'performance': {'type': 'patch-chooser', 'min_windows': 3},
+                'performance': {'type': 'patch-chooser', 'min_displays': 3},
                 'banked': {'type': 'banked', 'patch': 'Banked'},
             },
             'patch_cycles': {'Imported': ['Banked']},

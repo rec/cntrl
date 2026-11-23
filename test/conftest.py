@@ -28,10 +28,10 @@ def legacy_setups() -> dict[int, bytes]:
     for version in (36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47):
         data = bytearray(bytes.fromhex((root / f'setup{version}.golden').read_text()))
         page = data.index(b'CPAG')
-        count, windows, layout_version = data[page + 4 : page + 7]
-        start = page + (8 if layout_version == 1 else 12) + windows * 32
+        count, displays, layout_version = data[page + 4 : page + 7]
+        start = page + (8 if layout_version == 1 else 12) + displays * 32
         for index in range(count):
-            record = start + index * (34 + windows)
+            record = start + index * (34 + displays)
             if (kind := data[record + 32]) in (0, 2, 5, 6, 7, 8, 9):
                 data[record : record + 32] = f'status-{kind}'.encode().ljust(32, b'\0')
                 data[record + 32] = 1

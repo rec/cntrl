@@ -57,7 +57,7 @@ def test_dual_internal_setup_has_one_program_action_and_both_names(
     assert program['tags'] == ['synth']
     assert source['patch_metadata']['20']['_program']['tags'] == ['synth', 'reed']
     block = data[graph + compiler_wire.GRAPH.unpack_from(data, graph)[1] :]
-    # Second browser patch's right window uses its two distinct sound labels.
+    # Second browser patch's right display uses its two distinct sound labels.
     reference = struct.unpack_from('<H', data, 76 + 68 + 68 + 82 + 80)[0]
     assert [v[3] for v in lines(block, reference)] == [
         'Internal',

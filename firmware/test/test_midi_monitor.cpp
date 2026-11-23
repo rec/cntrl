@@ -165,7 +165,7 @@ struct Fonts : cntrl::ui::Fonts {
     cntrl::ui::Bounds bounds(unsigned, unsigned, uint32_t, const char *s) const override { return {0,0,int(std::strlen(s) * 3),5}; }
     bool glyph(unsigned, unsigned, uint32_t, const char *, unsigned, cntrl::ui::Glyph &) const override { return false; }
 };
-void test_window_layouts_history_and_bounded_refresh() {
+void test_display_layouts_history_and_bounded_refresh() {
     constexpr cntrl::midi::OutputConnection endpoints[] = {{"keys", "Keys", 0, cntrl::midi::OutputTransport::physical, true}};
     Monitor monitor; assert(monitor.open(0)); receive(monitor, {0xc0,127});
     monitor.packet(Direction::outgoing, 0, 0, {11,{0xb0,7,80}}, 1234567, true);
@@ -176,15 +176,15 @@ void test_window_layouts_history_and_bounded_refresh() {
         uint8_t layout[12 + 3 * 32 + 37] = {'C','P','A','G',1,3,2,0};
         layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::midi_monitor);
         layout[12 + 3 * 32 + 33] = uint8_t(count); pages.layout({layout});
-        for (unsigned window = 0; window < count; ++window) {
-            auto pane = pages.view(100, 100000, {}, {}, cntrl::Panic::Status::ready, window, count);
-            const bool combined = count == 1 || (count == 3 && window == 1);
-            assert(!std::strcmp(pane.lines[0].text, combined ? "Combined" : window == 0 ? "Incoming" : "Outgoing"));
+        for (unsigned display = 0; display < count; ++display) {
+            auto pane = pages.view(100, 100000, {}, {}, cntrl::Panic::Status::ready, display, count);
+            const bool combined = count == 1 || (count == 3 && display == 1);
+            assert(!std::strcmp(pane.lines[0].text, combined ? "Combined" : display == 0 ? "Incoming" : "Outgoing"));
             std::string text;
             for (const auto &line : pane.lines) { text += line.text; text += '\n'; }
-            assert((text.find("Program 128") != std::string::npos) == (combined || window == 0));
-            assert((text.find("CC 7 = 80") != std::string::npos) == (combined || window + 1 == count));
-            assert((text.find("1.234") != std::string::npos) == (combined || window + 1 == count));
+            assert((text.find("Program 128") != std::string::npos) == (combined || display == 0));
+            assert((text.find("CC 7 = 80") != std::string::npos) == (combined || display + 1 == count));
+            assert((text.find("1.234") != std::string::npos) == (combined || display + 1 == count));
             assert(!pages.due(199) && pages.due(200));
         }
     }
@@ -201,6 +201,6 @@ int main() {
     test_history_freeze_overflow_memory_and_rollover();
     test_connections_reset_partial_and_running_status();
     test_dense_clock_and_long_sysex_keep_memory_bounded();
-    test_window_layouts_history_and_bounded_refresh();
+    test_display_layouts_history_and_bounded_refresh();
     assert(cntrl::memory_used == 0);
 }

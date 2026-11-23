@@ -143,112 +143,112 @@ events = 512
 
 type = "status"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.cable-test]
 
 type = "cable-test"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.panic]
 
 type = "panic"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.midi-monitor]
 
 type = "midi-monitor"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.midi-looper]
 
 type = "midi-looper"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.arpeggiator]
 
 type = "arpeggiator"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.time]
 
 type = "time"
 ram2_bytes = 0
-min_windows = 2
-give_up_windows = []
+min_displays = 2
+give_up_displays = []
 patch = "sample"
 
 [pages.pong]
 
 type = "pong"
 ram2_bytes = 0
-min_windows = 3
-give_up_windows = []
+min_displays = 3
+give_up_displays = []
 patch = "sample"
 
 [pages.language]
 
 type = "language"
 ram2_bytes = 0
-min_windows = 2
-give_up_windows = []
+min_displays = 2
+give_up_displays = []
 patch = "sample"
 
 [pages.setups]
 
 type = "setups"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.songs-and-setlists]
 
 type = "songs-and-setlists"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.switches]
 
 type = "switches"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.calibration]
 
 type = "calibrate"
 ram2_bytes = 0
-min_windows = 1
-give_up_windows = []
+min_displays = 1
+give_up_displays = []
 patch = "sample"
 
 [pages.patch-chooser]
 
 type = "patch-chooser"
 ram2_bytes = 0
-min_windows = 0
-give_up_windows = []
+min_displays = 0
+give_up_displays = []
 patch = "sample"
 
 [scrolling]
@@ -274,12 +274,12 @@ font_name = "sample"
 horizontal_scale = 1.0
 
 
-[windows.next]
+[displays.next]
 
 view = "patch"
 pad = 0
 
-[windows.next.style]
+[displays.next.style]
 
 image = "sample"
 background_color = "sample"
@@ -287,12 +287,12 @@ foreground_color = "sample"
 font_name = "sample"
 horizontal_scale = 1.0
 
-[windows.sent]
+[displays.sent]
 
 view = "patch"
 pad = 0
 
-[windows.sent.style]
+[displays.sent.style]
 
 image = "sample"
 background_color = "sample"
@@ -300,12 +300,12 @@ foreground_color = "sample"
 font_name = "sample"
 horizontal_scale = 1.0
 
-[windows.undo]
+[displays.undo]
 
 view = "patch"
 pad = 0
 
-[windows.undo.style]
+[displays.undo.style]
 
 image = "sample"
 background_color = "sample"

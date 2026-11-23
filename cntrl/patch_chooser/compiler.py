@@ -116,7 +116,7 @@ def compile_show(
             pages = {
                 n: p
                 for n, p in show.pages.items()
-                if p.min_windows <= len(target.displays)
+                if p.min_displays <= len(target.displays)
             }
             if not looper.available_inputs(show, target) or not any(
                 e.name == target.default_midi_output and midi_endpoints.enabled(e, show)

@@ -92,7 +92,7 @@ address-in-use error can mean it is already serving, not that its socket is stal
 `cntrl flash --controller mc6-pro` retains the original pedal backup in the installation's `before/`
 directory and prepares a separate `restore/` copy before entering the bootloader.
 Setups, history snapshots and song sources from versions 36, 38, 39 and 40 are
-upgraded without recompiling their patches. Old page window
+upgraded without recompiling their patches. Old page display
 counts become minimums under the current page allocator, and newly introduced
 gesture actions remain inactive. Original binaries, history metadata, assets
 and songs remain in `before/`; restoration and read-back verification use `restore/`.

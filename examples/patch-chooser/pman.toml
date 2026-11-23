@@ -8,13 +8,13 @@ screensaver_timeout = 3
 [patch_views.patch]
 fields = ['patch_cycle.name', 'display_name']
 
-[windows.undo]
+[displays.undo]
 view = 'patch'
 
-[windows.sent]
+[displays.sent]
 view = 'patch'
 
-[windows.next]
+[displays.next]
 view = 'patch'
 
 [instruments.pman]

@@ -85,7 +85,7 @@ def test_patch_program_lines_share_smaller_fitting_size(target: models.Target) -
 
 
 def test_disabled_style_filling_preserves_plain_page(target: models.Target) -> None:
-    windows, references, block = display.compile_display(
+    displays, references, block = display.compile_display(
         models.Setup(fill_in_styles=False), [patch()], target
     )
     expected = [
@@ -93,8 +93,8 @@ def test_disabled_style_filling_preserves_plain_page(target: models.Target) -> N
         (1, (17, 40, 4, 0, 0, 65535, 40, 0), 5, 'Flute'),
     ]
     assert all(lines(block, r) == expected for r in references[0])
-    assert all(graphics.SCREEN.unpack(w)[1:3] == (8, 4) for w in windows)
-    assert all(w[12:] == bytes(4) for w in windows)
+    assert all(graphics.SCREEN.unpack(w)[1:3] == (8, 4) for w in displays)
+    assert all(w[12:] == bytes(4) for w in displays)
 
 
 def test_display_fixture_matches_portable_firmware(target: models.Target) -> None:
@@ -107,7 +107,7 @@ def test_display_fixture_matches_portable_firmware(target: models.Target) -> Non
     assert data.hex() == (FIXTURES / 'display.golden').read_text().strip()
 
 
-def test_a_window_can_select_a_different_page(target: models.Target) -> None:
+def test_a_display_can_select_a_different_page(target: models.Target) -> None:
     show = models.Setup.model_validate(
         {
             'instruments': {},
@@ -116,13 +116,13 @@ def test_a_window_can_select_a_different_page(target: models.Target) -> None:
                 'patch': {'fields': ['display_name']},
                 'tag': {'fields': ['patch_cycle.name']},
             },
-            'windows': {'sent': {'view': 'tag', 'pad': 12}},
+            'displays': {'sent': {'view': 'tag', 'pad': 12}},
         }
     )
-    windows, refs, block = display.compile_display(show, [patch()], target)
+    displays, refs, block = display.compile_display(show, [patch()], target)
     assert [x[3] for x in lines(block, refs[0][0])] == ['Flute']
     assert [x[3] for x in lines(block, refs[0][1])] == ['wind']
-    assert graphics.SCREEN.unpack(windows[1])[2] == 12
+    assert graphics.SCREEN.unpack(displays[1])[2] == 12
 
 
 def test_each_line_autoscales_independently(target: models.Target) -> None:
@@ -142,7 +142,7 @@ def test_each_line_autoscales_independently(target: models.Target) -> None:
     assert (second[1][1], second[2]) == (16, 14)
 
 
-def test_window_records_and_pages_follow_physical_left_to_right_order(
+def test_display_records_and_pages_follow_physical_left_to_right_order(
     target: models.Target,
 ) -> None:
     show = models.Setup.model_validate(
@@ -153,15 +153,15 @@ def test_window_records_and_pages_follow_physical_left_to_right_order(
                 'current': {'fields': ['brightness']},
                 'history': {'fields': ['patch_cycle.name']},
             },
-            'windows': {
+            'displays': {
                 'next': {'view': 'candidate', 'style': {'background_color': 'red'}},
                 'sent': {'view': 'current', 'style': {'background_color': 'green'}},
                 'undo': {'view': 'history', 'style': {'background_color': 'blue'}},
             },
         }
     )
-    windows, refs, block = display.compile_display(show, [patch()], target)
-    assert [graphics.SCREEN.unpack(w)[5] for w in windows] == [0xF800, 0x0400, 0x001F]
+    displays, refs, block = display.compile_display(show, [patch()], target)
+    assert [graphics.SCREEN.unpack(w)[5] for w in displays] == [0xF800, 0x0400, 0x001F]
     assert [r[3] for r in lines(block, refs[0][0])] == ['Flute']
     assert [r[3] for r in lines(block, refs[0][1])] == ['192']
     assert [r[3] for r in lines(block, refs[0][2])] == ['wind']
@@ -181,7 +181,7 @@ def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
         {
             'instruments': {},
             'patch_cycles': {'wind': []},
-            'windows': {'next': {'style': {'background_color': 'blue'}}},
+            'displays': {'next': {'style': {'background_color': 'blue'}}},
             'patch_views': {
                 'patch': {
                     'style': {'foreground_color': 'yellow'},
@@ -197,7 +197,7 @@ def test_styles_merge_per_property_and_patch_cycle_heading_excludes_content(
     assert (label[1][4], label[1][5]) == (1024, 31)
 
 
-def test_page_fields_use_window_data_and_global_parameters(
+def test_page_fields_use_display_data_and_global_parameters(
     target: models.Target,
 ) -> None:
     show = models.Setup.model_validate(
@@ -232,7 +232,7 @@ def test_page_fields_use_window_data_and_global_parameters(
             {'patch_views': {'patch': {'fields': ['program', 'program']}}},
             'duplicate page field',
         ),
-        ({'windows': {'sent': {'view': 'absent'}}}, 'unknown patch view'),
+        ({'displays': {'sent': {'view': 'absent'}}}, 'unknown patch view'),
         ({'patch_views': {'patch': {'line_styles': {'missing': {}}}}}, 'line_styles'),
     ],
 )
@@ -246,20 +246,20 @@ def test_ambiguous_or_unknown_references_are_rejected(
         display.compile_display(show, [patch()], target)
 
 
-def test_window_errors_are_reported_together(target: models.Target) -> None:
+def test_display_errors_are_reported_together(target: models.Target) -> None:
     show = models.Setup.model_validate(
         {
             'instruments': {},
             'patch_cycles': {},
-            'windows': {
+            'displays': {
                 n: {'style': {'foreground_color': 'unknown'}}
-                for n in display.WINDOW_NAMES
+                for n in display.DISPLAY_NAMES
             },
         }
     )
     with pytest.raises(ValueError) as failure:
         display.compile_display(show, [patch()], target)
-    assert all(f'windows.{n}' in str(failure.value) for n in display.WINDOW_NAMES)
+    assert all(f'displays.{n}' in str(failure.value) for n in display.DISPLAY_NAMES)
 
 
 def test_export_preserves_styles_and_unset_properties(target: models.Target) -> None:
@@ -273,7 +273,7 @@ def test_export_preserves_styles_and_unset_properties(target: models.Target) -> 
         }
     }
     show['tag_styles'] = {'wind': {'foreground_color': 'red'}}
-    show['windows'] = {'next': {'pad': '8 px', 'style': {'background_color': 'black'}}}
+    show['displays'] = {'next': {'pad': '8 px', 'style': {'background_color': 'black'}}}
     show['patch_cycles']['wind'][0]['style'] = {'background_color': 'white'}
     definitions = compiler_inputs.read_document(FIXTURES / 'definitions.json')
     assert isinstance(definitions, dict)

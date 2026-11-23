@@ -5,23 +5,23 @@ authoring, firmware allocation and UI navigation. Physical pedal verification
 remains to be performed.
 
 Allow any page type to occupy either side of the pedal. A per-setup allocation
-strategy determines which side receives spare windows first. Status can occupy
-a single window beside a Patch Chooser that expands into the remaining space.
+strategy determines which side receives spare displays first. Status can occupy
+a single display beside a Patch Chooser that expands into the remaining space.
 
 ## Agreed allocation rules
 
-- Rename the authored page setting `windows` to `min_windows`. It is the
-  minimum number of windows the selected page must receive.
-- Ordinary pages default to `min_windows = 1`. An explicit zero permits a
-  selected page to receive no windows while its background work continues.
+- Rename the authored page setting `windows` to `min_displays`. It is the
+  minimum number of displays the selected page must receive.
+- Ordinary pages default to `min_displays = 1`. An explicit zero permits a
+  selected page to receive no displays while its background work continues.
   The `None` page has a minimum and maximum of zero. A zero minimum still
-  allows a page to receive spare windows up to its type's maximum.
-- Page-type code exposes the maximum useful window count. This capability
+  allows a page to receive spare displays up to its type's maximum.
+- Page-type code exposes the maximum useful display count. This capability
   describes the renderer and is independent of authored setup preferences.
   Status has a maximum of one. Patch Chooser can use every available target
-  window. MIDI Monitor can use up to three.
-- The other utility pages remain expandable up to the target window count.
-- Use per-setup `layout.left_wins: bool = False` to distribute spare windows.
+  display. MIDI Monitor can use up to three.
+- The other utility pages remain expandable up to the target display count.
+- Use per-setup `layout.left_wins: bool = False` to distribute spare displays.
   False gives the rightmost region first claim. True gives the leftmost region
   first claim. Priority follows region placement in the selected direction.
 - Reject a layout at compilation when its simultaneous minimum requests
@@ -53,20 +53,20 @@ pages = ['status', 'monitor']
 
 [pages.live]
 type = 'patch-chooser'
-min_windows = 1
-give_up_windows = ['right', 'center', 'left']
+min_displays = 1
+give_up_displays = ['right', 'center', 'left']
 
 [pages.alternate]
 type = 'patch-chooser'
-min_windows = 1
+min_displays = 1
 
 [pages.status]
 type = 'status'
-min_windows = 1
+min_displays = 1
 
 [pages.monitor]
 type = 'midi-monitor'
-min_windows = 1
+min_displays = 1
 ```
 
 `layout.order` places region spans in the target's physical display order.
@@ -83,9 +83,9 @@ the remaining catalogue.
 With three displays, the example starts with Live across the left two displays
 and Status on the right. Selecting Monitor gives it two displays and leaves
 Live with one. Changing only `layout.order` to `['tools', 'performance']`
-places Status or Monitor on the left. Status still receives one window because
+places Status or Monitor on the left. Status still receives one display because
 of its type's maximum. With Monitor on the left, `left_wins = false` gives Live
-two windows and Monitor one. Setting it to `true` gives Monitor two and Live one.
+two displays and Monitor one. Setting it to `true` gives Monitor two and Live one.
 
 ## Focus and controls
 
@@ -97,9 +97,9 @@ region. Cycling one region preserves all other regions' current selections.
 Selecting a Patch Chooser page affects only its containing region.
 
 Page-specific switch handling goes to the focused region's selected page.
-Selecting focus updates its visible indication without reallocating windows.
+Selecting focus updates its visible indication without reallocating displays.
 Preserve global management and emergency controls. A focused page can have a
-zero-window allocation, so the menu must still expose its name and focus.
+zero-display allocation, so the menu must still expose its name and focus.
 Complete or cancel held input gestures in the old view when changing focus,
 so their release cannot trigger an action in the newly focused page.
 
@@ -114,53 +114,53 @@ For each legal combination of selected pages, allocate their minimums first.
 With `left_wins = false`, visit regions from the end of `layout.order` toward
 its beginning. With `left_wins = true`, visit them from the beginning toward
 the end.
-Give each selected page as many remaining windows as it can use, bounded by
+Give each selected page as many remaining displays as it can use, bounded by
 its page-type maximum. Both strategies satisfy every minimum before awarding
-spare windows. Once those counts are settled, place their contiguous spans
+spare displays. Once those counts are settled, place their contiguous spans
 in the authored physical order.
-Windows within a span follow the target's declared display order.
+Displays within a span follow the target's declared display order.
 
 For a three-display target with Status and Patch Chooser each requesting
-one window, the resulting counts are one and two. Status cannot absorb a
-spare window even when it has first priority. With two flexible pages, the
-higher-priority page receives the spare window. Any windows beyond all page
+one display, the resulting counts are one and two. Status cannot absorb a
+spare display even when it has first priority. With two flexible pages, the
+higher-priority page receives the spare display. Any displays beyond all page
 types' maxima remain blank.
 
 Validate every selectable combination during compilation. Because each region
-selects independently, summing the largest `min_windows` value in each region
+selects independently, summing the largest `min_displays` value in each region
 is sufficient to check that every combination fits. Report the region and page
 names contributing to an impossible allocation. Firmware loading must check
 the same constraints before admitting a compiled layout.
 
 ## Renderer contract
 
-Pass each visible page its first physical window and allocated window count.
-The renderer uses local window indices within that span. Remove assumptions
+Pass each visible page its first physical display and allocated display count.
+The renderer uses local display indices within that span. Remove assumptions
 that utility pages start at the right edge or that Patch Chooser occupies
 the leftmost available displays.
 
 Keep logical Patch Chooser content selection separate from physical placement.
-Its existing `give_up_windows` ordering determines which logical content to
+Its existing `give_up_displays` ordering determines which logical content to
 drop as its allocation shrinks. The surviving content keeps its logical order
 and maps into the allocated physical span. Maintain selected patches, sent
 state and Undo history independently of that span's physical position.
-Names in `give_up_windows` identify logical Patch Chooser content slots.
+Names in `give_up_displays` identify logical Patch Chooser content slots.
 They do not anchor those slots to physical left or right displays.
 
 A page type exposes its maximum through the shared page-type implementation
-contract. An expanding type can report the target's available window count.
+contract. An expanding type can report the target's available display count.
 Use the same capability values in authoring validation and firmware admission,
 with an automated agreement check if the two implementations need separate
 representations. Reject unsupported allocations when loading a compiled setup.
 Set the maximum of each remaining page type after reviewing its renderer and
-supported layouts. Preserve MIDI Monitor's dedicated one-, two- and three-window
+supported layouts. Preserve MIDI Monitor's dedicated one-, two- and three-display
 views. Keep these capability decisions beside the page-type implementation.
 
 ## Implementation and verification
 
 1. Extend the authoring models and layout compiler with regions, independent
    placement order, the per-setup `left_wins` boolean, initial focus, and
-   `min_windows`. Apply the existing page-count, controller-count and target
+   `min_displays`. Apply the existing page-count, controller-count and target
    display limits. Update
    tracked example setups and the generated sample configuration to the new
    schema. Preserve unrelated page preferences and patch display templates.
@@ -177,7 +177,7 @@ views. Keep these capability decisions beside the page-type implementation.
    the page configuration guide to describe the same model.
 5. Test omitted `left_wins` defaulting to false, both explicit boolean values
    and mirrored region orders. With two flexible pages, verify that changing
-   `left_wins` changes which receives spare windows, and that reversing both
+   `left_wins` changes which receives spare displays, and that reversing both
    placement and `left_wins` preserves counts per region. Test Status capped
    at one, Monitor capped at three, zero minimums, blank surplus space and single-display
    targets. Reject non-boolean `left_wins` values. Check invalid placement orders,

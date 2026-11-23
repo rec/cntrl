@@ -2,7 +2,7 @@
 #include <array>
 #include <cassert>
 
-void verify_windows(unsigned gap) {
+void verify_displays(unsigned gap) {
     using namespace scroll_probe;
     assert(panel_origin(0, gap) == 0);
     assert(panel_origin(1, gap) - panel_width == gap);
@@ -40,7 +40,7 @@ int main() {
         assert(panel_index(slot, false) == slot);
         assert(panel_index(slot, true) == 2 - slot);
     }
-    verify_windows(gap_width);
+    verify_displays(gap_width);
     unsigned rate = 60;
     for (unsigned expected : {60u, 50u, 40u, 30u}) {
         assert(rate == expected);

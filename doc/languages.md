@@ -8,10 +8,10 @@ Language is a device-wide preference and
 remains selected when you change setups. Patch names, filenames, MIDI messages
 and authored text stay as written.
 
-Open the **Language page** in the utility-page cycle. It uses exactly two windows: the first is a scrolling list
+Open the **Language page** in the utility-page cycle. It uses exactly two displays: the first is a scrolling list
 of installed languages in their native names, with small country flags; the
 second has the Language caption and controls. On the default three-display
-layout these are the center and right windows. English uses the UK flag.
+layout these are the center and right displays. English uses the UK flag.
 
 Use **E** to scroll up, **B** to scroll down and **C** to select. In Patch mode,
 press **F** for the next page. In Song and Setlist modes, the default controls
@@ -25,8 +25,8 @@ after Pong on targets with at least three displays. A one-display target omits
 it by default and rejects an explicit
 `type = 'language'` page; USB language commands remain available.
 For explicit page catalogues, add a named page with `type = 'language'` and put
-it in the desired region. The page always claims two windows, regardless of
-`min_windows`, and uses only those two windows when more are available.
+it in the desired region. The page always claims two displays, regardless of
+`min_displays`, and uses only those two displays when more are available.
 
 Selecting a language applies without reloading the setup or stopping
 playing, recording or looping. English is the default when no preference is set.
@@ -44,7 +44,7 @@ the shared flash font even in recovery. `cntrl global list` shows the saved pref
 selects English. Installing a replacement pack refreshes the selected language
 without changing whether the preference was explicitly set.
 
-Captions choose a bitmap size that fits the available window. Localized text
+Captions choose a bitmap size that fits the available display. Localized text
 can wrap, use a reviewed short caption or end with an ellipsis when necessary;
 it does not depend on scrolling or frame buffers. Built-in UI translation uses
 its own font, preserving the fonts chosen for authored performance text.

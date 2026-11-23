@@ -179,7 +179,7 @@ def test_relative_font_paths_compile_and_export_with_reusable_assets(
     data = compile_inputs(command, font_data).setups['show']
     assert font_data['show']
     key, bitmap = next(iter(font_data['show'].items()))
-    assert binary_format.core(data)[28] == 17  # Window records only paint backgrounds.
+    assert binary_format.core(data)[28] == 17  # Display records only paint backgrounds.
     assert struct.pack('<I', key) in data
     exported = resolved.export(data)
     assert tomlkit.parse(exported).unwrap()['fonts'] == {

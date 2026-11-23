@@ -67,7 +67,7 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> b
     metadata = 76 + instruments * 68 + cycles * 68 + patches * 82
     page = _page_offsets(data)[0]
     settings = Setup.model_validate(tomlkit.parse(export(saved)).unwrap())
-    windows = [
+    displays = [
         data[i : i + graphics.SCREEN.size] for i in range(28, 76, graphics.SCREEN.size)
     ]
     display_start = graph + GRAPH.unpack_from(data, graph)[1]
@@ -89,7 +89,7 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> b
     needed = (
         sum(p.ram2_bytes for p in settings.pages.values())
         + display.estimate_frame_ram(settings, target)
-        + display.estimate_font_ram(windows, data[display_start:], fonts)
+        + display.estimate_font_ram(displays, data[display_start:], fonts)
         + layout.estimate_ram(
             settings.pages,
             instruments,
@@ -244,12 +244,12 @@ def insert_doom_page(data: bytes, region: str, before: str) -> bytes:
         raise layout.LayoutError('the setup already has a page named doom')
     show.pages['doom'] = models.Page(type='doom')
     rotation.insert(index, 'doom')
-    windows = [
+    displays = [
         core[i : i + 32].split(b'\0', 1)[0].decode('ascii')
         for i in range(page + 12, page + 12 + core[page + 5] * 32, 32)
     ]
     navigation = core[end - 4 : end] if core[page + 10] else b''
-    replacement = layout.pack(show, windows, navigation)
+    replacement = layout.pack(show, displays, navigation)
     return binary_format.replace_core(
         data, _replace_layout(core, page, end, replacement)
     )
@@ -656,7 +656,7 @@ def _decode(data: bytes) -> dict[str, object]:
     # page authoring only when compiling it describes these exact page bytes.
     # Other source metadata remains untouched, including node IDs and assets.
     if 'pages' in source:
-        windows = [
+        displays = [
             _text(data, cursor + 12 + i * 32, 32) for i in range(data[cursor + 5])
         ]
         try:
@@ -667,7 +667,7 @@ def _decode(data: bytes) -> dict[str, object]:
                     if k in source or k in result
                 }
             )
-            authored_pages_wire = layout.pack(authored, windows, nav_bytes)
+            authored_pages_wire = layout.pack(authored, displays, nav_bytes)
         except (ValidationError, layout.LayoutError):
             same_pages = False
         else:

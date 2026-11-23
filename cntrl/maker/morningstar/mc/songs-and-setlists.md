@@ -33,7 +33,7 @@ the same name more than once.
 
 In the performance view, click F for the next song step and double-click F
 for the previous step.
-These controls also work within a step's full-window patch interface, regardless
+These controls also work within a step's full-display patch interface, regardless
 of switch inheritance. A/B highlight an occurrence
 for editing; they do not recall it. D opens the edit menu:
 

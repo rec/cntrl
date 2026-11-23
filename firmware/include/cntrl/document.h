@@ -172,26 +172,26 @@ public:
             || (bytes[names + 7] ? bytes[names + 9] >= bytes[names + 7] : bytes[names + 9] != 0)
             || (bytes[names + 10] && bytes[names + 10] != 4) || bytes[names + 11]) return false;
         const PageLayout arrangement{bytes + layout};
-        unsigned page_count = arrangement.pages(), windows = arrangement.windows();
+        unsigned page_count = arrangement.pages(), displays = arrangement.displays();
         names += arrangement.length();
         if (names > length || arrangement.controllers() > PageLayout::max_controllers) return false;
-        if (hardware.display_count() && hardware.display_count() != windows) return false;
-        for (unsigned i = 0; i < windows; ++i) {
-            const auto *name = reinterpret_cast<const uint8_t *>(arrangement.window_name(i));
+        if (hardware.display_count() && hardware.display_count() != displays) return false;
+        for (unsigned i = 0; i < displays; ++i) {
+            const auto *name = reinterpret_cast<const uint8_t *>(arrangement.display_name(i));
             if (!PageLayout::valid_name(name)) return false;
             if (const char *id = hardware.display_id(i))
-                if (std::strcmp(id, arrangement.window_name(i))) return false;
+                if (std::strcmp(id, arrangement.display_name(i))) return false;
             for (unsigned j = 0; j < i; ++j)
-                if (!std::strcmp(arrangement.window_name(i), arrangement.window_name(j))) return false;
+                if (!std::strcmp(arrangement.display_name(i), arrangement.display_name(j))) return false;
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
             if (!PageLayout::valid_name(p) || p[32] > PageLayout::switches || p[32] == 0 || p[32] == 2 || p[32] == 18 || (p[32] >= 5 && p[32] <= 9)
-                || p[33] > windows || (p[32] == 10 && p[33])
+                || p[33] > displays || (p[32] == 10 && p[33])
                 || ((p[32] == PageLayout::language || p[32] == PageLayout::time) && p[33] != 2)) return false;
             bool seen[256] = {};
-            for (unsigned j = 0; j < windows; ++j) {
-                if (p[34 + j] >= windows || seen[p[34 + j]]) return false;
+            for (unsigned j = 0; j < displays; ++j) {
+                if (p[34 + j] >= displays || seen[p[34 + j]]) return false;
                 seen[p[34 + j]] = true;
             }
             for (unsigned j = 0; j < i; ++j)
@@ -206,12 +206,12 @@ public:
             for (unsigned i = 0; i < p[33]; ++i) {
                 unsigned page = arrangement.region_page(r,i);
                 if (page >= page_count || assigned_pages[page]) return false;
-                assigned_pages[page] = true; largest = std::max(largest,arrangement.minimum_windows(page));
+                assigned_pages[page] = true; largest = std::max(largest,arrangement.minimum_displays(page));
             }
             assigned += p[33]; minimum += largest;
             for (unsigned i = 0; i < r; ++i) if (!std::strcmp(arrangement.region_name(r),arrangement.region_name(i))) return false;
         }
-        if (assigned != page_count || minimum > windows) return false;
+        if (assigned != page_count || minimum > displays) return false;
         const unsigned banked_offset = names;
         if (names + 4 <= length && !std::memcmp(bytes + names, "CBPG", 4)) {
             if (!BankedPages::valid(bytes + names, length - names, arrangement)) return false;

@@ -1466,7 +1466,7 @@ then cycled from TRS Ports back to Patch Chooser and confirmed it was displayed.
 MIDI stress testing stopped; the communication failure is not considered fixed.
 
 The user then found that the region migration had changed the working page layout
-and controls. The normal image was rebuilt with the one-window tool policy in
+and controls. The normal image was rebuilt with the one-display tool policy in
 `b857268` and the legacy layout/control repair in `63f43ca`. The retained region
 architecture now keeps Patch Chooser on the left, tools on the right, and the
 old full-width Patch Chooser position in the F cycle. The user confirmed the

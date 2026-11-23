@@ -1,7 +1,7 @@
 # Shared MIDI clock
 
 The shared clock supplies timing to the arpeggiator, looper and MIDI file
-services. The two-window **Time** page combines source selection, clock output
+services. The two-display **Time** page combines source selection, clock output
 and Tap Tempo. Two taps set the working tempo to the measured period. After a pause the
 first tap preserves the tempo until a second valid tap. Changing tempo during
 playback preserves fractional tick phase.
@@ -22,7 +22,7 @@ target output names: DIN, TRS, USB device or USB host. Disabled USB ports and
 duplicate destinations are rejected. The configurable TRS jacks
 (`configurable-1` through `configurable-4`) must have a MIDI output role.
 
-The left Time window shows separate Tap, DIN and TRS tempos. A green outline
+The left Time display shows separate Tap, DIN and TRS tempos. A green outline
 marks the selected source. The next-section control (E on MC Pro) cycles down
 through them. The next control (B) toggles Send, initially off. When enabled,
 Tap generates MIDI Clock at the measured tempo; DIN and TRS relay the selected
@@ -39,7 +39,7 @@ tap measurement. Sending clock does not send transport Start or Stop messages.
 Selecting a blank source with E waits for that source instead of immediately
 falling back. Once it has received a measured clock, automatic fallback resumes
 if that clock later expires. The Tap Tempo circle sits at the bottom right of
-its window, using the configured `flasher_diameter` (40 pixels by default).
+its display, using the configured `flasher_diameter` (40 pixels by default).
 Activating a setup, entering stock firmware or starting a port-owning
 diagnostic stops local generation.
 

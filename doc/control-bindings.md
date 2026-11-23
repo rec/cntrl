@@ -55,10 +55,10 @@ In each definition, put the entry actions in `patches` and assign buttons in
 The [worked song library](../examples/patch-chooser/scenes.toml) gives Verse
 and Chorus different sounds and different actions for the same button.
 
-On a three-window controller the middle bands show the scene, song and
+On a three-display controller the middle bands show the scene, song and
 active setlist from left to right. The upper and lower bands hold the switch
-labels. The labels align left, center, and right in their respective windows.
-Two windows show the scene and song. A single window stacks them in its middle
+labels. The labels align left, center, and right in their respective displays.
+Two displays show the scene and song. A single display stacks them in its middle
 band. A scene, song, or setlist can set `style.image` relative to its source file.
 CNTRL fits it to the target on the computer. Add `display_name` to draw text
 over the image, or use it alone for a shorter title. Without either field the
@@ -271,7 +271,7 @@ band. Empty middle bands retain their background color.
 
 During song and set performance, the current song's `style` supplies the scene's
 default foreground and background colors. Explicit patch and switch colors take
-precedence. Each window has rounded corners, and its upper and lower button bands
+precedence. Each display has rounded corners, and its upper and lower button bands
 swap foreground and background. Scenes use the controller's interface font in
 two sizes, with shorter captions when space is limited. The song's font choice
 applies in the song browser.

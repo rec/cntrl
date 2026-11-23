@@ -376,7 +376,7 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
     target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
     source = {
         'pages': {
-            'performance': {'type': 'patch-chooser', 'min_windows': 0},
+            'performance': {'type': 'patch-chooser', 'min_displays': 0},
             'status': {'type': 'status'},
             'panic': {'type': 'panic'},
         },
@@ -457,7 +457,7 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
     source = {
         'fill_in_styles': False,
         'pages': {
-            'performance': {'type': 'patch-chooser', 'min_windows': 0},
+            'performance': {'type': 'patch-chooser', 'min_displays': 0},
             'status': {'type': 'status'},
             'songs': {'type': 'songs-and-setlists'},
         },

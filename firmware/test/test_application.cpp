@@ -143,9 +143,9 @@ struct PageFonts : cntrl::ui::Fonts {
     bool glyph(unsigned, unsigned, uint32_t, const char *, unsigned, cntrl::ui::Glyph &) const override { return false; }
 };
 struct PageDisplay : cntrl::ui::Display {
-    unsigned windows = 1;
+    unsigned displays = 1;
     std::vector<std::vector<uint16_t>> pixels = std::vector<std::vector<uint16_t>>(3, std::vector<uint16_t>(64 * 64));
-    unsigned count() const override { return windows; }
+    unsigned count() const override { return displays; }
     cntrl::ui::Viewport viewport(unsigned) const override { return {64, 64, 0, 0}; }
     void poll() override {}
     bool ready() const override { return true; }
@@ -328,7 +328,7 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     for (uint8_t b : bytes) documents.receive(b, 0);
     for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
     assert(!documents.busy() && documents.select("Legacy"));
-    PagePlatform platform; PageFonts fonts; PageDisplay display; display.windows = 3;
+    PagePlatform platform; PageFonts fonts; PageDisplay display; display.displays = 3;
     uint16_t work[4096] = {};
     cntrl::ui::Renderer renderer(display, fonts, work, 4096);
     constexpr cntrl::ui::ControlBinding bindings[] = {{2,"A"},{1,"B"},{0,"C"},{5,"D"},{4,"E"},{3,"F"}};
@@ -337,15 +337,15 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     hardware.presentation = &host;
     host.configure_pages(documents.document());
     const auto layout = documents.document().page_layout();
-    assert(layout.windows() == 3 && layout.controllers() == 1 && layout.regions() == 2);
+    assert(layout.displays() == 3 && layout.controllers() == 1 && layout.regions() == 2);
     const unsigned patch = layout.controller_page(0), tools = layout.page_region(0);
     assert(layout.page(0)[0] == unsigned(cntrl::ui::Pages::Page::status));
     assert(app.allocation.focus() == tools && host.pages_.index() == 0);
     assert(app.allocation.region(0).selected == patch && app.allocation.region(0).first == 0);
     assert(app.allocation.region(0).count == 2 && app.allocation.region(tools).first == 2);
     assert(app.allocation.region(tools).count == 1);
-    assert(app.allocation.controller_window(0,0) == 0 && app.allocation.controller_window(0,1) == 1);
-    assert(app.allocation.controller_window(0,2) == -1);
+    assert(app.allocation.controller_display(0,0) == 0 && app.allocation.controller_display(0,1) == 1);
+    assert(app.allocation.controller_display(0,2) == -1);
     // A utility page owns focus, but the pending patch on the left must still throb.
     for (unsigned frames : {0u, 1u, 2u}) {
         assert(renderer.prepare(frames, true)); renderer.finish(true);
@@ -380,7 +380,7 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         assert(blank == (step == count - 1)); // The old patch-page cycle position is now None.
         assert(app.allocation.region(tools).count == (blank ? 0u : 1u));
         assert(app.allocation.region(0).first == 0 && app.allocation.region(0).count == (blank ? 3u : 2u));
-        assert(app.allocation.controller_window(0,2) == (blank ? 2 : -1));
+        assert(app.allocation.controller_display(0,2) == (blank ? 2 : -1));
         const auto current = primary.navigation(); std::vector<uint8_t> after(current.encoded_size());
         assert(current.encode(after.data(), unsigned(after.size())) && after == before);
     }
@@ -462,8 +462,8 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         cntrl::ui::Application *application = nullptr;
         unsigned sends = 0;
         std::string menu_name;
-        void show(unsigned window, const cntrl::Pane &pane) override {
-            if (window == 1) menu_name = pane.lines[1].text;
+        void show(unsigned display, const cntrl::Pane &pane) override {
+            if (display == 1) menu_name = pane.lines[1].text;
         }
         bool send(const char *, const uint8_t *, unsigned) override { ++sends; return true; }
         bool state(unsigned operation, uint32_t value) override { return application->state(operation, value, *this); }
@@ -483,7 +483,7 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         auto monitored = bytes; monitored[monitor_page] = cntrl::PageLayout::midi_monitor; monitored[monitor_page + 1] = uint8_t(count);
         cntrl::put32(monitored.data() + 20, cntrl::checksum(monitored.data() + 28, unsigned(monitored.size() - 28)));
         cntrl::Document checked; assert(checked.load(monitored.data(), unsigned(monitored.size()), hardware) == (count <= 3));
-        if (checked.valid()) assert(checked.page_layout().minimum_windows(1) == 1);
+        if (checked.valid()) assert(checked.page_layout().minimum_displays(1) == 1);
     }
     TestStorage storage, library;
     cntrl::Controller primary(hardware, hardware, hardware);
@@ -498,7 +498,7 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         cntrl::memory_budget = budget;
         primary.activate(document); app.configure(document, hardware);
         PagePlatform platform; PageFonts fonts; PageDisplay display;
-        display.windows = 3;
+        display.displays = 3;
         uint16_t work[4096] = {};
         cntrl::ui::Renderer renderer(display, fonts, work, 4096);
         cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {});

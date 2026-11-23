@@ -434,7 +434,7 @@ audit `models.py`, `layout.py`, `compiler.py`, `midi_processing.py`, `looper.py`
 `arpeggiator.py` and `setup_bundle.py`. These include page/instrument/cycle/button/
 endpoint counts, route `via` lists capped at 16, LFO destinations capped at 128,
 echo repeats capped at 64, event limits, encoded setup/patch counts up to 65535,
-and font/window/name constraints. The stream estimator currently includes large
+and font/display/name constraints. The stream estimator currently includes large
 fixed allowances (163840 or 196608 bytes, plus 4096); replace these with actual
 configured and admitted costs. Distinguish a semantic repeat limit from an
 eagerly allocated repeat buffer. Search model validators and binary encoders as

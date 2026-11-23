@@ -29,10 +29,10 @@ class ExampleSetup(models.Setup, frozen=True):
         order=['performance', 'tools'], focus='tools'
     )
     style: models.Style | None = models.Style(horizontal_scale=1.0)
-    windows: models.Windows = models.Windows(
-        next=models.Window(style=models.Style(horizontal_scale=1.0)),
-        sent=models.Window(style=models.Style(horizontal_scale=1.0)),
-        undo=models.Window(style=models.Style(horizontal_scale=1.0)),
+    displays: models.Displays = models.Displays(
+        next=models.Display(style=models.Style(horizontal_scale=1.0)),
+        sent=models.Display(style=models.Style(horizontal_scale=1.0)),
+        undo=models.Display(style=models.Style(horizontal_scale=1.0)),
     )
     patch_views: dict[str, models.PatchView] = {
         'patch': models.PatchView(style=models.Style(horizontal_scale=1.0))

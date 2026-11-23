@@ -703,7 +703,7 @@ class PatchView(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Window(BaseModel, frozen=True):
+class Display(BaseModel, frozen=True):
     view: str = 'patch'
     pad: (
         Annotated[int, Field(strict=True, ge=0, le=255), units.unit_validator('pixel')]
@@ -714,10 +714,10 @@ class Window(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
-class Windows(BaseModel, frozen=True):
-    next: Window = Field(default_factory=Window)
-    sent: Window = Field(default_factory=Window)
-    undo: Window = Field(default_factory=Window)
+class Displays(BaseModel, frozen=True):
+    next: Display = Field(default_factory=Display)
+    sent: Display = Field(default_factory=Display)
+    undo: Display = Field(default_factory=Display)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -1171,27 +1171,27 @@ class Page(BaseModel, frozen=True):
         'switches',
     ] = 'patch-chooser'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
-    min_windows: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
-    give_up_windows: list[str] = Field(default_factory=list, max_length=255)
+    min_displays: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
+    give_up_displays: list[str] = Field(default_factory=list, max_length=255)
     patch: str | None = None
 
     @model_validator(mode='after')
-    def window_allocation(self) -> 'Page':
-        if len(set(self.give_up_windows)) != len(self.give_up_windows):
-            raise ValueError('give_up_windows must contain each window once')
+    def display_allocation(self) -> 'Page':
+        if len(set(self.give_up_displays)) != len(self.give_up_displays):
+            raise ValueError('give_up_displays must contain each display once')
         if self.type == 'None':
-            if 'min_windows' in self.model_fields_set and self.min_windows:
-                raise ValueError('None must have zero minimum windows')
-            object.__setattr__(self, 'min_windows', 0)
+            if 'min_displays' in self.model_fields_set and self.min_displays:
+                raise ValueError('None must have zero minimum displays')
+            object.__setattr__(self, 'min_displays', 0)
         elif self.type in ('banked', 'pong'):
-            object.__setattr__(self, 'min_windows', 3)
+            object.__setattr__(self, 'min_displays', 3)
         elif self.type in ('language', 'time'):
-            object.__setattr__(self, 'min_windows', 2)
+            object.__setattr__(self, 'min_displays', 2)
         elif self.type != 'patch-chooser':
-            object.__setattr__(self, 'min_windows', 1)
+            object.__setattr__(self, 'min_displays', 1)
         return self
 
-    def maximum_windows(self, available: int) -> int:
+    def maximum_displays(self, available: int) -> int:
         if self.type == 'None':
             return 0
         return (
@@ -1323,7 +1323,7 @@ class Setup(BindingScope, frozen=True):
                 )
             },
             'calibration': Page(type='calibrate'),
-            'patch-chooser': Page(min_windows=0),
+            'patch-chooser': Page(min_displays=0),
         },
         max_length=255,
     )
@@ -1392,7 +1392,7 @@ class Setup(BindingScope, frozen=True):
         Field(ge=0, le=1, allow_inf_nan=False),
         units.unit_validator('dimensionless'),
     ] = 0.6
-    windows: Windows = Field(default_factory=Windows)
+    displays: Displays = Field(default_factory=Displays)
     patch_views: dict[str, PatchView] = Field(
         default_factory=lambda: {'patch': PatchView()}
     )

@@ -11,7 +11,7 @@ packages. See [Morningstar MC](cntrl/maker/morningstar/mc/README.md).
 
 The application supports named performance setups, on-controller selection and
 numeric editing, per-setup graphics, and separate original/program/show patch
-names. Named pages, windows and per-line styles are described in the
+names. Named pages, displays and per-line styles are described in the
 [display formatting guide](doc/formatting.md). The default patch page retains
 the existing navigation-heading/name UI. Programs and patches can independently
 carry multiple reusable tags, with inherited membership and ordered

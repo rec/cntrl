@@ -11,7 +11,7 @@ Physical timing and display qualification remain outstanding.
   open and closed under simultaneous DIN/TRS and USB traffic, sustained Clock
   and long SysEx. Check actual MIDI delivery with an independent receiver.
 - Check readability, direction markers, chronological ordering and refresh rate
-  on the actual displays for the one-, two- and three-window layouts. Verify
+  on the actual displays for the one-, two- and three-display layouts. Verify
   that remaining performance displays and background patch execution continue
   while monitoring.
 - Exercise Freeze, history browsing and overflow during live traffic. Check

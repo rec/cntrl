@@ -18,8 +18,8 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     cntrl::Pane panes[3];
     std::string last_error;
     uint32_t now = 0;
-    unsigned windows = 3;
-    unsigned display_count() const override { return windows; }
+    unsigned displays = 3;
+    unsigned display_count() const override { return displays; }
     unsigned input_count() const override { return 6; }
     unsigned switch_capacity() const override { return 5; }
     const char *input_label(unsigned input) const override { static const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[input]; }
@@ -193,11 +193,11 @@ int main(int argc, char **argv) {
     assert(!std::strcmp(board.panes[2].lines[0].text, "Next"));
     assert(!std::strcmp(board.panes[2].lines[2].text, "Accent"));
     const std::string scene = board.panes[0].lines[1].text;
-    for (auto windows : {1u, 2u, 3u}) {
-        board.windows = windows; board.switches.refresh(); sample(0);
+    for (auto displays : {1u, 2u, 3u}) {
+        board.displays = displays; board.switches.refresh(); sample(0);
         assert(board.panes[0].lines[1].text == scene);
-        assert(board.panes[0].split_middle == (windows == 1));
-        assert(!std::strcmp(windows == 1 ? board.panes[0].lines[3].text : board.panes[1].lines[1].text, "One"));
+        assert(board.panes[0].split_middle == (displays == 1));
+        assert(!std::strcmp(displays == 1 ? board.panes[0].lines[3].text : board.panes[1].lines[1].text, "One"));
     }
     assert(board.entry.start(board.document, unsigned(board.document.named_patch("forward")))); sample(0);
     assert(songs.continuation().patch == 1 && board.sent.back().second == 2);

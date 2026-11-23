@@ -9,7 +9,7 @@ have to define two scenes.
 
 Build on named patches, bindings, and the song's existing ordered `patches`
 list. A scene is a patch with a binding map that occupies all the performance
-windows. Keep a song step as one occurrence in the list, so the same scene
+displays. Keep a song step as one occurrence in the list, so the same scene
 can appear at several steps. Actions in a patch sequence still run together at
 one step. [Patch bindings](../doc/control-bindings.md)
 
@@ -27,13 +27,13 @@ recall Verse with its original controls and captions.
 
 ## Scene display
 
-Use three horizontal segments per window. The top and bottom captions sit
+Use three horizontal segments per display. The top and bottom captions sit
 beside their corresponding physical buttons and say what a click will do.
 Resolve the active bindings, including overrides, before choosing the captions.
 Keep the positions fixed when the scene changes. Foreground, background, and
 font may vary using the existing song, patch, and binding styles.
 
-| Segment | Left window | Center window | Right window |
+| Segment | Left display | Center display | Right display |
 | --- | --- | --- | --- |
 | Top | Upper button action | Upper button action | Upper button action |
 | Center | Current scene | Current song | Setlist and general information |
@@ -44,8 +44,8 @@ center. Use the setlist name on the right when performing a set. A position
 such as “2 of 8” is a candidate for general information. During standalone
 song performance, omit the setlist name.
 
-With two windows, use the left middle band for the scene and the right middle
-band for the song. With one window, divide its middle band into two rows of
+With two displays, use the left middle band for the scene and the right middle
+band for the song. With one display, divide its middle band into two rows of
 equal height, with the scene above the song. On both smaller layouts, omit
 the setlist and general information from the scene view. Keep the upper and
 lower button captions in their usual positions.
@@ -81,7 +81,7 @@ in performance navigation.
 Add optional `image` and `display_name` to the song. Resolve the image path
 relative to its source file. During `cntrl` compilation on the computer,
 prepare a bitmap at the exact pixel dimensions allocated to the song on the
-selected target, including the shorter song row on a one-window controller.
+selected target, including the shorter song row on a one-display controller.
 Include the prepared asset in song transfer.
 The pedal draws the bitmap directly. Size calculation, cropping or fitting,
 and pixel conversion all happen on the computer.
@@ -116,7 +116,7 @@ creation. Changing a display name affects only the caption.
 - Exercise every row of the song presentation table. Verify the compiled
   bitmap dimensions against the target segment, and check that upload,
   download, and emulator playback retain the artwork and display name.
-- Check the scene and song placement on one-, two-, and three-window targets.
+- Check the scene and song placement on one-, two-, and three-display targets.
   Test an unnamed song in its own file, a duplicate filename-derived name,
   and an unnamed entry in a multi-song library.
 

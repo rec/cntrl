@@ -1,28 +1,28 @@
 # Emulator-only hover help. Blank entries stay hidden.
-# Slots cover page-specific actions and windows used by the MC6 Pro or MC8 Pro.
+# Slots cover page-specific actions and displays used by the MC6 Pro or MC8 Pro.
 # Shared navigation and setup-defined bindings have no per-page slots here.
-# Windows are numbered left to right within the page; management panes can
+# Displays are numbered left to right within the page; management panes can
 # occupy different positions on three- and four-display controllers.
 # Buttons use controller layout IDs. F can be page navigation on the MC6 Pro
 # even where it has a page-specific action on the MC8 Pro.
 # Add [page.locale] with the same keys to translate; blank falls back to English.
 
 [status.en]
-window-1 = 'Status'
+display-1 = 'Status'
 
 [cable-test.en]
-window-1 = 'MIDI Cable Test'
+display-1 = 'MIDI Cable Test'
 button-c = 'C toggles the cable test On/Off'
 
 [panic.en]
-window-1 = 'Panic'
+display-1 = 'Panic'
 button-c = 'Press C to start MIDI cleanup. Hold C to repeat.'
 
 [patch-chooser.en]
-window-1 = 'Current or selected patch'
-window-2 = 'Current patch'
-window-3 = 'Undo preview'
-window-4 = 'Patch Chooser'
+display-1 = 'Current or selected patch'
+display-2 = 'Current patch'
+display-3 = 'Undo preview'
+display-4 = 'Patch Chooser'
 button-a = 'Activate selection'
 button-b = 'Next patch'
 button-c = 'Previous patch'
@@ -31,14 +31,14 @@ button-e = 'Next group'
 button-f = 'Previous group on MC8 Pro. Next page on MC6 Pro.'
 
 [midi-monitor.en]
-window-1 = 'Combined'
+display-1 = 'Combined'
 button-a = 'A/B History (when frozen)'
 button-b = 'A/B History (when frozen)'
 button-c = 'C Freeze / C Live'
 button-f = 'Next page.'
 
 [midi-looper.en]
-window-1 = 'MIDI Looper'
+display-1 = 'MIDI Looper'
 button-a = 'A Rec'
 button-b = 'B Play'
 button-c = 'C Undo. Confirm the selected action in a menu.'
@@ -47,19 +47,19 @@ button-e = 'E More'
 button-f = 'Back from the Looper menu'
 
 [arpeggiator.en]
-window-1 = 'Arpeggiator'
+display-1 = 'Arpeggiator'
 button-a = 'A Rec/Finish (Mono)'
 button-b = 'B Play/Stop (Mono) / B On/Off (Poly)'
 
 [banked.en]
-window-1 = 'Banked switches'
-window-2 = 'Banked switches'
-window-3 = 'Banked switches'
+display-1 = 'Banked switches'
+display-2 = 'Banked switches'
+display-3 = 'Banked switches'
 
 [pong.en]
-window-1 = 'PLAYER 1'
-window-2 = 'PONG'
-window-3 = 'PLAYER 2'
+display-1 = 'PLAYER 1'
+display-2 = 'PONG'
+display-3 = 'PLAYER 2'
 button-a = 'D Up / A Down'
 button-b = 'B Serve/Pause'
 button-c = 'F Up / C Down'
@@ -68,43 +68,43 @@ button-e = 'E Exit'
 button-f = 'F Up / C Down'
 
 [language.en]
-window-1 = 'Language list'
-window-2 = 'Language'
+display-1 = 'Language list'
+display-2 = 'Language'
 button-b = 'E and B to scroll'
 button-c = 'C to select'
 button-e = 'E and B to scroll'
 button-f = 'F for next page'
 
 [time.en]
-window-1 = 'Time'
-window-2 = 'Tap Tempo'
+display-1 = 'Time'
+display-2 = 'Tap Tempo'
 button-b = 'B toggles MIDI clock send'
 button-c = 'Tap Tempo. Hold C to clear.'
 button-e = 'E cycles the timing source'
 
 [calibrate.en]
-window-1 = 'Calibrate'
+display-1 = 'Calibrate'
 button-c = 'Press heel, then toe. Press C at each position.'
 
 [doom.en]
-window-1 = 'Doom launcher'
+display-1 = 'Doom launcher'
 button-c = 'C switches to Doom'
 
 [setups.en]
-window-1 = 'Setup controls'
-window-2 = 'Setups'
-window-3 = 'Setups / Setup menu'
-window-4 = 'Setup menu'
+display-1 = 'Setup controls'
+display-2 = 'Setups'
+display-3 = 'Setups / Setup menu'
+display-4 = 'Setup menu'
 button-a = 'A/B browse or adjust'
 button-b = 'A/B browse or adjust'
 button-c = 'C OK'
 button-f = 'F back'
 
 [songs-and-setlists.en]
-window-1 = 'Current'
-window-2 = 'Songs and setlists'
-window-3 = 'Songs and setlists / Next'
-window-4 = 'Next'
+display-1 = 'Current'
+display-2 = 'Songs and setlists'
+display-3 = 'Songs and setlists / Next'
+display-4 = 'Next'
 button-a = 'A/B browse, entry or letter'
 button-b = 'A/B browse, entry or letter'
 button-c = 'C OK or add'
@@ -113,8 +113,8 @@ button-e = 'D/E jump or pos'
 button-f = 'F back, done or next'
 
 [switches.en]
-window-1 = 'Switches'
-window-2 = 'Switches'
-window-3 = 'Switches'
-window-4 = 'Switches'
+display-1 = 'Switches'
+display-2 = 'Switches'
+display-3 = 'Switches'
+display-4 = 'Switches'
 button-f = 'F Back. F abandon while closing.'

@@ -261,7 +261,7 @@ class ControllerCanvas(QtWidgets.QWidget):
     def tooltip_at(self, position: QtCore.QPoint) -> tuple[str, QtCore.QRect]:
         (focused, screens), language = self.tooltip_context
         translations = tooltip_messages(language)
-        for display, (page, window) in zip(
+        for display, (page, display_number) in zip(
             self.session.target.displays, screens, strict=False
         ):
             area = self.placement_rect(
@@ -269,7 +269,7 @@ class ControllerCanvas(QtWidgets.QWidget):
             ).toRect()
             if area.contains(position):
                 return translations.get(page, {}).get(
-                    f'window-{window}', ''
+                    f'display-{display_number}', ''
                 ).strip(), area
         identity = Canvas(self.session.layout, self.width(), self.height()).control(
             position.x(), position.y()

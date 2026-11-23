@@ -18,7 +18,7 @@ def test_time_controls_measure_clear_select_and_relay(
 ) -> None:
     target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
     source = {
-        'pages': {'live': {'min_windows': 0}, 'time': {'type': 'time'}},
+        'pages': {'live': {'min_displays': 0}, 'time': {'type': 'time'}},
         'regions': {'performance': {'pages': ['live']}, 'tools': {'pages': ['time']}},
         'layout': {'focus': 'tools'},
         'page_settings': {'clock_outputs': ['din'], 'autoselect_clock': autoselect},

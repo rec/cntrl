@@ -70,7 +70,7 @@ order. Any page type can occupy any region.
 
 `layout.focus` names the region receiving page-specific controls. It defaults
 to the first physical region for authored layouts. A thin border marks its
-visible windows. Changing focus preserves all page selections.
+visible displays. Changing focus preserves all page selections.
 Selecting a page also focuses its region. Held gestures are cancelled when
 focus changes. Management and emergency controls remain global.
 
@@ -80,17 +80,17 @@ A single-display target uses one `main` region containing the entire catalogue.
 Omitting `pages` uses the built-in catalogue. An authored region list can
 pick from that catalogue by page name.
 
-Pong requires three windows. The default Patch Chooser can yield all its
-windows while Pong is selected, preserving its state and background execution.
+Pong requires three displays. The default Patch Chooser can yield all its
+displays while Pong is selected, preserving its state and background execution.
 Controllers with fewer than three displays omit Pong from the implicit
-catalogue. Selecting None returns all windows to the Patch Chooser.
+catalogue. Selecting None returns all displays to the Patch Chooser.
 
 On a Doom-enabled MC6 Pro, the default tools rotation ends with Calibration,
-Doom, then None. Doom uses one window. Press C on that page to start the
+Doom, then None. Doom uses one display. Press C on that page to start the
 standalone game. An explicit page catalogue can include `type = 'doom'`
 in its chosen rotation. [Doom build and launch](../cntrl/maker/morningstar/mc/doom/README.md)
 
-Setups, Songs and setlists, and Switches each use one utility window. Back from
+Setups, Songs and setlists, and Switches each use one utility display. Back from
 an editor returns to its page. To switch from a set to the Patch Chooser, open
 Songs and setlists and choose **Patch Chooser**. Replace references to the retired
 `menu` page with the individual pages you want, then recompile the setup.
@@ -135,70 +135,70 @@ pages = ['status', 'monitor']
 
 [pages.status]
 type = 'status'
-min_windows = 1
+min_displays = 1
 
 [pages.monitor]
 type = 'midi-monitor'
-min_windows = 1
+min_displays = 1
 
 [pages.live]
 type = 'patch-chooser'
-min_windows = 1
-give_up_windows = ['right', 'center', 'left']
+min_displays = 1
+give_up_displays = ['right', 'center', 'left']
 
 [pages.alternate]
 type = 'patch-chooser'
-min_windows = 1
-give_up_windows = ['left', 'right', 'center']
+min_displays = 1
+give_up_displays = ['left', 'right', 'center']
 ```
 
-## Window allocation
+## Display allocation
 
-Time and Language each use exactly two windows. Time's left window selects the
-clock source and toggles Send; its right window shows Tap Tempo. See
+Time and Language each use exactly two displays. Time's left display selects the
+clock source and toggles Send; its right display shows Tap Tempo. See
 [Shared MIDI clock](midi-clock.md) for controls and clock settings. The former
 standalone `tap-tempo` page is retired; recompile setups that contain it.
 
 Status, MIDI Monitor, MIDI Looper, Arpeggiator and the other utility
-pages use exactly one window. Their
-`min_windows` values are forced to one when compiling, exporting or allocating
-an existing saved setup. They do not acquire spare windows. The blank `None`
+pages use exactly one display. Their
+`min_displays` values are forced to one when compiling, exporting or allocating
+an existing saved setup. They do not acquire spare displays. The blank `None`
 placeholder keeps minimum and maximum zero. Banked and Pong require three
-windows.
+displays.
 
-For Patch Chooser, `min_windows` replaces the former page setting `windows`
+For Patch Chooser, `min_displays` replaces the former page setting `windows`
 and defaults to one for explicitly configured pages. The default catalogue
-sets it to zero so full-width tools can occupy all displays. Zero lets it receive no windows while its
-controls and background work remain available. It can acquire spare windows up
+sets it to zero so full-width tools can occupy all displays. Zero lets it receive no displays while its
+controls and background work remain available. It can acquire spare displays up
 to the target's display count.
 
 Every selected page receives its minimum first. `layout.left_wins = false`,
-the default, awards remaining windows from the rightmost region toward the
+the default, awards remaining displays from the rightmost region toward the
 left, up to each page type's maximum. Set it to `true` to award them from the
 left instead. Each region occupies a contiguous span. Any surplus beyond all
 maxima stays black. Compilation rejects a setup if any selectable combination
 cannot meet its minimums, or a minimum exceeds its type's maximum.
 
-On a three-display pedal, the example gives Live two windows and Status one.
-Selecting Monitor also gives Live two windows and Monitor one. Reverse
+On a three-display pedal, the example gives Live two displays and Status one.
+Selecting Monitor also gives Live two displays and Monitor one. Reverse
 `layout.order` to move tools to the left. Allocation priority affects spare
-windows only where more than one selected Patch Chooser can use them.
+displays only where more than one selected Patch Chooser can use them.
 
-Patch Chooser's `give_up_windows` lists logical content slots to surrender
+Patch Chooser's `give_up_displays` lists logical content slots to surrender
 first, defaulting to the reverse target display order. Surviving slots keep
 their logical order and map into the region's physical span. These names do
 not anchor content to a physical side.
 
 When Patch Chooser has one display, it shows the last successfully sent patch
-using `windows.sent`, regardless of `give_up_windows`. The display is blank
+using `displays.sent`, regardless of `give_up_displays`. The display is blank
 until a patch is sent.
 
 The encoded layout supports up to 255 named pages, subject to available memory.
-Display IDs and window counts follow the target's declared displays.
+Display IDs and display counts follow the target's declared displays.
 
 Page preferences and expression assignments remain under `[page_settings]`.
 Keyboard output uses patch actions. Patch display templates remain `[patch_views.NAME]`, referenced
-by `[windows.NAME]` through `view = 'NAME'`.
+by `[displays.NAME]` through `view = 'NAME'`.
 
 ## Empty setups
 
@@ -209,8 +209,9 @@ by `[windows.NAME]` through `view = 'NAME'`.
 
 Setup format 39 uses `CPAG` version 2, containing target display IDs, named
 page records with minimums, ordered region cycles, allocation direction and
-initial focus. Recompile authored setups after changing page `windows` to
-`min_windows`. Editable export preserves the compiled region layout.
+initial focus. In existing authored setups, rename `[windows.NAME]` to
+`[displays.NAME]`, `give_up_windows` to `give_up_displays`, and `min_windows` to
+`min_displays`. Editable export preserves the compiled region layout.
 
 Upgrading an older layout with one Patch Chooser and multiple displays keeps
 Patch Chooser on the left and its original tool cycle on the right. The tools

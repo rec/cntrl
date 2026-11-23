@@ -5,28 +5,28 @@ type = 'None'
 
 [pages.status]
 type = 'status'
-min_windows = 1
+min_displays = 1
 
 [pages.wide]
 type = 'status'
-min_windows = 1
+min_displays = 1
 
 [pages.all]
 type = 'status'
-min_windows = 1
+min_displays = 1
 
 [pages.tap]
 type = 'time'
-min_windows = 0
+min_displays = 0
 
 [pages.lead]
 type = 'patch-chooser'
-min_windows = 1
+min_displays = 1
 
 [pages.rhythm]
 type = 'patch-chooser'
-min_windows = 1
-give_up_windows = ['left', 'right', 'center']
+min_displays = 1
+give_up_displays = ['left', 'right', 'center']
 
 [patches.lead]
 patches = [

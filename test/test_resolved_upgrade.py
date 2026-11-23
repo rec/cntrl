@@ -11,6 +11,7 @@ from cntrl.patch_chooser import (
     compiler,
     compiler_inputs,
     compiler_wire,
+    display,
     layout,
     models,
     resolved,
@@ -20,6 +21,19 @@ from cntrl.patch_chooser import (
 @pytest.fixture
 def current_setup() -> bytes:
     return bytes.fromhex((ROOT / 'show.golden').read_text())
+
+
+def test_legacy_compiled_setup_exposes_display_settings(
+    legacy_setups: dict[int, bytes],
+) -> None:
+    original = legacy_setups[47]
+    source = display.read_source(original, resolved.graph_offset(original))
+    displays = source['displays']
+    assert isinstance(displays, dict) and set(displays) == {'next', 'sent', 'undo'}
+    pages = source['pages']
+    assert isinstance(pages, dict)
+    assert pages['status']['min_displays'] == 1
+    assert pages['status']['give_up_displays'] == []
 
 
 @pytest.mark.parametrize('version', [46, 47])
@@ -65,13 +79,13 @@ def test_historical_setup_preserves_graph_assets_and_page_order(
     assert list(source['pages']) == list(old_pages)
     assert source['regions'] == old_layout['regions']
     settings = models.Setup.model_validate(source)
-    windows = [
+    displays = [
         upgraded[new_page + 12 + i * 32 : new_page + 12 + (i + 1) * 32]
         .split(b'\0')[0]
         .decode('ascii')
         for i in range(upgraded[new_page + 5])
     ]
-    assert layout.pack(settings, windows) == upgraded[new_page:new_end]
+    assert layout.pack(settings, displays) == upgraded[new_page:new_end]
     assert original[resolved.graph_offset(original) :][:4] == b'CPAT'
 
 
@@ -80,8 +94,8 @@ def test_legacy_single_chooser_keeps_its_tool_cycle_and_full_width_position(
 ) -> None:
     original = legacy_setups[36]
     offset = original.index(b'CPAG')
-    count, windows = original[offset + 4 : offset + 6]
-    record = offset + 8 + windows * 32 + (count - 1) * (34 + windows)
+    count, displays = original[offset + 4 : offset + 6]
+    record = offset + 8 + displays * 32 + (count - 1) * (34 + displays)
     chooser = original[record : record + 32].split(b'\0')[0].decode()
     source = tomlkit.parse(resolved.export(resolved.upgrade(original))).unwrap()
     tools = [
@@ -107,14 +121,14 @@ def test_legacy_single_chooser_keeps_its_tool_cycle_and_full_width_position(
         'focus': 'tools',
     }
     assert list(source['pages']) == tools[:-1] + [chooser, 'full-performance']
-    assert source['pages'][chooser]['min_windows'] == 1
-    assert source['pages'][chooser]['give_up_windows'] == [
+    assert source['pages'][chooser]['min_displays'] == 1
+    assert source['pages'][chooser]['give_up_displays'] == [
         'right',
         'center',
         'left',
     ]
     assert source['pages']['full-performance']['type'] == 'None'
-    assert source['pages']['full-performance']['min_windows'] == 0
+    assert source['pages']['full-performance']['min_displays'] == 0
 
 
 def test_legacy_full_width_position_and_page_names_are_preserved(
@@ -123,8 +137,8 @@ def test_legacy_full_width_position_and_page_names_are_preserved(
     original = legacy_setups[36]
     offset = original.index(b'CPAG')
     section = bytearray(original[offset : layout.section_end(original, offset)])
-    count, windows = section[4:6]
-    start, size = 8 + windows * 32, 34 + windows
+    count, displays = section[4:6]
+    start, size = 8 + displays * 32, 34 + displays
     records = [
         bytearray(section[start + i * size : start + (i + 1) * size])
         for i in range(count)
@@ -173,9 +187,9 @@ def test_upgrade_replaces_retired_tools_and_preserves_compiled_patches() -> None
     )
     old = bytearray(compiled)
     offset = old.index(b'CPAG')
-    windows = old[offset + 5]
-    first_type = offset + 12 + windows * 32 + 32
-    stride = 34 + windows
+    displays = old[offset + 5]
+    first_type = offset + 12 + displays * 32 + 32
+    stride = 34 + displays
     for index, kind in enumerate((0, 7, 2), 1):
         old[first_type + index * stride] = kind
     struct.pack_into('<I', old, 20, crc32(old[28:]))
@@ -184,7 +198,7 @@ def test_upgrade_replaces_retired_tools_and_preserves_compiled_patches() -> None
     source = tomlkit.parse(resolved.export(upgraded)).unwrap()
     assert list(source['pages']) == ['live', 'tempo', 'status']
     assert source['pages']['tempo']['type'] == 'time'
-    assert source['pages']['tempo']['min_windows'] == 2
+    assert source['pages']['tempo']['min_displays'] == 2
     assert source['regions']['tools']['pages'] == ['tempo', 'status']
     assert source['layout']['focus'] == 'tools'
     assert (

@@ -46,9 +46,9 @@ public:
     }
 #endif
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(page_window_view)
+    CNTRL_FLASH_ROUTINE(page_display_view)
 #endif
-    static cntrl::Pane window_view(const cntrl::Pane &content, unsigned window, unsigned count) {
+    static cntrl::Pane display_view(const cntrl::Pane &content, unsigned display, unsigned count) {
         if (count == 1) return content;
         cntrl::Pane result;
         result.graphics = content.graphics;
@@ -56,7 +56,7 @@ public:
         result.lines[0] = content.lines[0];
         unsigned lines = 0;
         for (unsigned i = 1; i < cntrl::max_lines; ++i) if (content.lines[i].text[0]) ++lines;
-        const unsigned first = lines * window / count, end = lines * (window + 1) / count;
+        const unsigned first = lines * display / count, end = lines * (display + 1) / count;
         unsigned source = 0, destination = 1;
         for (unsigned i = 1; i < cntrl::max_lines; ++i) {
             if (!content.lines[i].text[0]) continue;
@@ -66,7 +66,7 @@ public:
             }
             ++source;
         }
-        if (window == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
+        if (display == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
     enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, time = PageLayout::time, calibrate, doom, setups, songs, switches };
@@ -288,7 +288,7 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_view)
 #endif
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1, const char *contact = "", bool direct_page_switch = true) {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned display = 0, unsigned count = 1, const char *contact = "", bool direct_page_switch = true) {
         using R = cntrl::PageSettings;
         const auto &status = status_snapshot ? status_snapshot->performance : live_status;
         dirty_ = false; refreshed_ = now;
@@ -296,7 +296,7 @@ public:
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
         if (page_ == Page::status && contact_) { contact_view(pane, contact); return pane; }
-        if (page_ == Page::time && window == 0) { time_view(pane); return pane; }
+        if (page_ == Page::time && display == 0) { time_view(pane); return pane; }
         if (page_ == Page::doom) {
             pane.bitmap = {&doom_artwork, 0, 0, DoomArtwork::width, DoomArtwork::height};
             return pane;
@@ -309,9 +309,9 @@ public:
             line(pane, 1, prompt_, vertical(64), vertical(24), settings_[R::status_font], true);
             return pane;
         }
-        if (page_ == Page::language) { language_view(pane, window, direct_page_switch); return pane; }
-        if (page_ == Page::pong) { pong_view(pane, window); return pane; }
-        if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
+        if (page_ == Page::language) { language_view(pane, display, direct_page_switch); return pane; }
+        if (page_ == Page::pong) { pong_view(pane, display); return pane; }
+        if (page_ == Page::midi_monitor) { monitor_view(pane, display, count); return pane; }
         if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
         if (page_ == Page::arpeggiator) { arpeggiator_view(pane); return pane; }
         const unsigned pad = pane.graphics.pad, title = settings_[R::title_height];
@@ -614,10 +614,10 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(pong_view)
 #endif
-    void pong_view(Pane &pane, unsigned window) {
+    void pong_view(Pane &pane, unsigned display) {
         pane.graphics.background = 0; pane.graphics.foreground = 0xffff; pane.graphics.pad = 0;
         auto rectangle = [&](unsigned index, float x, float y, float width, float height, uint16_t color, bool stippled = false) {
-            const int left = int((x - window * 160) * viewport_.width / 160), top = int(y * viewport_.height / 128);
+            const int left = int((x - display * 160) * viewport_.width / 160), top = int(y * viewport_.height / 128);
             const int right = std::min(int(viewport_.width), left + std::max(1, int(width * viewport_.width / 160)));
             const int bottom = std::min(int(viewport_.height), top + std::max(1, int(height * viewport_.height / 128)));
             const int clipped_left = std::max(0, left), clipped_top = std::max(0, top);
@@ -630,14 +630,14 @@ private:
         rectangle(3, pong.x - 2, pong.y - 2, 4, 4, 0xffe0);
         const unsigned font = settings_[cntrl::PageSettings::status_font];
         char score[32];
-        i18n::format(score, sizeof(score), i18n::Message::player_score, window == 0 ? 1 : 2, window == 0 ? pong.left_score : pong.right_score);
-        line(pane, 0, window == 1 ? "PONG" : score, vertical(3), vertical(18), font, true, nullptr, 0, 0, 16);
-        pane.lines[0].graphics.foreground = window == 0 ? 0x07ff : window == 2 ? 0xf81f : 0xffff;
-        const char *hint = window == 0 ? prompt(i18n::Message::up_down_prompt, controls_.previous_section, controls_.previous)
-            : window == 2 ? prompt(i18n::Message::up_down_prompt, controls_.back, controls_.confirm)
+        i18n::format(score, sizeof(score), i18n::Message::player_score, display == 0 ? 1 : 2, display == 0 ? pong.left_score : pong.right_score);
+        line(pane, 0, display == 1 ? "PONG" : score, vertical(3), vertical(18), font, true, nullptr, 0, 0, 16);
+        pane.lines[0].graphics.foreground = display == 0 ? 0x07ff : display == 2 ? 0xf81f : 0xffff;
+        const char *hint = display == 0 ? prompt(i18n::Message::up_down_prompt, controls_.previous_section, controls_.previous)
+            : display == 2 ? prompt(i18n::Message::up_down_prompt, controls_.back, controls_.confirm)
             : prompt(i18n::Message::serve_exit_prompt, controls_.next, controls_.next_section);
-        if (pong.engaged || window == 1) line(pane, 1, hint, vertical(115), vertical(11), font, true, nullptr, 0, 0, 10);
-        if (window == 1 && pong.engaged && pong.state != Pong::State::playing) {
+        if (pong.engaged || display == 1) line(pane, 1, hint, vertical(115), vertical(11), font, true, nullptr, 0, 0, 10);
+        if (display == 1 && pong.engaged && pong.state != Pong::State::playing) {
             const char *message = pong.state == Pong::State::paused ? i18n::text(i18n::Message::paused) : (pong.left_score == 11 ? i18n::text(i18n::Message::player_one_wins) : i18n::text(i18n::Message::player_two_wins));
             line(pane, 2, message, vertical(45), vertical(15), font, true, nullptr, 0, 0, 12);
         }
@@ -685,10 +685,10 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(monitor_view)
 #endif
-    void monitor_view(Pane &pane, unsigned window, unsigned count) {
+    void monitor_view(Pane &pane, unsigned display, unsigned count) {
         using Direction = midi::Monitor::Direction;
         using R = cntrl::PageSettings;
-        const Direction direction = count == 1 || (count == 3 && window == 1) ? Direction::both : window == 0 ? Direction::incoming : Direction::outgoing;
+        const Direction direction = count == 1 || (count == 3 && display == 1) ? Direction::both : display == 0 ? Direction::incoming : Direction::outgoing;
         const char *heading = direction == Direction::both ? i18n::text(i18n::Message::combined) : direction == Direction::incoming ? i18n::text(i18n::Message::incoming) : i18n::text(i18n::Message::outgoing);
         const unsigned pad = pane.graphics.pad;
         const unsigned title = std::min(unsigned(settings_[R::title_height]) + 4, viewport_.height / 4);
@@ -838,9 +838,9 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_language_view)
 #endif
-    void language_view(cntrl::Pane &pane, unsigned window, bool direct_page_switch) {
+    void language_view(cntrl::Pane &pane, unsigned display, bool direct_page_switch) {
         if (!languages) return;
-        if (window) {
+        if (display) {
             page_heading(pane, i18n::text(i18n::Message::language));
             const unsigned inputs[] = {controls_.next_section, controls_.next, controls_.confirm, controls_.back};
             char labels[4][32];

@@ -173,7 +173,7 @@ the setup; do not stall or stop an active engine implicitly.
 Derive the required set from compiled setup semantics: graphs, patch/switch
 actions, configured page cycles, background engines, movies and settings.
 Keep module IDs separate from physical left/right placement. A hidden page or
-zero-window region can still require its engine.
+zero-display region can still require its engine.
 
 Prefetch all required modules before accepting a setup. Prepare candidate code,
 data and state before replacing the active set. Account for both generations

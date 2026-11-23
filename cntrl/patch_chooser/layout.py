@@ -7,14 +7,14 @@ from .binary_format import DocumentFormatError
 
 
 class LayoutError(ValueError):
-    """The authored page layout cannot be packed with the declared windows."""
+    """The authored page layout cannot be packed with the declared displays."""
 
 
-def pack(show: models.Setup, windows: list[str], navigation: bytes = b'') -> bytes:
+def pack(show: models.Setup, displays: list[str], navigation: bytes = b'') -> bytes:
     pages = show.pages
     regions = show.regions
     if not regions and pages:
-        if len(windows) == 1:
+        if len(displays) == 1:
             regions = {'main': models.PageRegion(pages=list(pages))}
         else:
             performance = [
@@ -39,27 +39,29 @@ def pack(show: models.Setup, windows: list[str], navigation: bytes = b'') -> byt
         raise LayoutError('regions must assign every page exactly once')
     records = bytearray()
     for name, page in pages.items():
-        if page.min_windows > page.maximum_windows(len(windows)):
+        if page.min_displays > page.maximum_displays(len(displays)):
             raise LayoutError(
-                f'pages.{name}.min_windows exceeds the page type maximum '
+                f'pages.{name}.min_displays exceeds the page type maximum '
                 'or target display count'
             )
-        priority = page.give_up_windows or list(reversed(windows))
-        if len(priority) != len(windows) or set(priority) != set(windows):
+        priority = page.give_up_displays or list(reversed(displays))
+        if len(priority) != len(displays) or set(priority) != set(displays):
             raise LayoutError(
-                f'pages.{name}.give_up_windows must list every target display ID once'
+                f'pages.{name}.give_up_displays must list every target display ID once'
             )
         records.extend(encoded_name(name))
-        records.extend((PAGE_TYPES.index(page.type), page.min_windows))
-        records.extend(windows.index(n) for n in priority)
-    largest = [max(regions[n].pages, key=lambda p: pages[p].min_windows) for n in order]
-    if sum(pages[p].min_windows for p in largest) > len(windows):
+        records.extend((PAGE_TYPES.index(page.type), page.min_displays))
+        records.extend(displays.index(n) for n in priority)
+    largest = [
+        max(regions[n].pages, key=lambda p: pages[p].min_displays) for n in order
+    ]
+    if sum(pages[p].min_displays for p in largest) > len(displays):
         claims = ', '.join(
-            f'{n}/{p}={pages[p].min_windows}'
+            f'{n}/{p}={pages[p].min_displays}'
             for n, p in zip(order, largest, strict=True)
         )
         raise LayoutError(
-            f'region minimum windows exceed the target display count: {claims}'
+            f'region minimum displays exceed the target display count: {claims}'
         )
     region_records = bytearray()
     cycles = bytearray()
@@ -74,7 +76,7 @@ def pack(show: models.Setup, windows: list[str], navigation: bytes = b'') -> byt
         + bytes(
             (
                 len(pages),
-                len(windows),
+                len(displays),
                 2,
                 len(order),
                 settings.left_wins,
@@ -83,7 +85,7 @@ def pack(show: models.Setup, windows: list[str], navigation: bytes = b'') -> byt
                 0,
             )
         )
-        + b''.join(encoded_name(n) for n in windows)
+        + b''.join(encoded_name(n) for n in displays)
         + records
         + region_records
         + cycles
@@ -107,22 +109,22 @@ def section_end(data: bytes, offset: int) -> int:
         and data[offset : offset + 4] == b'CPAG'
         and data[offset + 6] == 1
     ):
-        count, windows, _, reserved = data[offset + 4 : offset + 8]
-        end = offset + 8 + windows * 32 + count * (34 + windows)
-        if reserved or not windows or end > len(data):
+        count, displays, _, reserved = data[offset + 4 : offset + 8]
+        end = offset + 8 + displays * 32 + count * (34 + displays)
+        if reserved or not displays or end > len(data):
             raise DocumentFormatError('invalid legacy page layout')
         return end
     if offset + 12 > len(data) or data[offset : offset + 4] != b'CPAG':
         raise DocumentFormatError('missing or truncated page layout')
-    count, windows, version, regions, left_wins, focus, first, second = data[
+    count, displays, version, regions, left_wins, focus, first, second = data[
         offset + 4 : offset + 12
     ]
-    end = offset + 12 + windows * 32 + count * (35 + windows) + regions * 34 + first
+    end = offset + 12 + displays * 32 + count * (35 + displays) + regions * 34 + first
     if (
         version != 2
         or first not in (0, 4)
         or second
-        or not windows
+        or not displays
         or regions > count
         or bool(count) != bool(regions)
         or left_wins > 1
@@ -140,10 +142,10 @@ def upgrade(data: bytes, offset: int, *, migrate_retired_pages: bool = False) ->
     if data[offset + 6] == 2:
         section = data[offset:end]
         return _replace_retired_pages(section) if migrate_retired_pages else section
-    count, windows = data[offset + 4 : offset + 6]
+    count, displays = data[offset + 4 : offset + 6]
     converted = (
         b'CPAG'
-        + bytes((count, windows, 2, bool(count), 0, 0, 0, 0))
+        + bytes((count, displays, 2, bool(count), 0, 0, 0, 0))
         + data[offset + 8 : end]
         + (
             encoded_name('main') + bytes((0, count)) + bytes(range(count))
@@ -155,7 +157,7 @@ def upgrade(data: bytes, offset: int, *, migrate_retired_pages: bool = False) ->
         converted = _replace_retired_pages(converted)
     settings = models.Setup.model_validate(unpack(converted, 0))
     choosers = [n for n, p in settings.pages.items() if p.type == 'patch-chooser']
-    if len(choosers) == 1 and windows >= 2:
+    if len(choosers) == 1 and displays >= 2:
         if len(settings.pages) == 255:
             raise DocumentFormatError(
                 'legacy page layout has no room for the full-performance page'
@@ -163,14 +165,14 @@ def upgrade(data: bytes, offset: int, *, migrate_retired_pages: bool = False) ->
         chooser = choosers[0]
         pages = dict(settings.pages)
         pages[chooser] = pages[chooser].model_copy(
-            update={'min_windows': min(pages[chooser].min_windows, 1)}
+            update={'min_displays': min(pages[chooser].min_displays, 1)}
         )
         placeholder, suffix = 'full-performance', 2
         while placeholder in pages:
             placeholder = f'full-performance-{suffix}'
             suffix += 1
         pages[placeholder] = models.Page(
-            type='None', give_up_windows=pages[chooser].give_up_windows
+            type='None', give_up_displays=pages[chooser].give_up_displays
         )
         tools = [placeholder if n == chooser else n for n in settings.pages]
         settings = settings.model_copy(
@@ -189,16 +191,16 @@ def upgrade(data: bytes, offset: int, *, migrate_retired_pages: bool = False) ->
             data[offset + 8 + i * 32 : offset + 40 + i * 32]
             .split(b'\0')[0]
             .decode('ascii')
-            for i in range(windows)
+            for i in range(displays)
         ]
         return pack(settings, names)
     return converted
 
 
 def _replace_retired_pages(data: bytes) -> bytes:
-    count, windows, _, regions, left_wins, focus = data[4:10]
-    start = 12 + windows * 32
-    stride = 34 + windows
+    count, displays, _, regions, left_wins, focus = data[4:10]
+    start = 12 + displays * 32
+    stride = 34 + displays
     end = start + count * stride
     records = [data[i : i + stride] for i in range(start, end, stride)]
     if not any(r[32] in RETIRED_PAGES for r in records):
@@ -206,7 +208,7 @@ def _replace_retired_pages(data: bytes) -> bytes:
 
     keep: dict[int, int] = {}
     pages = bytearray()
-    time_available = windows >= 2 and not any(r[32] == 19 for r in records)
+    time_available = displays >= 2 and not any(r[32] == 19 for r in records)
     for index, record in enumerate(records):
         kind = record[32]
         if kind in RETIRED_PAGES:
@@ -240,7 +242,9 @@ def _replace_retired_pages(data: bytes) -> bytes:
     focus = surviving_regions.index(focus) if focus in surviving_regions else 0
     result = (
         b'CPAG'
-        + bytes((len(keep), windows, 2, len(surviving_regions), left_wins, focus, 0, 0))
+        + bytes(
+            (len(keep), displays, 2, len(surviving_regions), left_wins, focus, 0, 0)
+        )
         + data[12:start]
         + pages
         + region_records
@@ -274,14 +278,14 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     end = section_end(data, offset)
     if data[offset + 6] == 1:
         return unpack(upgrade(data, offset), 0)
-    count, window_count = data[offset + 4 : offset + 6]
+    count, display_count = data[offset + 4 : offset + 6]
     region_count, left_wins, focus = data[offset + 7 : offset + 10]
     cursor = offset + 12
-    windows = [
+    displays = [
         data[cursor + i * 32 : cursor + (i + 1) * 32].split(b'\0')[0].decode('ascii')
-        for i in range(window_count)
+        for i in range(display_count)
     ]
-    cursor += window_count * 32
+    cursor += display_count * 32
     canonical = bytearray(data[offset:end])
     pages = {}
     for _ in range(count):
@@ -309,15 +313,15 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             )
         if name in pages or data[cursor + 32] >= len(PAGE_TYPES):
             raise DocumentFormatError('invalid page record')
-        if data[cursor + 33] > window_count:
-            raise DocumentFormatError('invalid page window count')
-        priority = data[cursor + 34 : cursor + 34 + window_count]
-        if sorted(priority) != list(range(window_count)):
-            raise DocumentFormatError('invalid logical window priority')
+        if data[cursor + 33] > display_count:
+            raise DocumentFormatError('invalid page display count')
+        priority = data[cursor + 34 : cursor + 34 + display_count]
+        if sorted(priority) != list(range(display_count)):
+            raise DocumentFormatError('invalid logical display priority')
         pages[name] = {
             'type': PAGE_TYPES[data[cursor + 32]],
-            'min_windows': data[cursor + 33],
-            'give_up_windows': [windows[i] for i in priority],
+            'min_displays': data[cursor + 33],
+            'give_up_displays': [displays[i] for i in priority],
         }
         if pages[name]['type'] not in (
             'None',
@@ -328,9 +332,9 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             'time',
         ):
             # Stored minima remain readable, but tool pages now have fixed width.
-            pages[name]['min_windows'] = 1
+            pages[name]['min_displays'] = 1
             canonical[cursor - offset + 33] = 1
-        cursor += 34 + window_count
+        cursor += 34 + display_count
     cycles = cursor + region_count * 34
     names = list(pages)
     regions = {}
@@ -364,7 +368,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
     try:
         encoded = pack(
             models.Setup.model_validate(result),
-            windows,
+            displays,
             data[end - 4 : end] if data[offset + 10] else b'',
         )
     except (LayoutError, ValidationError) as error:

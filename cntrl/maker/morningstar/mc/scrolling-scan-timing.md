@@ -52,7 +52,7 @@ visual tradeoff, not a root-cause fix or a guarantee that rightward motion is
 artifact-free. The preceding diagnostic and experimental evidence are retained.
 
 The initial direction-only attempt (`85f67d1`) was rejected: a card left one
-window and reappeared two windows away. The corrected performance layout mirrors
+display and reappeared two displays away. The corrected performance layout mirrors
 the complete patch interaction: candidate left, current centre, history right.
 Send moves the candidate into the centre and the current card into history to
 the right; Undo reverses that path. Pixel sampling follows one panorama across
@@ -280,9 +280,9 @@ that every source frame survived or establish the capture-time scale.
 
 After rotating the image upright, consecutive frames around playback 55-56 s
 show a left-edge strip on the initially blank centre display during C. Its
-contents change while the main window enters from the right. Around 77.7-78.2 s,
+contents change while the main display enters from the right. Around 77.7-78.2 s,
 Undo also has a narrow, broken strip at the right edge of the rightmost display,
-separated from the main window by a dark gap. Thus the new video does not
+separated from the main display by a dark gap. Thus the new video does not
 support treating Undo as completely artifact-free. This strengthens the
 two-direction RAM-reuse hypothesis, without proving a common physical cause.
 
@@ -1403,7 +1403,7 @@ The current isolation baseline cannot maintain 60 Hz at the highest strides.
 Press and release B to toggle the panel update order. The initial order is
 left, centre, right (`LTR`); the alternate is right, centre, left (`RTL`). Both
 the entering-pixel writes and the subsequent scroll commands use that order.
-The image's position, direction, speed and physical window assignments do not
+The image's position, direction, speed and physical display assignments do not
 change, and toggling B does not blank or repaint the screens.
 
 Press and release A to cycle the target update rate through 60, 50, 40 and 30 Hz,
@@ -1542,7 +1542,7 @@ caused the earlier corruption.
 ### Gap-aware panorama, 2026-10-24
 
 The image now contains 40 numbered tiles over 1,280 columns, with a configurable
-equal gap between the three windows. The uploaded build uses `SCROLL_GAP=64`.
+equal gap between the three displays. The uploaded build uses `SCROLL_GAP=64`.
 The known-working 8 MHz single-column transfer path is unchanged. The cache
 grows to 327,680 bytes, leaving 156,704 bytes free in RAM1 according to the build.
 
@@ -1637,7 +1637,7 @@ comparison. Saved card data remains untouched.
 The production patch chooser previously replaced outgoing, still-visible RAM
 columns with incoming pixels, then advanced the scroll register after a batch.
 This exposed a wrong-image strip on the left during sends and on the right
-during undo. Black empty windows made the contrast more apparent.
+during undo. Black empty displays made the contrast more apparent.
 
 The patch chooser now scrolls across all 162 controller rows, retaining the
 160-column visible window and staging each incoming column in hidden RAM. It

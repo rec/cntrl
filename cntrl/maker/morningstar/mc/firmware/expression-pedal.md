@@ -25,7 +25,7 @@ there (inverse quadratic). Both reach the configured endpoints. The assignment
 is included in compiled setup downloads and history. An assignment requires an
 expression-role input and an available output in the target configuration.
 
-**Calibration** uses one window in the default utility cycle. With an explicit
+**Calibration** uses one display in the default utility cycle. With an explicit
 page catalogue, include it in the utility region:
 
 ```toml

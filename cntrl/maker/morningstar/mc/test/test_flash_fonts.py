@@ -82,7 +82,7 @@ def test_long_performance_labels_keep_the_fixed_font_and_use_no_ram_asset(
     show = models.Setup(style=models.Style(font_name=name), fill_in_styles=False)
     text = 'Wide performance label with a long name'
     files: dict[int, bytes] = {}
-    windows, _, block = display.compile_display(
+    displays, _, block = display.compile_display(
         show,
         [
             display.DisplayPatch(
@@ -93,7 +93,7 @@ def test_long_performance_labels_keep_the_fixed_font_and_use_no_ram_asset(
         files,
     )
     assert not files
-    assert display.estimate_font_ram(windows, block, files) == 0
+    assert display.estimate_font_ram(displays, block, files) == 0
     _, styles, _, texts, pages, _ = display.HEADER.unpack_from(block)
     position = display.HEADER.size + styles * graphics.SCREEN.size + pages
     rendered: list[str] = []

@@ -278,7 +278,7 @@ static void setups_page_shows_its_physical_confirm_label() {
     assert(!std::strcmp(pane.lines[0].text, "Setups"));
     assert(!std::strcmp(pane.lines[1].text, "Confirm OK"));
 }
-static void pong_motion_only_changes_intersecting_windows() {
+static void pong_motion_only_changes_intersecting_displays() {
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
     uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0};
     layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::pong);
@@ -355,7 +355,7 @@ static void cable_test_preserves_its_original_font_and_indicators() {
     assert(pane.circles[2].x == 130 && pane.circles[2].color == 0x07e0);
     assert(pane.circles[3].color == 0x8410 && pane.toggle.enabled);
 }
-static void updating_one_window_does_not_starve_the_others() {
+static void updating_one_display_does_not_starve_the_others() {
     for (unsigned frames : {0u, 1u, 2u}) {
         Fonts fonts; MixedDisplay display;
         uint16_t work[231] = {};
@@ -374,7 +374,7 @@ static void updating_one_window_does_not_starve_the_others() {
             for (auto pixel : display.pixels[screen]) assert(pixel == screen + 1);
     }
 }
-static void distinct_geometries_and_reserved_windows() {
+static void distinct_geometries_and_reserved_displays() {
     for (unsigned frames : {0u, 1u, 2u}) {
     Fonts fonts; MixedDisplay display;
     uint16_t work[231] = {};
@@ -730,8 +730,8 @@ int main() {
     cntrl::memory_budget = 192 * 1024;
     setups_page_shows_its_physical_confirm_label();
     moving_shapes_repaint_only_their_damage_and_restore_overlaps();
-    pong_motion_only_changes_intersecting_windows();
-    updating_one_window_does_not_starve_the_others();
+    pong_motion_only_changes_intersecting_displays();
+    updating_one_display_does_not_starve_the_others();
     frame_preparation_failure_and_rollback_preserve_active_storage();
     one_frame_scrolls_match_two_frame_pixels_in_both_axes_and_directions();
     animations_can_be_disabled_without_disabling_brightness();
@@ -740,7 +740,7 @@ int main() {
     title_text_is_drawn_over_its_indicator();
     minimum_viewports_follow_declared_surfaces();
     circles_clip_before_iterating_and_do_not_overflow();
-    distinct_geometries_and_reserved_windows();
+    distinct_geometries_and_reserved_displays();
     portable_font_bearings_and_character_advances();
     font_bounds_preserve_bearings_spaces_and_shaped_offsets();
     ring_transition_preserves_hidden_columns_and_retries();

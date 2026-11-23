@@ -1196,7 +1196,7 @@ def test_hover_uses_screen_page_button_focus_and_active_language(
         gui,
         'tooltip_messages',
         lambda language: {
-            'patch-chooser': {'window-1': f'{language} screen'},
+            'patch-chooser': {'display-1': f'{language} screen'},
             'status': {'button-a': f'{language} button'},
             'time': {'button-a': f'{language} time'},
         },

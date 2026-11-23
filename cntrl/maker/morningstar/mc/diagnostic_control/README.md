@@ -1,7 +1,7 @@
 # MIDI transport control
 
 This target adds transport measurements to the working normal/newlib firmware.
-It retains the one-window tool pages, legacy layout/controls, cached Expression
+It retains the one-display tool pages, legacy layout/controls, cached Expression
 page and USB MIDI flush guard. It does not enable the bounded allocator or a
 watchdog or change the setup format. It includes the bridge fix accepting any
 unparsed MIDI byte in CIN `0xf`, rather than rejecting non-realtime bytes.

@@ -101,7 +101,7 @@ def test_all_missing_glyphs_report_their_fonts_and_fields() -> None:
         }
     }
     source['parameters'] = {'other': {'value': '♣'}}
-    source['windows'] = {}
+    source['displays'] = {}
     target = models.Target.model_validate(
         compiler_inputs.read_document(ROOT / 'firmware/test/target.json')
     )
@@ -173,12 +173,12 @@ def test_backgrounds_do_not_request_unused_label_glyphs() -> None:
             'patch_views': {'patch': {'fields': []}},
         }
     )
-    windows, _, _ = display.compile_display(
+    displays, _, _ = display.compile_display(
         show,
         [display.DisplayPatch(values={'patch_cycle.name': '☃', 'display_name': '雪'})],
         target,
     )
-    assert all(w[0:2] == bytes([17, 8]) for w in windows)
+    assert all(w[0:2] == bytes([17, 8]) for w in displays)
 
 
 def test_outline_scaling_changes_width_without_changing_height() -> None:

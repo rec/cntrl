@@ -9,24 +9,24 @@ contrast = 0.6
 [style]
 font_name = "Arimo"
 
-[windows.undo]
+[displays.undo]
 view = "patch"
 
-[windows.undo.style]
+[displays.undo.style]
 background_color = "0xF8FCF8"
 foreground_color = "0x000000"
 
-[windows.sent]
+[displays.sent]
 view = "patch"
 
-[windows.sent.style]
+[displays.sent.style]
 background_color = "0xF8FCF8"
 foreground_color = "0x000000"
 
-[windows.next]
+[displays.next]
 view = "patch"
 
-[windows.next.style]
+[displays.next.style]
 background_color = "0xF8FCF8"
 foreground_color = "0x000000"
 

@@ -25,11 +25,11 @@ fields = ['program', 'bank', 'volume', 'pan', 'instrument', 'name']
 [patch_views.settings]
 fields = ['is_midi_interface', 'screensaver_timeout', 'navigation.hold_delay', 'scrolling.horizontal_duration']
 
-[windows.undo]
+[displays.undo]
 view = 'numeric'
 
-[windows.sent]
+[displays.sent]
 view = 'settings'
 
-[windows.next.style]
+[displays.next.style]
 background_color = 'blue'

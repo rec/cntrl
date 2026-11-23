@@ -156,9 +156,9 @@ reverted in `49eb15f`.
 The user supplied `/Users/tom/Downloads/20261031_145523.mp4`, 1920x1080 at 30 fps,
 approximately 13.22 seconds long. It is ordinary video, not high-speed capture.
 During the first C transition, the centre display was initially blank. A white
-window entered from the right while a narrow white strip appeared at the far
+display entered from the right while a narrow white strip appeared at the far
 left. The strip stayed at the edge while its contents changed, then disappeared
-after settling. Thus it was not simply a remnant of a previous window there.
+after settling. Thus it was not simply a remnant of a previous display there.
 It is consistent with incoming data becoming visible at the wrong edge during
 RAM reuse, but does not distinguish mapping from scanout timing by itself.
 

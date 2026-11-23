@@ -208,7 +208,7 @@ public:
         }
         if (content.performance) {
             if (!application_.visible() || application_.feature_open(platform_)) return;
-            const int destination = application_.allocation.controller_window(application_.rendering(),pane);
+            const int destination = application_.allocation.controller_display(application_.rendering(),pane);
             if (destination < 0) return;
             Pane view = content;
             unsigned region = application_.layout.page_region(application_.layout.controller_page(application_.rendering()));
@@ -477,7 +477,7 @@ public:
         const auto &region = application_.allocation.region(region_index);
         if (!region.count) return;
         if (pane >= 0) {
-            pane = application_.allocation.controller_window(application_.rendering(),unsigned(pane));
+            pane = application_.allocation.controller_display(application_.rendering(),unsigned(pane));
             if (pane < 0) return;
         } else if (region.count == 1) pane = int(region.first);
         if (pane >= 0) renderer_.transition(undo,duration_ms,pane,0,vertical,panorama,1);
@@ -558,7 +558,7 @@ public:
         save_view();
         if (!splash_visible_ && !application_.feature_open(platform_) && documents_.document().valid()) {
           for (unsigned r = 0; r < (application_.utility_visible() ? 1u : application_.layout.regions()); ++r) {
-            const auto region = application_.utility_visible() ? PageAllocation::Region{application_.utility_page, 0, std::min(display_.count(), PageLayout::maximum_windows(application_.layout.page(application_.utility_page)[0], display_.count()))} : application_.allocation.region(r);
+            const auto region = application_.utility_visible() ? PageAllocation::Region{application_.utility_page, 0, std::min(display_.count(), PageLayout::maximum_displays(application_.layout.page(application_.utility_page)[0], display_.count()))} : application_.allocation.region(r);
             if (!region.count || application_.layout.page(region.selected)[0] == PageLayout::patch_chooser || application_.layout.page(region.selected)[0] == PageLayout::banked) continue;
             load_view(region.selected);
             if (!pages_.due(now)) { save_view(); continue; }
@@ -590,7 +590,7 @@ public:
                 , i, region.count, documents_.name_and_contact(),
                 !application_.song_navigation_active() || application_.layout.navigation()
             );
-                if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language && pages_.page() != Pages::Page::time) content = Pages::window_view(content,i,region.count);
+                if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language && pages_.page() != Pages::Page::time) content = Pages::display_view(content,i,region.count);
                 content.focused = r == application_.allocation.focus() && pages_.page() != Pages::Page::pong; renderer_.show(screen,content);
             }
             save_view();
@@ -600,7 +600,7 @@ public:
         if (!splash_visible_) draw();
     }
     void apply_brightness(uint32_t now) {
-        const int patch_screen = application_.allocation.controller_window(application_.visible_index, 0);
+        const int patch_screen = application_.allocation.controller_display(application_.visible_index, 0);
         unsigned screen = patch_screen >= 0 ? unsigned(patch_screen) : 0;
         renderer_.target_brightness(throb_.brightness(
             patch_screen >= 0 && !splash_visible_ && !brightness_feedback_ ? pending_patch_ : -1, now, 128, application_.held),screen);

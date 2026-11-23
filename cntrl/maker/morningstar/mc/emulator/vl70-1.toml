@@ -521,11 +521,11 @@ menu = ["d", "f"]
 Imported = ["Banked"]
 
 [pages.performance]
-min_windows = 3
+min_displays = 3
 
 [pages.banked]
 type = "banked"
-min_windows = 3
+min_displays = 3
 patch = "Banked"
 
 [trs_ports]
