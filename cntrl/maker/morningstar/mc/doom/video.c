@@ -13,6 +13,7 @@ static uint16_t frame[DEMO_WIDTH * DEMO_HEIGHT];
 static int target_row[LCD_H];
 static int window_y, window_bottom;
 static int pixel_x, pixel_y, pixel_step;
+static const uint8_t gamma5[32], gamma6[64];
 
 void I_InitGraphics(void)
 {
@@ -28,6 +29,12 @@ void I_SetPalette(int palette)
 {
     R_PaletteChanged();
     pal_read(palette, pump_lut);
+    for (unsigned i = 0; i < sizeof(pump_lut) / sizeof(*pump_lut); ++i) {
+        const uint16_t color = pump_lut[i];
+        pump_lut[i] = gamma5[color >> 11] << 11
+                    | gamma6[(color >> 5) & 63] << 5
+                    | gamma5[color & 31];
+    }
 }
 
 void lcd_begin(int x0, int y0, int x1, int y1)
@@ -82,3 +89,16 @@ void pump_submit(const uint8_t *columns, int count)
 void pump_sync(int max) { (void)max; }
 int pump_pending(void) { return 0; }
 void pump_end(void) {}
+
+// Gamma 1.25, rounded to the nearest RGB565 channel value:
+// round(max * pow(value / max, 1 / 1.25)).
+static const uint8_t gamma5[32] = {
+    0, 2, 3, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 15, 16, 17,
+    18, 19, 20, 21, 22, 23, 24, 24, 25, 26, 27, 28, 29, 29, 30, 31,
+};
+static const uint8_t gamma6[64] = {
+    0, 2, 4, 6, 7, 8, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20,
+    21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+    37, 38, 38, 39, 40, 41, 42, 43, 44, 45, 46, 46, 47, 48, 49, 50,
+    51, 52, 52, 53, 54, 55, 56, 57, 57, 58, 59, 60, 61, 61, 62, 63,
+};
