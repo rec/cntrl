@@ -202,6 +202,7 @@ class Session:
         self._other_events: list[tuple[int, Event]] = []
         self.failed = False
         self.stock_firmware = False
+        self.doom = False
         self.editing_name = False
         self.language = 'en'
         self.correction_regions: list[TranslationRegion] = []
@@ -485,6 +486,15 @@ class Session:
                         ),
                     )
                 )
+            elif payload[0] == 15 and len(payload) == 9:
+                self.doom = True
+                self.messages.append(
+                    OutputEvent(
+                        kind='firmware',
+                        time_us=struct.unpack_from('<Q', payload, 1)[0],
+                        message='Doom selected. Restart to return to CNTRL.',
+                    )
+                )
             elif payload[0] == 8 and len(payload) == 2 and payload[1] <= 1:
                 self.editing_name = bool(payload[1])
             elif payload[0] == 9:
@@ -573,6 +583,10 @@ class Session:
             frame[start : start + width] = pixels[row::height]
             start += display.width
 
+    @property
+    def firmware_exited(self) -> bool:
+        return self.stock_firmware or self.doom
+
     def advance(self, time_us: int, *, replay: bool = False) -> None:
         if not self.time_us <= time_us <= 0xFFFFFFFFFFFFFFFF:
             raise EmulatorError('virtual time must advance monotonically within uint64')
@@ -582,7 +596,7 @@ class Session:
         # acknowledgements give each segment its own watchdog without settling.
         while (
             replay
-            and not self.stock_firmware
+            and not self.firmware_exited
             and time_us - cursor > MAX_REPLAY_ADVANCE_US
         ):
             cursor += MAX_REPLAY_ADVANCE_US

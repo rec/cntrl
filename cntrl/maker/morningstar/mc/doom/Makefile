@@ -27,14 +27,27 @@ export ARDUINO_DIRECTORIES_DOWNLOADS := $(TOOLS)/downloads
 export ARDUINO_DIRECTORIES_USER := $(TOOLS)/user
 export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
-.PHONY: firmware check
+.PHONY: firmware check relocated
+relocated:
+	$(MAKE) firmware OUT="$(OUT)/relocated" FLASH_ORIGIN=0x60390000 FLASH_LENGTH=4288K
+
+ifneq ($(FLASH_ORIGIN),)
+CORE_LINKER := $(TOOLS)/data/packages/teensy/hardware/avr/1.62.0/cores/teensy4/imxrt1062_t41.ld
+LINKER := $(OUT)/doom.ld
+LINK_PROPERTY := --build-property 'build.flags.ld=-Wl,--gc-sections,--relax,--no-warn-rwx-segments "-T$(LINKER)"'
+
+$(LINKER): $(CORE_LINKER) Makefile
+	mkdir -p "$(OUT)"
+	sed 's/ORIGIN = 0x60000000, LENGTH = 7936K/ORIGIN = $(FLASH_ORIGIN), LENGTH = $(FLASH_LENGTH)/' "$<" > "$@"
+endif
+
 firmware: $(OUT)/elf/doom_demo.ino.elf
 	"$(SDK)/arm-none-eabi-size" "$<"
 	"$(SDK)/arm-none-eabi-objcopy" -O binary "$<" "$(OUT)/elf.bin"
 	"$(SDK)/arm-none-eabi-objcopy" -I ihex -O binary "$(OUT)/elf/doom_demo.ino.hex" "$(OUT)/hex.bin"
 	cmp "$(OUT)/elf.bin" "$(OUT)/hex.bin"
 
-$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h Makefile $(NOR) $(FLASH_CONFIG)
+$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h Makefile $(NOR) $(FLASH_CONFIG) $(LINKER)
 	mkdir -p "$(SKETCH)/src"
 	touch "$(SKETCH)/doom_demo.ino"
 	cp $(SHARED) board.cpp demo.h "$(FLASH_CONFIG)" "$(SKETCH)/src/"
@@ -44,6 +57,7 @@ $(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h M
 	printf '.section .progmem.doom,"a",%%progbits\n.balign 4\n.global demo_rom\ndemo_rom:\n.incbin "%s"\n' "$(NOR)" > "$(SKETCH)/src/rom.S"
 	"$(TOOLS)/bin/arduino-cli" compile --fqbn teensy:avr:teensy41:usb=serial,speed=600,opt=osstd,keys=en-us \
 		--build-path "$(OUT)/elf" \
+		$(LINK_PROPERTY) \
 		--build-property 'build.flags.c=$(FLAGS) -DCNTRL_EXTERNAL_FLASH_CONFIG $(INC)' \
 		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fno-rtti $(INC)' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=' \

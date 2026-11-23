@@ -84,7 +84,34 @@ for RAM1 stack and local variables and 511,840 bytes for the RAM2 heap. The
 demo's boot, display, switches and frame rate on the pedal still need live
 verification.
 
-## Installation and source
+## Launch from CNTRL
+
+The Doom-enabled build adds **Doom** to **Pages and Tools**. Select it to
+open a page with one **C Doom** action. Press C again to reboot into the
+game. The boot selector consumes the request before entering Doom, so a
+power cycle returns to the ordinary CNTRL startup. The launcher requires
+CNTRL to be the default firmware.
+
+Use the same DMC100 inputs as above and replace `firmware` with
+`relocated` to build the separate Doom application at `0x60390000`.
+From the repository root, export the two separately linked applications
+and then use the standard MC6 Pro flash workflow.
+
+```sh
+python -m cntrl.maker.morningstar.mc.build_target \
+  --source-root /absolute/path/to/cntrl \
+  --output /absolute/path/to/doom-export \
+  --doom-image /absolute/path/to/build/relocated/elf/doom_demo.ino.hex
+cntrl flash --controller mc6-pro \
+  --resources /absolute/path/to/doom-export/distribution
+```
+
+The export contains the CNTRL application, the relocated Doom application
+and the boot hook, with image bounds checked against the reserved flash
+region. The installer uses the existing MC6 Pro backup and restore workflow.
+[MC6 Pro upload and recovery](../firmware/upload-helper.md)
+
+## Standalone installation and source
 
 The demo occupies the application flash from `0x60000000`. Installing it
 would replace the current boot image. Power cycling restarts the demo.

@@ -59,9 +59,11 @@ public:
 #endif
     Application(Hardware &hardware, Documents &documents, Controller &primary, PatchOutputs &outputs, PatchSources &sources,
                 Songs &songs, SongCapture &capture, bool switches)
-        : menu(hardware, tool_names_.data(), switches ? 3 : 2), setups(documents, hardware),
+        : menu(hardware, tool_names_.data(), (switches ? 3 : 2) + hardware.doom_available()), setups(documents, hardware),
           song_ui(songs, hardware, capture, &documents), hardware_(hardware), documents_(documents), primary_(primary),
-          outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) {}
+          outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches), has_doom_(hardware.doom_available()) {
+        if (has_doom_) tool_names_[doom_index()] = "Doom";
+    }
     ~Application() { destroy_banked(pending_banked_); destroy_banked(banked_); destroy_controllers(pending_controllers_); destroy_controllers(controllers_); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_prepare_layout)
@@ -237,6 +239,7 @@ public:
 #endif
     void language_changed() {
         tool_names_ = {i18n::text(i18n::Message::setups), i18n::text(i18n::Message::songs_and_setlists), i18n::text(i18n::Message::switches)};
+        if (has_doom_) tool_names_[doom_index()] = "Doom";
         if (names_.data) {
             auto **names = reinterpret_cast<const char **>(names_.data);
             for (unsigned i = 0; i < page_offset(); ++i) names[i] = tool_names_[i];
@@ -309,8 +312,18 @@ public:
             controls_locked = true; return true;
         case Operation::menu_activate: {
             if (!menu.open()) return false;
+            const bool launching_doom = menu.doom();
             const int selected = menu.button(2, true);
             if (selected == -1) return true;
+            if (has_doom_ && unsigned(selected) == doom_index()) {
+                if (!launching_doom) {
+                    menu.enter_doom(); controls_locked = true;
+                } else if (documents_.busy() || documents_.dirty() || services.song_transfer_busy() || !hardware_.launch_doom()) {
+                    menu.enter_doom(); controls_locked = true;
+                    hardware_.error("Doom could not start");
+                }
+                return true;
+            }
             if (selected >= int(page_offset()) && unsigned(selected) - page_offset() < layout.regions()) {
                 at(visible_index).cancel_gesture(); pending_region = unsigned(selected) - page_offset(); controls_locked = true; return true;
             }
@@ -378,7 +391,7 @@ public:
         return false;
     }
 private:
-    std::array<const char *, 3> tool_names_{i18n::text(i18n::Message::setups), i18n::text(i18n::Message::songs_and_setlists), i18n::text(i18n::Message::switches)};
+    std::array<const char *, 4> tool_names_{i18n::text(i18n::Message::setups), i18n::text(i18n::Message::songs_and_setlists), i18n::text(i18n::Message::switches)};
     MemoryBuffer names_, pending_names_;
     CheckedArray<std::array<char,96>> labels_, pending_labels_;
     CheckedArray<Pages::ViewState> pending_views_;
@@ -410,9 +423,10 @@ private:
         storage.clear();
     }
     Songs &songs_;
-    bool has_switches_;
+    bool has_switches_, has_doom_;
     int pending_song_step_ = 0;
     bool stopping_setup_ = false;
-    unsigned page_offset() const { return has_switches_ ? 3 : 2; }
+    unsigned doom_index() const { return has_switches_ ? 3 : 2; }
+    unsigned page_offset() const { return doom_index() + has_doom_; }
 };
 } // namespace cntrl::ui

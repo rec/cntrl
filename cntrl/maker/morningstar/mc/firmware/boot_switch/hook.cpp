@@ -4,11 +4,20 @@
 // The composer extends stock's cleared BSS and MPU boundary by 256 bytes.
 SwitchGesture<CNTRL_SWITCH_WINDOW_MS> gesture;
 bool blocked = false;
+extern "C" const char custom_entry;
 
-extern "C" unsigned boot_selected() {
+extern "C" uintptr_t boot_entry() {
     auto words = reinterpret_cast<const volatile uint32_t *>(0x60084000);
     auto &request = *reinterpret_cast<volatile uint32_t *>(boot_request_register);
-    return select_boot(inspect_boot_selection(words).choice, request) == BootChoice::cntrl;
+    const auto fallback = inspect_boot_selection(words).choice;
+    auto selection = select_boot(fallback, request);
+    if (selection == BootChoice::doom) {
+        __asm__ volatile("dsb" ::: "memory");
+        if (const auto entry = doom_startup(reinterpret_cast<const volatile uint32_t *>(doom_origin + 0x1000)))
+            return entry;
+        selection = fallback;
+    }
+    return selection == BootChoice::cntrl ? reinterpret_cast<uintptr_t>(&custom_entry) : 0;
 }
 
 extern "C" unsigned stock_reader(void *reader) {

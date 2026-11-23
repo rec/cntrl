@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 import pytest
 from test_firmware import hex_record
 
-from cntrl.firmware.intel_hex import read_hex
-from cntrl.maker.morningstar.mc import upload_helper
+from cntrl.firmware.intel_hex import AddressRange, read_hex
+from cntrl.maker.morningstar.mc import boot_switch, upload_helper
 from cntrl.patch_chooser.devices import Device
 from cntrl.upload import Bootloader, Serve, Upload
 
@@ -256,6 +256,39 @@ def test_invalid_requests_never_reach_uploader(
 
 def test_valid_boot_image_is_accepted(firmware_path: Path) -> None:
     upload_helper.validate_firmware(read_hex(firmware_path))
+
+
+def test_doom_is_kept_in_its_separately_linked_flash_slot(firmware_path: Path) -> None:
+    image = read_hex(firmware_path)
+    origin = boot_switch.DOOM_ORIGIN
+    data = bytearray(image.data)
+    for offset, value in {
+        0x1004: origin + 0x1401,
+        0x1010: origin + 0x1020,
+        0x1014: origin + 0x1000,
+        0x1018: origin + len(data) - 3072,
+    }.items():
+        struct.pack_into('<I', data, offset, value)
+    doom = image.model_copy(
+        update={
+            'origin': origin,
+            'entry': origin + 0x1000,
+            'regions': [AddressRange(start=origin, end=origin + len(data))],
+            'data': bytes(data),
+        }
+    )
+    cntrl = image.model_copy(update={'origin': 0x60100000})
+    application = boot_switch.append_doom(cntrl, doom)
+    offset = origin - cntrl.origin
+    assert application[: len(cntrl.data)] == cntrl.data
+    assert application[len(cntrl.data) : offset] == b'\xff' * (offset - len(cntrl.data))
+    assert application[offset:] == doom.data
+    with pytest.raises(ValueError, match='contiguous'):
+        boot_switch.append_doom(cntrl, image)
+    with pytest.raises(ValueError, match='does not fit'):
+        boot_switch.append_doom(
+            cntrl.model_copy(update={'data': bytes(offset + 1)}), doom
+        )
 
 
 def test_helper_rejects_another_unit_before_upload(

@@ -1,20 +1,32 @@
 #pragma once
 #include <cstdint>
 
-enum class BootChoice : uint32_t { stock = 0x53544b31, cntrl = 0x43545231 };
+enum class BootChoice : uint32_t { stock = 0x53544b31, cntrl = 0x43545231, doom = 0x444f4f4d };
 
 // Only our markers are consumed. Teensy's crash reporting also uses this
 // reset-retained register, with a different value.
 constexpr uintptr_t boot_request_register = 0x400f8030;
 constexpr uint32_t request_stock = 0x434e5701, request_cntrl = 0x434e5702, visiting_stock = 0x434e5703;
+constexpr uint32_t request_doom = 0x434e5704;
+constexpr uintptr_t doom_origin = 0x60390000, application_end = 0x607c0000;
 inline BootChoice select_boot(BootChoice default_firmware, volatile uint32_t &request) {
     const uint32_t marker = request;
+    if (marker == request_doom) {
+        request = 0;
+        return BootChoice::doom;
+    }
     if (marker == request_stock) {
         request = visiting_stock;
         return BootChoice::stock;
     }
     if (marker == request_cntrl || marker == visiting_stock) request = 0;
     return marker == request_cntrl ? BootChoice::cntrl : default_firmware;
+}
+
+inline uint32_t doom_startup(const volatile uint32_t *ivt) {
+    const uint32_t reset = ivt[1];
+    return ivt[0] == 0x432000d1 && ivt[5] == doom_origin + 0x1000 &&
+        (reset & 1) && reset >= doom_origin + 0x1401 && reset < application_end ? reset : 0;
 }
 
 constexpr unsigned default_exit_pair = 33; // A+F

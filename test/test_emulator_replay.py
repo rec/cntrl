@@ -90,6 +90,7 @@ def test_replay_can_advance_an_older_native_runtime() -> None:
         def __init__(self) -> None:
             self.time_us = 0
             self.stock_firmware = False
+            self.doom = False
             self.advances: list[int] = []
 
         def request(self, payload: bytes) -> None:

@@ -6,11 +6,10 @@
 .thumb_func
 boot_gate:
     push {r4, lr}
-    bl boot_selected
+    bl boot_entry
     cmp r0, #0
     pop {r4, lr}
     beq stock
-    ldr r0, =custom_entry
     bx r0
 stock:
     bx lr

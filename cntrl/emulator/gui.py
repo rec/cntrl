@@ -566,7 +566,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         self.request_done.connect(
             self.finish_request, QtCore.Qt.ConnectionType.QueuedConnection
         )
-        self.stopped = session.failed or session.stock_firmware
+        self.stopped = session.failed or session.firmware_exited
         self.closing = False
         self.closing_session = False
         self.session_closed = False
@@ -1365,7 +1365,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             elif e.kind == 'keyboard':
                 self.log.appendPlainText(self.text('keyboard', data=e.data.hex(' ')))
             elif e.kind == 'firmware':
-                self.log.appendPlainText(self.text('stock_message'))
+                self.log.appendPlainText(
+                    e.message if self.session.doom else self.text('stock_message')
+                )
             else:
                 self.log.appendPlainText(e.message)
         for name, label in self.relay_labels.items():
@@ -1376,7 +1378,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                     else 'unknown_title'
                 )
             )
-        if self.session.stock_firmware:
+        if self.session.firmware_exited:
             self.stopped = True
             self.requests.clear()
             self.timer.stop()
@@ -1384,7 +1386,9 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             self.running.setEnabled(False)
             self.recording.setEnabled(False)
             self.canvas.setEnabled(False)
-            self.clock_label.setText(self.text('stock'))
+            self.clock_label.setText(
+                'Doom' if self.session.doom else self.text('stock')
+            )
             return
         self.clock_label.setText(f'{self.session.time_us / 1_000_000:.3f} s')
         self.canvas.update()

@@ -16,7 +16,9 @@ public:
     void configure(const char *const *names, unsigned count) { names_ = names; count_ = count; selected_ = std::min(selected_, count_ ? count_ - 1 : 0); }
     void refresh() { if (open_) render(); }
     void leave() { open_ = false; }
-    void enter() { open_ = locked_ = true; selected_ = 0; render(); }
+    void enter() { open_ = locked_ = true; selected_ = 0; doom_ = false; render(); }
+    void enter_doom() { open_ = locked_ = doom_ = true; render(); }
+    bool doom() const { return open_ && doom_; }
     void poll(uint8_t held) { if (!held) locked_ = false; }
     // -1: no selection; -2: return to performance; otherwise installed index.
 #ifdef CNTRL_FLASH_ROUTINE
@@ -26,6 +28,10 @@ public:
         if (!open_ || !down || locked_) return -1;
         if (button == 5) {
             open_ = false; return -2;
+        }
+        if (doom_) {
+            if (button == 2) { open_ = false; return int(selected_); }
+            return -1;
         }
         if (button == 2 && count_) {
             open_ = false; return int(selected_);
@@ -40,7 +46,7 @@ private:
     Hardware &hardware_;
     const char *const *names_;
     unsigned count_, selected_ = 0;
-    bool open_ = false, locked_ = false;
+    bool open_ = false, locked_ = false, doom_ = false;
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(module_menu_render)
 #endif
@@ -51,6 +57,11 @@ private:
         for (auto &view : views) for (auto &line : view.lines) {
             line.graphics.line_height = line.graphics.size = 16;
             line.graphics.font = ui::localized_face;
+        }
+        if (doom_) {
+            ui::copy_caption(views[1].lines[0], prompt.add(Role::confirm, "Doom").text());
+            ui::present(hardware_, views, 1);
+            return;
         }
         std::snprintf(views[0].lines[0].text, 64, "%s", prompt.pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::browse)).text());
         std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::ok)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());

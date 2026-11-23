@@ -204,10 +204,26 @@ public:
     bool storage_available() const override { return midi_storage.filesystem.available(); }
     bool configure_return(uint8_t pair, uint32_t token) override { return append_boot_record(visit_config | pair | (token ? 0x8000 : 0)); }
     bool consume_return(uint32_t token) override { return append_boot_record(visit_consumed | token); }
-    void handoff_firmware() override {
+    void handoff_firmware() override { reboot_into(request_stock); }
+    CNTRL_FLASH_ROUTINE(board_doom_available)
+    bool doom_available() const override {
+#if CNTRL_DOOM
+        return doom_startup(reinterpret_cast<const volatile uint32_t *>(doom_origin + 0x1000));
+#else
+        return false;
+#endif
+    }
+    CNTRL_FLASH_ROUTINE(board_launch_doom)
+    bool launch_doom() override {
+        if (!doom_available() ||
+            inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000)).choice != BootChoice::cntrl) return false;
+        reboot_into(request_doom);
+    }
+    [[noreturn]] CNTRL_FLASH_ROUTINE(board_reboot_into)
+    static void reboot_into(uint32_t request) {
         USB1_USBCMD = 2; USBPHY1_CTRL_SET = 0x80000000;
         delay(100); __disable_irq();
-        *reinterpret_cast<volatile uint32_t *>(boot_request_register) = request_stock;
+        *reinterpret_cast<volatile uint32_t *>(boot_request_register) = request;
         __asm__ volatile("dsb" ::: "memory");
         SCB_AIRCR = 0x05fa0004;
         __asm__ volatile("dsb" ::: "memory");

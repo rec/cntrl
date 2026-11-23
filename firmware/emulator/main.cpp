@@ -132,7 +132,7 @@ public:
     animation::Player *movie_player = nullptr;
     uint64_t time = 0;
     uint64_t accepted_packets = 0;
-    bool stock_firmware = false, stock_pending = false;
+    bool firmware_exited = false, stock_pending = false;
     uint8_t held = 0;
     unsigned blocked = 0, connected = 0xffff;
     std::array<uint64_t,16> generations{};
@@ -204,9 +204,9 @@ public:
     void finish_fonts(bool commit) override { font_assets::cache.finish(commit); }
     bool supports_keyboard() const override { return target::supports_keyboard; }
     bool supports_function(unsigned function) const override { return function == 1 && target::supports_stock_firmware; }
-    bool keyboard_connected() const { return supports_keyboard() && !stock_firmware; }
+    bool keyboard_connected() const { return supports_keyboard() && !firmware_exited; }
     bool keyboard_report(const KeyboardReport &report) override {
-        if (stock_firmware) return false;
+        if (firmware_exited) return false;
         std::vector<uint8_t> bytes{6}; integer(bytes,time,8);
         bytes.push_back(report.modifiers); bytes.push_back(0);
         bytes.insert(bytes.end(),report.keys,report.keys + 6); frame(bytes); return true;
@@ -216,7 +216,7 @@ public:
     }
     bool supports_relay(const char *name) const override { for (const char *relay : target::relay_names) if (!std::strcmp(name,relay)) return true; return false; }
     bool relay_write(const char *name,bool engaged) override {
-        if (stock_firmware || !supports_relay(name)) return false;
+        if (firmware_exited || !supports_relay(name)) return false;
         std::vector<uint8_t> bytes{4,uint8_t(engaged)}; bytes.insert(bytes.end(),name,name + std::strlen(name)); frame(bytes); return true;
     }
     midi::TrsMode port_mode(unsigned port) const { return port < 4 ? midi::TrsMode(modes[port]) : midi::TrsMode::off; }
@@ -263,15 +263,22 @@ public:
     bool song_boundary() const override { return app && app->song_boundary(); }
     bool song_style(ScreenGraphics &style) const override { return app && app->song_style(style); }
     bool looper_storage_ready() const { return true; }
+    bool doom_available() const override { return target::supports_doom; }
+    bool launch_doom() override {
+        if (!doom_available() || firmware_exited || stock_pending) return false;
+        firmware_exited = true;
+        std::vector<uint8_t> bytes{15}; integer(bytes,time,8); frame(bytes);
+        return true;
+    }
     bool switch_firmware() {
-        if (!target::supports_stock_firmware || stock_firmware || stock_pending || documents->busy() || documents->dirty() || !output_idle() || !stop_clock()) return false;
+        if (!target::supports_stock_firmware || firmware_exited || stock_pending || documents->busy() || documents->dirty() || !output_idle() || !stop_clock()) return false;
         stock_pending = true; return true;
     }
     void finish_firmware_switch() {
         // The clock Stop queued by the request must leave before the simulated handoff.
         if (!stock_pending || !output_idle()) return;
         stock_pending = false;
-        stock_firmware = true;
+        firmware_exited = true;
         std::vector<uint8_t> bytes{7}; integer(bytes,time,8); frame(bytes);
     }
     unsigned midi_file_clock_outputs() const { return files->player.clock_outputs(); }
@@ -349,7 +356,7 @@ public:
     bool capture(Song &s,bool reference) override { return song_sources->capture(s,reference); }
     void recalled() override { song_sources->recalled(); }
     bool write_packet(unsigned route,const midi::Packet &packet) override {
-        if (stock_firmware) return false;
+        if (firmware_exited) return false;
         if ((blocked & (1u << route)) || !(connected & (1u << route))) return false;
         // Exercise the tester without forwarding its probes to host MIDI ports.
         if (cable_test.enabled()) { ++accepted_packets; return true; }
@@ -541,8 +548,8 @@ public:
     bool diagnostic_controls(const uint8_t *,uint8_t,uint32_t) { return false; }
     ui::FirmwareVisit *visit() { return nullptr; }
     Actions &actions() { return action_router; }
-    void pages(uint32_t now) { if (!board.stock_firmware) { application.tick(now); documents.tick(now); } }
-    void midi() { if (!board.stock_firmware) { board.midi_runtime.poll(board); board.relays.tick(now()); } }
+    void pages(uint32_t now) { if (!board.firmware_exited) { application.tick(now); documents.tick(now); } }
+    void midi() { if (!board.firmware_exited) { board.midi_runtime.poll(board); board.relays.tick(now()); } }
     void expression_poll(uint32_t now) {
         expression.poll(now,[&](unsigned i) { return board.expression_available(i); },
             [&](unsigned i,unsigned) { return ExpressionCalibration::from_10_bit(board.readings[i]); },
@@ -553,25 +560,25 @@ public:
                 return connection && board.submit_live(connection->route,packet);
             });
     }
-    void navigation() { if (!board.stock_firmware) { input.finish(action_router); global_commands.poll(application.patch_pending()); } }
-    void display_poll(uint32_t now) { if (!board.stock_firmware) board.display(now,documents.busy() || application.feature_open(board) || application.patch_pending()); }
+    void navigation() { if (!board.firmware_exited) { input.finish(action_router); global_commands.poll(application.patch_pending()); } }
+    void display_poll(uint32_t now) { if (!board.firmware_exited) board.display(now,documents.busy() || application.feature_open(board) || application.patch_pending()); }
     void settle(unsigned budget = 4096) {
-        if (board.stock_firmware) return;
+        if (board.firmware_exited) return;
         unsigned quiet = 0;
         // Zero-duration looping files may remain productive at one timestamp.
         // Yield the command after a bounded amount of cooperative work.
-        for (unsigned iteration = 0; quiet < 16 && iteration < budget && !board.stock_firmware; ++iteration) {
+        for (unsigned iteration = 0; quiet < 16 && iteration < budget && !board.firmware_exited; ++iteration) {
             uint64_t accepted = board.accepted_packets;
             uint32_t preparation = board.midi_runtime.streams().diagnostics().preparation_visits;
             application.tick(board.milliseconds());
-            if (!board.stock_firmware) board.midi_runtime.poll(board);
+            if (!board.firmware_exited) board.midi_runtime.poll(board);
             board.finish_firmware_switch();
             bool incoming = false;
             for (const auto &source : board.incoming) incoming = incoming || !source.empty();
             quiet = incoming || accepted != board.accepted_packets
                 || preparation != board.midi_runtime.streams().diagnostics().preparation_visits ? 0 : quiet + 1;
         }
-        if (board.stock_firmware) return;
+        if (board.firmware_exited) return;
         display_poll(board.milliseconds());
         for (unsigned i = 0; i < 100000; ++i) {
             bool visible = movie_session.poll(board.milliseconds(),renderer.ready(),documents.busy() || application.feature_open(board) || application.patch_pending());
@@ -581,12 +588,12 @@ public:
     }
     void advance(uint64_t time, bool finish) {
         if (time < board.time) throw std::runtime_error("virtual time cannot move backward");
-        while (board.time < time && !board.stock_firmware) { board.time += std::min(uint64_t(1000),time - board.time); tick(); }
+        while (board.time < time && !board.firmware_exited) { board.time += std::min(uint64_t(1000),time - board.time); tick(); }
         if (finish) settle();
     }
     void tick();
     void cleanup() {
-        if (board.stock_firmware) return;
+        if (board.firmware_exited) return;
         board.leave_panic();
         board.leave_cable_test();
         board.release_keyboard();
@@ -614,7 +621,7 @@ public:
     }
     void command(const std::vector<uint8_t> &bytes);
     void input_state() const {
-        frame({8, uint8_t(!board.stock_firmware && !board.stock_pending && application.song_ui.editing_name())});
+        frame({8, uint8_t(!board.firmware_exited && !board.stock_pending && application.song_ui.editing_name())});
         const char *language = board.current_language();
         std::vector<uint8_t> state{9};
         state.insert(state.end(), language, language + std::strlen(language));
@@ -624,7 +631,7 @@ public:
         enum : uint8_t { no_overlay = 0, main_menu = 21, setups, songs, switch_editor };
         std::vector<uint8_t> help(2 + 2 * target::display_count, 0);
         help[0] = 11;
-        if (!board.stock_firmware && !board.stock_pending && !host.showing_splash()) {
+        if (!board.firmware_exited && !board.stock_pending && !host.showing_splash()) {
             const uint8_t overlay = board.switch_editor_open() ? switch_editor
                 : application.song_ui.open() ? songs : application.setups.open() ? setups
                 : application.menu.open() ? main_menu : no_overlay;
@@ -661,7 +668,7 @@ public:
         std::vector<uint8_t> batch{12};
         batch.insert(batch.end(), name, name + std::strlen(name));
         frame(batch);
-        if (board.stock_firmware || board.stock_pending || host.showing_splash()
+        if (board.firmware_exited || board.stock_pending || host.showing_splash()
             || movie_player.active() || !renderer.ready()) return;
         for (unsigned screen = 0; screen < regions.size(); ++screen) {
             for (const auto &region : regions[screen]) {
@@ -752,20 +759,20 @@ struct RuntimeServices {
     bool reply_ready() const { return true; }
     bool commands_allowed() const { return true; }
     void cancel_listing() {}
-    bool expression_allowed() const { return !s.board.stock_firmware; }
+    bool expression_allowed() const { return !s.board.firmware_exited; }
     void expression(uint32_t now) { s.expression_poll(now); }
     void navigation() { s.navigation(); }
     void display(uint32_t now) { s.display_poll(now); }
 };
 void Session::tick() {
-    if (!board.stock_firmware) {
+    if (!board.firmware_exited) {
         RuntimeServices services{*this}; cooperative.poll(services);
         board.finish_firmware_switch();
     }
 }
 void Session::command(const std::vector<uint8_t> &bytes) {
     const auto *p = bytes.data(); unsigned length = unsigned(bytes.size());
-    if (board.stock_firmware && p[0] != 9 && p[0] != 12) return;
+    if (board.firmware_exited && p[0] != 9 && p[0] != 12) return;
     if (board.stock_pending && p[0] != 1 && p[0] != 4 && p[0] != 9 && p[0] != 12) return;
     if (p[0] == 1 && (length == 9 || (length == 10 && p[9] == 0))) advance(u64(p + 1),length == 9);
     else if (p[0] == 2 && length == 3 && p[1] < target::button_count && p[2] <= 1) {

@@ -6,10 +6,10 @@ on the centre display, and support movement, turning, firing and using doors
 from the six footswitches. Keep the first build silent and single-player.
 
 The standalone implementation now boots Freedoom E1M1 in a native check
-and builds an MC6 Pro firmware image. The build guide records the button
-layout and measured memory use. Hardware bring-up and recovery verification
-remain open. The in-CNTRL lifecycle below describes the original integration
-plan. [Standalone demo](../cntrl/maker/morningstar/mc/doom/README.md)
+and builds an MC6 Pro firmware image. The optional CNTRL launcher boots
+that game from a separate flash slot for one run. Power cycling returns to
+CNTRL's normal startup. The in-CNTRL lifecycle below describes the original
+integration plan. [Demo build and launch](../cntrl/maker/morningstar/mc/doom/README.md)
 
 ## Starting point
 

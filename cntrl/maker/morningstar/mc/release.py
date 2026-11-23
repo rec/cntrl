@@ -74,7 +74,11 @@ def input_digest(source_root: Path) -> str:
 
 
 def export(
-    directory: Path, source_root: Path, components: boot_switch.Components
+    directory: Path,
+    source_root: Path,
+    components: boot_switch.Components,
+    *,
+    doom: FirmwareImage | None = None,
 ) -> None:
     """Build a complete resource set with no stock application bytes."""
     root = Path(__file__).parent
@@ -87,7 +91,8 @@ def export(
     destination = directory / 'distribution'
     destination.mkdir()
     custom = read_hex(components.application)
-    (destination / 'application.bin').write_bytes(custom.data)
+    application = boot_switch.append_doom(custom, doom) if doom else custom.data
+    (destination / 'application.bin').write_bytes(application)
     shutil.copyfile(components.hook, destination / 'hook.bin')
     shutil.copyfile(directory / 'target.toml', destination / 'target.toml')
     shutil.copytree(directory / 'fonts', destination / 'fonts')

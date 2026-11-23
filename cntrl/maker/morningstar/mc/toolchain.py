@@ -135,6 +135,7 @@ def compile_command(
     linker: Path,
     *,
     diagnostics: bool = False,
+    doom: bool = False,
 ) -> list[str]:
     """Use the production compiler invocation for builds and footprint experiments."""
     root, source_root, work, linker = (
@@ -158,6 +159,8 @@ def compile_command(
     )
     if diagnostics:
         cpp += ' -DCNTRL_MEMORY_QUALIFICATION'
+    if doom:
+        cpp += ' -DCNTRL_DOOM=1'
     if commit := commit_id(source_root):
         cpp += f' -DCNTRL_GIT_COMMIT=0x{commit}'
     properties = {
@@ -199,6 +202,7 @@ def build(
     linker: Path,
     *,
     diagnostics: bool = False,
+    doom: bool = False,
 ) -> None:
     root, source_root, work, linker = (
         root.resolve(),
@@ -206,7 +210,9 @@ def build(
         work.resolve(),
         linker.resolve(),
     )
-    command = compile_command(root, source_root, work, linker, diagnostics=diagnostics)
+    command = compile_command(
+        root, source_root, work, linker, diagnostics=diagnostics, doom=doom
+    )
     (work / 'compiler-options.toml').write_text(tomlkit.dumps({'command': command}))
     subprocess.run(
         command,

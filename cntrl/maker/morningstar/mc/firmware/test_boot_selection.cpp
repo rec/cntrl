@@ -70,4 +70,12 @@ int main() {
     assert(select_boot(BootChoice::stock, request) == BootChoice::stock);
     request = 0x0bad00f1; // Preserve Teensy's crash reboot marker.
     assert(select_boot(BootChoice::stock, request) == BootChoice::stock && request == 0x0bad00f1);
+
+    request = request_doom;
+    assert(select_boot(BootChoice::cntrl, request) == BootChoice::doom && !request);
+    assert(select_boot(BootChoice::cntrl, request) == BootChoice::cntrl);
+    uint32_t ivt[] = {0x432000d1, doom_origin + 0x1401, 0, 0, 0, doom_origin + 0x1000};
+    assert(doom_startup(ivt) == ivt[1]);
+    ivt[1] = application_end + 1;
+    assert(!doom_startup(ivt));
 }

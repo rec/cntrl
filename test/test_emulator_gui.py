@@ -63,6 +63,7 @@ class CapturedSession(Session):
         self.failed = False
         self.exit_code: int | None = None
         self.stock_firmware = False
+        self.doom = False
         self.editing_name = False
         self.language = 'en'
         self.correction_regions: list[TranslationRegion] = []
@@ -72,6 +73,10 @@ class CapturedSession(Session):
         self.tooltip_context = ('', ())
         self.keys: list[int] = []
         self.mode = 'setup preview'
+
+    @property
+    def firmware_exited(self) -> bool:
+        return self.stock_firmware or self.doom
 
     def button(self, control_id: str, pressed: bool) -> None:
         self.inputs.append((control_id, pressed))

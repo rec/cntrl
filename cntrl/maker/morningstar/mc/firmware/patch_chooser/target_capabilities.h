@@ -13,6 +13,7 @@ inline constexpr unsigned scan_interval_ms = 1;
 inline constexpr unsigned display_count = 3;
 inline constexpr unsigned button_count = 6;
 inline constexpr bool supports_stock_firmware = true;
+inline constexpr bool supports_doom = false;
 inline constexpr bool supports_keyboard = true;
 inline constexpr unsigned animation_stream_count = 2;
 inline constexpr std::array<unsigned, display_count> animation_display_streams = {{

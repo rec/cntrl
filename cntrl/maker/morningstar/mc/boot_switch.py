@@ -12,11 +12,12 @@ from reccy.configuration import units
 
 from ....firmware.intel_hex import FirmwareImage, read_hex
 from ....patch_chooser.models import millisecond_resolution
-from . import toolchain
+from . import toolchain, upload_helper
 
 
 class Build(BaseModel, frozen=True):
     diagnostics: bool = False
+    doom: bool = False
     switch_window: Annotated[
         float,
         Field(strict=True, ge=0.001, le=0.112),
@@ -31,6 +32,18 @@ class Components(BaseModel, frozen=True):
     stock_reader: int
 
 
+DOOM_ORIGIN = 0x60390000
+APPLICATION_END = 0x607C0000
+
+
+def append_doom(custom: FirmwareImage, doom: FirmwareImage) -> bytes:
+    if custom.origin != 0x60100000 or custom.origin + len(custom.data) > DOOM_ORIGIN:
+        raise ValueError('CNTRL does not fit before the Doom slot')
+    upload_helper.validate_firmware(doom, origin=DOOM_ORIGIN, end=APPLICATION_END)
+    padding = b'\xff' * (DOOM_ORIGIN - custom.origin - len(custom.data))
+    return custom.data + padding + doom.data
+
+
 def combine(
     stock: FirmwareImage, custom: FirmwareImage, hook: bytes, reader: int
 ) -> bytes:
@@ -38,7 +51,7 @@ def combine(
         raise ValueError('stock firmware does not match the traced v3.14.0 image')
     if (
         custom.origin != 0x60100000
-        or custom.origin + len(custom.data) > 0x607C0000
+        or custom.origin + len(custom.data) > APPLICATION_END
         or len(custom.regions) != 1
         or len(custom.data) % 1024
         or not 0 < len(hook) <= 4096
@@ -207,6 +220,7 @@ def build(command: Build, *, source_root: Path | None = None) -> Components:
         work,
         linker,
         diagnostics=command.diagnostics,
+        doom=command.doom,
     )
     custom = read_hex(work / 'cntrl.hex')
     entry = struct.unpack_from('<I', custom.data, 0x1004)[0]

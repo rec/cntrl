@@ -103,13 +103,15 @@ def request_stock_bootloader(board: Board) -> bool:
     return False
 
 
-def validate_firmware(image: FirmwareImage) -> None:
+def validate_firmware(
+    image: FirmwareImage, *, origin: int = 0x60000000, end: int = 0x607C0000
+) -> None:
     """Check the target's boot-image envelope, not the safety of its instructions."""
     if (
-        image.origin != 0x60000000
-        or image.entry != 0x60001000
+        image.origin != origin
+        or image.entry != origin + 0x1000
         or len(image.regions) != 1
-        or not 0x2000 <= len(image.data) <= 0x7C0000
+        or not 0x2000 <= len(image.data) <= end - origin
         or len(image.data) % 1024
     ):
         raise ValueError('expected a contiguous Teensy 4.1 application flash image')
@@ -123,14 +125,16 @@ def validate_firmware(image: FirmwareImage) -> None:
         or reserved != 0
         or reserved2 != 0
         or dcd != 0
-        or boot != 0x60001020
-        or self_address != 0x60001000
+        or boot != origin + 0x1020
+        or self_address != origin + 0x1000
         or not reset & 1
-        or not 0x60001400 <= reset - 1 < csf
+        or not origin + 0x1400 <= reset - 1 < csf
         or csf != image.origin + len(image.data) - 3072
         or image.data[-3072:] != bytes(3072)
         or struct.unpack_from('<3I', image.data, 0x1020)
-        != (image.origin, len(image.data), 0)
+        # The Teensy SDK's BootData names the physical flash base even when
+        # the boot selector jumps to an independently linked reset handler.
+        != (0x60000000, len(image.data), 0)
     ):
         raise ValueError('unexpected boot header, reset entry, boot data or CSF')
 

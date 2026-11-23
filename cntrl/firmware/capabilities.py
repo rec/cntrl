@@ -33,6 +33,8 @@ def header(target: Target) -> str:
         f'inline constexpr unsigned button_count = {len(target.buttons)};',
         'inline constexpr bool supports_stock_firmware = '
         f'{str("stock-firmware" in target.functions).lower()};',
+        'inline constexpr bool supports_doom = '
+        f'{str("doom" in target.functions).lower()};',
         'inline constexpr bool supports_keyboard = '
         f'{str("usb-hid-keyboard" in target.functions).lower()};',
         'inline constexpr unsigned animation_stream_count = '
