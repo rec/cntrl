@@ -219,6 +219,44 @@ def _upgrade_current_layout(data: bytes, *, migrate_retired_pages: bool) -> byte
     page, _, _ = _page_offsets(data)
     end = layout.section_end(data, page)
     pages = layout.upgrade(data, page, migrate_retired_pages=migrate_retired_pages)
+    return _replace_layout(data, page, end, pages)
+
+
+def insert_doom_page(data: bytes, region: str, before: str) -> bytes:
+    """Insert Doom without recompiling the stored setup or changing page indices."""
+    binary_format.require_structural_edit(data)
+    core = binary_format.core(data)
+    page, _, _ = _page_offsets(core)
+    end = layout.section_end(core, page)
+    if struct.unpack_from('<H', core, 4)[0] != DOCUMENT_VERSION:
+        raise binary_format.DocumentFormatError('update the saved setup format first')
+    show = models.Setup.model_validate(layout.unpack(core, page))
+    if region not in show.regions or before not in show.regions[region].pages:
+        raise layout.LayoutError(f'{region}: page {before!r} is not in this rotation')
+    rotation = show.regions[region].pages
+    index = rotation.index(before)
+    if 'doom' in show.pages:
+        if (
+            show.pages['doom'].type == 'doom'
+            and index
+            and rotation[index - 1] == 'doom'
+        ):
+            return data
+        raise layout.LayoutError('the setup already has a page named doom')
+    show.pages['doom'] = models.Page(type='doom')
+    rotation.insert(index, 'doom')
+    windows = [
+        core[i : i + 32].split(b'\0', 1)[0].decode('ascii')
+        for i in range(page + 12, page + 12 + core[page + 5] * 32, 32)
+    ]
+    navigation = core[end - 4 : end] if core[page + 10] else b''
+    replacement = layout.pack(show, windows, navigation)
+    return binary_format.replace_core(
+        data, _replace_layout(core, page, end, replacement)
+    )
+
+
+def _replace_layout(data: bytes, page: int, end: int, pages: bytes) -> bytes:
     converted = bytearray(data)
     converted[page:end] = pages
     struct.pack_into('<H', converted, 4, DOCUMENT_VERSION)

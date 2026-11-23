@@ -144,6 +144,23 @@ def test_doom_is_before_the_empty_page_in_the_default_tools_rotation() -> None:
         compiler.compile_show(exported, {}, [], standard)
 
 
+def test_insert_doom_preserves_the_compiled_data_outside_the_layout() -> None:
+    original = compiler.compile_show({'fill_in_styles': False}, {}, [], target())
+    updated = resolved.insert_doom_page(original, 'tools', 'None')
+    start = original.index(b'CPAG')
+    assert updated[28:start] == original[28:start]
+    original_end = layout.section_end(original, start)
+    updated_end = layout.section_end(updated, start)
+    assert updated[updated_end:] == original[original_end:]
+    old = layout.unpack(original, start)
+    new = layout.unpack(updated, start)
+    assert list(new['pages']) == [*old['pages'], 'doom']
+    cycle = old['regions']['tools']['pages']
+    cycle.insert(cycle.index('None'), 'doom')
+    assert new['regions'] == old['regions']
+    assert resolved.insert_doom_page(updated, 'tools', 'None') == updated
+
+
 @pytest.mark.parametrize('kind', ['trs-ports', 'expression'])
 def test_removed_utility_pages_cannot_be_authored(kind: str) -> None:
     with pytest.raises(compiler_errors.CompilationError, match='type'):

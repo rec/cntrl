@@ -35,6 +35,7 @@ from . import (
     disk_speed,
     history,
     languages,
+    layout,
     midi_assets,
     models,
     resolved,
@@ -78,6 +79,18 @@ class SetupSet(BaseModel, frozen=True):
     name: Annotated[str | None, tyro.conf.Positional] = None
 
 
+class SetupAddDoom(BaseModel, frozen=True):
+    """Insert Doom into one live setup without recompiling its patches or fonts."""
+
+    name: Annotated[str, tyro.conf.Positional]
+    port: Path
+    target: Path
+    region: str
+    before: str
+    backup: Path
+    """New file for the original compiled setup."""
+
+
 class SetupList(BaseModel, frozen=True):
     """List setups and commit dates, one per line."""
 
@@ -114,6 +127,7 @@ class SetupCLI(BaseModel, frozen=True):
         | Annotated[setup_sync.Sync, tyro.conf.subcommand(name='sync')]
         | Annotated[history.History, tyro.conf.subcommand(name='history')]
         | Annotated[SetupCopy, tyro.conf.subcommand(name='copy')]
+        | Annotated[SetupAddDoom, tyro.conf.subcommand(name='add-doom')]
         | Annotated[SetupSet, tyro.conf.subcommand(name='set')]
         | Annotated[SetupList, tyro.conf.subcommand(name='list')]
         | Annotated[SetupDelete, tyro.conf.subcommand(name='del')]
@@ -160,6 +174,7 @@ class Status(BaseModel, frozen=True):
 
 def run_setup(
     command: SetupCopy
+    | SetupAddDoom
     | SetupSet
     | SetupList
     | SetupDelete
@@ -180,6 +195,28 @@ def run_setup(
         raise ValueError('a supplied setup connection is supported for setup copy only')
     if isinstance(command, setup_create.Create):
         setup_create.run(command)
+        return
+    if isinstance(command, SetupAddDoom):
+        if 'doom' not in backups.read_target(command.target).functions:
+            raise compiler_errors.CompilationError(
+                ['Doom is unavailable on this target']
+            )
+        with transport.SerialConnection(command.port) as serial:
+            client = transport.SetupClient(serial)
+            original = client.download(command.name)
+            updated = resolved.insert_doom_page(
+                original, command.region, command.before
+            )
+            if updated != original:
+                try:
+                    with command.backup.open('xb') as backup:
+                        backup.write(original)
+                except OSError as error:
+                    raise DownloadOutputError(str(error)) from error
+                client.copy(command.name, updated, overwrite=True)
+            print(
+                f'{command.name}: Doom before {command.before}, verified on the pedal'
+            )
         return
     if isinstance(command, setup_sync.Sync):
         setup_sync.run(command)
@@ -716,6 +753,7 @@ def main() -> None:
         FontDecodeError,
         font_coverage.ReportError,
         history.HistoryError,
+        layout.LayoutError,
         midi_assets.MidiAssetMissingError,
         models.MidiFilenameError,
         setup_create.SetupCreationCancelled,
