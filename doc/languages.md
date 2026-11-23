@@ -14,9 +14,10 @@ of installed languages in their native names, with small country flags; the
 second has the Language caption and controls. On the default three-display
 layout these are the center and right windows. English uses the UK flag.
 
-Use **E** to scroll up, **B** to scroll down and **C** to select. With the
-default navigation controls, hold **F** for the next page, or click **F** and hold
-the second press for the previous page. Scrolling wraps at either end, and the
+Use **E** to scroll up, **B** to scroll down and **C** to select. In Patch mode,
+press **F** for the next page. In Song and Setlist modes, the default controls
+are hold **F** for next page or click **F** and hold the second press for the
+previous page. Scrolling wraps at either end, and the
 initial highlight follows the active language. Browsing alone does not change
 the UI language.
 

@@ -70,7 +70,8 @@ under the title at compile time. It keeps an explicit foreground color
 and warns if the contrast is low. With an automatic color, it chooses black
 or white and adds a one-pixel outline if both colors need more contrast.
 
-The default MC setup uses F for all four navigation gestures.
+In Song and Setlist modes, the default MC setup uses F for all four navigation
+gestures. In Patch mode, press F to cycle utility pages.
 
 | F gesture | Action |
 | --- | --- |

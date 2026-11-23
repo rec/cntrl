@@ -60,7 +60,7 @@
 | **Switch labels** | The top and bottom positions in each scene window. Each label shows what its corresponding switch does. A three-window pedal has six switch label positions. |
 | **Binding map** | The assignments that determine what the pedal's controls do while a scene is active. |
 | **Song forward / song backward** | The setup's reserved controls for stepping forward or backward directly from any scene in a song or set. The defaults are F click and F double-click. |
-| **Page forward / page back** | Gestures or combinations for browsing utility pages. By default, hold F to advance or click F and hold the second press to go back. Songs and scenes can each supply their own combinations. Returning to the empty page shows the current scene. |
+| **Page forward / page back** | Controls for browsing utility pages. In Patch mode, press F to advance. In Song and Setlist modes, hold F to advance or click F and hold the second press to go back by default. Songs and scenes can supply their own combinations. Returning to the empty page shows the current scene. |
 | **Binding scope**, **inherits** | A scope is where an assignment is defined. Song assignments can override shared ones. A patch's `inherits` setting chooses whether it keeps enclosing switch assignments, expression assignments, both, or neither. |
 | **Control role / control label** | A role is what a switch does in the current view, such as Confirm or Back. A label is what is printed on the pedal, such as C or F. Follow the labels shown in the current view. |
 | **Gesture**, **switch chord** | A gesture is a way of using a switch, such as tapping, double-tapping, holding, or releasing it. A switch chord uses multiple switches together, such as C+F. |

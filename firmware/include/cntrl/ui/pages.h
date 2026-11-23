@@ -287,7 +287,7 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_view)
 #endif
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1, const char *contact = "") {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned window = 0, unsigned count = 1, const char *contact = "", bool direct_page_switch = true) {
         using R = cntrl::PageSettings;
         const auto &status = status_snapshot ? status_snapshot->performance : live_status;
         dirty_ = false; refreshed_ = now;
@@ -307,7 +307,7 @@ public:
             line(pane, 1, prompt_, vertical(64), vertical(24), settings_[R::status_font], true);
             return pane;
         }
-        if (page_ == Page::language) { language_view(pane, window); return pane; }
+        if (page_ == Page::language) { language_view(pane, window, direct_page_switch); return pane; }
         if (page_ == Page::pong) { pong_view(pane, window); return pane; }
         if (page_ == Page::midi_monitor) { monitor_view(pane, window, count); return pane; }
         if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
@@ -836,7 +836,7 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_language_view)
 #endif
-    void language_view(cntrl::Pane &pane, unsigned window) {
+    void language_view(cntrl::Pane &pane, unsigned window, bool direct_page_switch) {
         if (!languages) return;
         if (window) {
             page_heading(pane, i18n::text(i18n::Message::language));
@@ -853,7 +853,7 @@ private:
             line(pane, 1, text, vertical(40), vertical(20), 17, true, nullptr, 0, 0, 12);
             i18n::format(text, sizeof(text), i18n::Message::language_select, labels[2]);
             line(pane, 2, text, vertical(70), vertical(20), 17, true, nullptr, 0, 0, 12);
-            if (languages->setup_navigation()) {
+            if (direct_page_switch) {
                 i18n::format(text, sizeof(text), i18n::Message::language_next_page, labels[3]);
                 line(pane, 3, text, vertical(100), vertical(20), 17, true, nullptr, 0, 0, 12);
             }

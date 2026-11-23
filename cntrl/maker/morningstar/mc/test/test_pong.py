@@ -46,9 +46,9 @@ def test_pong_spans_screens_and_releases_navigation_controls(
             now += duration
             session.advance(now)
 
-        def press(button: str, duration: int = 60000) -> None:
+        def press(button: str) -> None:
             session.button(button, True)
-            advance(duration)
+            advance(60000)
             session.button(button, False)
             advance(60000)
 
@@ -60,7 +60,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         if default_catalogue:
             # Every compiled utility page, including Panic, stays available.
             for _ in range(utility_pages.index('pong')):
-                press('f', 600000)
+                press('f')
             advance(500000)
         assert ball_on('lcd-2')
         # Exit is available before the first serve, as advertised by the legend.
@@ -68,14 +68,16 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
         for _ in range(len(utility_pages) - 1 if default_catalogue else 1):
-            press('f', 600000)
+            press('f')
         advance(500000)
         assert ball_on('lcd-2')
-        press('f', 600000)  # Before serving, holding F browses past Pong.
+        press('f')  # Before serving, F browses past Pong.
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        press('f')
-        press('f', 600000)  # Click and hold returns to the unstarted game.
+        session.button('d', True)
+        advance(60000)
+        press('f')  # D+F browses backward to the unstarted game.
+        session.button('d', False)
         advance(500000)
         assert ball_on('lcd-2')
         middle = session.frames['lcd-2']
@@ -134,7 +136,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
         for _ in range(len(utility_pages) - 1 if default_catalogue else 1):
-            press('f', 600000)  # Cycle back to the paused game.
+            press('f')  # Cycle back to the paused game.
         advance(500000)
         assert ball_on('lcd-1')
         before = dict(session.frames)

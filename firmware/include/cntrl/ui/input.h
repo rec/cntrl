@@ -36,12 +36,12 @@ public:
         const bool performing = application_.song_navigation_active();
         uint8_t assigned_pages = 0;
         const auto *setup = application_.layout.navigation();
-        const bool defaults = !setup && controls_.back < controls_.count;
+        const bool song_gestures = performing && !setup && controls_.back < controls_.count;
         route_chords(services, events, pressed, performing, consumed, assigned_pages, setup);
-        route_default_navigation(services.actions(), events, performing, consumed || !defaults, assigned_pages);
-        if (defaults && application_.song_boundary() && application_.binding_return_songs)
+        route_song_gestures(services.actions(), events, song_gestures && !consumed, assigned_pages);
+        if (song_gestures && application_.song_boundary() && application_.binding_return_songs)
             for (auto &event : events) event &= release_event;
-        if (!consumed) router_.route(services.actions(), events.data(), pressed, now, application_.utility_visible(), assigned_pages, defaults);
+        if (!consumed) router_.route(services.actions(), events.data(), pressed, now, application_.utility_visible(), assigned_pages, song_gestures, performing);
     }
     template<class Actions>
     void finish(Actions &actions) { router_.finish(actions, application_.pending_operation, application_.return_to_switches, application_.controls_locked); }
@@ -50,33 +50,24 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(input_navigation_gestures)
 #endif
-    void route_default_navigation(Actions &actions, std::array<uint8_t, 8> &events,
-                                  bool performing, bool disabled, uint8_t assigned_pages) {
-        if (disabled || application_.controls_locked) {
+    void route_song_gestures(Actions &actions, std::array<uint8_t, 8> &events, bool enabled, uint8_t assigned_pages) {
+        if (!enabled || application_.controls_locked) {
             navigation_pressed_ = navigation_tap_ = false;
             return;
         }
         auto &event = events[controls_.back];
         const auto &state = states_[controls_.back];
-        const bool feature = application_.feature_open(application_services_);
-        const bool defer_tap = performing || feature;
         const auto edge = event;
-        if (defer_tap) event = 0;
+        event = 0;
         // A short release stays pending so a second press can become a hold.
-        if (navigation_song_ != performing || navigation_feature_ != feature) navigation_tap_ = false;
         const bool second = navigation_tap_ && (edge & double_press_event);
         if (navigation_tap_ && !state.waiting_for_second) {
-            if (defer_tap && !second) {
-                if (performing) application_.request_song_step(false);
-                else event = press_event | release_event;
-            }
+            if (!second) application_.request_song_step(false);
             navigation_tap_ = false;
         }
         if (edge & press_event) {
             navigation_pressed_ = true;
             navigation_second_ = second;
-            navigation_song_ = performing;
-            navigation_feature_ = feature;
         }
         if (!navigation_pressed_) return;
         if (edge & hold_event) {
@@ -84,10 +75,9 @@ private:
         }
         if (edge & release_event) {
             navigation_pressed_ = false;
-            if (state.held || navigation_song_ != performing || navigation_feature_ != feature) return;
+            if (state.held) return;
             if (!navigation_second_) navigation_tap_ = true;
-            else if (performing) application_.request_song_step(true);
-            else if (feature) event = press_event | release_event;
+            else application_.request_song_step(true);
         }
     }
 
@@ -104,15 +94,19 @@ private:
             for (unsigned i = 0; i < 2; ++i)
                 if (auto mask = application_services_.scene_page_chord(i)) chords[2 + i] = mask;
         }
+        const uint8_t back = controls_.back < 8 ? uint8_t(1u << controls_.back) : 0;
         if (performing && !application_.utility_visible()) {
-            const uint8_t back = controls_.back < 8 ? uint8_t(1u << controls_.back) : 0;
             if (setup && !chords[0]) chords[0] = back;
             for (unsigned i = 2; i < 4; ++i) {
                 if (!setup && (chords[i] & back)) chords[i] = 0;
                 for (unsigned song = 0; song < 2; ++song)
                     if (chords[song] && (chords[i] & chords[song]) == chords[song]) chords[i] = 0;
             }
-        } else chords[0] = chords[1] = 0;
+        } else {
+            chords[0] = chords[1] = 0;
+            if (!performing) for (unsigned i = 2; i < 4; ++i)
+                if (chords[i] & back) chords[i] = 0;
+        }
         assigned_pages = unsigned(chords[2] != 0) | unsigned(chords[3] != 0) << 1;
         if (!consumed && !application_.controls_locked) {
             uint8_t members = chords[0] | chords[1] | chords[2] | chords[3];
@@ -140,7 +134,7 @@ private:
                 while (action < 4 && chords[action] != bit) ++action;
                 if (action < 2) application_.request_song_step(action == 1);
                 else if (action < 4) services.actions().browse(action == 3);
-                else events[i] = press_event | release_event;
+                else if (performing || i != controls_.back) events[i] = press_event | release_event;
             }
             if (!pending_members_) chord_used_ = 0;
         }
@@ -152,7 +146,6 @@ private:
     ApplicationServices &application_services_;
     ControlRouter router_;
     bool navigation_pressed_ = false, navigation_tap_ = false, navigation_second_ = false;
-    bool navigation_song_ = false, navigation_feature_ = false;
     uint8_t pending_members_ = 0, chord_used_ = 0;
 };
 } // namespace cntrl::ui

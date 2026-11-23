@@ -104,7 +104,7 @@ public:
             if (input != controls_.next && input != controls_.next_section && input != controls_.confirm && input != controls_.back) return false;
             if (!pressed) return true;
             if (input == controls_.back) {
-                if (application_.layout.navigation())
+                if (!application_.song_navigation_active() || application_.layout.navigation())
                     browse_page(controls_.reverse_page < 64 && (application_.held & (uint64_t(1) << controls_.reverse_page)));
                 return true;
             }
@@ -580,7 +580,8 @@ public:
 #else
                 , cntrl::Panic::Status::ready
 #endif
-                , i, region.count, documents_.name_and_contact()
+                , i, region.count, documents_.name_and_contact(),
+                !application_.song_navigation_active() || application_.layout.navigation()
             );
                 if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language && pages_.page() != Pages::Page::time) content = Pages::window_view(content,i,region.count);
                 content.focused = r == application_.allocation.focus() && pages_.page() != Pages::Page::pong; renderer_.show(screen,content);

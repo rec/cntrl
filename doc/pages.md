@@ -4,10 +4,10 @@ A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
 `patch-chooser`, `status`, `time`, `cable-test`, `panic`,
 `midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`, `menu`, and `None`.
-Select a region or a page in the Pages and tools menu. With the default
-navigation controls, hold F to cycle forward or click F and hold the
-second press to cycle backward. These gestures cycle the focused region in
-normal setup operation and browse utility pages during song and set performance.
+Select a region or a page in the Pages and tools menu. In Patch mode, press F
+to cycle pages in the focused region. In Song and Setlist modes, the default
+controls are hold F to browse utility pages forward, or click F and hold the
+second press to browse backward.
 Page and region names contain 1 to 31 printable ASCII characters.
 
 The default utility-page cycle is Status, MIDI Cable Test, Panic,
@@ -16,7 +16,7 @@ before None; Pong appears immediately before Language on targets with three
 or more displays. Time and Language require at least two displays and are omitted from
 the defaults on one-display targets.
 Setups using the default pages and automatically generated regions start with
-the tools region focused, so the page gestures browse this utility cycle. Explicit layout focus
+the tools region focused, so F browses this utility cycle. Explicit layout focus
 settings take precedence.
 
 Each patch-chooser page keeps its own navigation, sent-state and undo history.
@@ -209,7 +209,7 @@ initial focus. Recompile authored setups after changing page `windows` to
 
 Upgrading an older layout with one Patch Chooser and multiple displays keeps
 Patch Chooser on the left and its original tool cycle on the right. The tools
-region starts focused, so the page gestures cycle tools while unused tool buttons continue to
+region starts focused, so F cycles tools while unused tool buttons continue to
 control the visible Patch Chooser. The old Patch Chooser position in that
 cycle becomes a blank `full-performance` page, giving Patch Chooser every
 display without replacing its navigation or undo state. Existing page names

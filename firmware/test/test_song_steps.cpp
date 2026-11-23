@@ -131,6 +131,11 @@ int main(int argc, char **argv) {
     auto next = [&]() { click(); wait(5); };
     auto previous = [&]() { click(); click(); };
     auto hold = [&]() { press(5); wait(8); release(5); };
+    press(5);
+    assert((board.page_directions == std::vector<bool>{false}));
+    wait(8); release(5);
+    assert((board.page_directions == std::vector<bool>{false}));
+    board.page_directions.clear();
     songs.choose("Set"); app.song_ui.perform(); sample(0);
     if (argc == 3) {
         press(2); wait(8); release(2);
