@@ -395,6 +395,7 @@ PAGE_TYPES = (
     'menu',
     'time',
     'calibrate',
+    'doom',
 )
 
 RETIRED_CLOCK_PAGES = (0, 7, 8)

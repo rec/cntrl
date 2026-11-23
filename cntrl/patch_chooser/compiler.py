@@ -71,13 +71,16 @@ def compile_show(
     except ValidationError as error:
         raise CompilationError(validation_errors('show', error)) from error
     if 'pages' not in show.model_fields_set:
+        pages = {
+            n: p for n, p in show.pages.items() if p.min_windows <= len(target.displays)
+        }
+        if 'doom' in target.functions and not show.regions:
+            empty = pages.pop('None')
+            pages['doom'] = models.Page(type='doom')
+            pages['None'] = empty
         show = show.model_copy(
             update={
-                'pages': {
-                    n: p
-                    for n, p in show.pages.items()
-                    if p.min_windows <= len(target.displays)
-                },
+                'pages': pages,
                 'layout': (
                     models.PageLayout(focus='tools')
                     if show.layout is None
@@ -87,6 +90,10 @@ def compile_show(
                 ),
             }
         )
+    if 'doom' not in target.functions:
+        for name, page in show.pages.items():
+            if page.type == 'doom':
+                errors.append(f'pages.{name}: Doom is unavailable on this target')
     jacks = midi_endpoints.ports(target.midi_endpoints)
     for jack, mode in show.trs_ports.items():
         if jack not in jacks or mode not in target.trs_ports.get(jack, []):

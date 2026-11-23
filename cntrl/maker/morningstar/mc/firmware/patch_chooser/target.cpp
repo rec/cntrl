@@ -206,7 +206,7 @@ public:
     bool consume_return(uint32_t token) override { return append_boot_record(visit_consumed | token); }
     void handoff_firmware() override { reboot_into(request_stock); }
     CNTRL_FLASH_ROUTINE(board_doom_available)
-    bool doom_available() const override {
+    static bool doom_available() {
 #if CNTRL_DOOM
         return doom_startup(reinterpret_cast<const volatile uint32_t *>(doom_origin + 0x1000));
 #else

@@ -1155,6 +1155,7 @@ class Page(BaseModel, frozen=True):
         'arpeggiator',
         'banked',
         'pong',
+        'doom',
         'language',
         'calibrate',
         'menu',

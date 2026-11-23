@@ -131,6 +131,19 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     assert compiler.compile_show(exported, {}, [], device) == data
 
 
+def test_doom_is_before_the_empty_page_in_the_default_tools_rotation() -> None:
+    standard = target()
+    device = standard.model_copy(update={'functions': [*standard.functions, 'doom']})
+    data = compiler.compile_show({'fill_in_styles': False}, {}, [], device)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['regions']['tools']['pages'][-3:] == ['calibration', 'doom', 'None']
+    assert exported['pages']['doom']['type'] == 'doom'
+    assert exported['pages']['doom']['min_windows'] == 1
+    assert compiler.compile_show(exported, {}, [], device) == data
+    with pytest.raises(compiler_errors.CompilationError, match='Doom is unavailable'):
+        compiler.compile_show(exported, {}, [], standard)
+
+
 @pytest.mark.parametrize('kind', ['trs-ports', 'expression'])
 def test_removed_utility_pages_cannot_be_authored(kind: str) -> None:
     with pytest.raises(compiler_errors.CompilationError, match='type'):
@@ -262,16 +275,19 @@ def test_patch_chooser_instances_follow_encoded_page_count(count: int) -> None:
 )
 @pytest.mark.parametrize('count', [0, 1, 3])
 def test_tool_pages_always_compile_for_one_window(kind: str, count: int) -> None:
+    device = target()
+    if kind == 'doom':
+        device = device.model_copy(update={'functions': [*device.functions, 'doom']})
     data = compiler.compile_show(
         {'pages': {'tool': {'type': kind, 'min_windows': count}}},
         {},
         [],
-        target(),
+        device,
     )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['pages']['tool']['type'] == kind
     assert exported['pages']['tool']['min_windows'] == 1
-    assert compiler.compile_show(exported, {}, [], target()) == data
+    assert compiler.compile_show(exported, {}, [], device) == data
 
 
 @pytest.mark.parametrize('count', [0, 3])

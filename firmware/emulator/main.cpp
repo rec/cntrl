@@ -263,9 +263,8 @@ public:
     bool song_boundary() const override { return app && app->song_boundary(); }
     bool song_style(ScreenGraphics &style) const override { return app && app->song_style(style); }
     bool looper_storage_ready() const { return true; }
-    bool doom_available() const override { return target::supports_doom; }
     bool launch_doom() override {
-        if (!doom_available() || firmware_exited || stock_pending) return false;
+        if (!target::supports_doom || firmware_exited || stock_pending) return false;
         firmware_exited = true;
         std::vector<uint8_t> bytes{15}; integer(bytes,time,8); frame(bytes);
         return true;

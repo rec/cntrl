@@ -77,6 +77,13 @@ public:
     CNTRL_FLASH_ROUTINE(looper_button)
 #endif
     bool looper_button(unsigned input, bool pressed) {
+        if (pages_.page() == Pages::Page::doom) {
+            if (input != controls_.confirm) return false;
+            if (pressed && (documents_.busy() || documents_.dirty() ||
+                platform_.song_transfer_busy() || !platform_.launch_doom()))
+                error("Doom could not start");
+            return true;
+        }
         if (pages_.page() == Pages::Page::calibrate) {
             if (input != controls_.confirm) return false;
             auto &pedals = platform_.expression_controls();

@@ -72,12 +72,15 @@ A single-display target uses one `main` region containing the entire catalogue.
 Omitting `pages` uses the built-in catalogue. These defaults focus the first
 physical region, usually the Patch Chooser on a multi-display target.
 
-The default tools cycle ends with Pong followed by None. Pong requires three
-windows; the default Patch Chooser can yield all its windows while the game
-is selected, preserving its state and background execution. Selecting None
-returns all windows to the Patch Chooser. Controllers with fewer than three
-displays omit Pong from the implicit catalogue; explicitly configured Pong
-pages still require three displays.
+Pong requires three windows. The default Patch Chooser can yield all its
+windows while Pong is selected, preserving its state and background execution.
+Controllers with fewer than three displays omit Pong from the implicit
+catalogue. Selecting None returns all windows to the Patch Chooser.
+
+On a Doom-enabled MC6 Pro, the default tools rotation ends with Calibration,
+Doom, then None. Doom uses one window. Press C on that page to start the
+standalone game. An explicit page catalogue can include `type = 'doom'`
+in its chosen rotation. [Doom build and launch](../cntrl/maker/morningstar/mc/doom/README.md)
 
 Pages and tools is available as the optional Menu page. It uses one utility
 window on the right of the performance view. Press the confirm control (C on MC Pro) to

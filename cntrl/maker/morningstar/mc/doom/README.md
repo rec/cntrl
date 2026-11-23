@@ -86,11 +86,13 @@ verification.
 
 ## Launch from CNTRL
 
-The Doom-enabled build adds **Doom** to **Pages and Tools**. Select it to
-open a page with one **C Doom** action. Press C again to reboot into the
-game. The boot selector consumes the request before entering Doom, so a
-power cycle returns to the ordinary CNTRL startup. The launcher requires
-CNTRL to be the default firmware.
+Compile the setup against the Doom-enabled target. In the default utility
+rotation, **Doom** appears immediately before the empty page. Setups with
+explicit page rotations can add a page of type `doom` to their tools region.
+Cycle to **C Doom**, then press C to start the game. The boot selector
+consumes the request before entering Doom, so a power cycle returns to the
+ordinary CNTRL startup. The launcher requires CNTRL to be the default
+firmware.
 
 Use the same DMC100 inputs as above and replace `firmware` with
 `relocated` to build the separate Doom application at `0x60390000`.

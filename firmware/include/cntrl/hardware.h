@@ -118,7 +118,6 @@ struct Hardware : RelayDriver {
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
     virtual bool supports_function(unsigned) const { return false; }
     virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
-    virtual bool doom_available() const { return false; }
     virtual bool launch_doom() { return false; }
     virtual void configure_trs_ports(const uint8_t *) {}
     virtual bool supports_keyboard() const { return false; }

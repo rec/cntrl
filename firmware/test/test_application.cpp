@@ -17,11 +17,8 @@ struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServi
     uint8_t brightness = 0;
     cntrl::ui::FirmwareSelection selection{7, 0, true};
     unsigned configurations = 0, handoffs = 0, consumed = 0;
-    bool has_doom = false;
     unsigned doom_launches = 0;
     std::string last_error;
-    std::string centre_caption;
-    bool doom_available() const override { return has_doom; }
     bool launch_doom() override { ++doom_launches; return true; }
     cntrl::ui::FirmwareSelection firmware_selection() const override { return selection; }
     bool valid_exit(uint8_t pair) const override { return pair == 33; }
@@ -40,9 +37,7 @@ struct Hardware : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServi
     const char *control_label(cntrl::ControlRole role) const override {
         const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[unsigned(role)];
     }
-    void show(unsigned index, const cntrl::Pane &pane) override {
-        if (index == 1) centre_caption = pane.lines[0].text;
-    }
+    void show(unsigned, const cntrl::Pane &) override {}
     void set_brightness(uint8_t value, bool = false) override { brightness = value; }
     void set_splash(bool, uint32_t) override {}
     void error(const char *message) override { last_error = message; }
@@ -605,29 +600,24 @@ static void firmware_handoff_is_durable_and_corrupt_return_is_rejected(Hardware 
     assert(failed.request(33, &continuation)); failed.poll(true); failed.poll(true);
     assert(!failed.busy() && !execution && hardware.last_error == "Firmware switch failed");
 }
-static void doom_page_requires_a_separate_press_and_shows_the_physical_control() {
-    Hardware hardware; hardware.has_doom = true;
-    TestStorage setup_storage, song_storage;
-    cntrl::Controller primary(hardware, hardware, hardware);
-    cntrl::Documents documents(setup_storage, hardware, primary, hardware);
-    cntrl::Songs songs(song_storage, hardware);
-    cntrl::ui::Application app(hardware, documents, primary, hardware, hardware, songs, hardware, true);
-    using Op = cntrl::ui::Operation;
-    assert(app.operation_ui(Op::menu_open, hardware));
-    app.menu.poll(0);
-    for (unsigned i = 0; i < 3; ++i) app.operation_ui(Op::menu_next, hardware);
-    app.operation_ui(Op::menu_activate, hardware);
-    assert(hardware.centre_caption == "C Doom" && hardware.doom_launches == 0);
-    app.operation_ui(Op::menu_activate, hardware);
-    assert(hardware.doom_launches == 0);
-    app.menu.poll(0);
-    app.operation_ui(Op::menu_activate, hardware);
-    assert(hardware.doom_launches == 1 && !app.menu.open());
+static void doom_launches_only_from_its_utility_page(cntrl::Documents &documents, cntrl::ui::Application &app) {
+    PagePlatform platform; PageFonts fonts; PageDisplay display;
+    uint16_t work[64 * 64] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 64 * 64);
+    constexpr cntrl::ui::ControlBinding bindings[] = {{0,"A"},{1,"B"},{2,"C"},{3,"D"},{4,"E"},{5,"F"}};
+    cntrl::ui::PageHost<PagePlatform> host(platform, app, documents, display, fonts, renderer, {0,1,2,3,4,5,5,3,2,bindings,6});
+    auto view = host.pages_.save_view(); view.page = cntrl::ui::Pages::Page::doom; host.pages_.restore_view(view);
+    const auto pane = host.pages_.view(0, 0, {}, {}, cntrl::Panic::Status::ready);
+    assert(!std::strcmp(pane.lines[0].text, "C Doom") && !pane.lines[1].text[0]);
+    assert(!host.looper_button(5, true) && host.looper_button(2, false));
+    assert(platform.doom_launches == 0);
+    assert(host.looper_button(2, true) && platform.doom_launches == 1);
+    view.page = cntrl::ui::Pages::Page::status; host.pages_.restore_view(view);
+    assert(!host.looper_button(2, true) && platform.doom_launches == 1);
 }
 
 int main(int argc, char **argv) {
     assert(argc == 2 || argc == 3); selecting_pages_preserves_state_and_background_work(argv[1]);
-    doom_page_requires_a_separate_press_and_shows_the_physical_control();
     if (argc == 3) legacy_single_patch_chooser_preserves_performance_while_cycling_tools(argv[2]);
     Hardware hardware; TestStorage setup_storage, song_storage;
     cntrl::Controller primary(hardware, hardware, hardware);
@@ -645,6 +635,7 @@ int main(int argc, char **argv) {
         assert(!source.activate(missing, {}, false));
         firmware_handoff_is_durable_and_corrupt_return_is_rejected(hardware, documents, app, songs, source);
         pong_keeps_navigation_until_serve(documents, app);
+        doom_launches_only_from_its_utility_page(documents, app);
         monitor_page_controls_and_capture_follow_lifecycle(documents, app);
         looper_page_confirms_clear_but_explicit_bindings_execute_immediately(documents, app);
         assert(app.state(1, 91, hardware) && hardware.brightness == 91);
