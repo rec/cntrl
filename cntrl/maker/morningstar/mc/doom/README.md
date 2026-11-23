@@ -118,8 +118,10 @@ region. The installer uses the existing MC6 Pro backup and restore workflow.
 
 With the same prepared DMC100 checkout, run `make` as above with the
 `host` target. This builds `doom-host` and places `e1m1.img` beside it in
-the output directory. Add `--doom-host /absolute/path/to/doom-host` to
-your usual `cntrl emulate` command for a Doom-enabled MC6 Pro setup.
+the output directory. When built in the default `doom/build` directory,
+`cntrl emulate simple-setup.toml --controller mc6-pro` finds the game
+and includes Doom in the default utility rotation. For a custom build
+directory, pass `--doom-host /absolute/path/to/doom-host`.
 
 Press C on the Doom launcher to switch to the game on the center
 display. The same A–F controls work by mouse or keyboard. Tap F to use

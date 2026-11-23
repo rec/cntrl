@@ -4,6 +4,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 uint8_t demo_rom[NOR_SIZE];
 static uint32_t now;
@@ -36,6 +40,11 @@ void demo_fail(const char *message)
 
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
+    if (_setmode(_fileno(stdin), _O_BINARY) == -1 ||
+        _setmode(_fileno(stdout), _O_BINARY) == -1)
+        demo_fail("Could not open binary Doom frame and input streams");
+#endif
     if (argc != 2)
         demo_fail("Expected the path to the generated Freedoom image");
     FILE *file = fopen(argv[1], "rb");

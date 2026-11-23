@@ -1,5 +1,6 @@
 """Catalogue profiles bind to executable targets without changing hardware facts."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ from cntrl.patch_chooser import (
     data_files,
     device_globals,
     models,
+    resolved,
     setup_bundle,
 )
 from cntrl.patch_chooser.cli import compile_to_file
@@ -119,12 +121,26 @@ def test_short_command_compiles_a_setup_and_preserves_session_data(
         'controller=7, value=100}]\n'
     )
     monkeypatch.chdir(tmp_path)
+    build = tmp_path / 'cntrl/maker/morningstar/mc/doom/build'
+    build.mkdir(parents=True)
+    host = build / ('doom-host.exe' if os.name == 'nt' else 'doom-host')
+    host.touch()
+    (build / 'e1m1.img').touch()
     command = cli.Emulate(setup=source, controller=controller)
     layout, target, setup, storage = cli.prepare(command, compile_to_file)
     assert len(layout.controls) == len(target.buttons) == count
     assert storage == Path('.cntrl-emulator') / controller
     compiled = setup.read_bytes()
     assert list(setup_bundle.unpack(compiled)) == ['performance']
+    exported = tomlkit.parse(
+        resolved.export(setup_bundle.unpack(compiled)['performance'])
+    )
+    rotation = exported['regions']['tools']['pages']
+    if controller == 'mc6-pro':
+        assert command.playable_doom_host == host
+        assert rotation[-2:] == ['doom', 'None']
+    else:
+        assert 'doom' not in rotation
     assert all(Path(p).is_file() for p in target.font_sources.values())
     saved = storage / 'saved-pedal-state'
     saved.write_bytes(b'keep me')

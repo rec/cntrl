@@ -17,6 +17,7 @@ from tomlkit.exceptions import ParseError
 
 from ..file_lock import writer_lock
 from ..localization import catalogue
+from ..maker.morningstar.mc.emulator.profiles import built_doom_host
 from ..patch_chooser import data_files, device_globals, languages
 from ..patch_chooser.models import Target
 from ..patch_chooser.setup_bundle import SetupBundle
@@ -71,6 +72,10 @@ class Emulate(BaseModel, frozen=True):
     def valid_caret_blink_period(cls, value: str) -> str:
         caret_blink_interval_ms(value)
         return value
+
+    @cached_property
+    def playable_doom_host(self) -> Path | None:
+        return self.doom_host or built_doom_host(self.source_root)
 
     @cached_property
     def caret_blink_interval(self) -> int:
@@ -137,6 +142,7 @@ def prepare(
             controller=layout.controller,
             output=storage / '.emulator-build' / 'profile',
             mirror=command.port is not None,
+            doom_host=command.playable_doom_host,
         )
     else:
         assert command.layout is not None and command.target is not None
@@ -308,6 +314,6 @@ def emulate_locked(
             if not run_window(
                 session,
                 caret_blink_interval=command.caret_blink_interval,
-                doom_host=command.doom_host,
+                doom_host=command.playable_doom_host,
             ):
                 return

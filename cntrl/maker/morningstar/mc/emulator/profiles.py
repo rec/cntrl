@@ -1,5 +1,6 @@
 """Export catalogue-bound virtual targets from an MC6 Pro target export."""
 
+import os
 import shutil
 from pathlib import Path
 from typing import Literal
@@ -20,6 +21,12 @@ class Export(BaseModel, frozen=True):
     target: Path
     controller: Literal['mc6_pro', 'mc8_pro']
     output: Path
+
+
+def built_doom_host(source_root: Path) -> Path | None:
+    build = source_root / 'cntrl/maker/morningstar/mc/doom/build'
+    host = build / ('doom-host.exe' if os.name == 'nt' else 'doom-host')
+    return host if host.is_file() and (build / 'e1m1.img').is_file() else None
 
 
 def adapt(base: models.Target, controller: str, mirror: bool = False) -> models.Target:
@@ -93,7 +100,11 @@ def adapt(base: models.Target, controller: str, mirror: bool = False) -> models.
 
 
 def export(
-    target: Path | None, controller: str, output: Path, mirror: bool = False
+    target: Path | None,
+    controller: str,
+    output: Path,
+    mirror: bool = False,
+    doom_host: Path | None = None,
 ) -> Path:
     if target is None:
         target = Path(__file__).parents[1] / 'patch-chooser-target.json'
@@ -108,6 +119,13 @@ def export(
     except ValidationError as error:
         raise EmulatorError(f'{target}: {error}') from error
     profile = adapt(base, controller, mirror)
+    if (
+        controller == 'mc6_pro'
+        and not mirror
+        and doom_host
+        and 'doom' not in profile.functions
+    ):
+        profile = profile.model_copy(update={'functions': [*profile.functions, 'doom']})
     layout = EmulatorLayout.load(
         Path(__file__).with_name(controller.replace('_', '-') + '.toml')
     )
