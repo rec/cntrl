@@ -21,8 +21,12 @@ from the six footswitches. Keep the first build silent and single-player.
   how its data conversion works for the selected test map and whether the
   converted data can fit in the MC6 Pro application region. If the data must
   live on SD, check random-read latency before committing to that design.
-  The Teensy 4.1 MCUME port is a useful reference for the processor and uses
-  external PSRAM. [RP2040 Doom](https://kilograham.github.io/rp2040-doom/)
+  The Teensy 4.1 MCUME port is a processor reference with external PSRAM.
+  The first qualification run favours DMC100 Doom, which already converts
+  Freedoom Phase 1 and renders at 160 logical columns on a target with 32 KiB
+  of RAM. Its single-map pack passed conversion and validation on macOS.
+  [Qualification and reproduction](../cntrl/maker/morningstar/mc/doom/README.md)
+  [RP2040 Doom](https://kilograham.github.io/rp2040-doom/)
   [MCUME](https://github.com/Jean-MarcHarvengt/MCUME)
 
 ## Implementation sequence
@@ -48,14 +52,13 @@ from the six footswitches. Keep the first build silent and single-player.
    held. Derive captions from the target's physical labels. Convert the
    indexed frame to column-first, big-endian RGB565 in bounded strips using the
    existing display interface. Keep accepted transfer buffers valid until the
-   display is ready again, and let button scans and MIDI take priority over
-   drawing. [Page host](../firmware/include/cntrl/ui/page_host.h)
+   display is ready again and keep switch scanning responsive.
+   [Page host](../firmware/include/cntrl/ui/page_host.h)
    [Display interface](../firmware/include/cntrl/ui/display.h)
 4. **Prove it on the pedal.** Record the linked flash and RAM use, peak engine
    allocations, largest free block per RAM bank, game tick time and frame rate.
-   Exercise sustained gameplay with USB and DIN traffic and compare button
-   latency and MIDI jitter against a CNTRL-only baseline. Check that entering
-   or leaving the game preserves the active setup, that gameplay presses emit
+   MIDI timing and delivery during play are outside acceptance. Check that
+   entering or leaving the game preserves the active setup, gameplay presses emit
    no unintended MIDI, and that exit clears held inputs and restores the
    previous page. If the memory or timing budget fails, bring the measurements
    back for a decision on a separately built game image.
@@ -67,8 +70,7 @@ from the six footswitches. Keep the first build silent and single-player.
   Hold, release and exit are covered by a deterministic input test.
 - The emulator captures a repeatable frame after a fixed input sequence.
   Aim for 15 rendered frames per second on the test map while maintaining
-  35 Hz game ticks. Check for dropped MIDI messages and compare measured
-  jitter with the same traffic and setup before entering the game.
+  35 Hz game ticks.
 - Missing or incompatible game data leaves CNTRL usable and shows a clear
   error. A successful exit restores the previous page and releases game
   buffers.
