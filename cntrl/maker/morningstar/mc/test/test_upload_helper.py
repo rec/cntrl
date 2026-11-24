@@ -359,6 +359,24 @@ def test_upload_client_does_not_create_server_state(
     assert not cache.exists()
 
 
+def test_flash_record_prefers_the_checkout_over_the_user_log(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / 'home'
+    checkout = tmp_path / 'checkout'
+    package = checkout / 'cntrl'
+    package.mkdir(parents=True)
+    (package / 'upload.py').touch()
+    record = checkout / 'doc' / 'flash-record.md'
+    record.parent.mkdir()
+    record.touch()
+    monkeypatch.setattr(Path, 'home', lambda: home)
+    monkeypatch.chdir(package)
+    assert upload_helper.flash_record_path() == record
+    monkeypatch.chdir(tmp_path)
+    assert upload_helper.flash_record_path() == home / '.cntrl/doc/flash-record.md'
+
+
 @pytest.mark.parametrize('location', ['symlink', 'relative', 'extension'])
 def test_disallowed_image_locations_never_reach_device_access(
     firmware_path: Path,
@@ -471,8 +489,10 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
     digest = hashlib.sha256(original).hexdigest()
     updater = tmp_path / 'tycmd'
     updater.write_bytes(b'qualified uploader')
+    record = tmp_path / 'doc' / 'flash-record.md'
     monkeypatch.setenv('CNTRL_TYCMD', str(updater))
     monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path / 'staging')
+    monkeypatch.setattr(upload_helper, 'flash_record_path', lambda: record)
     calls: list[list[str]] = []
     snapshots: list[Path] = []
 
@@ -500,8 +520,13 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         assert snapshot != firmware_path
         firmware_path.write_text('changed after validation')
         assert snapshot.read_bytes() == original
+        if len(snapshots) == 2:
+            return subprocess.CompletedProcess(command, 0, 'reset', '')
         return subprocess.CompletedProcess(
-            command, 7, 'uploader output', 'uploader error'
+            command,
+            7,
+            'upload@12345-Teensy Uploading...\n',
+            "I/O error while writing to 'IOService:/private/device'\n",
         )
 
     monkeypatch.setattr(subprocess, 'run', run)
@@ -513,8 +538,21 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         assert result.returncode == 1
         assert len(calls) == 1
         assert firmware_path.read_bytes() == original
+        assert not record.exists()
     else:
         assert result.returncode == 7
-        assert result.output == 'uploader outputuploader error'
+        assert 'I/O error while writing' in result.output
         assert len(calls) == 2
         assert not snapshots[0].exists()
+        firmware_path.write_bytes(original)
+        retry = upload_helper.process_request(
+            request.model_dump_json().encode() + b'\n', '12345'
+        )
+        assert retry.returncode == 0
+        entries = record.read_text()
+        assert entries.count('\n## ') == 2
+        assert entries.count(digest) == 2
+        assert entries.index('Failed (uploader exit 7)') < entries.index('Succeeded')
+        assert "I/O error while writing to 'IOService:/…'" in entries
+        assert '/private/device' not in entries
+        assert '12345' not in entries

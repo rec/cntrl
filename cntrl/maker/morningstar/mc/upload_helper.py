@@ -2,15 +2,18 @@
 
 import hashlib
 import os
+import re
 import stat
 import struct
 import subprocess
 import sys
+from datetime import UTC, datetime
 from multiprocessing.connection import Client, Listener
 from multiprocessing.context import AuthenticationError
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
+from uuid import UUID, uuid4
 
 import tyro
 from pydantic import BaseModel, TypeAdapter
@@ -24,11 +27,17 @@ from ....upload import Bootloader, Provision, Serve, Upload
 from . import updater_provision
 
 
+class FlashAttempt(BaseModel, frozen=True):
+    id: UUID
+    record: Path
+
+
 class UploadResult(BaseModel, frozen=True):
     returncode: int
     output: str
     uploader: str = ''
     uploader_sha256: str = ''
+    attempt: FlashAttempt | None = None
 
 
 class Board(BaseModel, frozen=True):
@@ -146,6 +155,34 @@ def updater_path() -> Path:
     return updater_provision.installed(CACHE_DIRECTORY / 'tytools-0.9.9')
 
 
+def flash_record_path() -> Path:
+    """Use the checkout's record when the helper runs inside that checkout."""
+    cwd = Path.cwd()
+    for directory in (cwd, *cwd.parents):
+        record = directory / 'doc' / 'flash-record.md'
+        if record.is_file() and (directory / 'cntrl' / 'upload.py').is_file():
+            return record
+    return Path.home() / '.cntrl' / 'doc' / 'flash-record.md'
+
+
+def record_reconnect(result: UploadResult, expected: str, outcome: str) -> None:
+    """Append the installer's boot observation to the matching upload record."""
+    if result.attempt is None:
+        return
+    attempt = result.attempt
+    checked = datetime.now(UTC).isoformat(timespec='seconds')
+    # A different upload may already have appended an entry. Link by attempt
+    # ID instead of editing the file or assuming this upload is still last.
+    _record_outcome(
+        attempt.record,
+        f'\n### Reconnect {checked}\n\n'
+        f'- [Upload attempt](#attempt-{attempt.id.hex}), '
+        f'uploader exit {result.returncode}\n'
+        f'- Expected build `{expected}`\n'
+        f'- {outcome}\n',
+    )
+
+
 def upload_image(request: Upload) -> UploadResult:
     """Snapshot an owned image, validate it, then upload to the selected target."""
     if not request.image.is_absolute():
@@ -192,19 +229,68 @@ def upload_image(request: Upload) -> UploadResult:
             )
         board = matches[0]
         print(f'Uploading SHA-256 {image.sha256} to {board.tag}', flush=True)
-        result = subprocess.run(
-            [updater, 'upload', '--board', board.tag, str(snapshot)],
-            capture_output=True,
-            text=True,
-            check=False,
+        attempt = FlashAttempt(id=uuid4(), record=flash_record_path())
+        record = attempt.record
+        started = datetime.now(UTC).isoformat(timespec='seconds')
+        _append_flash_record(
+            record,
+            f'\n## {started}\n\n<a id="attempt-{attempt.id.hex}"></a>\n\n'
+            f'- Image SHA-256 `{image.sha256}`\n',
         )
+        try:
+            result = subprocess.run(
+                [updater, 'upload', '--board', board.tag, str(snapshot)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError as error:
+            _record_outcome(record, f'- Failed to start uploader: {error.strerror}\n')
+            raise
         output = result.stdout + result.stderr
+        if result.returncode:
+            diagnostic = '\n'.join((result.stdout.rstrip(), result.stderr.rstrip()))
+            diagnostic = (
+                diagnostic.replace(board.serial, '<serial>')
+                .replace(str(snapshot), snapshot.name)
+                .replace(updater, Path(updater).name)
+            )
+            diagnostic = re.sub(r"""IOService:/[^'"\n]*""", 'IOService:/…', diagnostic)
+            details = ''.join(
+                f'      {line}\n' for line in diagnostic.strip().splitlines()
+            )
+            _record_outcome(
+                record, f'- Failed (uploader exit {result.returncode})\n\n{details}'
+            )
+        else:
+            _record_outcome(record, '- Succeeded (uploader exit 0)\n')
         print(output, end='', flush=True)
         return UploadResult(
             returncode=result.returncode,
             output=output,
             uploader=updater,
             uploader_sha256=hashlib.sha256(Path(updater).read_bytes()).hexdigest(),
+            attempt=attempt,
+        )
+
+
+def _append_flash_record(path: Path, entry: str) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with path.open('a', encoding='utf-8') as stream:
+        if stream.tell() == 0:
+            stream.write('# Flash record\n')
+        stream.write(entry)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def _record_outcome(path: Path, entry: str) -> None:
+    try:
+        _append_flash_record(path, entry)
+    except OSError as error:
+        # A logging failure must not turn a successful upload into a failed one.
+        print(
+            f'Could not finish the flash record: {error}', file=sys.stderr, flush=True
         )
 
 
@@ -243,6 +329,7 @@ def serve(serial: str) -> None:
     ) as listener:
         try:
             print(f'Upload-only helper listening on {SOCKET_PATH}', flush=True)
+            print(f'Flash record: {flash_record_path()}', flush=True)
             print(
                 f'Selected unit: {serial}. Enter HalfKay before uploading. '
                 'Ctrl-C stops the helper.'

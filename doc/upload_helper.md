@@ -27,6 +27,14 @@ The helper validates and snapshots that image, then calls the installed updater.
 All clients use the same per-user endpoint; Git is not required.
 It does not expose arbitrary commands, targets or uploader flags.
 
+The helper records each updater invocation, including retries, in
+[`doc/flash-record.md`](flash-record.md) when started from the CNTRL checkout.
+Outside a checkout it uses `.cntrl/doc/flash-record.md` in your home directory.
+`cntrl flash` adds a linked reconnect check with the expected and observed
+builds, or an explanation when it could not verify the running firmware.
+The helper prints the path on startup. Restart an already-running helper after
+upgrading CNTRL to pick up the logging code.
+
 Build and inspect the image first, close serial captures, request bootloader
 entry, verify device identity, then upload with the digest. Let the upload finish.
 Investigate write failures before retrying, and verify application status and

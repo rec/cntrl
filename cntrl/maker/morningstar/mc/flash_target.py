@@ -1,6 +1,7 @@
 """Back up the MC6 Pro, upload its built image, restore and verify saved data."""
 
 import hashlib
+import re
 import shutil
 import subprocess
 import sys
@@ -111,6 +112,10 @@ def run(
     if errors:
         raise ValueError('\n'.join(errors))
     upload_helper.updater_path()
+    result: upload_helper.UploadResult | None = None
+    expected_commit = manifest.source_commit[:7]
+    running_commit = None
+    reconnect = 'Reconnect could not be verified'
     try:
         if command.first_install:
             assert command.serial and command.editor_backup
@@ -193,7 +198,16 @@ def run(
         record['uploader_returncode'] = result.returncode
         record.update(uploader=result.uploader, uploader_sha256=result.uploader_sha256)
         write_record(directory / 'installation.toml', record)
-        port = wait_connected(serial)
+        try:
+            port = wait_connected(serial)
+        except TimeoutError:
+            reconnect = _reconnect_timeout(serial)
+            raise
+        reconnect = 'CNTRL reconnected, firmware unverified'
+        try:
+            running_commit = _firmware_commit(_read_status(port, connection_factory))
+        except (*transport.USB_ERRORS, OSError, EOFError) as error:
+            reconnect += f' ({type(error).__name__})'
         if restore is None:
             if result.returncode:
                 raise ValueError(
@@ -211,17 +225,10 @@ def run(
                 backups.verify_after_flashing(
                     restore, port, target, connection=connection
                 )
-        with (
-            connection_factory(port)
-            if connection_factory is not None
-            else transport.SerialConnection(port)
-        ) as connection:
-            status = transport.SetupClient(connection).request('CNTRL STATUS')
-        fields = dict(p.split('=', 1) for p in status.split() if '=' in p)
-        if (
-            fields.get('git') != manifest.source_commit[:7]
-            or fields.get('model') != 'mc6-pro'
-        ):
+        status = _read_status(port, connection_factory)
+        verified_commit = _firmware_commit(status)
+        running_commit = verified_commit or running_commit
+        if verified_commit != expected_commit:
             raise ValueError(
                 f'running firmware identity differs from packaged release: {status}'
             )
@@ -243,6 +250,48 @@ def run(
         record.update(result='failed', error=str(error))
         write_record(directory / 'installation.toml', record)
         raise
+    finally:
+        if result is not None:
+            if running_commit == expected_commit:
+                reconnect = f'Expected build running (`{running_commit}`)'
+            elif running_commit is not None:
+                reconnect = f'Different firmware running (`{running_commit}`)'
+            upload_helper.record_reconnect(result, expected_commit, reconnect)
+
+
+def _read_status(
+    port: Path, connection_factory: Callable[[Path], transport.SerialConnection] | None
+) -> str:
+    if connection_factory is None:
+        return transport.device_status(port)
+    with connection_factory(port) as connection:
+        return transport.SetupClient(connection).request('CNTRL STATUS')
+
+
+def _firmware_commit(status: str) -> str | None:
+    fields = dict(p.split('=', 1) for p in status.split() if '=' in p)
+    commit = fields.get('git', '')
+    if (
+        status.startswith('CNTRL READY ')
+        and fields.get('model') == 'mc6-pro'
+        and re.fullmatch('[0-9a-f]{7}', commit)
+    ):
+        return commit
+    return None
+
+
+def _reconnect_timeout(serial: str) -> str:
+    outcome = 'CNTRL did not reconnect before timeout'
+    try:
+        boards = [b for b in upload_helper.list_boards() if b.serial == serial]
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        return outcome
+    if len(boards) == 1:
+        if boards[0].description == 'Morningstar MC6 Pro':
+            return 'Different firmware running (Morningstar stock)'
+        if boards[0].description == 'HalfKay':
+            return f'{outcome} (still in HalfKay)'
+    return outcome
 
 
 def check_helper(serial: str) -> upload_helper.UploadResult:
