@@ -8,10 +8,11 @@ Language is a device-wide preference and
 remains selected when you change setups. Patch names, filenames, MIDI messages
 and authored text stay as written.
 
-Open the **Language page** in the utility-page cycle. It uses exactly two displays: the first is a scrolling list
-of installed languages in their native names, with small country flags; the
-second has the Language caption and controls. On the default three-display
-layout these are the center and right displays. English uses the UK flag.
+Open the **Language page** in the utility-page cycle. The first display shows
+the installed languages alphabetized by their native names, with small country
+flags. The second shows the Language caption and controls. On the default
+three-display layout these are the center and right displays. English uses the
+UK flag.
 
 Use **E** to scroll up, **B** to scroll down and **C** to select. In Patch mode,
 press **F** for the next page. In Song and Setlist modes, the default controls

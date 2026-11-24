@@ -96,7 +96,8 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         colors = {first[i : i + 2] for i in range(0, len(first), 2)}
         assert {b'\xf8\0', b'\0\x18', b'\xff\xe0'} <= colors
         snapshot(0)
-        for _ in range(catalogue.locales().index('fr')):
+        # English is selected initially. Español lies between English and Français.
+        for _ in range(2):
             press('b')
         advance(500000)
         assert session.frames['lcd-2'] != first
@@ -128,7 +129,8 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         assert french != english
         snapshot(1)
         # Moving the candidate never changes the active language until C.
-        for _ in range(catalogue.locales().index('fr') + 1):
+        # Walk back through Español, English, Deutsch, Dansk and Čeština.
+        for _ in range(6):
             press('e')
         advance(500000)
         assert session.frames['lcd-3'] == french

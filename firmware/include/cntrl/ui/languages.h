@@ -5,6 +5,7 @@
 #include <cntrl/checked_array.h>
 #include "fonts.h"
 #include "messages.h"
+#include "utf8.h"
 #ifdef CNTRL_EMULATOR
 #include <map>
 #include <string>
@@ -74,10 +75,23 @@ public:
             if (!installed_.resize(index + 1)) break;
             installed_[index] = info;
         }
-        // Directory order varies by filesystem; keep recovery English first.
-        for (unsigned i = 2; i < installed_.size(); ++i) {
+        const auto initial = [](const char *name) -> uint32_t {
+            uint32_t code = 0;
+            if (!utf8::next(name, code)) return 0;
+            if (code >= 'A' && code <= 'Z') code += 'a' - 'A';
+            // Czech sorts Č just after C.
+            if (code == 0x010c || code == 0x010d) return 2 * 'c' + 1;
+            return 2 * code;
+        };
+        const auto before = [&](const Info &left, const Info &right) {
+            const auto first = initial(left.name), second = initial(right.name);
+            if (first != second) return first < second;
+            const int names = std::strcmp(left.name, right.name);
+            return names ? names < 0 : std::strcmp(left.tag, right.tag) < 0;
+        };
+        for (unsigned i = 1; i < installed_.size(); ++i) {
             const auto value = installed_[i]; unsigned j = i;
-            while (j > 1 && std::strcmp(installed_[j - 1].tag, value.tag) > 0) {
+            while (j && before(value, installed_[j - 1])) {
                 installed_[j] = installed_[j - 1]; --j;
             }
             installed_[j] = value;
