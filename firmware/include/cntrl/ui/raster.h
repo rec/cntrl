@@ -213,10 +213,10 @@ public:
             for (unsigned col = 0; col < flags::width; ++col)
                 pixel(x + int(col), y + int(row), bitmap[row * flags::width + col]);
     }
-    void circle(const Circle &c) {
+    void circle(const Circle &c, int y_offset = 0) {
         const int span = c.diameter + 2 * c.annulus;
         if (!c.diameter) return;
-        const int left = int(c.x) - span / 2, top = int(c.y) - span / 2;
+        const int left = int(c.x) - span / 2, top = int(c.y) + y_offset - span / 2;
         const int end_x = std::min(clip_.right, left + span), end_y = std::min(clip_.bottom, top + span);
         for (int y = std::max(clip_.top, top); y < end_y; ++y) for (int x = std::max(clip_.left, left); x < end_x; ++x) {
             const int64_t dx = 2 * (x - left) + 1 - span, dy = 2 * (y - top) + 1 - span;

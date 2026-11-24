@@ -883,14 +883,17 @@ private:
         highlight.color = 0xfdc0;
         const Rectangle bounds{int16_t(pad), int16_t(pad), uint16_t(viewport_.width - 2 * pad),
                                uint16_t(viewport_.height - 2 * pad)};
+        const char *active = languages->current_language();
         language.paint(pane, bounds, row_height, now, highlight, 0, [&](unsigned item, TextLine &text, int y) {
             text.graphics = pane.graphics;
             utf8::copy(text.text, sizeof(text.text), languages->language_name(item));
             text.graphics.font = 17;
-            text.graphics.flag = flags::identifier(languages->language_tag(item));
-            text.x = uint16_t(pad + flags::width + 4);
+            const char *tag = languages->language_tag(item);
+            text.graphics.flag = flags::identifier(tag);
+            text.flag_marked = !std::strcmp(active, tag);
+            text.x = uint16_t(pad + flags::marker_column + flags::width + flags::label_gap);
             unsigned size = 12;
-            for (; size > 8; --size) if (fonts_.bounds(17, size, 0, text.text).width <= int(viewport_.width - pad - text.x)) break;
+            for (; size > 8; --size) if (fonts_.bounds(17, size, 0, text.text).width <= int(viewport_.width) - int(pad) - text.x) break;
             text.graphics.size = uint8_t(size); text.graphics.line_height = uint16_t(row_height);
             const auto ink = fonts_.bounds(17, size, 0, text.text);
             text.y = int16_t(y + (int(row_height) - ink.height) / 2 - ink.top);

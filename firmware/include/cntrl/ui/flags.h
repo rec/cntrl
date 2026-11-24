@@ -5,6 +5,8 @@
 
 namespace cntrl::ui::flags {
 inline constexpr unsigned width = 18, height = 12;
+inline constexpr unsigned marker_before = 2, marker_after = 4;
+inline constexpr unsigned marker_column = marker_before + height + marker_after, label_gap = 6;
 enum Country { uk, france, germany, spain, italy, portugal, netherlands, poland,
     czechia, slovakia, hungary, romania, sweden, denmark, norway, finland, turkey, count };
 

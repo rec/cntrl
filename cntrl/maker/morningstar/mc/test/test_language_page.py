@@ -84,6 +84,15 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
                 with Image.open(directory / f'lcd-{i + 1}.png') as panel:
                     image.paste(panel, (i * 160, row * 128))
 
+        def marker_rows(frame: bytes) -> list[int]:
+            pixels = [
+                divmod(i // 2, 160)
+                for i in range(0, len(frame), 2)
+                if frame[i : i + 2] == b'\x05\xa0'
+            ]
+            assert sorted({x for _, x in pixels}) == list(range(5, 15))
+            return sorted({y for y, _ in pixels})
+
         advance(1000000)
         for page in utility_pages[1 : language_position + 1]:
             press('f')
@@ -95,6 +104,7 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         first = session.frames['lcd-2']
         colors = {first[i : i + 2] for i in range(0, len(first), 2)}
         assert {b'\xf8\0', b'\0\x18', b'\xff\xe0'} <= colors
+        assert marker_rows(first) == list(range(59, 69))
         snapshot(0)
         # Verify a frame between English and Español, while the band stays put.
         session.button('b', True)
@@ -104,6 +114,7 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         advance(500000)
         settled = session.frames['lcd-2']
         assert moving != first and moving != settled
+        assert marker_rows(moving) != marker_rows(first)
         for frame in (first, moving, settled):
             column = [
                 frame[(y * 160 + 150) * 2 : (y * 160 + 151) * 2] for y in range(128)
@@ -116,6 +127,7 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         assert session.frames['lcd-2'] != first
         assert session.frames['lcd-1'] == performance
         assert session.frames['lcd-3'] == english
+        assert marker_rows(session.frames['lcd-2']) == list(range(19, 29))
         session.capture_corrections(True)
         caption = next(r for r in session.correction_regions if r.message == 'language')
         session.preview_correction(caption, 'Language selection')
@@ -125,11 +137,13 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         session.resolve_correction_language(False)
         assert session.requested_correction_language == ''
         assert session.language == 'en'
+        assert marker_rows(session.frames['lcd-2']) == list(range(19, 29))
         press('c')
         session.clear_corrections()
         session.resolve_correction_language(True)
         advance(500000)
         assert session.language == 'fr'
+        assert marker_rows(session.frames['lcd-2']) == list(range(59, 69))
         assert session.correction_language_name == 'Français'
         assert (
             next(

@@ -291,7 +291,8 @@ private:
             bool changed = std::strcmp(a.text, b.text) || std::memcmp(&a.graphics, &b.graphics, sizeof(a.graphics))
                 || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.fit != b.fit || a.stippled != b.stippled
                 || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color || a.outline != b.outline
-                || a.artwork_index != b.artwork_index || a.artwork_generation != b.artwork_generation;
+                || a.artwork_index != b.artwork_index || a.artwork_generation != b.artwork_generation
+                || a.flag_marked != b.flag_marked;
 #ifdef CNTRL_EMULATOR
             if (!translation_regions_.empty())
                 changed = changed || a.translation_id != b.translation_id || a.translation_short != b.translation_short
@@ -393,11 +394,15 @@ private:
         raster_.toggle(painting_.toggle); rendering_ = true; incoming_screen_ = -1;
         for (unsigned i = 0; i < max_lines; ++i) {
             const auto &line = painting_.lines[i];
-            if (!line.graphics.flag || !line.text[0]) continue;
+            if ((!line.graphics.flag && !line.flag_marked) || !line.text[0]) continue;
             raster_.clip(text_clip(i));
             const auto bounds = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);
-            raster_.flag(line.graphics.flag, int(line.x) - int(flags::width) - 4,
-                text_y(i) + bounds.top + (bounds.height - int(flags::height)) / 2);
+            const int x = int(line.x) - int(flags::width + flags::label_gap);
+            const int row_height = line.graphics.line_height;
+            const int center = text_y(i) + bounds.top - (row_height - bounds.height) / 2 + row_height / 2;
+            raster_.flag(line.graphics.flag, x, center - int(flags::height / 2));
+            if (line.flag_marked)
+                raster_.circle({uint16_t(x - int(flags::marker_after + flags::height / 2)), 0, flags::height - 2, 0, 0x05a0, 0}, center);
         }
         raster_.clip(painting_region_);
     }
