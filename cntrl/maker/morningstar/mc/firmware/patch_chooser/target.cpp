@@ -1383,7 +1383,7 @@ public:
         for (unsigned i = 0; i < cntrl::KeyboardInput::capacity && keyboard_input.read(key); ++i)
             if (connected && deployment.ready() && !deployment.pending()) application.text_key(key, millis());
         if (keyboard_input.take_overflow() && deployment.ready() && !deployment.pending()) {
-            if (application.setups.editing_contact()) board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::keyboard_input_dropped));
+            if (application.setups.editing_text()) board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::keyboard_input_dropped));
             else application.song_ui.keyboard_overflow();
         }
     }

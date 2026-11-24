@@ -858,7 +858,7 @@ void Session::command(const std::vector<uint8_t> &bytes) {
         renderer.invalidate(); settle();
     }
     else if (p[0] == 15 && length == 2) {
-        if (!application.setups.editing_contact() || host.external_keyboard_connected())
+        if (!application.setups.editing_text() || host.external_keyboard_connected())
             application.text_key(p[1], board.milliseconds());
         settle();
     }

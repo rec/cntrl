@@ -144,7 +144,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Pedal | Startup set, including the current setlist shortcut, and multiline Contact text | Device preference journal |
 | Pedal boot firmware | CNTRL or stock on controllers with a combined firmware image | Boot selection flash journal |
 | Pedal language | Installed languages | Device preference journal and deferred language loader |
-| Expression calibration | Heel and toe capture for enabled expression jacks, with review before Save | Device calibration file |
+| Expression calibration | Heel and toe capture for enabled expression jacks, jack names, and settling time, with review before Save | Device calibration file |
 | Device preferences | 33 scalar registry fields, including choices and a named clock-output picker. Port fields depend on hardware support. | Device preference journal with inherited values, setup overrides, and reload validation |
 | Loaded setup | Grouped Display, MIDI, Navigation, Ports, and Time settings with value origin and a way to inherit an existing pedal preference | Setup draft, revision, and reload |
 | Saved setups | The same grouped settings and the existing patch-cycle editor | Named setup draft and revision, with reload for the loaded setup |
@@ -170,7 +170,7 @@ occur and repeat those tasks after changing the labels or controls.
 
 | Owner | Fields with an on-pedal save path | Fields still requiring an editor or save path |
 | --- | --- | --- |
-| Pedal | Boot firmware, startup set, language, contact text, calibration endpoints, and the 33 scalar preferences | Calibration names and settling time |
+| Pedal | Boot firmware, startup set, language, contact text, calibration endpoints, jack names, settling time, and the 33 scalar preferences | |
 | Setup | Brightness, screensaver timeout, animation color cycling, target pulse, MIDI interface and USB modes, USB forwarding, scrolling, fast debounce, navigation timing, TRS modes, auxiliary switch mode, Time page settings including clock outputs and presets, and patch cycles | Frame buffers, animation resources, pickup, loop reset, other page-specific scalar settings, routing, controls, counter definitions, startup and idle movie selections, and page layout and appearance |
 | Setup instrument | MIDI channel 1–16 and enabled output, shared by the instrument programs using that instrument in the setup | Profile and instrument identity. Profile choices can affect bank mappings and SysEx. |
 | Setup patch | Instrument program 1–128, banks available in the assigned profile, optional volume 0–127, and optional pan −64–63 on supported program patches | Other MIDI action types and their parameters, names, style, nested actions, and binding definitions |

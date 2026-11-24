@@ -208,7 +208,10 @@ def test_calibrate_page_saves_each_expression_jack(
     target = files.target.model_copy(
         update={
             'controls': models.TargetControls(
-                confirm='a', previous='b', next='c' if settings else None
+                confirm='a',
+                previous='b',
+                next='c' if settings else None,
+                previous_section='d' if settings else None,
             ),
             'trs_ports': {j: ['expression'] for j in jacks},
         }
@@ -264,8 +267,19 @@ def test_calibrate_page_saves_each_expression_jack(
             session.advance(session.time_us + 200000)
             press('c')
             press('a')
+            for button in ('a', 'd', 'a'):  # Calibrate, Options, Jack 1 name.
+                press(button)
+            assert session.editing_name
+            session.key(ord('?'))  # The keyboard is disconnected.
+            session.external_keyboard(True)
+            session.key(ord('!'))
+            session.key(10)
+            press('c')
+            press('a')
     saved = tomlkit.parse(calibration.read_text()).unwrap()
-    assert saved['configurable-1']['name'] == 'Boss EV-30, left'
+    assert saved['configurable-1']['name'] == (
+        '!Boss EV-30, left' if settings else 'Boss EV-30, left'
+    )
     assert saved['bits'] == 12
     for jack, (heel, toe) in enumerate(ranges, 1):
         assert saved[f'configurable-{jack}']['heel'] == round(heel * 4095 / 1023)

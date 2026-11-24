@@ -12,6 +12,7 @@ namespace cntrl {
 class CalibrationFile {
 public:
     static constexpr const char *path = "/cntrl/calibration.toml";
+    static constexpr unsigned maximum_settle_ms = 60000;
 
     CalibrationFile(files::FileSystem &filesystem, unsigned count)
         : filesystem_(filesystem), entries_(count) {}
@@ -35,14 +36,34 @@ public:
     unsigned settle_ms() const { return settle_ms_; }
     void import(unsigned jack, ExpressionCalibration value) { entries_[jack].calibration = value; }
 
-    bool save(const std::vector<CalibrationCapture> &captures) {
-        std::string text = "bits = 12\nsettle_ms = " + std::to_string(settle_ms_) + "\n\n";
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(calibration_file_save)
+#endif
+    bool save(const std::vector<CalibrationCapture> *captures, unsigned settle_ms,
+              unsigned renamed = unsigned(-1), const char *label = nullptr) {
+        if (!settle_ms || settle_ms > maximum_settle_ms) return false;
+        std::string name, decoded;
+        if (label) {
+            if (renamed >= entries_.size()) return false;
+            if (*label) {
+                name = '"';
+                for (const char *p = label; *p; ++p) {
+                    if (uint8_t(*p) < 32 || uint8_t(*p) == 127) return false;
+                    if (*p == '"' || *p == '\\') name += '\\';
+                    name += *p;
+                }
+                name += '"';
+                decoded = label;
+            }
+        }
+        std::string text = "bits = 12\nsettle_ms = " + std::to_string(settle_ms) + "\n\n";
         for (unsigned i = 0; i < entries_.size(); ++i) {
             const auto &entry = entries_[i];
-            const auto calibration = captures[i].toe_ready ? captures[i].value() : entry.calibration;
-            if (!calibration.valid() && entry.name.empty()) continue;
+            const auto calibration = captures && (*captures)[i].toe_ready ? (*captures)[i].value() : entry.calibration;
+            const auto &encoded = label && i == renamed ? name : entry.name;
+            if (!calibration.valid() && encoded.empty()) continue;
             text += "[configurable-" + std::to_string(i + 1) + "]\n";
-            if (!entry.name.empty()) text += "name = " + entry.name + '\n';
+            if (!encoded.empty()) text += "name = " + encoded + '\n';
             if (calibration.valid()) {
                 text += "heel = " + std::to_string(calibration.heel) + '\n';
                 text += "toe = " + std::to_string(calibration.toe) + '\n';
@@ -71,8 +92,14 @@ public:
             return false;
         }
         if (existing) filesystem_.remove(previous);
-        for (unsigned i = 0; i < entries_.size(); ++i)
-            if (captures[i].toe_ready) entries_[i].calibration = captures[i].value();
+        if (captures)
+            for (unsigned i = 0; i < entries_.size(); ++i)
+                if ((*captures)[i].toe_ready) entries_[i].calibration = (*captures)[i].value();
+        if (label) {
+            entries_[renamed].name.swap(name);
+            entries_[renamed].label.swap(decoded);
+        }
+        settle_ms_ = settle_ms;
         return true;
     }
 
@@ -130,7 +157,7 @@ private:
                 unsigned raw;
                 if (!number(trim(value.substr(0, value.find('#'))), raw)) return false;
                 if (key == "bits" && !have_bits && (raw == 10 || raw == 12)) { bits = raw; have_bits = true; }
-                else if (key == "settle_ms" && !have_delay && raw && raw <= 60000) { delay = raw; have_delay = true; }
+                else if (key == "settle_ms" && !have_delay && raw && raw <= maximum_settle_ms) { delay = raw; have_delay = true; }
                 else return false;
                 continue;
             }

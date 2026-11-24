@@ -46,6 +46,12 @@ loads it at startup. All setups share it. The raw files in a pedal backup
 include this file. To restore it from a backup, copy it back to the same location
 on the SD card while the pedal is off.
 
+Open **Settings → Pedal → Calibrate**, then press D for **Options**. Choose a
+jack to edit its name, or choose **Settling time** to set how long the toe reading
+must remain steady to complete capture. The default is 2,000 ms. A/B adjust
+the delay and E changes the step. Review and save the change to apply it to
+all setups. Saving either option preserves the measured endpoints.
+
 ```toml
 bits = 12
 settle_ms = 2000
@@ -59,7 +65,7 @@ toe = 3627
 Each jack can have a single quoted `name`, which is optional and preserved
 when recalibrating. The file accepts single-line entries and decimal endpoint
 values from 0 to 4095. A file without `bits` uses the previous 10-bit scale.
-Edit it while the pedal is off. When there is no TOML
+Edit the file directly while the pedal is off. When there is no TOML
 file, the firmware can still read older per-jack calibration records. The next
 successful calibration save carries those measurements into the TOML file.
 

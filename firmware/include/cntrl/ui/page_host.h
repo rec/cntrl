@@ -630,7 +630,10 @@ public:
             && uint32_t(now - calibration_view_at_) >= 100) {
             calibration_view_at_ = now;
             Prompt prompt(platform_);
-            if (!pedals->calibrating()) prompt.add(ControlRole::confirm, i18n::text(i18n::Message::calibrate));
+            if (!pedals->calibrating()) {
+                prompt.add(ControlRole::confirm, i18n::text(i18n::Message::calibrate));
+                if (display_.count() < 3) prompt.add(ControlRole::previous_section, "Options", ", ");
+            }
             else if (pedals->captured()) prompt.add(ControlRole::confirm, "Review");
             prompt.add(ControlRole::back, i18n::text(i18n::Message::back), ", ");
             const unsigned screen = display_.count() < 3 ? 0 : display_.count() / 2;

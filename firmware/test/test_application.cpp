@@ -311,6 +311,8 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         cntrl::BootFirmware saved_boot = cntrl::BootFirmware::unavailable;
         bool boot_save_blocked = false;
         bool language_enabled = false;
+        cntrl::ExpressionPedals *calibration = nullptr;
+        cntrl::ExpressionPedals *expression_calibration() override { return calibration; }
         const char *saved_language = "en";
         const char *pending_language = nullptr;
         bool request_language(const char *tag) override {
@@ -553,6 +555,51 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         assert(!std::strcmp(documents.name_and_contact(), "Ané\nb\n@example.org"));
         button(5); button(5); app.finish_tool();
         assert(!app.setups.open() && hardware.sent == before_tools);
+    }
+    {
+        assert(settings_disk.make_directory("/cntrl"));
+        {
+            std::ofstream file(settings_disk.path(cntrl::CalibrationFile::path));
+            file << "bits = 12\nsettle_ms = 80\n[configurable-2]\nname = 'Volume'\nheel = 600\ntoe = 3700\n";
+            assert(file);
+        }
+        cntrl::ExpressionPedals calibration(2, settings_disk, 1, 1);
+        assert(calibration.load_calibrations());
+        hardware.calibration = &calibration;
+        assert(app.open_tool(cntrl::PageLayout::settings, platform));
+        app.setups.poll(0);
+        app.controls_locked = false;
+        const auto button = [&](unsigned control) { click(control, 3515); };
+        button(0); button(2); // Pedal.
+        button(0); button(2); // Calibrate.
+        button(3); // Options.
+        assert(hardware.settings_text[1] == "Jack 1 name");
+        button(1); button(2); // Jack 2 name.
+        assert(app.editing_text());
+        app.text_key('"', 3515); app.text_key('\\', 3515); app.text_key('\n', 3515);
+        assert(hardware.settings_text[2] == "Keep editing");
+        button(2);
+        assert(hardware.settings_text[1] == "Jack 2 name");
+        button(5); button(1); button(2); // Save.
+        assert(!std::strcmp(calibration.name(1), "\"\\Volume"));
+        button(1); button(2); // Settling time.
+        assert(hardware.settings_text[2] == "80 ms");
+        button(1); button(2); button(0); button(2); // Discard a draft.
+        assert(calibration.settle_ms() == 80);
+        button(2); button(1); button(2); button(1);
+        settings_disk.blocked = true;
+        button(2);
+        assert(calibration.settle_ms() == 80 && hardware.settings_text[2] == "Save");
+        settings_disk.blocked = false;
+        button(2);
+        assert(calibration.settle_ms() == 180);
+        button(5); button(5); button(5); button(5); app.finish_tool();
+        assert(!app.setups.open() && hardware.sent == before_tools);
+        cntrl::ExpressionPedals restored(2, settings_disk, 1, 1);
+        assert(restored.load_calibrations() && restored.settle_ms() == 180);
+        assert(!std::strcmp(restored.name(1), "\"\\Volume"));
+        assert(restored.calibration(1).heel == 600 && restored.calibration(1).toe == 3700);
+        hardware.calibration = nullptr;
     }
     {
         const unsigned setup_brightness = documents.document().brightness();

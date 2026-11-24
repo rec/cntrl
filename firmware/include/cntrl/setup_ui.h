@@ -26,8 +26,9 @@ public:
     }
     void resume_settings() { mode_ = Mode::current; locked_ = true; render(); }
     void refresh() { if (open()) render(); }
-    bool editing_contact() const {
-        return mode_ == Mode::contact || (mode_ == Mode::decision && device_editor_ == Mode::contact);
+    bool editing_text() const {
+        return mode_ == Mode::contact || (mode_ == Mode::decision
+            && (device_editor_ == Mode::contact || device_editor_ == Mode::calibration_name));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_enter_contact)
@@ -44,15 +45,16 @@ public:
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_contact_key)
+    CNTRL_FLASH_ROUTINE(setup_ui_text_key)
 #endif
-    void contact_key(uint8_t key, uint32_t now) {
-        if (locked_ || !editing_contact()) return;
+    void text_key(uint8_t key, uint32_t now) {
+        if (locked_ || !editing_text()) return;
         if (key == 27) { button(5, true, now); return; }
         if (mode_ == Mode::decision) {
             if (key == '\n') button(2, true, now);
             return;
         }
+        if (key == '\n' && device_editor_ == Mode::calibration_name) { button(5, true, now); return; }
         char *position = contact_draft_ + contact_cursor_;
         if (key == '\b') {
             if (!contact_cursor_) return;
@@ -110,12 +112,13 @@ public:
             render();
             return true;
         }
-        const bool changed = device_editor_ == Mode::contact ? std::strcmp(contact_draft_, docs_.name_and_contact()) != 0
+        const bool changed = device_editor_ == Mode::contact || device_editor_ == Mode::calibration_name ? text_changed()
             : device_editor_ == Mode::startup_set ? std::strcmp(startup_draft_, docs_.startup_set()) != 0
             : device_editor_ == Mode::preference_value ? preference_changed()
             : device_editor_ == Mode::boot_firmware ? boot_draft_ != hardware_.boot_firmware()
             : device_editor_ == Mode::language ? language_changed()
             : device_editor_ == Mode::calibration ? hardware_.expression_calibration()->captured()
+            : device_editor_ == Mode::calibration_delay ? calibration_delay_ != hardware_.expression_calibration()->settle_ms()
             : docs_.dirty() && (changed_fields_ || setup_changes_);
         if (!changed) {
             if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->cancel();
@@ -241,10 +244,17 @@ public:
                 mode_ = Mode::decision; item_ = 2;
             }
             else if (button == 5) leave_device_editor();
+            else if (button == 3 && !pedals.calibrating()) {
+                calibration_choice_ = 0;
+                device_editor_ = Mode::closed;
+                mode_ = Mode::calibration_options;
+            }
             else if (button == 2 && !pedals.calibrating()) {
                 if (docs_.busy() || hardware_.configuration_locked()) hardware_.error(ui::i18n::text(ui::i18n::Message::operation_failed));
                 else pedals.calibrate();
             }
+        } else if (mode_ == Mode::calibration_options || mode_ == Mode::calibration_delay) {
+            calibration_button(button);
         } else if (mode_ == Mode::language) {
             if (button < 2) {
                 const unsigned count = hardware_.language_count();
@@ -372,7 +382,8 @@ public:
             else if (button == 2 || button == 5) mode_ = Mode::field;
         } else if (mode_ == Mode::decision && device_editor_ != Mode::closed) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
-            else if (button == 5 || (button == 2 && item_ == 2)) keep_editing(device_editor_);
+            else if (button == 5 || (button == 2 && item_ == 2))
+                keep_editing(device_editor_ == Mode::calibration_name ? Mode::contact : device_editor_);
             else if (button == 2) {
                 if (!item_ && device_editor_ == Mode::language) {
                     if (hardware_.request_language(language_draft_)) { mode_ = Mode::language_saving; render(); }
@@ -403,7 +414,8 @@ public:
     }
 private:
     enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, calibration, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
-                      cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value };
+                      cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value,
+                      calibration_options, calibration_delay, calibration_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -436,6 +448,7 @@ private:
     char contact_draft_[sizeof(GlobalSettings::Values::name_and_contact)] = {};
     unsigned contact_cursor_ = 0;
     bool contact_shortcut_ = false;
+    unsigned calibration_choice_ = 0, calibration_delay_ = 0;
     bool has_performance_shortcut() const { return current_patch_ != UINT16_MAX || current_set_[0]; }
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
@@ -539,6 +552,9 @@ private:
     void leave_device_editor() {
         if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->cancel();
         if (return_from_shortcut_ || contact_shortcut_) { close(); return; }
+        if (device_editor_ == Mode::calibration_name || device_editor_ == Mode::calibration_delay) {
+            mode_ = Mode::calibration_options; device_editor_ = Mode::closed; return;
+        }
         if (device_editor_ == Mode::preference_value) {
             mode_ = Mode::preferences; device_editor_ = Mode::closed; return;
         }
@@ -562,6 +578,13 @@ private:
         if (device_editor_ == Mode::calibration) {
             auto &pedals = *hardware_.expression_calibration();
             return !docs_.busy() && !hardware_.configuration_locked() && pedals.captured() && pedals.calibrate();
+        }
+        if (device_editor_ == Mode::calibration_name || device_editor_ == Mode::calibration_delay) {
+            auto &pedals = *hardware_.expression_calibration();
+            const bool naming = device_editor_ == Mode::calibration_name;
+            return !docs_.busy() && !hardware_.configuration_locked()
+                && pedals.save_calibration_settings(naming ? pedals.settle_ms() : calibration_delay_,
+                    calibration_choice_, naming ? contact_draft_ : nullptr);
         }
         if (device_editor_ == Mode::boot_firmware) {
             if (const char *error = hardware_.save_boot_firmware(boot_draft_)) {
@@ -763,6 +786,46 @@ private:
         resume_editor_ = Mode::closed;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_calibration_button)
+#endif
+    void calibration_button(unsigned button) {
+        const auto &pedals = *hardware_.expression_calibration();
+        if (mode_ == Mode::calibration_options) {
+            const unsigned count = pedals.count() + 1;
+            if (button < 2) calibration_choice_ = (calibration_choice_ + (button ? 1 : count - 1)) % count;
+            else if (button == 5) mode_ = device_editor_ = Mode::calibration;
+            else if (button == 2 && calibration_choice_ == pedals.count()) {
+                calibration_delay_ = pedals.settle_ms();
+                preference_step_ = 100;
+                mode_ = device_editor_ = Mode::calibration_delay;
+            } else if (button == 2) {
+                const char *label = pedals.name(calibration_choice_);
+                if (std::strlen(label) >= sizeof(contact_draft_)) {
+                    hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded));
+                    return;
+                }
+                std::strcpy(contact_draft_, label);
+                contact_cursor_ = 0;
+                device_editor_ = Mode::calibration_name;
+                mode_ = Mode::contact;
+            }
+        } else if (button < 2) {
+            const int step = int(preference_step_);
+            calibration_delay_ = unsigned(std::clamp(int(calibration_delay_) + (button ? step : -step),
+                1, int(CalibrationFile::maximum_settle_ms)));
+        } else if (button == 4) {
+            preference_step_ = preference_step_ == 1000 ? 1 : preference_step_ * 10;
+        } else if (button == 2 || button == 5) {
+            if (calibration_delay_ != pedals.settle_ms()) { mode_ = Mode::decision; item_ = 2; }
+            else leave_device_editor();
+        }
+    }
+    bool text_changed() const {
+        const char *original = device_editor_ == Mode::calibration_name ? hardware_.expression_calibration()->name(calibration_choice_)
+            : docs_.name_and_contact();
+        return std::strcmp(contact_draft_, original) != 0;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_contact_button)
 #endif
     void contact_button(unsigned button) {
@@ -771,8 +834,9 @@ private:
         uint32_t code = 0;
         ui::utf8::next(next, code);
         const unsigned length = unsigned(std::strlen(contact_draft_));
+        const bool naming = device_editor_ == Mode::calibration_name;
         if (mode_ == Mode::contact_action) {
-            if (button < 2) item_ = (item_ + (button ? 1 : 2)) % 3;
+            if (button < 2) item_ = naming ? (item_ == 0 ? 2 : 0) : (item_ + (button ? 1 : 2)) % 3;
             else if (button == 5) mode_ = Mode::contact;
             else if (button == 2) {
                 if (item_ == 2) std::memmove(position, next, std::strlen(next) + 1);
@@ -785,7 +849,7 @@ private:
             return;
         }
         if (button == 5) {
-            if (std::strcmp(contact_draft_, docs_.name_and_contact())) { mode_ = Mode::decision; item_ = contact_shortcut_ ? 0 : 2; }
+            if (text_changed()) { mode_ = Mode::decision; item_ = contact_shortcut_ ? 0 : 2; }
             else leave_device_editor();
         } else if (button == 2) { mode_ = Mode::contact_action; item_ = 0; }
         else if (button == 3 && contact_cursor_) {
@@ -921,7 +985,7 @@ private:
         using Role = ControlRole;
         const char *title = ui::i18n::text(ui::i18n::Message::setups), *value = browsing_ ? ui::i18n::text(ui::i18n::Message::working) : name_[0] ? name_ : ui::i18n::text(ui::i18n::Message::no_setups);
         const char *value_label = ui::i18n::text(ui::i18n::Message::action);
-        char number[64] = {};
+        char number[64] = {}, calibration_title[32] = {};
         const bool adding_cycle = mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
             || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
         const bool preference_view = mode_ == Mode::preferences || mode_ == Mode::preference_value;
@@ -968,6 +1032,21 @@ private:
             value = language_name();
         }
         else if (mode_ == Mode::calibration) title = ui::i18n::text(ui::i18n::Message::calibrate);
+        else if (mode_ == Mode::calibration_options || mode_ == Mode::calibration_delay) {
+            const auto &pedals = *hardware_.expression_calibration();
+            if (calibration_choice_ < pedals.count()) {
+                std::snprintf(calibration_title, sizeof(calibration_title), "Jack %u name", calibration_choice_ + 1);
+                title = calibration_title;
+                value = pedals.name(calibration_choice_);
+                if (!*value) value = ui::i18n::text(ui::i18n::Message::none);
+            } else {
+                title = "Settling time";
+                std::snprintf(number, sizeof(number), "%u ms",
+                    mode_ == Mode::calibration_delay ? calibration_delay_ : pedals.settle_ms());
+                value = number;
+            }
+            value_label = ui::i18n::text(ui::i18n::Message::pedal);
+        }
         else if (preference_view) {
             const auto &field = preference();
             const auto *values = docs_.global_preferences();
@@ -989,6 +1068,10 @@ private:
         }
         else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
             title = ui::i18n::text(ui::i18n::Message::owner_contact);
+            if (device_editor_ == Mode::calibration_name) {
+                std::snprintf(calibration_title, sizeof(calibration_title), "Jack %u name", calibration_choice_ + 1);
+                title = calibration_title;
+            }
             const char *selected = contact_draft_ + contact_cursor_;
             const char *start = selected, *next = selected;
             uint32_t code = 0;
@@ -1176,6 +1259,13 @@ private:
             if (mode_ == Mode::calibration) {
                 views[0].lines[0].text[0] = 0;
                 views[0].lines[1].text[0] = 0;
+                if (!hardware_.expression_calibration()->calibrating())
+                    ui::copy_caption(views[0].lines[0], prompt.clear().add(Role::previous_section, "Options").text());
+            }
+            if (mode_ == Mode::calibration_delay) {
+                ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
+                char step[24]; std::snprintf(step, sizeof(step), "Step %lu ms", (unsigned long)preference_step_);
+                ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
             }
             if (mode_ == Mode::contact) {
                 ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
@@ -1246,6 +1336,13 @@ private:
                 }
                 else if (device_editor_ == Mode::calibration)
                     ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::calibrate));
+                else if (device_editor_ == Mode::calibration_name) {
+                    std::snprintf(views[2].lines[0].text, 64, "Jack %u name", calibration_choice_ + 1);
+                    ui::copy_caption(views[2].lines[2], contact_draft_[0] ? contact_draft_ : ui::i18n::text(ui::i18n::Message::none));
+                } else if (device_editor_ == Mode::calibration_delay) {
+                    ui::copy_caption(views[2].lines[0], "Settling time");
+                    std::snprintf(views[2].lines[2].text, 64, "%u ms", calibration_delay_);
+                }
                 else if (device_editor_ == Mode::preference_value) {
                     ui::copy_caption(views[2].lines[0], preference().label);
                     preference_text(views[2].lines[2].text, sizeof(views[2].lines[2].text), preference_value_);

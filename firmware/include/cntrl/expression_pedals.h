@@ -57,7 +57,7 @@ public:
             calibrating_ = true;
             return true;
         }
-        if (captured() && (!calibration_ready_ || !calibrations_.save(captures_))) return false;
+        if (captured() && (!calibration_ready_ || !calibrations_.save(&captures_, calibrations_.settle_ms()))) return false;
         cancel();
         return true;
     }
@@ -108,6 +108,10 @@ public:
     const CalibrationCapture &capture(unsigned jack) const { return captures_[jack]; }
     ExpressionCalibration calibration(unsigned jack) const { return calibrations_.calibration(jack); }
     const char *name(unsigned jack) const { return calibrations_.name(jack); }
+    unsigned settle_ms() const { return calibrations_.settle_ms(); }
+    bool save_calibration_settings(unsigned settle_ms, unsigned jack, const char *label) {
+        return calibration_ready_ && !calibrating_ && calibrations_.save(nullptr, settle_ms, jack, label);
+    }
 
 private:
     struct LegacyRecord {
