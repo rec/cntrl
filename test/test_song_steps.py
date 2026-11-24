@@ -90,6 +90,15 @@ def test_song_step_navigation_and_boundaries(
     assert saved['pickup'] is True
     assert saved['pickup_pairing_ms'] == 3
     assert saved['loop_stop_reset_controls'] is True
+    (neutral,) = saved['loop_stop_neutral_values']
+    assert neutral == {
+        'output': 'din',
+        'channel': 1,
+        'type': 'control-change',
+        'controller': 1,
+        'value': 2,
+        'resolution': 7,
+    }
     saved_time = saved['page_settings']
     assert saved_time['clock_outputs'] == ['din']
     assert saved_time['clock_timeout'] == 0.26

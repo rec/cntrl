@@ -788,6 +788,9 @@ public:
         if (!std::memcmp(end, "CSTR", 4)) end += u32(end + 4);
         return end;
     }
+    const uint8_t *loop_stop_section() const {
+        return pickup_ ? data_ + pickup_ + 9 + nodes() : pickup_section();
+    }
     const uint8_t *arpeggiator_section() const {
         const uint8_t *end = pickup_section();
         if (!std::memcmp(end, "CPUP", 4)) end += 9 + u16(end + 4);

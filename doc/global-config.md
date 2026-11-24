@@ -177,6 +177,11 @@ inherit the setup policy. **Pickup pairing (ms)** changes the pairing window.
 **Reset controls on loop stop** enables the setup's reset policy and preserves
 any authored neutral values.
 
+Open **Reset controls on loop stop** and press E for **Neutral values**. Each
+entry specifies its output, control type, channel, address, and value. Select
+**Add neutral value** to create an entry, or select an existing entry to edit
+or remove it. Accept the entry into the draft, then save the setup to apply it.
+
 Select **Instruments** from the current setup, from the current patch's MIDI
 channel field, or from a saved setup's field list. The instrument editor shows
 the current channel and output. Saving applies the new route to instrument

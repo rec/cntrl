@@ -369,6 +369,15 @@ int main(int argc, char **argv) {
         tap(2); tap(1); tap(2);
         tap(1); tap(1);
         assert(!std::strcmp(board.panes[1].lines[1].text, "Reset controls on loop stop"));
+        tap(2); tap(4);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Add neutral value"));
+        tap(2); tap(0); tap(2); tap(1); tap(2); tap(5);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "CC 7-bit 1 Ch 1 = 1"));
+        tap(0); tap(2); tap(5); // Duplicate address.
+        assert(!std::strcmp(board.panes[2].lines[2].text, "Invalid or overlapping value"));
+        tap(3); tap(0); tap(4); // Cancel the duplicate and remove the first entry.
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Add neutral value"));
+        tap(2); tap(0); tap(2); tap(1); tap(1); tap(2); tap(5); tap(5);
         tap(2); tap(1); tap(2);
         assert(!documents.document().pickup() && !documents.document().loop_stop_reset_controls());
         save("Save and reload setup");
@@ -404,7 +413,7 @@ int main(int argc, char **argv) {
         const auto &document = documents.document();
         assert(!document.frame_buffers() && document.page_ram2() == budget);
         assert(!(document.explicit_settings() & (1u << 7)));
-        assert(document.length() == before_pickup + 9 + document.nodes() + 7);
+        assert(document.length() == before_pickup + 9 + document.nodes() + 14);
         assert(document.pickup() && document.pickup_pairing_ms() == 3 && document.loop_stop_reset_controls());
         assert((document.explicit_settings() & (uint64_t(1) << 33)) && !preferences.values().values[10]);
         std::ofstream exported(argv[4], std::ios::binary);
@@ -421,6 +430,10 @@ int main(int argc, char **argv) {
         assert(documents.edit_setup_preference(10, 0, false));
         assert(documents.edit_setup_preference(11, 2, false));
         assert(documents.edit_setup_preference(33, 0, false));
+        const auto *old = documents.document().loop_stop_settings();
+        const cntrl::midi::Parameter additional{cntrl::midi::Parameter::nrpn14, 3, 1000, 12345};
+        assert(documents.edit_loop_neutral(1, old[7], &additional));
+        assert(documents.edit_loop_neutral(1, 0, nullptr));
         assert(documents.edit_save(board.now));
         while (documents.busy()) sample(0);
         const auto &document = documents.document();

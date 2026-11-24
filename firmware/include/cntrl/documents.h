@@ -238,6 +238,32 @@ public:
         return edit_document(draft) && write_setup_preference(draft, field, value, inherit);
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_loop_neutral)
+#endif
+    bool edit_loop_neutral(unsigned index, unsigned output, const midi::Parameter *parameter) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)
+            || (parameter && (output >= 16 || !parameter->valid()))) return false;
+        const auto *record = draft.loop_stop_settings();
+        const unsigned count = record ? u16(record + 5) : 0;
+        if (index > count || (index == count && (!parameter || count == UINT16_MAX))) return false;
+        const bool append = index == count;
+        const unsigned section = unsigned(draft.loop_stop_section() - draft.data());
+        const unsigned row = section + 7 + 7 * index;
+        if (!splice_setup(draft, record ? row : section, append ? 0 : 7, parameter ? (record ? 7 : 14) : 0)) return false;
+        auto *bytes = scratch_.data;
+        if (!record) std::memcpy(bytes + section, "CLRS", 4);
+        binary::write16(bytes + section + 5, uint16_t(count + unsigned(append) - unsigned(!parameter)));
+        if (parameter) {
+            bytes[row] = uint8_t(output);
+            bytes[row + 1] = parameter->kind;
+            bytes[row + 2] = parameter->channel;
+            binary::write16(bytes + row + 3, parameter->address);
+            binary::write16(bytes + row + 5, uint16_t(parameter->value));
+        }
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_instrument)
 #endif
     bool edit_instrument(unsigned index, const char *output, unsigned channel) {
@@ -435,6 +461,45 @@ public:
     bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_splice_setup)
+#endif
+    bool splice_setup(const Document &draft, unsigned position, unsigned removed, unsigned inserted) {
+        const bool resize = removed != inserted;
+        const unsigned size = draft.length() - removed + inserted;
+        if ((resize && draft.has_opaque_metadata()) || !allocate(scratch_, size)) return false;
+        auto *bytes = scratch_.data;
+        std::memcpy(bytes, draft.data(), position);
+        if (inserted) std::memset(bytes + position, 0, inserted);
+        std::memcpy(bytes + position + inserted, draft.data() + position + removed, draft.length() - position - removed);
+        if (!resize) return true;
+        auto *core = bytes + draft.core_offset();
+        const unsigned length = draft.core_length() - removed + inserted;
+        put32(core + 8, length);
+        if (draft.core_offset()) {
+            put32(core - 4, length);
+            put32(bytes + 12, size - binary::header_size);
+        }
+        const int64_t extra = int64_t((size + 7) & ~7u) - ((draft.length() + 7) & ~7u);
+        int64_t budget = draft.page_ram2();
+        const auto layout = draft.page_layout();
+        for (unsigned i = 0; i < layout.pages(); ++i)
+            if (layout.page(i)[0] == PageLayout::banked) budget += extra;
+        if (budget < 0 || budget + hardware_.memory_runtime() > hardware_.memory_capacity()) return false;
+        put32(bytes + draft.metadata() + scrolling_offset + 8, uint32_t(budget));
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_accept_setup_draft)
+#endif
+    bool accept_setup_draft() {
+        binary::seal_setup(scratch_.data, scratch_.size);
+        Document candidate;
+        if (!candidate.load(scratch_.data, scratch_.size, hardware_, nullptr)
+            || !candidate.load(scratch_.data, scratch_.size, hardware_, global_values())) return false;
+        staging_.swap(scratch_);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_write_instrument)
 #endif
     bool write_instrument(const Document &draft, unsigned index, const char *output, unsigned channel) {
@@ -505,19 +570,14 @@ private:
         if (!inherit) {
             if (pickup || loop_reset) {
                 const auto *existing = pickup ? draft.pickup_record() : draft.loop_stop_settings();
-                const auto *position = existing ? existing : draft.pickup_section();
-                if (!existing && loop_reset && draft.pickup_record())
-                    position += 9 + draft.nodes();
+                const auto *position = existing ? existing : pickup ? draft.pickup_section() : draft.loop_stop_section();
                 record_at = unsigned(position - draft.data());
                 if (!existing) growth = pickup ? 9 + draft.nodes() : 7;
             } else if (clock_word && !(flags & 0x20)) growth = clock_section_size;
         }
-        if ((growth && draft.has_opaque_metadata()) || !allocate(scratch_, draft.length() + growth)) return false;
+        if (!splice_setup(draft, record_at, 0, growth)) return false;
         auto *bytes = scratch_.data;
         if (growth) {
-            std::memcpy(bytes, draft.data(), record_at);
-            std::memcpy(bytes + record_at + growth, draft.data() + record_at, draft.length() - record_at);
-            std::memset(bytes + record_at, 0, growth);
             if (pickup) {
                 std::memcpy(bytes + record_at, "CPUP", 4);
                 binary::write16(bytes + record_at + 4, uint16_t(draft.nodes()));
@@ -527,22 +587,7 @@ private:
                 bytes[draft.core_offset() + 19] |= 0x20;
                 binary::write16(bytes + clock_at + 2 * (PageSettings::slot1 - PageSettings::clock_outputs), 120);
             }
-            auto *core = bytes + draft.core_offset();
-            const unsigned length = draft.core_length() + growth;
-            put32(core + 8, length);
-            if (draft.core_offset()) {
-                put32(core - 4, length);
-                put32(bytes + 12, scratch_.size - binary::header_size);
-            }
-            const auto layout = draft.page_layout();
-            const unsigned extra = ((scratch_.size + 7) & ~7u) - ((draft.length() + 7) & ~7u);
-            unsigned budget = draft.page_ram2();
-            for (unsigned i = 0; i < layout.pages(); ++i)
-                if (layout.page(i)[0] == PageLayout::banked) budget += extra;
-            if (budget > hardware_.memory_capacity() || hardware_.memory_runtime() > hardware_.memory_capacity() - budget)
-                return false;
-            put32(bytes + draft.metadata() + scrolling_offset + 8, budget);
-        } else std::memcpy(bytes, draft.data(), draft.length());
+        }
         if (!inherit) {
             auto *core = bytes + draft.core_offset();
             auto *metadata = bytes + draft.metadata();
@@ -588,13 +633,7 @@ private:
             const unsigned offset = draft.global_mask_offset() + growth;
             for (unsigned i = 0; i < 8; ++i) bytes[offset + i] = uint8_t(mask >> (8 * i));
         }
-        binary::seal_setup(bytes, scratch_.size);
-        Document candidate;
-        // Check the saved fallback independently from today's pedal values.
-        if (!candidate.load(bytes, scratch_.size, hardware_, nullptr)
-            || !candidate.load(bytes, scratch_.size, hardware_, global_values())) return false;
-        staging_.swap(scratch_);
-        return true;
+        return accept_setup_draft();
     }
     enum class BrowsePhase { idle, scan, header, body, trailer, activate };
     struct Browse {

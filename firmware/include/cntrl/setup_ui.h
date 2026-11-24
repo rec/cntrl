@@ -108,6 +108,10 @@ public:
     bool return_to_performance() {
         if (!settings_ || !open() || docs_.busy() || browsing_ || mode_ == Mode::language_saving) return false;
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
+        if ((mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value) && !stage_neutral()) {
+            render();
+            return true;
+        }
         if (setup_preferences_ && mode_ == Mode::preference_value && !stage_setup_preference()) {
             render();
             return true;
@@ -275,6 +279,8 @@ public:
             }
         } else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
             preference_button(button);
+        } else if (mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value) {
+            neutral_button(button);
         } else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
@@ -415,7 +421,7 @@ public:
 private:
     enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, calibration, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value,
-                      calibration_options, calibration_delay, calibration_name };
+                      calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -436,6 +442,12 @@ private:
     bool preference_known_ = false;
     Mode setup_preference_return_ = Mode::closed;
     uint64_t setup_changes_ = 0;
+    midi::Parameter neutral_{};
+    unsigned neutral_index_ = 0, neutral_output_ = 0, neutral_field_ = 0;
+    bool neutral_changed_ = false, neutral_rejected_ = false;
+    static constexpr uint8_t neutral_kinds[] = {midi::Parameter::cc7, midi::Parameter::cc14,
+        midi::Parameter::nrpn7, midi::Parameter::nrpn14, midi::Parameter::rpn14};
+    static constexpr const char *neutral_types[] = {"CC 7-bit", "CC 14-bit", "NRPN 7-bit", "NRPN 14-bit", "RPN 14-bit"};
     uint32_t preference_initial_ = 0;
     bool setup_preferences_ = false, preference_initial_known_ = false, preference_rejected_ = false;
     bool preference_can_inherit_ = false;
@@ -641,6 +653,88 @@ private:
         preference_initial_known_ = preference_known_;
         return true;
     }
+    bool stage_neutral() {
+        if (!neutral_changed_) return true;
+        neutral_rejected_ = !docs_.edit_loop_neutral(neutral_index_, neutral_output_, &neutral_);
+        if (neutral_rejected_) return false;
+        setup_changes_ |= uint64_t(1) << 33;
+        neutral_changed_ = false;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_neutral_button)
+#endif
+    void neutral_button(unsigned button) {
+        Document draft;
+        if (!docs_.edit_document(draft)) return;
+        const auto *record = draft.loop_stop_settings();
+        const unsigned count = record ? u16(record + 5) : 0;
+        const auto outputs = hardware_.midi_outputs();
+        const auto browse_output = [&](unsigned current, bool forward) {
+            Document fallback = draft;
+            fallback.bind_globals(nullptr);
+            for (unsigned i = 1; i <= 16; ++i) {
+                const unsigned route = (current + (forward ? i : 16 - i)) % 16;
+                const auto *output = outputs.route(route);
+                if (output && draft.has_output(hardware_, output->name) && fallback.has_output(hardware_, output->name))
+                    return route;
+            }
+            return 16u;
+        };
+        neutral_rejected_ = false;
+        if (mode_ == Mode::neutrals) {
+            if (button < 2) neutral_index_ = (neutral_index_ + (button ? 1 : count)) % (count + 1);
+            else if (button == 5) mode_ = Mode::preferences;
+            else if (button == 4 && neutral_index_ < count) {
+                if (docs_.edit_loop_neutral(neutral_index_, 0, nullptr)) setup_changes_ |= uint64_t(1) << 33;
+                else neutral_rejected_ = true;
+            } else if (button == 2) {
+                neutral_changed_ = neutral_index_ == count;
+                if (neutral_changed_) {
+                    neutral_output_ = browse_output(15, true);
+                    if (neutral_output_ == 16) { neutral_rejected_ = true; return; }
+                    neutral_ = {midi::Parameter::cc7, 0, 1, 0};
+                } else {
+                    const auto *row = record + 7 + 7 * neutral_index_;
+                    neutral_output_ = row[0];
+                    neutral_ = {row[1], row[2], uint16_t(u16(row + 3)), int(u16(row + 5))};
+                }
+                neutral_field_ = 0;
+                mode_ = Mode::neutral_fields;
+            }
+        } else if (mode_ == Mode::neutral_fields) {
+            if (button < 2) neutral_field_ = (neutral_field_ + (button ? 1 : 4)) % 5;
+            else if (button == 2) { preference_step_ = 1; mode_ = Mode::neutral_value; }
+            else if (button == 3 || (button == 5 && stage_neutral())) mode_ = Mode::neutrals;
+        } else if (button == 2 || button == 5) mode_ = Mode::neutral_fields;
+        else if (button == 4 && neutral_field_ >= 3)
+            preference_step_ = preference_step_ < 1000 ? preference_step_ * 10 : 1;
+        else if (button < 2) {
+            const int direction = button ? 1 : -1;
+            const int delta = direction * int(preference_step_);
+            if (neutral_field_ == 0) {
+                const unsigned route = browse_output(neutral_output_, button == 1);
+                if (route == 16) { neutral_rejected_ = true; return; }
+                neutral_output_ = route;
+            } else if (neutral_field_ == 1) {
+                unsigned i = 0;
+                while (neutral_kinds[i] != neutral_.kind) ++i;
+                neutral_.kind = neutral_kinds[(i + (button ? 1 : 4)) % 5];
+                neutral_.address = 1;
+                neutral_.value = std::min(int(neutral_.value), neutral_.maximum());
+            } else if (neutral_field_ == 2) neutral_.channel = uint8_t(std::clamp(int(neutral_.channel) + direction, 0, 15));
+            else if (neutral_field_ == 4) neutral_.value = std::clamp(int(neutral_.value) + delta, 0, neutral_.maximum());
+            else if (neutral_.kind != midi::Parameter::rpn14) {
+                const int maximum = neutral_.kind == midi::Parameter::cc7 ? 119 : neutral_.kind == midi::Parameter::cc14 ? 31 : 16383;
+                auto proposed = neutral_;
+                for (int n = std::clamp(int(neutral_.address) + delta, 0, maximum); n >= 0 && n <= maximum; n += direction) {
+                    proposed.address = uint16_t(n);
+                    if (proposed.valid()) { neutral_.address = proposed.address; break; }
+                }
+            }
+            neutral_changed_ = true;
+        }
+    }
     void browse_preference(bool backward, bool group) {
         const unsigned count = setup_preferences_ ? ui::setup_preferences : ui::pedal_preferences;
         const char *original_group = preference().group;
@@ -731,6 +825,12 @@ private:
                 preference_component_ = 0;
                 if (!preference_output()) browse_preference_output(false);
                 mode_ = Mode::preference_value;
+            }
+        } else if (button == 4 && setup_preferences_ && field.field == 33) {
+            if (stage_setup_preference()) {
+                neutral_index_ = 0;
+                neutral_rejected_ = false;
+                mode_ = Mode::neutrals;
             }
         } else if (button == 3) {
             if (field.kind == ui::PreferenceKind::color) preference_component_ = (preference_component_ + 1) % 3;
@@ -978,6 +1078,63 @@ private:
         if (docs_.browse(name_, backward)) browsing_ = true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render_neutral)
+#endif
+    void render_neutral(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
+        using Role = ControlRole;
+        const auto *record = draft.loop_stop_settings();
+        const unsigned count = record ? u16(record + 5) : 0;
+        auto &center = views[1].lines;
+        auto &right = views[2].lines;
+        const auto outputs = hardware_.midi_outputs();
+        const char *feedback = neutral_rejected_ ? "Invalid or overlapping value"
+            : neutral_changed_ && mode_ != Mode::neutrals ? "Changed" : "";
+        ui::copy_caption(right[2], feedback);
+        const bool list = mode_ == Mode::neutrals, adjusting = mode_ == Mode::neutral_value;
+        if (list && neutral_index_ == count) {
+            ui::copy_caption(center[1], "Loop-stop neutral values");
+            ui::copy_caption(right[1], "Add neutral value");
+            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Add")
+                .add(Role::back, "Back", ", ").text());
+            return;
+        }
+        const auto *row = list ? record + 7 + 7 * neutral_index_ : nullptr;
+        const auto *output = outputs.route(row ? row[0] : neutral_output_);
+        const char *output_name = output ? output->label : "Unavailable";
+        const unsigned kind = row ? row[1] : neutral_.kind;
+        unsigned kind_index = 0;
+        while (neutral_kinds[kind_index] != kind) ++kind_index;
+        if (list) {
+            ui::copy_caption(center[1], "Loop-stop neutral values");
+            std::snprintf(center[2].text, 64, "%u/%u", neutral_index_ + 1, count);
+            ui::copy_caption(right[0], output_name);
+            std::snprintf(right[1].text, 64, "%s %u Ch %u = %u", neutral_types[kind_index],
+                u16(row + 3), row[2] + 1, u16(row + 5));
+            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Edit")
+                .add(Role::back, "Back", ", ").text());
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, "Remove").text());
+            return;
+        }
+        const char *fields[] = {"Output", "Control type", "MIDI channel",
+            neutral_.kind == midi::Parameter::cc7 || neutral_.kind == midi::Parameter::cc14 ? "Controller" : "Parameter",
+            "Neutral value"};
+        ui::copy_caption(center[1], fields[neutral_field_]);
+        ui::copy_caption(right[0], "Loop stop");
+        if (neutral_field_ < 2) ui::copy_caption(right[1], neutral_field_ ? neutral_types[kind_index] : output_name);
+        else std::snprintf(right[1].text, 64, "%d", neutral_field_ == 2 ? neutral_.channel + 1
+            : neutral_field_ == 3 ? neutral_.address : int(neutral_.value));
+        if (adjusting) {
+            ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, "Adjust").text());
+            if (neutral_field_ >= 3) {
+                char step[16]; std::snprintf(step, sizeof(step), "Step %lu", (unsigned long)preference_step_);
+                ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
+            }
+        } else {
+            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Edit").add(Role::back, "Accept entry", ", ").text());
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Cancel entry").text());
+        }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render)
 #endif
     void render() {
@@ -989,9 +1146,10 @@ private:
         const bool adding_cycle = mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
             || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
         const bool preference_view = mode_ == Mode::preferences || mode_ == Mode::preference_value;
+        const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
         const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
         const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
-            || instrument_view || (setup_preferences_ && preference_view);
+            || instrument_view || neutral_view || (setup_preferences_ && preference_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
         if (mode_ == Mode::current) {
@@ -1312,9 +1470,12 @@ private:
                         char step[24]; std::snprintf(step, sizeof(step), "Step %lu", (unsigned long)preference_step_);
                         prompt.add(Role::next_section, step);
                     }
+                    if (setup_preferences_ && preference().field == 33)
+                        prompt.add(Role::next_section, "Neutral values");
                     ui::copy_caption(views[0].lines[2], prompt.text());
                 }
             }
+            if (neutral_view) render_neutral(views, draft, prompt);
             if (mode_ == Mode::decision) {
                 const bool pedal = device_editor_ != Mode::closed;
                 ui::copy_caption(views[1].lines[0], pedal ? ui::i18n::text(ui::i18n::Message::pedal) : docs_.edit_name());
