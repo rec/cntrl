@@ -148,6 +148,10 @@ public:
             render();
             return true;
         }
+        if (mode_ == Mode::contact_style_value && !stage_contact_style()) {
+            render();
+            return true;
+        }
         if (setup_preferences_ && mode_ == Mode::preference_value && !stage_setup_preference()) {
             render();
             return true;
@@ -328,6 +332,8 @@ public:
             navigation_button(button);
         } else if (is_expression_view()) {
             expression_button(button);
+        } else if (is_contact_style_view()) {
+            contact_style_button(button);
         } else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
@@ -473,7 +479,7 @@ private:
                       layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
                       layout_chooser_order, layout_chooser_order_move, layout_add_type, layout_name, layout_name_action,
                       counters, counter_fields, counter_value, navigation_shortcuts, navigation_value,
-                      expression_jacks, expression_fields, expression_value };
+                      expression_jacks, expression_fields, expression_value, contact_style_fields, contact_style_value };
     enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, split, join, add, count };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -516,6 +522,11 @@ private:
         "MIDI output", "Mirror output", "MIDI channel", "Controller", "Minimum", "Maximum", "Reverse", "Response curve",
     };
     static constexpr const char *expression_curves[] = {"Linear", "Slow", "Fast"};
+    enum ContactField { contact_foreground, contact_background, contact_font, contact_field_count };
+    unsigned contact_field_ = 0, contact_face_ = ui::localized_face, contact_size_ = 16;
+    uint16_t contact_colors_[2] = {};
+    bool contact_style_rejected_ = false;
+    static constexpr const char *contact_style_fields[] = {"Text color", "Background color", "Text font"};
     enum CounterField { counter_output, counter_type, counter_channel, counter_controller,
         counter_initial, counter_minimum, counter_maximum, counter_step, counter_boundary, counter_field_count };
     unsigned counter_index_ = 0, counter_field_ = 0;
@@ -744,6 +755,11 @@ private:
         if (index == ui::expression_preference_index) {
             Document draft;
             return setup_preferences_ && docs_.edit_document(draft) && expression_jacks(draft);
+        }
+        if (index == ui::contact_preference_index) {
+            Document draft;
+            return setup_preferences_ && docs_.edit_document(draft)
+                && (draft.contact_style() || hardware_.supports_font(ui::localized_face, 16));
         }
         const unsigned field = ui::preference_at(index).field;
         if (setup_preferences_ && !Documents::setup_preference_editable(field)) return false;
@@ -1175,6 +1191,74 @@ private:
     bool is_counter_view() const { return mode_ >= Mode::counters && mode_ <= Mode::counter_value; }
     bool is_navigation_view() const { return mode_ == Mode::navigation_shortcuts || mode_ == Mode::navigation_value; }
     bool is_expression_view() const { return mode_ >= Mode::expression_jacks && mode_ <= Mode::expression_value; }
+    bool is_contact_style_view() const { return mode_ == Mode::contact_style_fields || mode_ == Mode::contact_style_value; }
+    void read_contact_style(const Document &draft) {
+        const auto *style = draft.contact_style();
+        contact_face_ = style ? style[0] : ui::localized_face;
+        contact_size_ = style ? style[1] : 16;
+        contact_colors_[contact_foreground] = style ? u16(style + 4) : 0;
+        contact_colors_[contact_background] = style ? u16(style + 6) : draft.page_settings()[PageSettings::background];
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_stage_contact_style)
+#endif
+    bool stage_contact_style() {
+        Document draft;
+        if (!docs_.edit_document(draft)) return false;
+        const auto *style = draft.contact_style();
+        if (contact_face_ == (style ? style[0] : ui::localized_face)
+            && contact_size_ == (style ? style[1] : 16)
+            && contact_colors_[contact_foreground] == (style ? u16(style + 4) : 0)
+            && contact_colors_[contact_background] == (style ? u16(style + 6) : draft.page_settings()[PageSettings::background])) return true;
+        contact_style_rejected_ = !docs_.edit_contact_style(contact_face_, contact_size_,
+            contact_colors_[contact_foreground], contact_colors_[contact_background]);
+        if (contact_style_rejected_) return false;
+        changed_fields_ |= 1u << 16;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_contact_style_button)
+#endif
+    void contact_style_button(unsigned button) {
+        contact_style_rejected_ = false;
+        if (mode_ == Mode::contact_style_fields) {
+            if (button < 2) contact_field_ = (contact_field_ + (button ? 1 : contact_field_count - 1)) % contact_field_count;
+            else if (button == 5) mode_ = Mode::preferences;
+            else if (button == 2) {
+                preference_component_ = 0;
+                mode_ = Mode::contact_style_value;
+            }
+        } else if (button == 2 || button == 5) {
+            if (stage_contact_style()) mode_ = Mode::contact_style_fields;
+        } else if (button == 4) {
+            if (contact_field_ == contact_font) {
+                contact_face_ = ui::localized_face;
+                contact_size_ = 16;
+            } else {
+                Document draft;
+                if (!docs_.edit_document(draft)) return;
+                contact_colors_[contact_field_] = contact_field_ == contact_background ? draft.page_settings()[PageSettings::background] : 0;
+            }
+        } else if (contact_field_ != contact_font) {
+            if (button == 3) preference_component_ = (preference_component_ + 1) % 3;
+            else if (button < 2) contact_colors_[contact_field_] = ui::adjust_color(contact_colors_[contact_field_],
+                preference_component_, button ? 1 : -1);
+        } else if (button < 2) {
+            constexpr unsigned default_face = sizeof(ui::preference_faces) / sizeof(ui::preference_faces[0]);
+            constexpr unsigned count = default_face + 1;
+            unsigned index = contact_face_ == ui::localized_face ? default_face : ui::preference_face_index(contact_face_);
+            for (unsigned i = 0; i < count; ++i) {
+                index = (index + (button ? 1 : count - 1)) % count;
+                const unsigned face = index == default_face ? ui::localized_face : ui::preference_faces[index];
+                for (unsigned size = 16; size >= 8; --size) {
+                    if (!hardware_.supports_font(face, size)) continue;
+                    contact_face_ = face;
+                    contact_size_ = size;
+                    return;
+                }
+            }
+        }
+    }
     static unsigned expression_jacks(const Document &draft) {
         unsigned mask = 0;
         Document fallback = draft;
@@ -1522,6 +1606,15 @@ private:
                     while (!(mask & (1u << expression_jack_))) ++expression_jack_;
                     expression_feedback_ = nullptr;
                     mode_ = Mode::expression_jacks;
+                    return;
+                }
+                if (preference_index_ == ui::contact_preference_index) {
+                    Document draft;
+                    if (!docs_.edit_document(draft)) return;
+                    read_contact_style(draft);
+                    contact_field_ = 0;
+                    contact_style_rejected_ = false;
+                    mode_ = Mode::contact_style_fields;
                     return;
                 }
                 const uint64_t bit = uint64_t(1) << field.field;
@@ -2129,6 +2222,37 @@ private:
         }
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render_contact_style)
+#endif
+    void render_contact_style(Pane (&views)[3], ui::Prompt &prompt) const {
+        using Role = ControlRole;
+        const bool adjusting = mode_ == Mode::contact_style_value;
+        const bool font = contact_field_ == contact_font;
+        ui::copy_caption(views[1].lines[1], "Contact appearance");
+        ui::copy_caption(views[2].lines[0], contact_style_fields[contact_field_]);
+        auto &value = views[2].lines[1];
+        if (font) ui::copy_caption(value, contact_face_ == ui::localized_face
+            ? "Language font" : ui::preference_face_names[ui::preference_face_index(contact_face_)]);
+        else {
+            const auto color = contact_colors_[contact_field_];
+            ui::color_caption(value.text, sizeof(value.text), color);
+            if (hardware_.display_count() >= 3) {
+                views[2].graphics.background = color;
+                const uint16_t ink = ui::Raster::luminance(color) < 1790 ? 0xffff : 0;
+                for (auto &line : views[2].lines) line.graphics.foreground = ink;
+            }
+        }
+        if (contact_style_rejected_) ui::copy_caption(views[1].lines[2], "Could not change appearance");
+        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, adjusting ? "Adjust" : "Browse").text());
+        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, adjusting ? "Accept" : "Edit")
+            .add(Role::back, "Back", ", ").text());
+        if (adjusting) {
+            prompt.clear();
+            if (!font) prompt.add(Role::previous_section, ui::preference_color_channel[preference_component_]);
+            ui::copy_caption(views[0].lines[2], prompt.add(Role::next_section, "Default", ", ").text());
+        }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render)
 #endif
     void render() {
@@ -2143,7 +2267,8 @@ private:
         const bool counter_entry = mode_ == Mode::preferences && preference_index_ == ui::counter_preference_index;
         const bool navigation_entry = mode_ == Mode::preferences && preference_index_ == ui::navigation_preference_index;
         const bool expression_entry = mode_ == Mode::preferences && preference_index_ == ui::expression_preference_index;
-        const bool special_entry = layout_entry || counter_entry || navigation_entry || expression_entry;
+        const bool contact_style_entry = mode_ == Mode::preferences && preference_index_ == ui::contact_preference_index;
+        const bool special_entry = layout_entry || counter_entry || navigation_entry || expression_entry || contact_style_entry;
         const bool preference_view = !special_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
         const bool layout_view = is_layout_view();
         const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
@@ -2151,7 +2276,7 @@ private:
         const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
         const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
             || instrument_view || neutral_view || movie_view || layout_view || special_entry || is_counter_view() || is_navigation_view()
-            || is_expression_view() || (setup_preferences_ && preference_view);
+            || is_expression_view() || is_contact_style_view() || (setup_preferences_ && preference_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
         if (mode_ == Mode::current) {
@@ -2222,6 +2347,10 @@ private:
         else if (expression_entry) {
             title = "Expression MIDI";
             value = "Expression jack assignments";
+        }
+        else if (contact_style_entry) {
+            title = "Contact appearance";
+            value = "Text, background and font";
         }
         else if (preference_view) {
             const auto &field = preference();
@@ -2510,6 +2639,7 @@ private:
             if (is_counter_view()) render_counter(views, draft, prompt);
             if (is_navigation_view()) render_navigation(views, draft, prompt);
             if (is_expression_view()) render_expression(views, draft, prompt);
+            if (is_contact_style_view()) render_contact_style(views, prompt);
             if (special_entry)
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Group").text());
             if (mode_ == Mode::decision) {

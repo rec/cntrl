@@ -526,6 +526,25 @@ int main(int argc, char **argv) {
         assert(board.sent.empty());
         return 0;
     }
+    if (argc == 5 && !std::strcmp(argv[3], "--contact-style")) {
+        app.allocation.configure(configuration.page_layout());
+        settings(); tap(2); tap(3); tap(3); tap(3);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Contact appearance"));
+        tap(2); tap(2); tap(1); tap(2); // Increase the text's red component.
+        tap(0); tap(2); tap(1); tap(2); // Select Arimo.
+        const auto *old = documents.document().contact_style();
+        assert((!old || cntrl::u16(old + 4) == 0) && board.sent.empty());
+        settings(); tap(1); tap(2);
+        while (documents.busy()) sample(0);
+        const auto &document = documents.document();
+        const auto *style = document.contact_style();
+        assert(style && style[0] == 17 && cntrl::u16(style + 4) == 0x0800);
+        assert(board.sent.empty());
+        std::ofstream exported(argv[4], std::ios::binary);
+        exported.write(reinterpret_cast<const char *>(document.data()), document.length());
+        assert(exported);
+        return 0;
+    }
     if (argc == 5 && !std::strcmp(argv[3], "--expression-settings")) {
         board.follow_setup_pages = true;
         app.allocation.configure(configuration.page_layout());

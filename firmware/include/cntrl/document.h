@@ -690,6 +690,7 @@ public:
     unsigned core_length() const { return core_length_; }
     uint32_t artwork_generation() const { return artwork_ ? u32(data_ + core_ + 20) : 0; }
     const uint8_t *contact_style() const { return contact_style_ ? data_ + styles_ + (contact_style_ - 1) * 16 : nullptr; }
+    const uint8_t *artwork_section() const { return artwork_ ? data_ + artwork_ : nullptr; }
     Bitmap contact_artwork(const BitmapSource *source) const {
         return contact_style_ && artwork_ ? bitmap_for(source, u32(data_ + artwork_ + 8) + contact_style_) : Bitmap{};
     }

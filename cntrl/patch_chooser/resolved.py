@@ -631,8 +631,39 @@ def _decode(data: bytes) -> dict[str, object]:
     repeat = struct.unpack_from('<H', data, meta + 12)[0]
     result['navigation'] = {'hold_delay': hold / 1000, 'repeat_interval': repeat / 1000}
     pages = page_settings.unpack(data, meta + 16)
-    if 'contact_style' in source:
-        pages['contact_style'] = source.pop('contact_style')
+    authored_contact = source.pop('contact_style', None)
+    presentation = offset + GRAPH.unpack_from(data, offset)[1]
+    count = display.HEADER.unpack_from(data, presentation)[1]
+    if count:
+        contact_index = (
+            presentation + display.HEADER.size + (count - 1) * graphics.SCREEN.size
+        )
+        font, _, _, style_flags, foreground, background, *_ = (
+            graphics.SCREEN.unpack_from(data, contact_index)
+        )
+        if style_flags == display.CONTACT_STYLE:
+            contact = authored_contact if isinstance(authored_contact, dict) else {}
+            if font == 253:
+                contact.pop('font_name', None)
+            else:
+                family = next((n for n, i in UI_FONTS.items() if i == font), None)
+                if family is None:
+                    raise binary_format.DocumentFormatError(
+                        f'unknown Contact font ID {font}'
+                    )
+                contact['font_name'] = family
+            for key, value, default in (
+                ('foreground_color', foreground, 'black'),
+                ('background_color', background, str(pages['background_color'])),
+            ):
+                if graphics.rgb565(graphics.color(contact.get(key, default))) != value:
+                    r, g, b = value >> 11, (value >> 5) & 63, value & 31
+                    contact[key] = (
+                        f'0x{r * 255 // 31:02X}{g * 255 // 63:02X}{b * 255 // 31:02X}'
+                    )
+            pages['contact_style'] = contact
+    elif authored_contact is not None:
+        pages['contact_style'] = authored_contact
     cursor = meta + METADATA.size + ni * 64 + nb * 8 + np * 4
     if flags & page_settings.EXPRESSION_FLAG:
         pages['expression'] = page_settings.unpack_expression(

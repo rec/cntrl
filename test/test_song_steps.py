@@ -4,9 +4,17 @@ import subprocess
 from pathlib import Path
 
 import tomlkit
+from PIL import Image
 
 from cntrl.fonts import ui
-from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved, songs
+from cntrl.patch_chooser import (
+    compiler,
+    compiler_inputs,
+    display,
+    models,
+    resolved,
+    songs,
+)
 from scripts.native_tests import NativePrograms
 
 
@@ -209,6 +217,58 @@ def test_song_step_navigation_and_boundaries(
     )
     saved_navigation = tomlkit.parse(resolved.export(edited.read_bytes()))['navigation']
     assert saved_navigation['page_forward'] == 'A+B'
+    contact_art = tmp_path / 'contact.png'
+    Image.new('RGB', (12, 12), 'red').save(contact_art)
+    patch_art = tmp_path / 'patch.png'
+    Image.new('RGB', (12, 12), 'blue').save(patch_art)
+    appearance_cases = (
+        {},
+        {
+            'patch_cycles': {
+                'Patch': [
+                    {
+                        'output': 'din',
+                        'channel': 1,
+                        'controller': 7,
+                        'value': 12,
+                        'style': {'image': str(patch_art)},
+                    }
+                ]
+            }
+        },
+        {'page_settings': {'contact_style': {'image': str(contact_art)}}},
+    )
+    contact_setup = tmp_path / 'contact.bin'
+    for fields in appearance_cases:
+        original = compiler.compile_show({**pages, **fields}, {}, [], target)
+        contact_setup.write_bytes(original)
+        subprocess.run(
+            [
+                str(runner),
+                str(fixture),
+                str(contact_setup),
+                '--contact-style',
+                str(edited),
+            ],
+            check=True,
+        )
+        saved = edited.read_bytes()
+        contact = tomlkit.parse(resolved.export(saved))['page_settings'][
+            'contact_style'
+        ]
+        assert contact['foreground_color'] == '0x080000'
+        assert contact['font_name'] == 'Arimo'
+        assert contact.get('image') == (
+            str(contact_art) if 'page_settings' in fields else None
+        )
+        saved_art = display.artwork_files(
+            saved, display.read_source(saved, resolved.graph_offset(saved))
+        )
+        original_art = display.artwork_files(
+            original, display.read_source(original, resolved.graph_offset(original))
+        )
+        assert bool(original_art[1]) == bool(fields)
+        assert saved_art == original_art
     expression_setup = tmp_path / 'expression.bin'
     expression_setup.write_bytes(
         compiler.compile_show(

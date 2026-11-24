@@ -238,6 +238,53 @@ public:
         return edit_document(draft) && write_setup_preference(draft, field, value, inherit);
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_contact_style)
+#endif
+    bool edit_contact_style(unsigned font, unsigned size, uint16_t foreground, uint16_t background) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)
+            || font > 253 || size < 8 || size > 16 || !hardware_.supports_font(font, size)) return false;
+        const auto *base = draft.data();
+        const auto *current = draft.contact_style();
+        unsigned position;
+        if (current) {
+            position = unsigned(current - base);
+            if (!splice_setup(draft, position, 0, 0)) return false;
+        } else {
+            const unsigned display = draft.display_metadata();
+            const unsigned count = u16(base + display + 4);
+            if (count == UINT16_MAX) return false;
+            position = display + 16 + count * 16;
+            if (const auto *artwork = draft.artwork_section()) {
+                const unsigned records = u32(artwork + 4);
+                if (records == UINT16_MAX) return false;
+                const unsigned directory = unsigned(artwork - base);
+                const unsigned pixels = directory + 12 + 8 * records;
+                const unsigned end = draft.core_offset() + draft.core_length();
+                if (!splice_setup(draft, position, end - position, end - position + 24)) return false;
+                auto *bytes = scratch_.data;
+                // Append the style and its empty artwork entry. Existing image IDs are unchanged.
+                std::memcpy(bytes + position + 16, base + position, pixels - position);
+                std::memcpy(bytes + pixels + 24, base + pixels, end - pixels);
+                put32(bytes + directory + 20, records + 1);
+                for (unsigned i = 0; i < records; ++i) {
+                    auto *entry_offset = bytes + directory + 32 + 8 * i;
+                    if (const unsigned original = u32(entry_offset)) put32(entry_offset, original + 8);
+                }
+                put32(bytes + end + 20, u32(base + end - 4) + 8);
+            } else if (!splice_setup(draft, position, 0, 16)) return false;
+            binary::write16(scratch_.data + display + 4, uint16_t(count + 1));
+        }
+        auto *style = scratch_.data + position;
+        style[0] = uint8_t(font);
+        style[1] = uint8_t(size);
+        style[3] = 0x80;
+        binary::write16(style + 4, foreground);
+        binary::write16(style + 6, background);
+        binary::write16(style + 8, uint16_t(size));
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_expression)
 #endif
     bool edit_expression(unsigned jack, const ExpressionAssignment &value) {

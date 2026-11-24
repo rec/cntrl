@@ -343,7 +343,13 @@ To clear both copies, run `cntrl global clear name_and_contact` with the pedal c
 Clearing it offline saves an empty value to apply on the next sync.
 The translated Contact caption requires the language packs built for this firmware.
 
-For the appearance of the Contact body, add an optional style to the setup.
+On the pedal, open **Settings → Setup fields → Contact appearance** to edit
+the text color, background color, and font for the loaded or saved setup.
+Use D to choose the color component and E to restore the current field's
+default. Save the setup to apply the appearance. The contact text belongs to
+the pedal, and the optional image can be set in the setup file.
+
+The setup file accepts a Contact body style like this.
 The image sits behind the text. CNTRL checks the contrast under the lettering
 and uses black or white with an outline where needed. Choose a built-in UI font
 or omit the font to use the current language's font.

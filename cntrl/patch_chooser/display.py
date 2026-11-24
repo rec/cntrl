@@ -618,6 +618,7 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
     )
     if magic != b'CDSP' or not pages:
         raise binary_format.DocumentFormatError('invalid display metadata')
+    last_style = offset + HEADER.size + (styles - 1) * graphics.SCREEN.size
     offset += HEADER.size + styles * graphics.SCREEN.size + page_size
     for _ in range(texts):
         if offset + 2 > len(data):
@@ -629,6 +630,17 @@ def read_source(data: bytes, offset: int) -> dict[str, object]:
         raise binary_format.DocumentFormatError('invalid display source size')
     try:
         source = tomlkit.parse(data[offset:end].decode('utf-8')).unwrap()
+        paths = source.get('artwork_sources')
+        if (
+            styles
+            and data[last_style + 3] == CONTACT_STYLE
+            and end + 12 <= len(data)
+            and isinstance(paths, list)
+            and len(paths) + 1 == struct.unpack_from('<I', data, end + 4)[0]
+            and data[end + 12 + len(paths) * 8 : end + 20 + len(paths) * 8] == bytes(8)
+        ):
+            # A style created on the pedal adds an empty artwork directory row.
+            paths.append('')
         # Older compiled setups retain the authoring keys used at compile time.
         if 'windows' in source:
             source['displays'] = source.pop('windows')
