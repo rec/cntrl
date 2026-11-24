@@ -378,9 +378,13 @@ enum class Message : uint16_t {
     between_songs,
     next_song_name,
     use_set_at_startup,
+    insert_space,
+    insert_line_break,
+    delete_character,
+    line_break,
 };
-inline constexpr unsigned message_count = 375;
-inline constexpr uint32_t catalogue_schema = 0x0c2a55dbu;
+inline constexpr unsigned message_count = 379;
+inline constexpr uint32_t catalogue_schema = 0xb5d69e41u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -1565,6 +1569,14 @@ inline const Field next_song_name_fields[] CNTRL_I18N_STORAGE = {
 };
 inline const char use_set_at_startup_text[] CNTRL_I18N_STORAGE = "Use at startup";
 inline const char use_set_at_startup_short[] CNTRL_I18N_STORAGE = "";
+inline const char insert_space_text[] CNTRL_I18N_STORAGE = "Insert space";
+inline const char insert_space_short[] CNTRL_I18N_STORAGE = "";
+inline const char insert_line_break_text[] CNTRL_I18N_STORAGE = "Insert line break";
+inline const char insert_line_break_short[] CNTRL_I18N_STORAGE = "";
+inline const char delete_character_text[] CNTRL_I18N_STORAGE = "Delete character";
+inline const char delete_character_short[] CNTRL_I18N_STORAGE = "";
+inline const char line_break_text[] CNTRL_I18N_STORAGE = "Line break";
+inline const char line_break_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {patch_chooser_text, patch_chooser_short, nullptr, 0},
     {browse_text, browse_short, nullptr, 0},
@@ -1941,6 +1953,10 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {between_songs_text, between_songs_short, nullptr, 0},
     {next_song_name_text, next_song_name_short, next_song_name_fields, 1},
     {use_set_at_startup_text, use_set_at_startup_short, nullptr, 0},
+    {insert_space_text, insert_space_short, nullptr, 0},
+    {insert_line_break_text, insert_line_break_short, nullptr, 0},
+    {delete_character_text, delete_character_short, nullptr, 0},
+    {line_break_text, line_break_short, nullptr, 0},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

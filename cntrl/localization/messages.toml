@@ -1497,3 +1497,19 @@ context = 'Name of the song that starts on the next step'
 en = 'Use at startup'
 context = 'Open the startup set editor with the displayed setlist selected'
 
+[messages.insert_space]
+en = 'Insert space'
+context = 'Contact editor action at the cursor'
+
+[messages.insert_line_break]
+en = 'Insert line break'
+context = 'Contact editor action at the cursor'
+
+[messages.delete_character]
+en = 'Delete character'
+context = 'Contact editor action at the cursor'
+
+[messages.line_break]
+en = 'Line break'
+context = 'Text cursor is on a line break in Contact'
+

@@ -418,3 +418,15 @@ text = "Siguiente canción: {name:s}"
 
 [messages.use_set_at_startup]
 text = "Usar al iniciar"
+
+[messages.insert_space]
+text = "Insertar espacio"
+
+[messages.insert_line_break]
+text = "Insertar salto de línea"
+
+[messages.delete_character]
+text = "Borrar carácter"
+
+[messages.line_break]
+text = "Salto de línea"

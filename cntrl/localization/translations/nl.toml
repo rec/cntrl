@@ -418,3 +418,15 @@ text = "Volgend nummer: {name:s}"
 
 [messages.use_set_at_startup]
 text = "Gebruiken bij opstarten"
+
+[messages.insert_space]
+text = "Spatie invoegen"
+
+[messages.insert_line_break]
+text = "Regeleinde invoegen"
+
+[messages.delete_character]
+text = "Teken wissen"
+
+[messages.line_break]
+text = "Regeleinde"

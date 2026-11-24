@@ -45,6 +45,13 @@ public:
     void bind_globals(GlobalSettings &globals) { globals_ = &globals; document_.bind_globals(&globals.values()); }
     const char *startup_set() const { return globals_ ? globals_->values().startup_set : ""; }
     const char *name_and_contact() const { return globals_ ? globals_->values().name_and_contact : ""; }
+    bool name_and_contact(const char *text) {
+        if (!globals_ || busy() || dirty_) return false;
+        auto values = globals_->values();
+        if (std::strlen(text) >= sizeof(values.name_and_contact)) return false;
+        std::strcpy(values.name_and_contact, text);
+        return global_replace(values, false);
+    }
     bool startup_set(const char *name) {
         if (!globals_ || busy() || dirty_) return false;
         auto values = globals_->values();

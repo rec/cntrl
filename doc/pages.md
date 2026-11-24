@@ -43,6 +43,12 @@ to start in the Patch Chooser.
 In setlist mode, **Use at startup** opens the same editor with the current
 setlist selected.
 
+Under **Pedal → Contact**, use A/B to change the character in brackets and
+D/E to move the cursor. C opens the actions for inserting a space, inserting
+a line break, or deleting a character. F opens the save prompt when the text
+has changed. Contact saves to the pedal's preferences and appears on the
+Contact screen in Status.
+
 Adjustments are drafts. Back from a value returns to its field. Back from
 the field list offers to save and reload the setup, discard the draft, or
 keep editing. Saving a setup edit stops current playback during reload.

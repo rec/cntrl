@@ -418,3 +418,15 @@ text = "Næste sang: {name:s}"
 
 [messages.use_set_at_startup]
 text = "Brug ved opstart"
+
+[messages.insert_space]
+text = "Indsæt mellemrum"
+
+[messages.insert_line_break]
+text = "Indsæt linjeskift"
+
+[messages.delete_character]
+text = "Slet tegn"
+
+[messages.line_break]
+text = "Linjeskift"

@@ -418,3 +418,15 @@ text = "Próxima música: {name:s}"
 
 [messages.use_set_at_startup]
 text = "Usar no arranque"
+
+[messages.insert_space]
+text = "Inserir espaço"
+
+[messages.insert_line_break]
+text = "Inserir quebra de linha"
+
+[messages.delete_character]
+text = "Apagar carácter"
+
+[messages.line_break]
+text = "Quebra de linha"

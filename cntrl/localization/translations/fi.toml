@@ -418,3 +418,15 @@ text = "Seuraava kappale: {name:s}"
 
 [messages.use_set_at_startup]
 text = "Käytä käynnistyessä"
+
+[messages.insert_space]
+text = "Lisää välilyönti"
+
+[messages.insert_line_break]
+text = "Lisää rivinvaihto"
+
+[messages.delete_character]
+text = "Poista merkki"
+
+[messages.line_break]
+text = "Rivinvaihto"

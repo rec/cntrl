@@ -9,6 +9,7 @@ enum class Operation : unsigned {
     setup_previous, setup_next, setup_confirm, setup_back,
     songs_previous, songs_next, songs_confirm, songs_previous_section, songs_next_section, songs_back,
     switches_return = 153,
+    setup_previous_section, setup_next_section,
 };
 struct ControlBinding { unsigned controller_button; const char *label; };
 struct Controls {
@@ -47,6 +48,8 @@ public:
                     if (i == controls_.previous) services.invoke(Operation::setup_previous);
                     else if (i == controls_.next) services.invoke(Operation::setup_next);
                     else if (i == controls_.confirm) services.invoke(Operation::setup_confirm);
+                    else if (i == controls_.previous_section) services.invoke(Operation::setup_previous_section);
+                    else if (i == controls_.next_section) services.invoke(Operation::setup_next_section);
                     else if (i == controls_.back) services.invoke(Operation::setup_back);
                 }
             } else {

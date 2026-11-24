@@ -418,3 +418,15 @@ text = "Prossimo brano: {name:s}"
 
 [messages.use_set_at_startup]
 text = "Usa all’avvio"
+
+[messages.insert_space]
+text = "Inserisci spazio"
+
+[messages.insert_line_break]
+text = "Inserisci interruzione di riga"
+
+[messages.delete_character]
+text = "Elimina carattere"
+
+[messages.line_break]
+text = "Interruzione di riga"

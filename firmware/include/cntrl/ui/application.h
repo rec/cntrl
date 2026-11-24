@@ -313,9 +313,12 @@ public:
         case Operation::setup_previous:
         case Operation::setup_next:
         case Operation::setup_confirm:
+        case Operation::setup_previous_section:
+        case Operation::setup_next_section:
         case Operation::setup_back: {
             if (!setups.open() || documents_.busy()) return false;
-            const unsigned button = operation == Operation::setup_previous ? 0 : operation == Operation::setup_next ? 1 : operation == Operation::setup_confirm ? 2 : 5;
+            const unsigned button = operation == Operation::setup_previous ? 0 : operation == Operation::setup_next ? 1 : operation == Operation::setup_confirm ? 2
+                : operation == Operation::setup_previous_section ? 3 : operation == Operation::setup_next_section ? 4 : 5;
             setups.button(button, true, services.application_time()); return true;
         }
         case Operation::songs_previous:

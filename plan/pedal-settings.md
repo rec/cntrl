@@ -141,7 +141,7 @@ occur and repeat those tasks after changing the labels or controls.
 
 | Owner | Settings coverage | Save path |
 | --- | --- | --- |
-| Pedal | Startup set, including the current setlist shortcut | Device preference journal |
+| Pedal | Startup set, including the current setlist shortcut, and multiline Contact text | Device preference journal |
 | Loaded setup | Brightness, screensaver timeout, USB MIDI | Setup draft, revision, and reload |
 | Current browser patch's instrument | MIDI channel, 1–16 | Shared instrument record in the setup draft |
 
@@ -149,8 +149,8 @@ occur and repeat those tasks after changing the labels or controls.
   cycle creation. Song and setlist editors have library operations, including
   editing the order of occurrences. Bringing these under Settings requires
   preserving performance when choosing the target of an edit.
-- The device settings service already stores the rest of the global registry
-  and contact text. Settings still needs editors for those values and controls
+- The device settings service already stores the rest of the global registry.
+  Settings still needs editors for those values and controls
   that show when a setup supplies its own override.
 - Inactive setup edits need a way to load and save a draft without activating
   that setup. Song-step edits need to resolve the library selection and save to

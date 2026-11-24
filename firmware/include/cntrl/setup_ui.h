@@ -30,7 +30,7 @@ public:
         songs_ = &songs;
         std::snprintf(current_set_, sizeof(current_set_), "%s", performing ? songs.active_set() : "");
         shortcut_ = has_performance_shortcut() ? Shortcut::performance : Shortcut::setup;
-        startup_edit_ = false;
+        device_editor_ = Mode::closed;
         locked_ = true;
         mode_ = Mode::current;
         render();
@@ -87,26 +87,29 @@ public:
                 shortcut_ = Shortcut(first + (unsigned(shortcut_) - first + count + (button == 0 ? -1 : 1)) % count);
             }
             if (button == 2) {
-                if (shortcut_ == Shortcut::pedal || (shortcut_ == Shortcut::performance && current_set_[0])) {
-                    startup_edit_ = true;
-                    startup_choice_ = 0;
-                    const char *initial = shortcut_ == Shortcut::performance ? current_set_ : docs_.startup_set();
-                    Setlist set;
-                    for (unsigned i = 0; i < songs_->counts().sets && songs_->set_at(i, set); ++i)
-                        if (!std::strcmp(initial, set.name)) { startup_choice_ = i + 1; break; }
-                    std::snprintf(startup_draft_, sizeof(startup_draft_), "%s", initial);
-                    mode_ = Mode::startup_set;
-                    render();
-                    return;
+                if (shortcut_ == Shortcut::pedal) { mode_ = Mode::pedal; item_ = 0; }
+                else if (shortcut_ == Shortcut::performance && current_set_[0]) begin_startup_set(current_set_);
+                else {
+                    if (!docs_.edit_begin()) { hardware_.error(ui::i18n::text(ui::i18n::Message::operation_failed)); return; }
+                    original_ = false;
+                    changed_fields_ = 0;
+                    current_field_ = shortcut_ == Shortcut::performance;
+                    patch_ = current_field_ ? current_patch_ : 0;
+                    field_ = current_field_ ? 2 : 5;
+                    mode_ = Mode::field;
                 }
-                if (!docs_.edit_begin()) { hardware_.error(ui::i18n::text(ui::i18n::Message::operation_failed)); return; }
-                original_ = false;
-                changed_fields_ = 0;
-                current_field_ = shortcut_ == Shortcut::performance;
-                patch_ = current_field_ ? current_patch_ : 0;
-                field_ = current_field_ ? 2 : 5;
-                mode_ = Mode::field;
             }
+        } else if (mode_ == Mode::pedal) {
+            if (button < 2) item_ = 1 - item_;
+            else if (button == 5) mode_ = Mode::current;
+            else if (button == 2 && !item_) begin_startup_set(docs_.startup_set());
+            else if (button == 2) {
+                std::strcpy(contact_draft_, docs_.name_and_contact());
+                contact_cursor_ = 0;
+                mode_ = device_editor_ = Mode::contact;
+            }
+        } else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
+            contact_button(button);
         } else if (mode_ == Mode::startup_set) {
             if (button < 2) {
                 const unsigned count = songs_->counts().sets + 1;
@@ -119,7 +122,7 @@ public:
                 std::snprintf(startup_draft_, sizeof(startup_draft_), "%s", set.name);
             } else if ((button == 2 || button == 5) && std::strcmp(startup_draft_, docs_.startup_set())) {
                 mode_ = Mode::decision; item_ = 2;
-            } else if (button == 2 || button == 5) { mode_ = Mode::current; startup_edit_ = false; }
+            } else if (button == 2 || button == 5) leave_device_editor();
         } else if (mode_ == Mode::catalogue) {
             if (button < 2) browse(button == 0);
             else if (button == 2 && name_[0]) { mode_ = Mode::action; item_ = 0; }
@@ -201,14 +204,15 @@ public:
             if (button < 2 && docs_.edit_adjust(patch_, field_, button == 0 ? -1 : 1, original_ && field_ < 5))
                 changed_fields_ |= 1u << field_;
             else if (button == 2 || button == 5) mode_ = Mode::field;
-        } else if (mode_ == Mode::decision && startup_edit_) {
+        } else if (mode_ == Mode::decision && device_editor_ != Mode::closed) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
-            else if (button == 5 || (button == 2 && item_ == 2)) mode_ = Mode::startup_set;
+            else if (button == 5 || (button == 2 && item_ == 2)) mode_ = device_editor_;
             else if (button == 2) {
-                if (!item_ && ((startup_draft_[0] && !songs_->setlist(startup_draft_)) || !docs_.startup_set(startup_draft_))) {
+                if (!item_ && !(device_editor_ == Mode::contact ? docs_.name_and_contact(contact_draft_)
+                    : (!startup_draft_[0] || songs_->setlist(startup_draft_)) && docs_.startup_set(startup_draft_))) {
                     hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed)); return;
                 }
-                close(); return;
+                leave_device_editor();
             }
         } else if (mode_ == Mode::decision) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
@@ -222,7 +226,7 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, current, startup_set, catalogue, action, selecting, patch, field, value, decision, saving, failed, history, comparison, history_work,
+    enum class Mode { closed, current, pedal, startup_set, contact, contact_action, catalogue, action, selecting, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -235,10 +239,12 @@ private:
     enum class Shortcut { performance, setup, pedal };
     Shortcut shortcut_ = Shortcut::setup;
     const Songs *songs_ = nullptr;
-    bool startup_edit_ = false;
+    Mode device_editor_ = Mode::closed;
     unsigned startup_choice_ = 0;
     char startup_draft_[64] = {};
     char current_set_[64] = {};
+    char contact_draft_[sizeof(GlobalSettings::Values::name_and_contact)] = {};
+    unsigned contact_cursor_ = 0;
     bool has_performance_shortcut() const { return current_patch_ != UINT16_MAX || current_set_[0]; }
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
@@ -246,6 +252,54 @@ private:
     unsigned alias_ = 0, tag_ = CycleCatalogue::all, character_ = 0;
     char cycle_name_[64] = {};
     char suggested_[64] = {};
+    void begin_startup_set(const char *initial) {
+        startup_choice_ = 0;
+        Setlist set;
+        for (unsigned i = 0; i < songs_->counts().sets && songs_->set_at(i, set); ++i)
+            if (!std::strcmp(initial, set.name)) { startup_choice_ = i + 1; break; }
+        std::snprintf(startup_draft_, sizeof(startup_draft_), "%s", initial);
+        mode_ = device_editor_ = Mode::startup_set;
+    }
+    void leave_device_editor() {
+        mode_ = shortcut_ == Shortcut::pedal ? Mode::pedal : Mode::current;
+        item_ = device_editor_ == Mode::contact ? 1 : 0;
+        device_editor_ = Mode::closed;
+    }
+    void contact_button(unsigned button) {
+        char *const position = contact_draft_ + contact_cursor_;
+        const char *next = position;
+        uint32_t code = 0;
+        ui::utf8::next(next, code);
+        const unsigned length = unsigned(std::strlen(contact_draft_));
+        if (mode_ == Mode::contact_action) {
+            if (button < 2) item_ = (item_ + (button ? 1 : 2)) % 3;
+            else if (button == 5) mode_ = Mode::contact;
+            else if (button == 2) {
+                if (item_ == 2) std::memmove(position, next, std::strlen(next) + 1);
+                else if (length + 1 < sizeof(contact_draft_)) {
+                    std::memmove(position + 1, position, std::strlen(position) + 1);
+                    *position = item_ ? '\n' : ' ';
+                } else { hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return; }
+                mode_ = Mode::contact;
+            }
+            return;
+        }
+        if (button == 5) {
+            if (std::strcmp(contact_draft_, docs_.name_and_contact())) { mode_ = Mode::decision; item_ = 2; }
+            else leave_device_editor();
+        } else if (button == 2) { mode_ = Mode::contact_action; item_ = 0; }
+        else if (button == 3 && contact_cursor_) {
+            do { --contact_cursor_; } while ((uint8_t(contact_draft_[contact_cursor_]) & 0xc0) == 0x80);
+        } else if (button == 4) contact_cursor_ = unsigned(next - contact_draft_);
+        else if (button < 2) {
+            if (!code && length + 1 >= sizeof(contact_draft_)) {
+                hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return;
+            }
+            std::memmove(position + 1, next, std::strlen(next) + 1);
+            *position = code >= 32 && code <= 126 ? char(32 + (code - 32 + (button ? 1 : 94)) % 95)
+                : button ? 'a' : 'A';
+        }
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_cycle_name)
 #endif
@@ -367,6 +421,32 @@ private:
                 value = ui::i18n::text(ui::i18n::Message::startup_set);
             }
         }
+        else if (mode_ == Mode::pedal) {
+            title = ui::i18n::text(ui::i18n::Message::pedal);
+            value = ui::i18n::text(item_ ? ui::i18n::Message::owner_contact : ui::i18n::Message::startup_set);
+        }
+        else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
+            title = ui::i18n::text(ui::i18n::Message::owner_contact);
+            const char *selected = contact_draft_ + contact_cursor_;
+            const char *start = selected, *next = selected;
+            uint32_t code = 0;
+            ui::utf8::next(next, code);
+            for (unsigned i = 0; i < 6 && start > contact_draft_ && start[-1] != '\n'; ++i)
+                do { --start; } while ((uint8_t(*start) & 0xc0) == 0x80);
+            const char *end = next;
+            for (unsigned i = 0; i < 6 && *end && *end != '\n' && code != '\n'; ++i) {
+                uint32_t following;
+                ui::utf8::next(end, following);
+            }
+            std::snprintf(number, sizeof(number), "%.*s[%.*s]%.*s", int(selected - start), start,
+                code == '\n' ? 0 : int(next - selected), selected, int(end - next), next);
+            value = number;
+            if (mode_ == Mode::contact_action) {
+                const ui::i18n::Message actions[] = {ui::i18n::Message::insert_space, ui::i18n::Message::insert_line_break, ui::i18n::Message::delete_character};
+                value_label = ui::i18n::text(actions[item_]);
+            } else if (code == '\n') value_label = ui::i18n::text(ui::i18n::Message::line_break);
+            else value_label = ui::i18n::text(ui::i18n::Message::value);
+        }
         else if (mode_ == Mode::startup_set) {
             title = ui::i18n::text(ui::i18n::Message::startup_set);
             value_label = ui::i18n::text(ui::i18n::Message::pedal);
@@ -486,15 +566,23 @@ private:
                 ui::copy_caption(views[2].lines[0], docs_.selected());
             if ((mode_ == Mode::field || mode_ == Mode::value) && (changed_fields_ & (1u << field_)))
                 ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::changed));
-            if (startup_edit_)
+            if (device_editor_ == Mode::startup_set)
                 ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::startup_set_scope));
+            if (mode_ == Mode::contact) {
+                ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
+                ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
+                ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, ui::i18n::text(ui::i18n::Message::position_action)).text());
+            }
             if (mode_ == Mode::decision) {
-                ui::copy_caption(views[1].lines[0], startup_edit_ ? ui::i18n::text(ui::i18n::Message::pedal) : docs_.selected());
-                const auto save = startup_edit_ ? ui::i18n::Message::save : ui::i18n::Message::save_reload_setup;
+                const bool pedal = device_editor_ != Mode::closed;
+                ui::copy_caption(views[1].lines[0], pedal ? ui::i18n::text(ui::i18n::Message::pedal) : docs_.selected());
+                const auto save = pedal ? ui::i18n::Message::save : ui::i18n::Message::save_reload_setup;
                 const auto action = item_ == 0 ? save : item_ == 1 ? ui::i18n::Message::discard : ui::i18n::Message::keep_editing;
                 ui::copy_caption(views[2].lines[1], ui::i18n::text(action));
-                if (startup_edit_)
+                if (device_editor_ == Mode::startup_set)
                     ui::copy_caption(views[2].lines[2], startup_draft_[0] ? startup_draft_ : ui::i18n::text(ui::i18n::Message::none));
+                else if (device_editor_ == Mode::contact)
+                    ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::owner_contact));
                 else ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::reload_stops_playback));
             }
         }

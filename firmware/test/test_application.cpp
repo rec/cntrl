@@ -5,6 +5,7 @@
 #include <cntrl/ui/firmware_visit.h>
 #include <cntrl/ui/page_host.h>
 #include <cntrl/buttons.h>
+#include "filesystem.h"
 #include "patch_hardware.h"
 #include "storage.h"
 #include <cassert>
@@ -315,9 +316,16 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     } hardware;
     auto bytes = read_fixture(path);
     TestStorage storage, library;
+    struct SettingsDisk : TestFileSystem {
+        using TestFileSystem::TestFileSystem;
+        bool blocked = false;
+        std::unique_ptr<cntrl::files::File> file() override { return blocked ? nullptr : TestFileSystem::file(); }
+    } settings_disk(std::filesystem::path(path).parent_path() / "settings-device");
+    cntrl::GlobalSettings preferences(settings_disk);
+    assert(preferences.boot());
     cntrl::Controller primary(hardware, hardware, hardware);
     hardware.controller = &primary;
-    cntrl::Documents documents(storage, hardware, primary, hardware);
+    cntrl::Documents documents(storage, hardware, primary, hardware, &preferences);
     cntrl::Songs songs(library, hardware);
     cntrl::ui::Application app(hardware, documents, primary, hardware, hardware, songs, hardware, false);
     cntrl::Document checked; assert(checked.load(bytes.data(), unsigned(bytes.size()), hardware));
@@ -454,6 +462,35 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         const auto navigation = primary.navigation();
         assert(navigation.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes);
         assert(hardware.sent == before_tools && doc.instrument(instrument)[64] == channel);
+    }
+    {
+        assert(documents.name_and_contact("Ané\na@example.org"));
+        assert(app.open_tool(cntrl::PageLayout::settings, platform));
+        app.setups.poll(0);
+        app.controls_locked = false;
+        const auto button = [&](unsigned control) { click(control, 3510); };
+        button(0); button(2); // Pedal.
+        button(1); button(2); // Contact.
+        for (unsigned i = 0; i < 4; ++i) button(4); // Walk past the UTF-8 name and line break.
+        button(1); // Change the first character of the address.
+        button(5); button(2); // Back, then Keep editing.
+        assert(!std::strcmp(documents.name_and_contact(), "Ané\na@example.org"));
+        button(4); button(2); button(1); button(2); // Insert a line break after b.
+        button(5); button(1); // Select Save.
+        settings_disk.blocked = true;
+        button(2);
+        assert(app.setups.open() && !std::strcmp(documents.name_and_contact(), "Ané\na@example.org"));
+        settings_disk.blocked = false;
+        button(2);
+        assert(!std::strcmp(documents.name_and_contact(), "Ané\nb\n@example.org"));
+        cntrl::GlobalSettings rebooted(settings_disk);
+        assert(rebooted.boot() && !std::strcmp(rebooted.values().name_and_contact, "Ané\nb\n@example.org"));
+        button(2); // Reopen Contact.
+        button(2); button(0); button(2); // Delete the first character.
+        button(5); button(0); button(2); // Discard.
+        assert(!std::strcmp(documents.name_and_contact(), "Ané\nb\n@example.org"));
+        button(5); button(5); app.finish_tool();
+        assert(!app.setups.open() && hardware.sent == before_tools);
     }
     click(5, 3600);
     assert(host.pages_.index() == layout.region_page(tools, 1));
