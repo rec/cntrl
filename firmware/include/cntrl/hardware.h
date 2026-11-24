@@ -179,6 +179,7 @@ struct Hardware : RelayDriver {
     virtual void finish_language(bool) {}
     virtual bool language_available(const char *tag) const { return !std::strcmp(tag, "en"); }
     virtual bool request_language(const char *) { return false; }
+    virtual bool language_change_pending() const { return false; }
     virtual const char *current_language() const { return "en"; }
     virtual unsigned language_count() const { return 1; }
     virtual const char *language_tag(unsigned) const { return "en"; }

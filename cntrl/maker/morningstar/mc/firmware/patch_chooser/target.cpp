@@ -637,6 +637,7 @@ public:
     FLASHMEM cntrl::LanguagePreparation prepare_language(const char *tag) override { return languages.prepare(tag); }
     void finish_language(bool commit) override;
     bool request_language(const char *tag) override { return global_commands.request_language(tag); }
+    bool language_change_pending() const override { return global_commands.language_pending(); }
     bool language_available(const char *tag) const override { return languages.available(tag); }
     const char *current_language() const override { return languages.current(); }
     FLASHMEM unsigned language_count() const override { return languages.count(); }

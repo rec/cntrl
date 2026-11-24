@@ -104,6 +104,7 @@ public:
         requested_language = tag;
         return true;
     }
+    bool language_change_pending() const override { return globals->language_pending(); }
     bool language_available(const char *tag) const override { return languages->available(tag); }
     const char *current_language() const override { return languages->current(); }
     unsigned language_count() const override { return languages->count(); }

@@ -54,12 +54,13 @@ public:
     CNTRL_FLASH_ROUTINE(setup_ui_return_to_performance)
 #endif
     bool return_to_performance() {
-        if (!settings_ || !open() || docs_.busy() || browsing_) return false;
+        if (!settings_ || !open() || docs_.busy() || browsing_ || mode_ == Mode::language_saving) return false;
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
         const bool changed = device_editor_ == Mode::contact ? std::strcmp(contact_draft_, docs_.name_and_contact()) != 0
             : device_editor_ == Mode::startup_set ? std::strcmp(startup_draft_, docs_.startup_set()) != 0
             : device_editor_ == Mode::preference_value ? preference_changed()
             : device_editor_ == Mode::boot_firmware ? boot_draft_ != hardware_.boot_firmware()
+            : device_editor_ == Mode::language ? language_changed()
             : docs_.dirty() && changed_fields_;
         if (!changed) {
             if (docs_.dirty()) docs_.edit_cancel();
@@ -78,6 +79,11 @@ public:
 #endif
     void poll(uint8_t held) {
         if (locked_ && !held) locked_ = false;
+        if (mode_ == Mode::language_saving && !hardware_.language_change_pending()) {
+            if (language_changed()) mode_ = Mode::decision;
+            else leave_device_editor();
+            if (open()) render();
+        }
         if (mode_ == Mode::selecting && !docs_.busy()) {
             if (docs_.last_error()[0]) { mode_ = Mode::failed; render(); }
             else close();
@@ -109,7 +115,7 @@ public:
 #endif
     void button(unsigned button, bool down, uint32_t now) {
         if (!down || locked_ || browsing_ || mode_ == Mode::selecting || mode_ == Mode::loading_draft
-            || mode_ == Mode::saving || mode_ == Mode::history_work) return;
+            || mode_ == Mode::saving || mode_ == Mode::language_saving || mode_ == Mode::history_work) return;
         if (mode_ == Mode::failed) {
             if (button == 2 || button == 5) {
                 if (docs_.dirty()) { mode_ = Mode::decision; item_ = 0; render(); }
@@ -147,10 +153,13 @@ public:
                 }
             }
         } else if (mode_ == Mode::pedal) {
-            const unsigned count = hardware_.boot_firmware() != BootFirmware::unavailable ? 4 : docs_.global_preferences() ? 3 : 2;
+            const bool preferences_available = docs_.global_preferences();
+            const bool boot_available = hardware_.boot_firmware() != BootFirmware::unavailable;
+            const bool language_available = preferences_available && hardware_.language_count();
             if (button < 2) {
-                do { item_ = (item_ + count + (button ? 1 : -1)) % count; }
-                while (item_ == 2 && !docs_.global_preferences());
+                do { item_ = (item_ + (button ? 1 : 4)) % 5; }
+                while ((item_ == 2 && !preferences_available) || (item_ == 3 && !boot_available)
+                    || (item_ == 4 && !language_available));
             }
             else if (button == 5) mode_ = Mode::current;
             else if (button == 2 && !item_) begin_startup_set(docs_.startup_set());
@@ -159,9 +168,24 @@ public:
                 contact_cursor_ = 0;
                 mode_ = device_editor_ = Mode::contact;
             } else if (button == 2 && item_ == 2) { preference_index_ = 0; mode_ = Mode::preferences; }
-            else if (button == 2) {
+            else if (button == 2 && item_ == 3) {
                 boot_draft_ = hardware_.boot_firmware();
                 mode_ = device_editor_ = Mode::boot_firmware;
+            } else if (button == 2 && language_available) {
+                std::snprintf(language_draft_, sizeof(language_draft_), "%s", hardware_.current_language());
+                mode_ = device_editor_ = Mode::language;
+            }
+        } else if (mode_ == Mode::language) {
+            if (button < 2) {
+                const unsigned count = hardware_.language_count();
+                if (count) {
+                    const unsigned selected = language_index();
+                    const unsigned index = selected < count ? (selected + (button ? 1 : count - 1)) % count : 0;
+                    std::snprintf(language_draft_, sizeof(language_draft_), "%s", hardware_.language_tag(index));
+                }
+            } else if (button == 2 || button == 5) {
+                if (language_changed()) { mode_ = Mode::decision; item_ = 2; }
+                else leave_device_editor();
             }
         } else if (mode_ == Mode::boot_firmware) {
             if (button < 2) boot_draft_ = boot_draft_ == BootFirmware::stock ? BootFirmware::cntrl : BootFirmware::stock;
@@ -271,6 +295,11 @@ public:
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
             else if (button == 5 || (button == 2 && item_ == 2)) keep_editing(device_editor_);
             else if (button == 2) {
+                if (!item_ && device_editor_ == Mode::language) {
+                    if (hardware_.request_language(language_draft_)) { mode_ = Mode::language_saving; render(); }
+                    else hardware_.error(ui::i18n::text(ui::i18n::Message::language_change_rejected));
+                    return;
+                }
                 const bool reload = device_editor_ == Mode::preference_value && preference_reloads();
                 if (!item_ && !save_device_editor()) {
                     if (device_editor_ != Mode::boot_firmware) {
@@ -294,7 +323,7 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
+    enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -315,6 +344,7 @@ private:
     uint32_t preference_value_ = 0, setup_preference_ = 0, preference_step_ = 1;
     bool preference_known_ = false;
     BootFirmware boot_draft_ = BootFirmware::unavailable;
+    char language_draft_[sizeof(GlobalSettings::Values::language)] = {};
     Library library_request_ = Library::none;
     unsigned startup_choice_ = 0;
     char startup_draft_[64] = {};
@@ -359,8 +389,19 @@ private:
             mode_ = Mode::preferences; device_editor_ = Mode::closed; return;
         }
         mode_ = shortcut_ == Shortcut::pedal ? Mode::pedal : Mode::current;
-        item_ = device_editor_ == Mode::boot_firmware ? 3 : device_editor_ == Mode::contact ? 1 : 0;
+        item_ = device_editor_ == Mode::language ? 4 : device_editor_ == Mode::boot_firmware ? 3 : device_editor_ == Mode::contact ? 1 : 0;
         device_editor_ = Mode::closed;
+    }
+    bool language_changed() const { return std::strcmp(language_draft_, hardware_.current_language()) != 0; }
+    unsigned language_index() const {
+        const unsigned count = hardware_.language_count();
+        for (unsigned i = 0; i < count; ++i)
+            if (!std::strcmp(language_draft_, hardware_.language_tag(i))) return i;
+        return count;
+    }
+    const char *language_name() const {
+        const unsigned index = language_index();
+        return index < hardware_.language_count() ? hardware_.language_name(index) : language_draft_;
     }
     bool save_device_editor() {
         if (device_editor_ == Mode::boot_firmware) {
@@ -685,12 +726,16 @@ private:
         }
         else if (mode_ == Mode::pedal) {
             title = ui::i18n::text(ui::i18n::Message::pedal);
-            value = item_ == 3 ? "Boot firmware" : item_ == 2 ? "Preferences"
+            value = item_ == 4 ? ui::i18n::text(ui::i18n::Message::language) : item_ == 3 ? "Boot firmware" : item_ == 2 ? "Preferences"
                 : ui::i18n::text(item_ ? ui::i18n::Message::owner_contact : ui::i18n::Message::startup_set);
         }
         else if (mode_ == Mode::boot_firmware) {
             title = "Boot firmware";
             value = boot_draft_ == BootFirmware::stock ? "Stock firmware" : "CNTRL";
+        }
+        else if (mode_ == Mode::language) {
+            title = ui::i18n::text(ui::i18n::Message::language);
+            value = language_name();
         }
         else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
             const auto &field = preference();
@@ -753,7 +798,7 @@ private:
         } else if (mode_ == Mode::decision) {
             title = ui::i18n::text(ui::i18n::Message::unsaved_edits); value = item_ == 0 ? ui::i18n::text(ui::i18n::Message::save) : item_ == 1 ? ui::i18n::text(ui::i18n::Message::discard) : ui::i18n::text(ui::i18n::Message::cancel);
         } else if (mode_ == Mode::history_work) { title = ui::i18n::text(ui::i18n::Message::history); value = ui::i18n::text(ui::i18n::Message::working); }
-        else if (mode_ == Mode::saving) { title = ui::i18n::text(ui::i18n::Message::saving); value = ui::i18n::text(ui::i18n::Message::please_wait); }
+        else if (mode_ == Mode::saving || mode_ == Mode::language_saving) { title = ui::i18n::text(ui::i18n::Message::saving); value = ui::i18n::text(ui::i18n::Message::please_wait); }
         else if (mode_ == Mode::selecting) { title = ui::i18n::text(ui::i18n::Message::changing_setup); value = ui::i18n::text(ui::i18n::Message::please_wait); }
         else if (mode_ == Mode::loading_draft) { title = name_; value = ui::i18n::text(ui::i18n::Message::working); }
         else if (mode_ == Mode::failed) { title = ui::i18n::text(ui::i18n::Message::operation_failed); value = docs_.last_error(); }
@@ -850,6 +895,12 @@ private:
                 if (mode_ == Mode::boot_firmware)
                     ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
             }
+            if (mode_ == Mode::language)
+                ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
+            if (mode_ == Mode::language_saving) {
+                views[0].lines[0].text[0] = 0;
+                views[0].lines[1].text[0] = 0;
+            }
             if (mode_ == Mode::contact) {
                 ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
                 ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
@@ -893,6 +944,10 @@ private:
                 else if (device_editor_ == Mode::boot_firmware) {
                     ui::copy_caption(views[2].lines[0], "Boot firmware");
                     ui::copy_caption(views[2].lines[2], boot_draft_ == BootFirmware::stock ? "Stock firmware" : "CNTRL");
+                }
+                else if (device_editor_ == Mode::language) {
+                    ui::copy_caption(views[2].lines[0], ui::i18n::text(ui::i18n::Message::language));
+                    ui::copy_caption(views[2].lines[2], language_name());
                 }
                 else if (device_editor_ == Mode::preference_value) {
                     ui::copy_caption(views[2].lines[0], preference().label);

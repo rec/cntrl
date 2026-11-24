@@ -17,6 +17,7 @@ from cntrl.patch_chooser import (
     compiler,
     data_files,
     device_globals,
+    languages,
     models,
     resolved,
     setup_bundle,
@@ -443,6 +444,9 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
     )
     executable = backend.build(target, tmp_path / 'native', root)
     layout = EmulatorLayout.load(Path(__file__).parents[1] / 'emulator/mc6-pro.toml')
+    language_dir = tmp_path / 'session/cntrl/languages'
+    language_dir.mkdir(parents=True)
+    (language_dir / 'fr.bin').write_bytes(languages.pack('fr'))
     with backend.Session(
         layout, target, executable, tmp_path / 'session', bundle
     ) as session:
@@ -477,13 +481,21 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
         before_settings = len(session.messages)
         press('f')  # Settings utility page.
         press('c')
-        for button in ('a', 'c', 'a', 'c', 'b', 'c', 'b', 'c'):
+        for button in ('a', 'c', 'b', 'b', 'b', 'c', 'b', 'c', 'b', 'c'):
             press(button)
         events = session.messages[before_settings:]
         assert [e.message for e in events] == [
             'Simulated boot default saved: stock firmware.'
         ]
         assert not session.stock_firmware
+        assert session.language == 'en'
+        for button in ('b', 'c', 'b', 'c'):  # Draft French and review.
+            press(button)
+        assert session.language == 'en'
+        press('b')
+        press('c')
+        session.advance(session.time_us + 1000000)
+        assert session.language == 'fr'
         press('f')
         press('f')
         press('f')

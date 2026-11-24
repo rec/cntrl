@@ -25,6 +25,7 @@ public:
         std::snprintf(values.language, sizeof(values.language), "%s", clear ? "" : tag);
         return queue_language(values, false, false);
     }
+    bool language_pending() const { return language_pending_; }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(global_commands_request)
 #endif

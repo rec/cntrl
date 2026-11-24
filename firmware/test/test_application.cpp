@@ -310,6 +310,19 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         std::string settings_text[3];
         cntrl::BootFirmware saved_boot = cntrl::BootFirmware::unavailable;
         bool boot_save_blocked = false;
+        bool language_enabled = false;
+        const char *saved_language = "en";
+        const char *pending_language = nullptr;
+        bool request_language(const char *tag) override {
+            if (std::strcmp(tag, "fr")) return false;
+            pending_language = "fr";
+            return true;
+        }
+        bool language_change_pending() const override { return pending_language; }
+        const char *current_language() const override { return saved_language; }
+        unsigned language_count() const override { return language_enabled ? 2 : 0; }
+        const char *language_tag(unsigned index) const override { return index ? "fr" : "en"; }
+        const char *language_name(unsigned index) const override { return index ? "Français" : "English"; }
         cntrl::BootFirmware boot_firmware() const override { return saved_boot; }
         const char *save_boot_firmware(cntrl::BootFirmware firmware) override {
             if (boot_save_blocked) return "busy";
@@ -594,6 +607,32 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         hardware.boot_save_blocked = false;
         button(2);
         assert(hardware.saved_boot == cntrl::BootFirmware::stock);
+        button(5); button(5); app.finish_tool();
+        assert(!app.setups.open() && hardware.sent == before_tools);
+    }
+    {
+        hardware.language_enabled = true;
+        assert(app.open_tool(cntrl::PageLayout::settings, platform));
+        app.setups.poll(0);
+        app.controls_locked = false;
+        const auto button = [&](unsigned control) { click(control, 3540); };
+        button(0); button(2); // Pedal.
+        button(0); button(2); // Language.
+        assert(hardware.settings_text[1] == "Language" && hardware.settings_text[2] == "English");
+        button(1); button(5); button(0); button(2); // Discard French.
+        assert(!hardware.pending_language && !std::strcmp(hardware.saved_language, "en"));
+        button(2); button(1); button(2); button(1); button(2); // Save French.
+        assert(hardware.pending_language && !std::strcmp(hardware.saved_language, "en"));
+        app.setups.poll(0);
+        assert(hardware.settings_text[1] == "Saving");
+        hardware.pending_language = nullptr; // The language package failed to load.
+        app.setups.poll(0);
+        button(2); // The draft is still available for saving.
+        assert(hardware.pending_language && !std::strcmp(hardware.pending_language, "fr"));
+        hardware.saved_language = hardware.pending_language;
+        hardware.pending_language = nullptr;
+        app.setups.poll(0);
+        assert(hardware.settings_text[1] == "Pedal");
         button(5); button(5); app.finish_tool();
         assert(!app.setups.open() && hardware.sent == before_tools);
     }
