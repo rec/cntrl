@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from ..fonts.catalogue import UI_FONTS
 from . import (
     arpeggiator,
+    autocycles,
     banked,
     binary_format,
     counters,
@@ -99,7 +100,7 @@ def refresh_memory(data: bytes, fonts: dict[int, bytes], *, target: Target) -> b
         + midi_processing.estimate_ram(streams, endpoint_count=len(endpoints))
         + looper.estimate_ram(loop)
         + arpeggiator.estimate_ram(arp)
-        + banked.estimate_ram(settings.pages, len(data))
+        + banked.estimate_ram(settings.pages, max(len(data) + 28, len(saved)))
     )
     address = metadata + METADATA.size - 8
     if struct.unpack_from('<I', data, address)[0] == needed:
@@ -574,6 +575,7 @@ def export(data: bytes) -> str:
 
 
 def _decode(data: bytes) -> dict[str, object]:
+    serialized = data
     data, edits = patch_edit_core(data)
     if len(data) >= 6 and struct.unpack_from('<H', data, 4)[0] != DOCUMENT_VERSION:
         data = upgrade(data)
@@ -778,13 +780,22 @@ def _decode(data: bytes) -> dict[str, object]:
     ).items():
         pages[list(pages)[page]].update(settings)
     patch_cycles: dict[str, object] = {}
+    automatic = autocycles.recipes(serialized, list(instruments), nc)
     for i in range(nc):
         address = 76 + ni * 68 + i * 68
         start, count = struct.unpack_from('<HH', data, address + 64)
         values: list[dict[str, object]] = []
+        recipe = automatic.get(i)
         for position in range(start, start + count):
             root = roots[position]
             value = _patch(data, offset, root, metadata, set(), labels)
+            if recipe and (
+                value.get('instrument') != recipe['instrument']
+                or 'volume' in value
+                or 'pan' in value
+                or _edited_program(data, offset, root, metadata, named_nodes)
+            ):
+                recipe = None
             if root in detached or (
                 'patch' in value
                 and _edited_program(data, offset, root, metadata, named_nodes)
@@ -792,7 +803,9 @@ def _decode(data: bytes) -> dict[str, object]:
                 cache = 76 + ni * 68 + nc * 68 + position * 82
                 value['display_name'] = _text(data, cache + 12, 64)
             values.append(value)
-        patch_cycles[_text(data, address, 64)] = values
+        patch_cycles[_text(data, address, 64)] = (
+            recipe if recipe is not None else values
+        )
     result['patch_cycles'] = patch_cycles
     switches: dict[str, object] = {}
     keys = list(authored_switches)
@@ -875,6 +888,7 @@ def _decode(data: bytes) -> dict[str, object]:
         switches[key] = value
     result['switches'] = switches
     programs: list[dict[str, object]] = []
+    catalogue = autocycles.catalogue_program_nodes(serialized)
     for i in range(nodes):
         address = (
             offset + struct.unpack_from('<I', data, offset + GRAPH.size + i * 4)[0]
@@ -886,6 +900,8 @@ def _decode(data: bytes) -> dict[str, object]:
                 dict[str, object], cast(dict[str, object], metadata[str(i)])['_program']
             )
         )
+        if catalogue is not None and i not in catalogue and entry.get('name'):
+            continue
         instrument = struct.unpack_from('<H', data, address + 4)[0]
         identity = meta + METADATA.size + instrument * 64
         entry.update(

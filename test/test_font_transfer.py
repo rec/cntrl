@@ -400,7 +400,9 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
     )
     definitions = compiler_inputs.read_document(ROOT / 'firmware/test/definitions.json')
     font_data: dict[int, bytes] = {}
-    data = compiler.compile_show(source, definitions, [], target, font_data)
+    data = compiler.compile_show(
+        source, definitions, [], target, font_data, include_catalogue=True
+    )
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert f'{family}@1.25x' in exported['fonts']
     if family == 'StillTime':
@@ -410,10 +412,9 @@ def test_scaled_styles_fit_and_survive_export(family: str, tmp_path: Path) -> No
     path = tmp_path / 'exported.toml'
     path.write_text(resolved.export(data))
     command = data_files.Sources(document=[str(path)], target=[str(target_path)])
-    assert (
-        binary_format.core(compile_inputs(command).setups['exported'])
-        == setup_bundle.reindex({'exported': data})['exported']
-    )
+    assert binary_format.core(
+        compile_inputs(command).setups['exported']
+    ) == binary_format.core(setup_bundle.reindex({'exported': data})['exported'])
 
 
 def test_still_time_default_scale_can_be_overridden() -> None:

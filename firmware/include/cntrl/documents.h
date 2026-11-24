@@ -3,6 +3,7 @@
 #include <cntrl/usb_config.h>
 #include "controller.h"
 #include "patch_edit.h"
+#include "cycle_edit.h"
 #include "setup_names.h"
 #include "revisions.h"
 #include <cstdlib>
@@ -153,6 +154,33 @@ public:
         if (!allocate(staging_, document_.length())) return false;
         std::memcpy(staging_.data, active_.data, document_.length()); dirty_ = true; return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_add_cycle)
+#endif
+    bool edit_add_cycle(const char *name, unsigned instrument, unsigned tag) {
+        Document current, candidate;
+        if (!dirty_ || busy() || hardware_.configuration_locked()
+            || !current.load(staging_.data, staging_.size, hardware_, global_values())
+            || !append_cycle(current, name, instrument, tag, scratch_)
+            || !candidate.load(scratch_.data, scratch_.size, hardware_, global_values())) return false;
+        if (candidate.page_ram2() > hardware_.memory_capacity()
+            || hardware_.memory_runtime() > hardware_.memory_capacity() - candidate.page_ram2()) return false;
+        staging_.swap(scratch_);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_cycle_name_used)
+#endif
+    bool edit_cycle_name_used(const char *name) const {
+        Document current;
+        if (dirty_ && current.load(staging_.data, staging_.size, hardware_, global_values()))
+            for (unsigned i = 0; i < current.patch_cycles(); ++i)
+                if (!name_compare(name, reinterpret_cast<const char *>(current.patch_cycle(i)))) return true;
+        return false;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_value)
+#endif
     int64_t edit_value(unsigned patch, unsigned field) const {
         Document d; if (!dirty_ || !d.load(staging_.data, staging_.size, hardware_, global_values()) || (field <= 4 && patch >= d.patches())) return 0;
         const uint8_t *p = patch < d.patches() ? d.patch(patch) : nullptr;
@@ -201,7 +229,7 @@ public:
             && !(field == 5 && value >= 0 && value <= 255)
             && !(field == 6 && value >= 0 && value <= 2147483)
             && !(field == 7 && value >= 0 && value <= 1)) return false;
-        if (field <= 4 && field != 2 && reference && !original) {
+        if (field <= 4 && field != 2 && ((reference && !original) || d.cycle_catalogue().contains_node(unsigned(node)))) {
             if (!detach_patch(d, patch, scratch_) || !d.load(scratch_.data, scratch_.size, hardware_, global_values())) {
                 hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed));
                 return false;

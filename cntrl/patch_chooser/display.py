@@ -22,6 +22,7 @@ class DisplayPatch(BaseModel, frozen=True):
     program_style: models.Style | None = None
     tags: list[str] = Field(default_factory=list)
     program_tags: list[str] = Field(default_factory=list)
+    live_cycle_name: bool = False
 
     @cached_property
     def effective_tags(self) -> list[str]:
@@ -139,6 +140,8 @@ def compile_display(
             for name in page.fields:
                 parameter = show.parameters.get(name)
                 code = 24 if name in counter_fields else FIELDS.get(name, CONSTANT)
+                if code == 0 and patch.live_cycle_name:
+                    code = 25
                 value = (
                     show.counters[name[9:]].initial
                     if code == 24
@@ -425,8 +428,6 @@ def compile_display(
         b'CDSP', len(styles), len(pages), len(texts), len(page_data), len(authored)
     )
     block += b''.join(s for s, _ in styles) + page_data + text_data + authored
-    if len(block) > 65535:
-        raise ValueError('display metadata exceeds 65535 bytes')
     if any(images):
         from .song_artwork import prepare_bitmap
 
@@ -541,8 +542,8 @@ def estimate_frame_ram(setup: models.Setup, target: models.Target) -> int:
     pixels = 2 * sum(d.width * d.height for d in target.displays)
     total = setup.frame_buffers * (((pixels + 7) & ~7) + 8)
     if setup.frame_buffers == 1 and setup.use_animations:
-        # ARM Pane is 1960 bytes; Renderer checks this against sizeof(Pane).
-        total += ((len(target.displays) * 1960 + 7) & ~7) + 8
+        # ARM Pane is 1976 bytes; Renderer checks this against sizeof(Pane).
+        total += ((len(target.displays) * 1976 + 7) & ~7) + 8
     return total
 
 

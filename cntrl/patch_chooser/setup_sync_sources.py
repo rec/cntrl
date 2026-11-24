@@ -45,6 +45,22 @@ def destination(
 ) -> Change:
     path = change.path
     locations = trace.locations.get(change.setup, {})
+    if (
+        len(path) == 2
+        and path[0] == 'patch_cycles'
+        and not change.base.present
+        and not change.host.present
+        and change.pedal.present
+        and isinstance(change.pedal.value, dict)
+        and (root := trace.roots.get(change.setup)) is not None
+        and root.suffix == '.toml'
+    ):
+        return placed(
+            change,
+            data_files.Location(file=root, path=path),
+            trace,
+            'Add this instrument cycle to the setup.',
+        )
     if change.setting_override == 'inherit':
         location = locations.get(tuple(path))
         if location is None or location.file in trace.defaults.values():

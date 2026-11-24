@@ -154,6 +154,7 @@ def compile_inputs(
                     movies,
                     source_snapshots=trace.files,
                     setting_overrides=trace.setting_overrides.get(e.name),
+                    include_catalogue=True,
                 )
                 if assets is not None:
                     assets[e.name] = fonts

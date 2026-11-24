@@ -109,6 +109,15 @@ public:
                 if (docs_.history_restore(name_, revision_.number, now)) mode_ = Mode::saving;
                 else { hardware_.error(ui::i18n::text(ui::i18n::Message::restore_failed)); return; }
             }
+        } else if (mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
+                   || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name) {
+            cycle_button(button);
+        } else if ((mode_ == Mode::patch || mode_ == Mode::field) && button == 4
+                   && docs_.document().cycle_catalogue().size()) {
+            cycle_return_ = mode_;
+            alias_ = 0;
+            while (!docs_.document().cycle_catalogue().count(alias_)) ++alias_;
+            mode_ = Mode::cycle_instrument;
         } else if (mode_ == Mode::patch) {
             if (button < 2) {
                 patch_ = (patch_ + docs_.document().patches() + (button == 0 ? -1 : 1)) % docs_.document().patches();
@@ -140,7 +149,8 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, catalogue, action, selecting, patch, field, value, decision, saving, failed, history, comparison, history_work };
+    enum class Mode { closed, catalogue, action, selecting, patch, field, value, decision, saving, failed, history, comparison, history_work,
+                      cycle_instrument, cycle_tag, cycle_confirm, cycle_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -149,6 +159,91 @@ private:
     bool locked_ = false, browsing_ = false, select_edit_ = false, original_ = false;
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
+    Mode cycle_return_ = Mode::closed;
+    unsigned alias_ = 0, tag_ = CycleCatalogue::all, character_ = 0;
+    char cycle_name_[64] = {};
+    char suggested_[64] = {};
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_cycle_name)
+#endif
+    void propose_cycle_name() {
+        const auto &doc = docs_.document();
+        const char *alias = reinterpret_cast<const char *>(doc.instrument(alias_));
+        const char *tag = tag_ == CycleCatalogue::all ? "" : doc.cycle_catalogue().tag(tag_);
+        std::snprintf(suggested_, sizeof(suggested_), "%s", alias);
+        if (*tag) {
+            const auto used = std::strlen(suggested_);
+            suggested_[used] = ' ';
+            ui::utf8::copy(suggested_ + used + 1, sizeof(suggested_) - used - 1, tag);
+        }
+        std::strcpy(cycle_name_, suggested_);
+        for (unsigned suffix = 2;; ++suffix) {
+            if (!docs_.edit_cycle_name_used(cycle_name_)) break;
+            char number[12];
+            std::snprintf(number, sizeof(number), " %u", suffix);
+            ui::utf8::copy(cycle_name_, sizeof(cycle_name_) - std::strlen(number), suggested_);
+            std::strcat(cycle_name_, number);
+        }
+        std::strcpy(suggested_, cycle_name_);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_cycle_button)
+#endif
+    void cycle_button(unsigned button) {
+        const auto &doc = docs_.document();
+        const auto &catalogue = doc.cycle_catalogue();
+        if (mode_ == Mode::cycle_instrument) {
+            if (button == 5) mode_ = cycle_return_;
+            else if (button < 2) do {
+                alias_ = (alias_ + doc.instruments() + (button ? 1 : -1)) % doc.instruments();
+            } while (!catalogue.count(alias_));
+            else if (button == 2) { tag_ = CycleCatalogue::all; mode_ = Mode::cycle_tag; }
+        } else if (mode_ == Mode::cycle_tag) {
+            if (button == 5) mode_ = Mode::cycle_instrument;
+            else if (button < 2) {
+                const unsigned count = catalogue.tags() + 1;
+                unsigned choice = tag_ == CycleCatalogue::all ? 0 : tag_ + 1;
+                do { choice = (choice + count + (button ? 1 : -1)) % count; }
+                while (choice && !catalogue.count(alias_, choice - 1));
+                tag_ = choice ? choice - 1 : CycleCatalogue::all;
+            } else if (button == 2) { propose_cycle_name(); mode_ = Mode::cycle_confirm; }
+        } else if (mode_ == Mode::cycle_confirm) {
+            if (button == 5) mode_ = Mode::cycle_tag;
+            else if (button == 3) {
+                std::strcpy(suggested_, cycle_name_);
+                for (const char *p = cycle_name_; *p; ++p) if (uint8_t(*p) >= 128) {
+                    cycle_name_[0] = 0; break;
+                }
+                character_ = 0;
+                mode_ = Mode::cycle_name;
+            } else if (button == 2) {
+                if (docs_.edit_cycle_name_used(cycle_name_)) {
+                    hardware_.error("Cycle name already used");
+                    return;
+                }
+                if (!docs_.edit_add_cycle(cycle_name_, alias_, tag_)) {
+                    hardware_.error("Cycle exceeds available setup capacity");
+                    return;
+                }
+                mode_ = Mode::decision; item_ = 0;
+            }
+        } else {
+            unsigned length = unsigned(std::strlen(cycle_name_));
+            if (button == 5) std::strcpy(cycle_name_, suggested_);
+            if (button == 2 || button == 5) {
+                while (length && button == 2 && cycle_name_[length - 1] == ' ') cycle_name_[--length] = 0;
+                if (!cycle_name_[0]) std::strcpy(cycle_name_, suggested_);
+                mode_ = Mode::cycle_confirm;
+            } else if (button == 3 && character_) --character_;
+            else if (button == 4 && character_ < 62) ++character_;
+            else if (button < 2) {
+                while (length <= character_) cycle_name_[length++] = ' ';
+                cycle_name_[length] = 0;
+                char &letter = cycle_name_[character_];
+                letter = char(32 + (letter - 32 + 95 + (button ? 1 : -1)) % 95);
+            }
+        }
+    }
     void close() { mode_ = Mode::closed; docs_.redraw(); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_begin_edit)
@@ -197,6 +292,25 @@ private:
         else if (mode_ == Mode::saving) { title = ui::i18n::text(ui::i18n::Message::saving); value = ui::i18n::text(ui::i18n::Message::please_wait); }
         else if (mode_ == Mode::selecting) { title = ui::i18n::text(ui::i18n::Message::changing_setup); value = ui::i18n::text(ui::i18n::Message::please_wait); }
         else if (mode_ == Mode::failed) { title = ui::i18n::text(ui::i18n::Message::operation_failed); value = docs_.last_error(); }
+        const bool adding_cycle = mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
+            || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
+        if (adding_cycle) {
+            const auto &doc = docs_.document();
+            title = "Add patch cycle";
+            if (mode_ == Mode::cycle_instrument) {
+                value_label = "Instrument";
+                value = reinterpret_cast<const char *>(doc.instrument(alias_));
+            } else if (mode_ == Mode::cycle_tag) {
+                value_label = "Programs";
+                value = tag_ == CycleCatalogue::all ? "All programs" : doc.cycle_catalogue().tag(tag_);
+            } else if (mode_ == Mode::cycle_confirm) {
+                std::snprintf(number, sizeof(number), "%u programs", doc.cycle_catalogue().count(alias_, tag_));
+                value_label = number; value = cycle_name_;
+            } else {
+                std::snprintf(number, sizeof(number), "Character %u", character_ + 1);
+                value_label = number; value = cycle_name_;
+            }
+        }
         if (mode_ == Mode::history) {
             title = ui::i18n::text(ui::i18n::Message::history); value_label = ui::i18n::text(ui::i18n::Message::revision);
             if (revision_.number) {
@@ -226,6 +340,13 @@ private:
         std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::browse)).text());
         std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::ok)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
         if (mode_ == Mode::value) std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
+        views[0].lines[2].graphics.line_height = views[0].lines[2].graphics.size = 16;
+        if ((mode_ == Mode::patch || mode_ == Mode::field) && docs_.document().cycle_catalogue().size())
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, "Add cycle").text());
+        if (mode_ == Mode::cycle_confirm)
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, ui::i18n::text(ui::i18n::Message::rename)).text());
+        if (mode_ == Mode::cycle_name)
+            ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, ui::i18n::text(ui::i18n::Message::position_action)).text());
         if (mode_ == Mode::catalogue) {
             ui::copy_caption(views[1].lines[0], ui::i18n::text(ui::i18n::Message::setups));
             std::snprintf(views[1].lines[1].text, 64, "%s", value);
@@ -233,7 +354,7 @@ private:
             ui::copy_caption(views[2].lines[1], ui::i18n::text(ui::i18n::Message::no_midi_sent));
         } else {
             const bool shared_edit = original_ && (mode_ == Mode::field || mode_ == Mode::value) && field_ < 5;
-            ui::copy_caption(views[1].lines[0], ui::i18n::text(mode_ == Mode::action ? ui::i18n::Message::setup : mode_ == Mode::patch ? ui::i18n::Message::patch_cycle : shared_edit ? ui::i18n::Message::edit_original_patch : ui::i18n::Message::field));
+            ui::copy_caption(views[1].lines[0], ui::i18n::text(mode_ == Mode::action || adding_cycle ? ui::i18n::Message::setup : mode_ == Mode::patch ? ui::i18n::Message::patch_cycle : shared_edit ? ui::i18n::Message::edit_original_patch : ui::i18n::Message::field));
             ui::copy_caption(views[1].lines[1], title);
             ui::copy_caption(views[2].lines[0], value_label);
             ui::copy_caption(views[2].lines[1], value);

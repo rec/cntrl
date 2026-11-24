@@ -9,7 +9,9 @@ from pydantic import ValidationError
 
 from . import (
     arpeggiator,
+    autocycles,
     banked,
+    binary_format,
     counters,
     device_settings,
     display,
@@ -65,6 +67,7 @@ def compile_show(
     binding_scopes: list[tuple[int, str, dict[str, object]]] | None = None,
     scene_images: dict[int, tuple[str, models.Style, int]] | None = None,
     song_scenes: dict[str, tuple[str, str, str | None]] | None = None,
+    include_catalogue: bool = False,
 ) -> bytes:
     errors: list[str] = []
     generated: dict[int, bytes] = {}
@@ -233,10 +236,52 @@ def compile_show(
     names: list[bytes] = []
     roots: list[int] = []
     views: list[display.DisplayPatch] = []
+    catalogues: dict[str, list[models.TablePatch]] = {}
+    recipes: list[binary_format.Record] = []
     for patch_cycle, raw in show.patch_cycles.items():
         label = fixed_text(
             patch_cycle, 64, target, f'patch_cycles.{patch_cycle}', errors, unicode=True
         )
+        if isinstance(raw, dict):
+            context = f'patch_cycles.{patch_cycle}'
+            try:
+                selector = autocycles.Selector.model_validate(raw)
+            except ValidationError as error:
+                errors.extend(validation_errors(context, error))
+                continue
+            instrument = instruments.get(selector.instrument)
+            if instrument is None:
+                errors.append(f'{context}: unknown instrument {selector.instrument!r}')
+                continue
+            if selector.instrument not in catalogues:
+                catalogues[selector.instrument] = autocycles.programs(
+                    entries, instrument
+                )
+            raw = [
+                {
+                    'instrument': selector.instrument,
+                    'program': e.program,
+                    'bank': e.bank,
+                }
+                for e in autocycles.select(catalogues[selector.instrument], selector)
+            ]
+            tag = (
+                fixed_text(
+                    selector.tag, 64, target, context + '.tag', errors, unicode=True
+                )
+                if selector.tag
+                else b''
+            )
+            recipes.append(
+                binary_format.Record(
+                    tag=binary_format.CYCLE_RECIPE,
+                    data=autocycles.RECIPE.pack(
+                        len(patch_cycles),
+                        list(instruments).index(selector.instrument),
+                        tag,
+                    ),
+                )
+            )
         if not isinstance(raw, list):
             errors.append(
                 f'patch_cycles.{patch_cycle}: expected a list of Patch values'
@@ -256,6 +301,21 @@ def compile_show(
                 '<64sHH', label, min(start, 65535), min(len(roots) - start, 65535)
             )
         )
+    catalogue_nodes: list[tuple[int, models.TablePatch]] = []
+    prepare_catalogue = include_catalogue and any(
+        p.type == 'patch-chooser' for p in show.pages.values()
+    )
+    if prepare_catalogue:
+        for alias, instrument in instruments.items():
+            for entry in autocycles.programs(entries, instrument):
+                path = f'instruments.{alias}.catalogue[{entry.bank}, {entry.program}]'
+                index = compiler.parse(
+                    {'instrument': alias, 'program': entry.program, 'bank': entry.bank},
+                    path,
+                )
+                if index is not None:
+                    catalogue_nodes.append((index, entry))
+                    compiler.browser.append((index, alias, path))
     switch_records: list[bytes] = []
     switch_views: list[display.DisplayPatch] = []
     assignments: list[tuple[str, models.SwitchAssignment, int, int]] = []
@@ -385,7 +445,7 @@ def compile_show(
         )
     compiler.named = named
     compiler.validate(assignments + gesture_assignments)
-    for index, patch_cycle, path in compiler.browser:
+    for position, (index, patch_cycle, path) in enumerate(compiler.browser):
         patch, presentation = compiler.presentation(index)
         label = presentation.display_name or presentation.name or compiler.labels[patch]
         value = compiler.values[index]
@@ -416,10 +476,14 @@ def compile_show(
             record, bank, name, program_name, program_view = program
             record = bytearray(record)
             # Patch cycle index is presentation data; node execution does not read it.
-            patch_cycle_index = next(
-                i
-                for i, c in enumerate(patch_cycles)
-                if c[:64].split(b'\0')[0].decode('utf-8') == patch_cycle
+            patch_cycle_index = (
+                0
+                if position >= len(roots)
+                else next(
+                    i
+                    for i, c in enumerate(patch_cycles)
+                    if c[:64].split(b'\0')[0].decode('utf-8') == patch_cycle
+                )
             )
             struct.pack_into('<H', record, 2, patch_cycle_index)
             record[12:76] = fixed_text(
@@ -430,6 +494,7 @@ def compile_show(
                     'context': path,
                     'style': presentation.style,
                     'autostyle': autostyle,
+                    'live_cycle_name': position >= len(roots),
                     'tags': presentation.tags,
                     'values': program_view.values
                     | {'patch_cycle.name': patch_cycle, 'display_name': label},
@@ -539,6 +604,19 @@ def compile_show(
         r[:-2] + struct.pack('<H', references[len(records) + i][1])
         for i, r in enumerate(switch_records)
     ]
+    if prepare_catalogue:
+        recipes.insert(
+            0,
+            binary_format.Record(
+                tag=binary_format.CYCLE_CATALOGUE,
+                data=autocycles.pack_catalogue(
+                    catalogue_nodes, records, banks, names, len(roots), target, errors
+                ),
+            ),
+        )
+        del records[len(roots) :]
+        del banks[len(roots) :]
+        del names[len(roots) * 3 :]
     mappings: list[bytes] = []
     identities: list[bytes] = []
     for i, (alias, instrument) in enumerate(instruments.items()):
@@ -718,11 +796,34 @@ def compile_show(
             | (GESTURES_FLAG if gestures else 0)
         ),
     )
+    core_length = len(result)
+    if recipes:
+        result = binary_format.Document(
+            kind=binary_format.Kind.setup,
+            records=[
+                binary_format.Record(
+                    tag=binary_format.CORE, required=True, data=result
+                ),
+                *recipes,
+            ],
+        ).pack()
     result = (
         device_settings.attach(result, setting_overrides, target)
         if setting_overrides is not None
         else result
     )
+    if recipes and (
+        extra := banked.estimate_ram(show.pages, len(result))
+        - banked.estimate_ram(show.pages, core_length + 28)
+    ):
+        address = 76 + len(instruments) * 68 + len(patch_cycles) * 68 + len(roots) * 82
+        address += METADATA.size - 8
+        core = bytearray(binary_format.core(result))
+        struct.pack_into(
+            '<I', core, address, struct.unpack_from('<I', core, address)[0] + extra
+        )
+        struct.pack_into('<I', core, 20, crc32(core[28:]))
+        result = binary_format.replace_core(result, bytes(core))
     warn_fast_switches(compiler, assignments, song_scenes or {}, song_bindings)
     return result
 

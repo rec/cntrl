@@ -130,7 +130,7 @@ def pack_document(
         )
         + body
     )
-    if extra_ram := banked.estimate_ram(show.pages, len(result)):
+    if extra_ram := banked.estimate_ram(show.pages, len(result) + 28):
         result = bytearray(result)
         address = 76 + instruments * 68 + cycles * 68 + roots * 82 + METADATA.size - 8
         struct.pack_into(

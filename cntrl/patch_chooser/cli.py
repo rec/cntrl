@@ -23,6 +23,7 @@ from ..fonts.assets import FontDecodeError
 from ..localization import catalogue
 from ..maker.morningstar.mc import font_coverage
 from . import (
+    autocycles,
     backups,
     binary_format,
     compiler_errors,
@@ -124,6 +125,7 @@ class SetupDownload(BaseModel, frozen=True):
 class SetupCLI(BaseModel, frozen=True):
     command: (
         Annotated[setup_create.Create, tyro.conf.subcommand(name='create')]
+        | Annotated[autocycles.AddCycle, tyro.conf.subcommand(name='add-cycle')]
         | Annotated[setup_sync.Sync, tyro.conf.subcommand(name='sync')]
         | Annotated[history.History, tyro.conf.subcommand(name='history')]
         | Annotated[SetupCopy, tyro.conf.subcommand(name='copy')]
@@ -187,6 +189,7 @@ def run_setup(
     | backups.Convert
     | backups.Recover
     | setup_sync.Sync
+    | autocycles.AddCycle
     | setup_create.Create,
     *,
     connection: transport.SerialConnection | None = None,
@@ -195,6 +198,9 @@ def run_setup(
         raise ValueError('a supplied setup connection is supported for setup copy only')
     if isinstance(command, setup_create.Create):
         setup_create.run(command)
+        return
+    if isinstance(command, autocycles.AddCycle):
+        autocycles.run(command)
         return
     if isinstance(command, SetupAddDoom):
         if 'doom' not in backups.read_target(command.target).functions:

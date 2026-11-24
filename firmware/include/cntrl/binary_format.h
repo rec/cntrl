@@ -9,6 +9,8 @@ constexpr bool supported_format(uint16_t format) { return format == development_
 enum class Kind : uint16_t { setup = 1, bundle = 2, songs = 3 };
 constexpr unsigned header_size = 20, record_size = 8, maximum_payload = 16u * 1024u * 1024u;
 constexpr uint16_t patch_edit_origins = 6;
+constexpr uint16_t cycle_recipe = 12;
+constexpr uint16_t cycle_catalogue = 13;
 inline uint16_t read16(const uint8_t *p) { return uint16_t(p[0]) | uint16_t(p[1]) << 8; }
 inline void write16(uint8_t *p, uint16_t n) { p[0] = uint8_t(n); p[1] = uint8_t(n >> 8); }
 inline uint32_t read32(const uint8_t *p) {
@@ -128,6 +130,11 @@ public:
                 extended_artwork_seen_ |= bit;
             } else if (tag == patch_edit_origins && kind_ == Kind::setup) {
                 if (n < 8 || n % 4) return false;
+            } else if (tag == cycle_recipe && kind_ == Kind::setup) {
+                if (n != 68 || !reader.read(position_ + 67, bytes, 1) || bytes[0]) return false;
+            } else if (tag == cycle_catalogue && kind_ == Kind::setup) {
+                if (n < 8 || catalogue_) return false;
+                catalogue_ = true;
             } else view_.opaque = true;
         }
         position_ += n; return true;
@@ -141,7 +148,7 @@ private:
     Kind kind_;
     View view_;
     uint32_t wire_crc_ = 0xffffffffu, envelope_crc_ = 0xffffffffu, expected_ = 0;
-    bool envelope_ = false, wire_ = false, source_ = false;
+    bool envelope_ = false, wire_ = false, source_ = false, catalogue_ = false;
     static void update(uint32_t &crc, uint8_t byte) {
         crc ^= byte;
         for (unsigned bit = 0; bit < 8; ++bit) crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1)));

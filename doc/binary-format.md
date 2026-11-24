@@ -54,6 +54,8 @@ or execution. Unsupported format identifiers are rejected rather than inferred.
 | Tags 8–9, kind 3 | Setlist artwork directory and title styles in setlist record order |
 | Tags 10–11, kind 3 | Scene artwork directory and title styles indexed by binding node |
 | Tag 6, kind 1 | Optional authoring metadata for a local patch created by the setup editor |
+| Tag 12, kind 1 | Optional automatic cycle selector for export and sync |
+| Tag 13, kind 1 | Singleton compiled instrument catalogue for the setup editor |
 | Other tags | Unrecognized optional metadata can be retained; unrecognized required semantics prevent activation |
 
 The setup core snapshot uses the explicitly encoded `CSW1` schema 48,
@@ -87,6 +89,15 @@ Each local patch edit record starts with two little-endian u16 node IDs for the
 new root and the former browser root. Pairs of u16 node IDs then map each cloned
 node to its source node for export. The core graph contains the complete local
 patch and remains authoritative for playback.
+
+An automatic cycle selector contains the u16 cycle and instrument indices
+followed by a 64-byte NUL-padded program tag. An empty tag selects all programs
+for the instrument. The catalogue holds prepared program nodes and browser
+records, indexed by instrument and tag. An empty catalogue means the compiler
+found no named programs to offer. Display field 25 renders the current cycle
+name using the localized font and fits names entered on the pedal. Saving a
+cycle appends ordinary browser records and roots referencing the precompiled
+nodes, then writes its selector.
 
 An editor refuses transformations that could invalidate opaque references.
 This includes remapping a setup table, changing node identities or upgrading a

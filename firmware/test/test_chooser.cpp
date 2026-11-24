@@ -852,10 +852,68 @@ void test_patch_reference_edits(const char *input, const char *output) {
     assert(saved);
 }
 
+void test_automatic_cycle_save(const char *input, const char *output) {
+    std::ifstream file(input, std::ios::binary);
+    std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), {}};
+    Fake hw; TestStorage card; TestController controller(hw);
+    cntrl::Documents docs(card, hw, controller, hw);
+    docs.boot();
+    upload(docs, bytes); command(docs, "CNTRL SETUP FINISH");
+    assert(docs.document().patches() == 1);
+    assert(docs.document().cycle_catalogue().count(0) == 3);
+
+    cntrl::SetupUi ui(docs, hw);
+    ui.enter(); ui.poll(0);
+    auto press = [&](unsigned button) { ui.button(button, true, 1); };
+    press(2); press(1); press(2);
+    assert(std::strstr(hw.panes[0].lines[2].text, "Add cycle"));
+    press(4); press(2); press(1); press(2);
+    assert(!std::strcmp(hw.panes[2].lines[1].text, "synth brass"));
+    press(2);
+    assert(docs.document().patch_cycles() == 1);
+    card.remaining = 0;
+    press(2);
+    while (docs.busy()) docs.tick(2);
+    ui.poll(0);
+    assert(docs.last_error()[0] && docs.document().patch_cycles() == 1);
+    card.remaining = -1;
+    press(2); press(2);
+    while (docs.busy()) docs.tick(3);
+    ui.poll(0);
+    assert(!ui.open() && docs.document().patch_cycles() == 2);
+
+    assert(docs.edit_begin());
+    assert(!docs.edit_add_cycle("Synth Brass", 0, cntrl::CycleCatalogue::all));
+    assert(!docs.edit_add_cycle("Empty", 0, 1000));
+    assert(docs.edit_adjust(1, 0, 1));
+    assert(docs.edit_add_cycle("All", 0, cntrl::CycleCatalogue::all));
+    assert(docs.edit_value(4, 0) == 3);
+    assert(!docs.edit_add_cycle("Another", 0, cntrl::CycleCatalogue::all));
+    docs.edit_cancel();
+
+    cntrl::Documents reboot(card, hw, controller, hw);
+    reboot.boot();
+    const auto &document = reboot.document();
+    assert(document.patch_cycles() == 2 && document.patches() == 3);
+    controller.action(4);
+    assert(!std::strcmp(hw.panes[0].lines[1].text, "Brass"));
+    controller.action(2);
+    assert(hw.routes.back() == "din");
+    assert((hw.sent.back() == std::vector<uint8_t>{0xb1, 32, 1, 0xc1, 2}));
+
+    std::ofstream saved(output, std::ios::binary);
+    saved.write(reinterpret_cast<const char *>(document.data()), document.length());
+    assert(saved);
+}
+
 int main(int argc, char **argv) {
     assert(argc >= 3);
     if (argc == 4 && !std::strcmp(argv[1], "--patch-edit")) {
         test_patch_reference_edits(argv[2], argv[3]);
+        return 0;
+    }
+    if (argc == 4 && !std::strcmp(argv[1], "--automatic-cycle")) {
+        test_automatic_cycle_save(argv[2], argv[3]);
         return 0;
     }
     bool profiling = false, exhaustive = false;

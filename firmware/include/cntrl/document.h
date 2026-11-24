@@ -5,6 +5,7 @@
 #include "midi_processing.h"
 #include "numeric.h"
 #include "binary_format.h"
+#include "cycle_catalogue.h"
 #include "global_settings.h"
 #include "banked_pages.h"
 #include <cstring>
@@ -481,7 +482,7 @@ public:
             if (cursor + count * 8 > texts) return false;
             for (unsigned j = 0; j < count; ++j, cursor += 8) {
                 const uint8_t *p = bytes + cursor;
-                if ((p[0] > 7 && (p[0] < 16 || p[0] > 24) && p[0] != 255)
+                if ((p[0] > 7 && (p[0] < 16 || p[0] > 25) && p[0] != 255)
                     || p[1] > 1 || u16(p + 2) >= ns || u16(p + 6) >= nt) return false;
                 if (contact_style == unsigned(u16(p + 2)) + 1) return false;
                 const uint8_t *g = bytes + styles + u16(p + 2) * 16;
@@ -575,6 +576,8 @@ public:
             next += count;
         }
         if (next != np) return false;
+        auto catalogue = CycleCatalogue::from_setup(serialized, serialized_length, persistent.offset + length);
+        if (!catalogue.valid(ni, u16(bytes + graph + 8), pages)) return false;
         data_ = serialized; length_ = serialized_length; core_ = persistent.offset;
         core_length_ = length; opaque_ = persistent.opaque;
         instruments_ = ni; patch_cycles_ = nc; patches_ = np;
@@ -645,6 +648,12 @@ public:
         return -1;
     }
     unsigned graph_metadata() const { return graph_; }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_cycle_catalogue)
+#endif
+    CycleCatalogue cycle_catalogue() const {
+        return CycleCatalogue::from_setup(data_, length_, core_ + core_length_);
+    }
     const uint8_t *pickup_record() const { return pickup_ ? data_ + pickup_ : nullptr; }
     const uint8_t *node(unsigned i) const { return data_ + graph_ + u32(data_ + graph_ + 16 + i * 4); }
     unsigned browser_root(unsigned i) const { return u16(data_ + graph_ + 16 + nodes() * 4 + i * 2); }
@@ -884,6 +893,10 @@ public:
             else field_text(line.text, sizeof(line.text), p[0], index, u16(p + 6), values);
             if (ui::i18n::translated_ui && (p[0] == 17 || p[0] == 18 || p[0] == 22)) {
                 // Reserved localized UI face; authored labels retain their font.
+                line.graphics.font = 253; line.graphics.asset = 0;
+            }
+            if (p[0] == 25) {
+                line.centered = line.fit = true;
                 line.graphics.font = 253; line.graphics.asset = 0;
             }
         }
@@ -1194,7 +1207,7 @@ private:
         }
         if (u16(p) == 65535 && code >= 2 && code <= 6) return;
         switch (code) {
-        case 0: source = patch_cycle(u16(p + 2)); break;
+        case 0: case 25: source = patch_cycle(u16(p + 2)); break;
         case 1: source = p + 12; break;
         case 6: if (u16(p) == 65535) return; source = instrument(u16(p)); break;
         case 2: std::snprintf(text, size, "%u", unsigned(p[4]) + 1); return;

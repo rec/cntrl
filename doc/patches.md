@@ -1,7 +1,8 @@
 # Patches, switches and songs
 
-`patch_cycles` maps names to ordered lists of patches. A tag classifies a program
-or patch independently of those lists. Items use a `tags` list; the setup's
+`patch_cycles` maps names to ordered lists of patches or instrument selectors.
+A tag classifies a program or patch independently of those lists. Items use a
+`tags` list; the setup's
 optional `[tag_styles.NAME]` tables define styles for selected tags. Tags do not
 need a declaration to be used. Top-level `tags` describes the performance setup
 itself and is not inherited by its patches.
@@ -13,6 +14,35 @@ Each form works in a named definition, browser patch cycle, switch assignment,
 song position or sequence.
 A sequence executes all its children in order on one activation. A song
 advances one position at a time.
+
+## Create a cycle from an instrument
+
+Run `cntrl setup add-cycle SETUP.toml` to pick a configured instrument, review
+the program count, and save a cycle. Enter accepts each suggested selection.
+You can select a program tag to narrow the cycle, or enter a custom cycle name.
+Compile and copy the updated setup to use it on the pedal.
+
+The wizard writes a selector under `[patch_cycles]`. You can also write one
+directly. `instrument` is the alias under `[instruments]`, so the cycle uses
+that alias's MIDI route, channel, and profile.
+
+```toml
+[patch_cycles]
+Synth = { instrument = 'synth' }
+'Synth Brass' = { instrument = 'synth', tag = 'brass' }
+```
+
+The cycle contains named programs in bank and program-number order. Recompile
+to pick up changes to the catalogue or tag membership.
+
+On the pedal, open **Setups**, choose **Edit**, then press the switch labeled
+**Add cycle**. Browse with A and B, confirm with C, and go back with F on
+six-switch controllers. Choose the instrument, then **All programs** or a
+tag. Review the name and count. D opens the name editor. Confirm the cycle and
+choose **Save** to make it available in browser mode. Recompile older setups
+with the current `cntrl` to include their catalogues. Export and sync retain
+the instrument and tag selection. Editing an individual entry's program, bank,
+volume, or pan makes that cycle an explicit patch list on export.
 
 ## Patch display presentation
 

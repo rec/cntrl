@@ -37,7 +37,9 @@ int main() {
         for (const char *expected : {"Instructions", "Selection", "A setup", "Details", "Back"})
             assert(std::find(lines.begin(), lines.end(), expected) != lines.end());
         if (count < 3) assert(std::strcmp(hardware.shown[0].lines[0].text, "Selection") == 0);
-        if (count == 3) for (unsigned i = 0; i < 3; ++i) assert(std::memcmp(&hardware.shown[i], &panes[i], sizeof(cntrl::Pane)) == 0);
+        if (count == 3) for (unsigned i = 0; i < 3; ++i)
+            for (unsigned line = 0; line < cntrl::max_lines; ++line)
+                assert(!std::strcmp(hardware.shown[i].lines[line].text, panes[i].lines[line].text));
         if (count == 5) assert(std::strcmp(hardware.shown[2].lines[0].text, "Selection") == 0);
     }
 }

@@ -97,6 +97,12 @@ def unpack(data: bytes, kind: Kind) -> Document:
         elif tag == PATCH_EDIT_ORIGINS and kind == Kind.setup:
             if flags or size < 8 or size % 4:
                 raise DocumentFormatError('invalid local patch origins')
+        elif tag == CYCLE_RECIPE and kind == Kind.setup:
+            if flags or size != 68 or data[cursor + size - 1]:
+                raise DocumentFormatError('invalid automatic cycle recipe')
+        elif tag == CYCLE_CATALOGUE and kind == Kind.setup:
+            if flags or size < 8 or any(r.tag == CYCLE_CATALOGUE for r in records):
+                raise DocumentFormatError('invalid automatic cycle catalogue')
         elif (
             tag
             in (
@@ -172,7 +178,14 @@ def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
     return data.startswith(MAGIC) and any(
         not (
             kind == Kind.setup
-            and r.tag in (SOURCE, SETTING_OVERRIDES, PATCH_EDIT_ORIGINS)
+            and r.tag
+            in (
+                SOURCE,
+                SETTING_OVERRIDES,
+                PATCH_EDIT_ORIGINS,
+                CYCLE_RECIPE,
+                CYCLE_CATALOGUE,
+            )
             or kind == Kind.songs
             and r.tag
             in (
@@ -222,6 +235,8 @@ SETLIST_ARTWORK = 8
 SETLIST_TITLE_CONTRAST = 9
 SCENE_ARTWORK = 10
 SCENE_TITLE_STYLE = 11
+CYCLE_RECIPE = 12
+CYCLE_CATALOGUE = 13
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096
