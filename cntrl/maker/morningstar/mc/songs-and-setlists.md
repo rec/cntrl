@@ -25,6 +25,14 @@ The song keeps its name and setlist entries. Renaming updates every setlist
 reference to that name. Rename uses A/B to change a character, D/E to move the cursor, C to save and F to cancel. The same editor is
 available for setlist names.
 
+To edit a MIDI action inside a song patch, open **Settings**, choose **Songs**,
+open the song, and choose **Edit patches**. Choose the step and **Edit patch
+value**. If the patch has several editable actions or a switch action, browse
+by activation order or by the switch and its trigger. The display shows the
+current Program Change or Control Change. Choose **Only this song step** to
+make a private copy, or edit the shared action for every use. The review shows
+the proposed values before saving.
+
 Under Setlists, choose **New setlist**. It receives a unique default name and
 opens the alphabetically sorted song picker. C adds the highlighted song and
 keeps the picker open; A/B browse and D/E jump between initial letters. F returns

@@ -1,6 +1,7 @@
 #pragma once
 #include "document.h"
 #include "checked_array.h"
+#include "checked_list.h"
 
 namespace cntrl {
 // Walk the same path the setup editor can edit. References are kept out of
@@ -35,6 +36,17 @@ struct PatchValues {
         return kind != other.kind || bank != other.bank || !std::equal(values, values + 3, other.values);
     }
 };
+struct EditableAction {
+    uint16_t node = UINT16_MAX;
+    uint8_t input = UINT8_MAX, trigger = 0;
+    PatchKind kind = PatchKind::instrument_program;
+    uint8_t number = 0, value = 0;
+};
+inline constexpr const char *patch_action_triggers[] = {
+    "On", "Off", "Release", "Hold", "Hold release", "Double press", "Double release", "Repeat",
+    "Double hold", "Double hold release", "Triple press", "Triple release", "Triple hold", "Triple hold release",
+    "Enter", "Exit",
+};
 
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(editable_patch_value)
@@ -58,6 +70,59 @@ inline const uint8_t *editable_patch_values(const Document &document, unsigned r
         } else break;
     }
     return nullptr;
+}
+
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(read_patch_actions)
+#endif
+inline bool read_patch_actions(const Document &document, unsigned root, CheckedList<EditableAction> &actions) {
+    struct Frame { EditableAction action; unsigned child = 0; };
+    CheckedArray<uint8_t> visited;
+    CheckedList<Frame> stack;
+    actions.release();
+    if (root >= document.nodes() || !visited.resize(document.nodes())) return false;
+    const auto visit = [&](EditableAction action) {
+        if (action.node >= document.nodes() || visited[action.node]) return true;
+        visited[action.node] = 1;
+        return stack.append({action}) != nullptr;
+    };
+    if (!visit({uint16_t(root)})) return false;
+    while (!stack.empty()) {
+        auto &frame = stack.back();
+        const auto *node = document.node(frame.action.node), *payload = node + 4;
+        auto next = frame.action;
+        const unsigned child = frame.child++;
+        if (node[0] == 5 && child < u16(payload)) {
+            next.node = u16(payload + 2 + child * 2);
+        } else if (node[0] == 10 && child <= 30u * payload[66]) {
+            if (!child) next.node = u16(payload);
+            else {
+                const unsigned branch = (child - 1) % 30;
+                const auto *binding = payload + 220 + (child - 1) / 30 * binding_record_size;
+                const unsigned offset = branch < 2 ? 2 + branch * 2
+                    : branch < 14 ? 72 + (branch - 2) * 2
+                    : branch < 28 ? binding_shifted_offset + (branch - 14) * 2
+                    : binding_hooks_offset + (branch - 28) * 2;
+                next = {u16(binding + offset), binding[0], uint8_t(branch)};
+            }
+        } else if (node[0] == 12 && !child) {
+            next.node = u16(payload);
+        } else if (node[0] == 6 && !child && u16(payload) == UINT16_MAX) {
+            next.node = uint16_t(document.named_patch(reinterpret_cast<const char *>(payload + 2)));
+        } else {
+            PatchValues values;
+            if ((node[0] == 1 || node[0] == 2) && editable_patch_values(document, next.node, values)) {
+                next.kind = values.kind;
+                next.number = uint8_t(values.kind == PatchKind::control_change ? values.values[1] : values.values[0]);
+                next.value = uint8_t(values.values[0]);
+                if (!actions.append(next)) return false;
+            }
+            stack.pop_back();
+            continue;
+        }
+        if (!visit(next)) return false;
+    }
+    return !actions.empty();
 }
 
 #ifdef CNTRL_FLASH_ROUTINE

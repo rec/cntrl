@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
             while (songs.busy()) songs.tick();
             assert(songs.success());
         }
-        const auto open_patch = [&](unsigned index) {
+        const auto open_patch = [&](unsigned index, const char *heading = "Edit scope") {
             settings();
             tap(0); tap(0); tap(0); tap(2);
             tap(2); tap(1); tap(2); // One, Edit patches.
@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
             while (documents.busy()) sample(0);
             sample(0);
             assert(!documents.dirty());
-            assert(!std::strcmp(board.panes[1].lines[1].text, "Edit scope"));
+            assert(!std::strcmp(board.panes[1].lines[1].text, heading));
         };
         const auto saved_setup_value = [&](const char *name) {
             assert(documents.edit_begin(name));
@@ -277,6 +277,29 @@ int main(int argc, char **argv) {
         save_and_return();
         assert(songs.patch_values("One", 1, board, copy) && copy.kind == cntrl::PatchKind::channel_program);
         assert(copy.values[0] == 12 && copy.values[1] == 4);
+        std::strcpy(selection.key, "Scene");
+        assert(songs.replace_patch("One", 1, selection));
+        while (songs.busy()) songs.tick();
+        open_patch(1, "Edit action");
+        tap(1);
+        assert(!std::strcmp(board.panes[2].lines[0].text, "A On"));
+        assert(!std::strcmp(board.panes[2].lines[1].text, "CC 64: 127"));
+        tap(2);
+        while (documents.busy()) sample(0);
+        sample(0);
+        tap(2); tap(0); // Lower A On in a private copy of the scene.
+        save_and_return();
+        cntrl::CheckedList<cntrl::EditableAction> actions;
+        assert(songs.patch_actions("One", 1, board, actions) && actions.size() >= 3);
+        assert(songs.patch_values("One", 1, board, copy, nullptr, actions[1].node)
+            && copy.values[0] == 126 && copy.values[1] == 64);
+        assert(documents.edit_begin("Spare"));
+        while (documents.busy()) documents.tick(board.now);
+        cntrl::Document draft;
+        assert(documents.edit_document(draft));
+        assert(cntrl::read_patch_actions(draft, unsigned(draft.named_patch("Scene")), actions));
+        assert(cntrl::editable_patch_values(draft, actions[1].node, copy) && copy.values[0] == 127);
+        documents.edit_cancel();
         assert(board.sent.size() == sent);
         return 0;
     }
@@ -328,10 +351,16 @@ int main(int argc, char **argv) {
         assert(songs.insert_patch("Pne", 0, first)); // A second use of the same source node.
         while (songs.busy()) sample(0);
         assert(songs.success());
-        const auto open_patch_value = [&] {
+        const auto open_patch_action = [&] {
             open_songs();
             tap(1); tap(2); // Edit patches.
-            tap(2); tap(1); tap(1); tap(2); // Edit the first patch value.
+            tap(2); tap(1); tap(1); tap(2); // Browse the first patch's actions.
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Edit action"));
+        };
+        const auto open_patch_value = [&] {
+            open_patch_action();
+            assert(!std::strcmp(board.panes[2].lines[0].text, "Activation"));
+            tap(2);
         };
         const auto expect_values = [&](int first_value, int second_value) {
             cntrl::PatchValues value;
@@ -370,12 +399,29 @@ int main(int argc, char **argv) {
         if (!app.tool_editor_open(board)) app.finish_tool();
         assert(songs.success());
         expect_values(3, 2);
+        open_patch_action();
+        tap(1); tap(1);
+        assert(!std::strcmp(board.panes[2].lines[0].text, "A Off"));
+        tap(2); tap(2); tap(1); settings(); // Change the release value for this step.
+        tap(1); tap(2);
+        while (songs.busy()) sample(0);
+        sample(0);
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        assert(songs.success());
         assert(songs.continuation().patch == 0 && board.sent.size() == sent);
         cntrl::Songs restored(song_storage, board);
         cntrl::PatchValues value;
         assert(restored.boot());
         assert(restored.patch_values("Pne", 0, board, value) && value.values[0] == 3);
         assert(restored.patch_values("Pne", 1, board, value) && value.values[0] == 2);
+        for (unsigned step = 0; step < 2; ++step) {
+            cntrl::CheckedList<cntrl::EditableAction> actions;
+            assert(restored.patch_actions("Pne", step, board, actions) && actions.size() >= 3);
+            assert(restored.patch_values("Pne", step, board, value, nullptr, actions[1].node)
+                && value.values[0] == 127);
+            assert(restored.patch_values("Pne", step, board, value, nullptr, actions[2].node)
+                && value.values[0] == (step ? 0 : 1));
+        }
         return 0;
     }
     if (argc == 4 && !std::strcmp(argv[3], "--setlist-settings")) {

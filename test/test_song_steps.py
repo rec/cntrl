@@ -162,6 +162,25 @@ def test_song_step_navigation_and_boundaries(
                         'value': 10,
                     },
                     'Voice': {'instrument': 'synth', 'program': 12, 'bank': 1},
+                    'Scene': {
+                        'patch': 'Lead',
+                        'bindings': {
+                            'A': {
+                                'mode': 'momentary',
+                                'on': {
+                                    'output': 'din',
+                                    'channel': 1,
+                                    'controller': 64,
+                                    'value': 127,
+                                },
+                                'off': {
+                                    'output': 'din',
+                                    'channel': 1,
+                                    'controller': 64,
+                                },
+                            },
+                        },
+                    },
                     'Other': {'instrument': 'alternate', 'program': 12, 'bank': 2},
                     'Direct': {
                         'type': 'program-change',

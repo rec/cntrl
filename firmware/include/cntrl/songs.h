@@ -186,23 +186,34 @@ public:
         job_.at = at; job_.selection = selection; return prepare_source(job_.selection);
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_patch_actions)
+#endif
+    bool patch_actions(const char *name, unsigned at, Hardware &hardware, CheckedList<EditableAction> &actions) const {
+        SongSelection selection;
+        MemoryBuffer bytes;
+        Document document;
+        return patch_at(name, at, selection) && !selection.document[0]
+            && read_patch_document(selection, hardware, bytes, document)
+            && read_patch_actions(document, selection.node, actions);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_patch_value)
 #endif
     bool patch_values(const char *name, unsigned at, Hardware &hardware, PatchValues &values,
-                      CheckedArray<uint32_t> *banks = nullptr) const {
+                      CheckedArray<uint32_t> *banks = nullptr, unsigned action = UINT16_MAX) const {
         SongSelection selection;
         MemoryBuffer bytes;
         Document document;
         if (!patch_at(name, at, selection) || selection.document[0]
             || !read_patch_document(selection, hardware, bytes, document)) return false;
-        const auto *node = editable_patch_values(document, selection.node, values);
+        const auto *node = editable_patch_values(document, action == UINT16_MAX ? selection.node : action, values);
         return node && (!banks || read_patch_banks(document, node, *banks));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_save_patch_value)
 #endif
     bool save_patch_values(const char *name, unsigned at, Hardware &hardware, const PatchValues &values, bool shared,
-                          const Document *named_source = nullptr) {
+                          const Document *named_source = nullptr, unsigned action = UINT16_MAX) {
         if (busy() || executing()) return false;
         SongSelection selection;
         MemoryBuffer bytes;
@@ -220,7 +231,7 @@ public:
         } else if (!read_patch_document(selection, hardware, bytes, document)) {
             return false;
         }
-        if (!write_patch_values(document, selection.node, values, bytes.data)
+        if (!write_patch_values(document, action == UINT16_MAX ? selection.node : action, values, bytes.data)
             || !document.load(bytes.data, bytes.size, hardware)) return false;
         unsigned offset = 0, length = 0;
         if (shared && (!source_offset(selection.source, offset, length) || length != document.length())) return false;

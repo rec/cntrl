@@ -25,6 +25,7 @@ public:
         mode_ = closed; waiting_ = managing_library_ = managing_setlists_ = false;
         named_work_ = NamedWork::none;
         patch_banks_.release();
+        patch_actions_.release();
     }
     void perform() { managing_library_ = managing_setlists_ = false; mode_ = performance; cursor_ = 0; locked_ = true; ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error()); render(); }
     void enter() { managing_library_ = managing_setlists_ = false; mode_ = root; cursor_ = 0; locked_ = true; patch_chooser_requested = false; render(); }
@@ -62,8 +63,10 @@ public:
                 added_ = saved_.added; std::snprintf(picker_, 64, "%s", saved_.picker);
                 std::snprintf(song_name_, 64, "%s", saved_.song); fail();
             } else {
-                if (saved_.mode == library_decision && library_edit_ == LibraryEdit::change_patch_value)
+                if (saved_.mode == library_decision && library_edit_ == LibraryEdit::change_patch_value) {
                     patch_banks_.release();
+                    patch_actions_.release();
+                }
                 if (saved_.mode == library_decision && library_edit_ == LibraryEdit::rename_song) {
                     std::strcpy(song_name_, name_);
                     std::strcpy(picker_, name_);
@@ -115,11 +118,23 @@ private:
         feedback_[0] = 0;
         if (mode_ == naming) { name_button(button); render(); return; }
         if (mode_ == library_decision) { library_decision_button(button); if (open()) render(); return; }
+        if (mode_ == pick_patch_action) {
+            const unsigned count = patch_actions_.size();
+            if (button < 2) patch_action_ = (patch_action_ + (button ? 1 : count - 1)) % count;
+            else if (button == 2) {
+                if (named_patch_) {
+                    SongSelection selection;
+                    if (!songs_.patch_at(song_name_, patch_cursor_, selection)
+                        || !begin_named_patch(NamedWork::inspect_action, selection)) fail();
+                } else open_embedded_action();
+            } else if (button == 5) { mode_ = patch_actions; patch_actions_.release(); }
+            render(); return;
+        }
         if (mode_ == patch_scope || mode_ == patch_value) {
             if (mode_ == patch_scope) {
                 if (button < 2) shared_patch_ = !shared_patch_;
                 else if (button == 2) mode_ = patch_value;
-                else if (button == 5) mode_ = patch_actions;
+                else if (button == 5) mode_ = show_action_picker() ? pick_patch_action : patch_actions;
             } else if (button < 2) {
                 if (patch_field_ == 3) patch_draft_.bank = adjacent_patch_bank(patch_banks_, patch_draft_.bank, button != 0);
                 else {
@@ -132,9 +147,10 @@ private:
                 patch_field_ = (patch_field_ + (button == 3 ? count - 1 : 1)) % count;
             } else if (button == 2 || button == 5) {
                 if (patch_draft_.differs(patch_values_)) review_library_edit(LibraryEdit::change_patch_value, patch_value);
-                else mode_ = patch_actions;
+                else mode_ = show_action_picker() ? pick_patch_action : patch_actions;
             }
-            if (mode_ == patch_actions) patch_banks_.release();
+            if (mode_ == patch_actions || mode_ == pick_patch_action) patch_banks_.release();
+            if (mode_ == patch_actions) patch_actions_.release();
             render(); return;
         }
         if (button == 5) {
@@ -209,16 +225,17 @@ private:
             if (managing_library_) {
                 if (cursor_ == 2) {
                     patch_banks_.release();
+                    patch_actions_.release();
+                    patch_action_ = 0;
                     SongSelection selection;
                     if (songs_.patch_at(song_name_, patch_cursor_, selection) && selection.document[0]) {
                         if (!begin_named_patch(NamedWork::inspect, selection))
                             ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot read the owning setup");
-                    } else if (songs_.patch_values(song_name_, patch_cursor_, hardware_, patch_values_, &patch_banks_)) {
+                    } else if (songs_.patch_actions(song_name_, patch_cursor_, hardware_, patch_actions_)) {
                         named_patch_ = false;
-                        patch_draft_ = patch_values_; patch_field_ = 0;
-                        shared_patch_ = false;
-                        mode_ = patch_scope;
-                    } else ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot edit this patch value");
+                        if (show_action_picker()) mode_ = pick_patch_action;
+                        else open_embedded_action();
+                    } else ui::utf8::copy(feedback_, sizeof(feedback_), "No editable MIDI actions");
                     render(); return;
                 }
                 const auto *song = songs_.song(song_name_);
@@ -277,7 +294,7 @@ private:
         render();
     }
 private:
-    enum Mode { closed, root, sets, set_entries, set_actions, library, song_actions, performance, editing, adding, moving, library_decision, naming, patches, patch_actions, patch_scope, patch_value };
+    enum Mode { closed, root, sets, set_entries, set_actions, library, song_actions, performance, editing, adding, moving, library_decision, naming, patches, patch_actions, pick_patch_action, patch_scope, patch_value };
     Songs &songs_; Hardware &hardware_; SongCapture &capture_;
     Documents *documents_;
     Mode mode_ = closed, return_mode_ = root;
@@ -297,10 +314,12 @@ private:
     char managed_set_[64] = {};
     PatchValues patch_values_, patch_draft_;
     CheckedArray<uint32_t> patch_banks_;
+    CheckedList<EditableAction> patch_actions_;
+    unsigned patch_action_ = 0;
     unsigned patch_field_ = 0;
     bool shared_patch_ = false, named_patch_ = false, patch_reloads_ = false;
     uint32_t named_patch_crc_ = 0;
-    enum class NamedWork { none, inspect, load_for_save, saving };
+    enum class NamedWork { none, inspect, inspect_action, load_for_save, saving };
     NamedWork named_work_ = NamedWork::none;
     const Setlist *current_set() const { return songs_.setlist(managing_setlists_ ? managed_set_ : songs_.active_set()); }
     void review_move() { review_library_edit(LibraryEdit::move, moving); }
@@ -335,7 +354,9 @@ private:
         }
     }
     void finish_library_edit() {
-        if (library_edit_ == LibraryEdit::change_patch_value && !songs_.busy()) patch_banks_.release();
+        if (library_edit_ == LibraryEdit::change_patch_value && !songs_.busy()) {
+            patch_banks_.release(); patch_actions_.release();
+        }
         if (managing_setlists_) mode_ = set_entries;
         else if (library_edit_ == LibraryEdit::rename_song) { mode_ = song_actions; cursor_ = 0; }
         else {
@@ -349,6 +370,18 @@ private:
         if (!documents_ || !selection.document[0] || !documents_->edit_begin(selection.document)) return false;
         named_work_ = work;
         return true;
+    }
+    bool show_action_picker() const {
+        return patch_actions_.size() > 1 || (!patch_actions_.empty() && patch_actions_.front().input != UINT8_MAX);
+    }
+    void begin_patch_scope() {
+        patch_draft_ = patch_values_; patch_field_ = 0;
+        shared_patch_ = false; mode_ = patch_scope;
+    }
+    void open_embedded_action() {
+        if (songs_.generation() == library_generation_ && songs_.patch_values(song_name_, patch_cursor_, hardware_,
+            patch_values_, &patch_banks_, patch_actions_[patch_action_].node)) begin_patch_scope();
+        else fail();
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_ui_poll_named_patch)
@@ -370,31 +403,40 @@ private:
                 && !name_compare(documents_->edit_name(), selection.document) && documents_->edit_document(source);
             const int root = loaded ? source.named_patch(selection.key) : -1;
             if (work == NamedWork::inspect) {
-                const auto *node = root >= 0 ? editable_patch_values(source, unsigned(root), patch_values_) : nullptr;
-                if (node && read_patch_banks(source, node, patch_banks_)) {
+                if (root >= 0 && read_patch_actions(source, unsigned(root), patch_actions_)) {
                     named_patch_crc_ = checksum(source.data(), source.length());
                     patch_reloads_ = documents_->edit_reloads();
-                    named_patch_ = true; shared_patch_ = false;
-                    patch_draft_ = patch_values_; patch_field_ = 0;
-                    mode_ = patch_scope;
-                } else ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot edit this patch value");
+                    named_patch_ = true;
+                    if (show_action_picker()) mode_ = pick_patch_action;
+                    else open_named_action(source);
+                } else ui::utf8::copy(feedback_, sizeof(feedback_), "No editable MIDI actions");
                 documents_->edit_cancel();
             } else if (root < 0 || checksum(source.data(), source.length()) != named_patch_crc_
-                || (shared_patch_ && documents_->edit_reloads() != patch_reloads_)) {
+                || (work == NamedWork::load_for_save && shared_patch_ && documents_->edit_reloads() != patch_reloads_)) {
                 documents_->edit_cancel();
                 ui::utf8::copy(feedback_, sizeof(feedback_), "Setup changed. Reopen this patch to edit it.");
+            } else if (work == NamedWork::inspect_action) {
+                open_named_action(source);
+                documents_->edit_cancel();
             } else if (shared_patch_) {
-                if (documents_->edit_named_patch_values(selection.key, patch_draft_) && documents_->edit_save(now))
+                if (documents_->edit_named_patch_values(selection.key, patch_draft_, patch_actions_[patch_action_].node)
+                    && documents_->edit_save(now))
                     named_work_ = NamedWork::saving;
                 else { documents_->edit_cancel(); fail(); }
             } else {
-                const bool saved = songs_.save_patch_values(song_name_, patch_cursor_, hardware_, patch_draft_, false, &source);
+                const bool saved = songs_.save_patch_values(song_name_, patch_cursor_, hardware_, patch_draft_, false,
+                    &source, patch_actions_[patch_action_].node);
                 documents_->edit_cancel();
                 if (saved) { finish_library_edit(); waiting_ = true; }
                 else fail();
             }
         }
         if (open()) render();
+    }
+    void open_named_action(const Document &source) {
+        const auto *node = editable_patch_values(source, patch_actions_[patch_action_].node, patch_values_);
+        if (node && read_patch_banks(source, node, patch_banks_)) begin_patch_scope();
+        else fail();
     }
     bool save_library_edit() {
         switch (library_edit_) {
@@ -406,7 +448,8 @@ private:
         case LibraryEdit::remove_patch: return songs_.remove_patch(song_name_, patch_cursor_);
         case LibraryEdit::move_patch_earlier: return songs_.move_patch(song_name_, patch_cursor_, true);
         case LibraryEdit::move_patch_later: return songs_.move_patch(song_name_, patch_cursor_, false);
-        case LibraryEdit::change_patch_value: return songs_.save_patch_values(song_name_, patch_cursor_, hardware_, patch_draft_, shared_patch_);
+        case LibraryEdit::change_patch_value: return songs_.save_patch_values(song_name_, patch_cursor_, hardware_,
+            patch_draft_, shared_patch_, nullptr, patch_actions_[patch_action_].node);
         }
         return false;
     }
@@ -611,9 +654,28 @@ private:
         }
         if (managing_library_ && !managing_setlists_) {
             text(1, 0, mode_ == library ? ui::i18n::text(ui::i18n::Message::songs) : song_name_);
+            if (show_action_picker() && (mode_ == pick_patch_action || mode_ == patch_scope || mode_ == patch_value
+                || (mode_ == library_decision && library_edit_ == LibraryEdit::change_patch_value))) {
+                const auto &action = patch_actions_[patch_action_];
+                auto &caption = panes[2].lines[0].text;
+                if (action.input == UINT8_MAX) text(2, 0, "Activation");
+                else std::snprintf(caption, sizeof(caption), "%s %s%s", hardware_.input_label(action.input),
+                    action.trigger >= 14 && action.trigger < 28 ? "Shifted " : "",
+                    patch_action_triggers[action.trigger < 14 ? action.trigger : action.trigger - 14]);
+                if (mode_ == pick_patch_action) {
+                    text(1, 1, "Edit action");
+                    std::snprintf(panes[1].lines[2].text, 64, "%u/%u", patch_action_ + 1, unsigned(patch_actions_.size()));
+                    auto &details = panes[2].lines[1].text;
+                    if (action.kind == PatchKind::control_change)
+                        std::snprintf(details, sizeof(details), "CC %d: %d", action.number, action.value);
+                    else std::snprintf(details, sizeof(details), "PC %d", action.number);
+                    text(0, 3, prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::browse)).text());
+                }
+            }
             if (mode_ == patch_scope || mode_ == patch_value || (mode_ == library_decision && library_edit_ == LibraryEdit::change_patch_value)) {
                 std::snprintf(panes[0].lines[0].text, 64, "Patch %u", patch_cursor_ + 1);
-                text(0, 1, shared_patch_ ? "Every use of this patch" : "Only this song step");
+                text(0, 1, !shared_patch_ ? "Only this song step"
+                    : show_action_picker() ? "Every use of this action" : "Every use of this patch");
                 if (!shared_patch_) text(0, 2, "A copy stops following shared edits");
                 else if (named_patch_) {
                     SongSelection selection;
@@ -639,6 +701,7 @@ private:
                     else std::snprintf(line, sizeof(line), "%s %d", fields[field].label, value);
                 };
                 if (mode_ == library_decision) {
+                    if (show_action_picker()) text(0, 0, panes[2].lines[0].text);
                     unsigned row = 0;
                     for (unsigned i = 0; i < 3; ++i)
                         if (patch_draft_.values[i] != patch_values_.values[i]) show_field(i, row++);
