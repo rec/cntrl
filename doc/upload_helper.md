@@ -32,6 +32,9 @@ The helper records each updater invocation, including retries, in
 Outside a checkout it uses `.cntrl/doc/flash-record.md` in your home directory.
 `cntrl flash` adds a linked reconnect check with the expected and observed
 builds, or an explanation when it could not verify the running firmware.
+During installs and updates, uploader errors and retries go to this record.
+The terminal shows an error if CNTRL could not complete the installation.
+Only first installs can automatically restore stock firmware.
 The helper prints the path on startup. Restart an already-running helper after
 upgrading CNTRL to pick up the logging code.
 

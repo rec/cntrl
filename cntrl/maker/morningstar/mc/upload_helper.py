@@ -38,6 +38,7 @@ class UploadResult(BaseModel, frozen=True):
     uploader: str = ''
     uploader_sha256: str = ''
     attempt: FlashAttempt | None = None
+    managed_recovery: bool = False
 
 
 class Board(BaseModel, frozen=True):
@@ -55,7 +56,11 @@ class Check(BaseModel, frozen=True):
     model_config = {'extra': 'forbid'}
 
 
-def request_bootloader(serial: str) -> None:
+class ManagedUpload(Upload, frozen=True):
+    first_install: bool
+
+
+def request_bootloader(serial: str, *, quiet: bool = False) -> None:
     """Select the Teensy USB core's special 134-baud bootloader request."""
     ports = [d.port for d in connected() if d.serial == serial]
     if len(ports) != 1:
@@ -63,7 +68,8 @@ def request_bootloader(serial: str) -> None:
     with Serial(str(ports[0]), baudrate=134, timeout=5, write_timeout=5):
         pass
     # Do not restore line coding: USB must receive the reboot request.
-    print('Bootloader requested; verify HalfKay enumeration before uploading.')
+    if not quiet:
+        print('Bootloader requested; verify HalfKay enumeration before uploading.')
 
 
 def list_boards() -> list[Board]:
@@ -89,7 +95,7 @@ def stock_board(serial: str) -> Board:
     return matches[0]
 
 
-def request_stock_bootloader(board: Board) -> bool:
+def request_stock_bootloader(board: Board, *, quiet: bool = False) -> bool:
     """Try the Teensy CDC request on the pinned stock USB identity."""
     ports = [
         p.device
@@ -107,6 +113,7 @@ def request_stock_bootloader(board: Board) -> bool:
         subprocess.run(
             [str(updater_path()), 'reset', '--bootloader', '--board', board.tag],
             check=True,
+            capture_output=quiet,
         )
         return True
     return False
@@ -185,6 +192,8 @@ def record_reconnect(result: UploadResult, expected: str, outcome: str) -> None:
 
 def upload_image(request: Upload) -> UploadResult:
     """Snapshot an owned image, validate it, then upload to the selected target."""
+    from .boot_switch import STOCK_SHA256
+
     if not request.image.is_absolute():
         raise ValueError('firmware image path must be absolute')
     source = request.image
@@ -202,7 +211,9 @@ def upload_image(request: Upload) -> UploadResult:
         image = read_hex(snapshot)
         if image.sha256 != request.sha256:
             raise ValueError('firmware SHA-256 changed; no upload was attempted')
-        validate_firmware(image)
+        managed = isinstance(request, ManagedUpload)
+        if not (managed and request.first_install and image.sha256 == STOCK_SHA256):
+            validate_firmware(image)
         updater = str(updater_path())
         listing = subprocess.run(
             [updater, 'list', '--verbose', '--output', 'json'],
@@ -228,7 +239,8 @@ def upload_image(request: Upload) -> UploadResult:
                 'the expected pedal is not uniquely present in HalfKay mode'
             )
         board = matches[0]
-        print(f'Uploading SHA-256 {image.sha256} to {board.tag}', flush=True)
+        if not managed:
+            print(f'Uploading SHA-256 {image.sha256} to {board.tag}', flush=True)
         attempt = FlashAttempt(id=uuid4(), record=flash_record_path())
         record = attempt.record
         started = datetime.now(UTC).isoformat(timespec='seconds')
@@ -264,7 +276,8 @@ def upload_image(request: Upload) -> UploadResult:
             )
         else:
             _record_outcome(record, '- Succeeded (uploader exit 0)\n')
-        print(output, end='', flush=True)
+        if not managed:
+            print(output, end='', flush=True)
         return UploadResult(
             returncode=result.returncode,
             output=output,
@@ -301,7 +314,7 @@ def process_request(line: bytes, serial: str) -> UploadResult:
             raise ValueError(
                 f'expected a newline-terminated request (maximum {REQUEST_LIMIT} bytes)'
             )
-        request = TypeAdapter(Upload | Check).validate_json(line)
+        request = TypeAdapter(Upload | ManagedUpload | Check).validate_json(line)
         if request.serial != serial:
             raise ValueError(
                 'request serial differs from the unit selected when starting the helper'
@@ -313,6 +326,7 @@ def process_request(line: bytes, serial: str) -> UploadResult:
                 output='Upload helper ready',
                 uploader=str(updater),
                 uploader_sha256=hashlib.sha256(updater.read_bytes()).hexdigest(),
+                managed_recovery=True,
             )
         return upload_image(request)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:

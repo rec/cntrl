@@ -151,6 +151,12 @@ def export(
     (destination / 'manifest.toml').write_text(tomlkit.dumps(manifest.model_dump()))
 
 
+def stock_image() -> Path:
+    return distribution.cached_stock(
+        STOCK, distribution.cache_directory() / 'cntrl-firmware' / 'mc6-pro'
+    )
+
+
 def prepare(resources: Path, output: Path) -> distribution.Manifest:
     """Compose a package's exact pairing without any build tools or device access."""
     manifest = distribution.read_manifest(resources)
@@ -204,12 +210,8 @@ def prepare(resources: Path, output: Path) -> distribution.Manifest:
     )
     if custom.entry != custom.origin + 0x1000:
         raise ValueError('unexpected relocated application entry')
-    stock_path = distribution.cached_stock(
-        manifest.stock,
-        distribution.cache_directory() / 'cntrl-firmware' / manifest.controller,
-    )
     combined = boot_switch.combine(
-        read_hex(stock_path),
+        read_hex(stock_image()),
         custom,
         distribution.resource(resources, manifest.hook).read_bytes(),
         manifest.stock_reader,

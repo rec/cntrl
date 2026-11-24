@@ -26,7 +26,6 @@ from ....patch_chooser import (
     transport,
 )
 from ....patch_chooser.setup_sync_store import write_record
-from ....upload import Upload
 from . import legacy_usb, release, upload_helper
 
 
@@ -40,6 +39,10 @@ class Flash(BaseModel, frozen=True):
     editor_backup: Path | None = None
     legacy_usb: bool = False
     prepare_only: bool = False
+
+
+class FlashError(ValueError):
+    """The installer could not complete the firmware flash."""
 
 
 def run(
@@ -112,16 +115,16 @@ def run(
     if errors:
         raise ValueError('\n'.join(errors))
     upload_helper.updater_path()
-    result: upload_helper.UploadResult | None = None
     expected_commit = manifest.source_commit[:7]
-    running_commit = None
-    reconnect = 'Reconnect could not be verified'
+    stock: Path | None = None
+    restore: Path | None = None
     try:
         if command.first_install:
             assert command.serial and command.editor_backup
             serial = command.serial
             board = upload_helper.stock_board(serial)
             ready = check_helper(serial)
+            stock = release.stock_image()
             record.update(
                 uploader=ready.uploader, uploader_sha256=ready.uploader_sha256
             )
@@ -133,7 +136,7 @@ def run(
                 editor_backup_sha256=hashlib.sha256(backup.read_bytes()).hexdigest(),
             )
             write_record(directory / 'installation.toml', record)
-            requested = upload_helper.request_stock_bootloader(board)
+            requested = upload_helper.request_stock_bootloader(board, quiet=True)
             if not requested or not wait_halfkay(serial):
                 if not sys.stdin.isatty():
                     raise ValueError(
@@ -148,7 +151,6 @@ def run(
                     '(requires removing the backplate). '
                     'Enter HalfKay recovery mode, then press Enter: '
                 )
-            restore = None
         else:
             port = devices.select_port(command.port)
             matches = [
@@ -187,33 +189,25 @@ def run(
             restore = backups.prepare_restore(before, directory / 'restore', target)
             record['backup'] = str(before)
             write_record(directory / 'installation.toml', record)
-            upload_helper.request_bootloader(serial)
+            upload_helper.request_bootloader(serial, quiet=True)
             wait_disconnected(serial)
         record.update(serial=serial, result='uploading')
         write_record(directory / 'installation.toml', record)
-        result = upload_helper.request_upload(
-            Upload(image=source, sha256=image.sha256, serial=serial)
+        result, port, verify_after_restore = _install_with_recovery(
+            upload_helper.ManagedUpload(
+                image=source,
+                sha256=image.sha256,
+                serial=serial,
+                first_install=command.first_install,
+            ),
+            stock,
+            expected_commit,
+            connection_factory,
         )
-        print(result.output, end='', flush=True)
         record['uploader_returncode'] = result.returncode
         record.update(uploader=result.uploader, uploader_sha256=result.uploader_sha256)
         write_record(directory / 'installation.toml', record)
-        try:
-            port = wait_connected(serial)
-        except TimeoutError:
-            reconnect = _reconnect_timeout(serial)
-            raise
-        reconnect = 'CNTRL reconnected, firmware unverified'
-        try:
-            running_commit = _firmware_commit(_read_status(port, connection_factory))
-        except (*transport.USB_ERRORS, OSError, EOFError) as error:
-            reconnect += f' ({type(error).__name__})'
         if restore is None:
-            if result.returncode:
-                raise ValueError(
-                    f'uploader returned {result.returncode}; '
-                    'starter installation was not attempted'
-                )
             install_starter(directory, port)
         else:
             with (
@@ -226,20 +220,16 @@ def run(
                     restore, port, target, connection=connection
                 )
         status = _read_status(port, connection_factory)
-        verified_commit = _firmware_commit(status)
-        running_commit = verified_commit or running_commit
-        if verified_commit != expected_commit:
-            raise ValueError(
-                f'running firmware identity differs from packaged release: {status}'
-            )
-        if result.returncode:
-            raise ValueError(
-                f'data restored, but uploader returned {result.returncode}; '
-                'installation is not confirmed'
+        if _firmware_commit(status) != expected_commit:
+            raise FlashError('CNTRL could not verify the installed firmware.')
+        if verify_after_restore:
+            upload_helper.record_reconnect(
+                result,
+                expected_commit,
+                f'Expected build running (`{expected_commit}`) after restore',
             )
         record.update(result='verified', status=status)
         write_record(directory / 'installation.toml', record)
-        print(f'Flashed and verified SHA-256 {image.sha256}', flush=True)
     except (
         OSError,
         ValueError,
@@ -250,13 +240,6 @@ def run(
         record.update(result='failed', error=str(error))
         write_record(directory / 'installation.toml', record)
         raise
-    finally:
-        if result is not None:
-            if running_commit == expected_commit:
-                reconnect = f'Expected build running (`{running_commit}`)'
-            elif running_commit is not None:
-                reconnect = f'Different firmware running (`{running_commit}`)'
-            upload_helper.record_reconnect(result, expected_commit, reconnect)
 
 
 def _read_status(
@@ -268,11 +251,147 @@ def _read_status(
         return transport.SetupClient(connection).request('CNTRL STATUS')
 
 
+def _install_with_recovery(
+    image: upload_helper.ManagedUpload,
+    stock: Path | None,
+    expected: str,
+    connection_factory: Callable[[Path], transport.SerialConnection] | None,
+) -> tuple[upload_helper.UploadResult, Path, bool]:
+    attempted = False
+    for delay in (0, *RETRY_DELAYS):
+        if delay:
+            time.sleep(delay)
+            if not _recover_halfkay(image.serial):
+                continue
+        result = upload_helper.request_upload(image)
+        attempted = attempted or result.attempt is not None
+        port, outcome = _observe_installation(
+            image, expected, result, connection_factory
+        )
+        upload_helper.record_reconnect(result, expected, outcome)
+        if port is not None:
+            return result, port, outcome == LEGACY_STORAGE_RECOVERY
+
+    if not attempted:
+        raise FlashError(
+            'CNTRL could not start a firmware upload. Check the USB connection '
+            'and the running upload helper. The installer did not start a flash.'
+        )
+
+    if stock is None:
+        raise FlashError(
+            'CNTRL could not verify the firmware update. Your setup and history backup '
+            f'is saved in {image.image.parent / "before"}.'
+        )
+
+    rollback = image.model_copy(update={'image': stock, 'sha256': release.STOCK.sha256})
+    stock_version = f'Morningstar stock {release.STOCK.version}'
+    for delay in RETRY_DELAYS:
+        time.sleep(delay)
+        if not _recover_halfkay(image.serial):
+            continue
+        result = upload_helper.request_upload(rollback)
+        _, outcome = _observe_installation(rollback, None, result, None)
+        upload_helper.record_reconnect(result, stock_version, outcome)
+        if result.returncode == 0 and outcome == 'Morningstar stock running':
+            raise FlashError(f'CNTRL was not installed. {stock_version} was restored.')
+
+    raise FlashError(
+        'CNTRL could not install or restore Morningstar firmware automatically. '
+        'Follow Morningstar’s instructions to remove the backplate. Connect the '
+        'pedal directly by USB, open the Morningstar Firmware Updater, and briefly '
+        'press the internal PROGRAM button. Select the saved Morningstar HEX to flash. '
+        'Your editor backup is saved in the installation directory.\n'
+        'https://help.morningstar.io/en/article/'
+        'firmware-upload-failure-controller-does-not-boot-up-1b7h2fe/\n'
+        f'Morningstar HEX: {stock}'
+    )
+
+
+def _recover_halfkay(serial: str) -> bool:
+    try:
+        boards = [b for b in upload_helper.list_boards() if b.serial == serial]
+        if len(boards) == 1:
+            board = boards[0]
+            if _is_halfkay(board, serial):
+                return True
+            if board.description == 'Morningstar MC6 Pro':
+                if not upload_helper.request_stock_bootloader(board, quiet=True):
+                    return False
+            elif any(d.serial == serial for d in devices.connected()):
+                upload_helper.request_bootloader(serial, quiet=True)
+        return wait_halfkay(serial)
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        return False
+
+
+def _observe_installation(
+    image: upload_helper.ManagedUpload,
+    expected: str | None,
+    result: upload_helper.UploadResult,
+    connection_factory: Callable[[Path], transport.SerialConnection] | None,
+) -> tuple[Path | None, str]:
+    serial = image.serial
+    deadline = time.monotonic() + 30
+    outcome = 'Pedal did not reconnect before timeout'
+    while True:
+        try:
+            ports = [d.port for d in devices.connected() if d.serial == serial]
+            if len(ports) == 1:
+                try:
+                    status = _read_status(ports[0], connection_factory)
+                except transport.UsbReplyError as error:
+                    status = str(error)
+                    if status != STORAGE_RECOVERY and not status.startswith(
+                        STORAGE_RECOVERY + ' '
+                    ):
+                        raise
+                commit = _firmware_commit(status)
+                if commit == expected and commit is not None:
+                    observation = f'Expected build running (`{commit}`)'
+                    if status.startswith(STORAGE_RECOVERY):
+                        observation += ' in storage recovery'
+                    return ports[0], observation
+                if commit is not None:
+                    return None, f'Different firmware running (`{commit}`)'
+                if (
+                    not image.first_install
+                    and status == STORAGE_RECOVERY
+                    and result.returncode == 0
+                ):
+                    return ports[0], LEGACY_STORAGE_RECOVERY
+                outcome = 'CNTRL reconnected, firmware unverified'
+            boards = [b for b in upload_helper.list_boards() if b.serial == serial]
+            if len(boards) == 1:
+                if boards[0].description == 'Morningstar MC6 Pro':
+                    return None, (
+                        'Morningstar stock running'
+                        if expected is None
+                        else 'Different firmware running (Morningstar stock)'
+                    )
+                if _is_halfkay(boards[0], serial):
+                    outcome = 'Pedal stayed in HalfKay'
+                    if result.returncode and 'I/O error while writing' in result.output:
+                        # The confirmed bootloader is safe to retry. Running a
+                        # partially written application could strand the pedal.
+                        return None, outcome
+        except (
+            *transport.USB_ERRORS,
+            OSError,
+            EOFError,
+            subprocess.CalledProcessError,
+        ):
+            outcome = 'Reconnect could not be verified'
+        if time.monotonic() >= deadline:
+            return None, outcome
+        time.sleep(0.1)
+
+
 def _firmware_commit(status: str) -> str | None:
     fields = dict(p.split('=', 1) for p in status.split() if '=' in p)
     commit = fields.get('git', '')
     if (
-        status.startswith('CNTRL READY ')
+        status.startswith(('CNTRL READY ', STORAGE_RECOVERY + ' '))
         and fields.get('model') == 'mc6-pro'
         and re.fullmatch('[0-9a-f]{7}', commit)
     ):
@@ -280,24 +399,12 @@ def _firmware_commit(status: str) -> str | None:
     return None
 
 
-def _reconnect_timeout(serial: str) -> str:
-    outcome = 'CNTRL did not reconnect before timeout'
-    try:
-        boards = [b for b in upload_helper.list_boards() if b.serial == serial]
-    except (OSError, ValueError, subprocess.CalledProcessError):
-        return outcome
-    if len(boards) == 1:
-        if boards[0].description == 'Morningstar MC6 Pro':
-            return 'Different firmware running (Morningstar stock)'
-        if boards[0].description == 'HalfKay':
-            return f'{outcome} (still in HalfKay)'
-    return outcome
-
-
 def check_helper(serial: str) -> upload_helper.UploadResult:
     result = upload_helper.request_upload(upload_helper.Check(serial=serial))
     if result.returncode:
         raise ValueError(result.output)
+    if not result.managed_recovery:
+        raise FlashError('Restart the CNTRL upload helper before flashing.')
     return result
 
 
@@ -309,33 +416,22 @@ def wait_disconnected(serial: str) -> None:
         time.sleep(0.1)
 
 
-def wait_connected(serial: str) -> Path:
-    deadline = time.monotonic() + 30
-    while True:
-        matches = [d for d in devices.connected() if d.serial == serial]
-        if len(matches) == 1:
-            return matches[0].port
-        if time.monotonic() >= deadline:
-            raise TimeoutError(
-                'pedal did not return after upload; '
-                'installation evidence and backups retained'
-            )
-        time.sleep(0.1)
-
-
 def wait_halfkay(serial: str) -> bool:
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        if any(
-            b.serial == serial
-            and b.description == 'HalfKay'
-            and b.model == 'Teensy 4.1'
-            and 'upload' in b.capabilities
-            for b in upload_helper.list_boards()
-        ):
+        if any(_is_halfkay(b, serial) for b in upload_helper.list_boards()):
             return True
         time.sleep(0.1)
     return False
+
+
+def _is_halfkay(board: upload_helper.Board, serial: str) -> bool:
+    return (
+        board.serial == serial
+        and board.description == 'HalfKay'
+        and board.model == 'Teensy 4.1'
+        and 'upload' in board.capabilities
+    )
 
 
 def install_starter(directory: Path, port: Path) -> None:
@@ -399,7 +495,17 @@ def install_starter(directory: Path, port: Path) -> None:
 
 
 def main() -> None:
-    run(tyro.cli(Flash))
+    try:
+        run(tyro.cli(Flash))
+    except FlashError as error:
+        sys.exit(str(error))
+
+
+RETRY_DELAYS = (0.1, 0.2, 0.3, 1, 2)
+STORAGE_RECOVERY = 'CNTRL ERROR deployment-recovery'
+LEGACY_STORAGE_RECOVERY = (
+    'CNTRL reconnected in storage recovery; checking build after restore'
+)
 
 
 if __name__ == '__main__':

@@ -479,11 +479,14 @@ def test_changed_image_is_rejected_before_device_access(
 
 
 @pytest.mark.parametrize('wrong_target', [False, True])
+@pytest.mark.parametrize('mode', ['manual', 'install', 'update', 'rollback'])
 def test_upload_uses_snapshot_and_only_the_expected_halfkay(
     firmware_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     wrong_target: bool,
+    mode: str,
 ) -> None:
     original = firmware_path.read_bytes()
     digest = hashlib.sha256(original).hexdigest()
@@ -493,6 +496,13 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
     monkeypatch.setenv('CNTRL_TYCMD', str(updater))
     monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path / 'staging')
     monkeypatch.setattr(upload_helper, 'flash_record_path', lambda: record)
+    if mode == 'rollback':
+        monkeypatch.setattr(boot_switch, 'STOCK_SHA256', digest)
+        monkeypatch.setattr(
+            upload_helper,
+            'validate_firmware',
+            MagicMock(side_effect=ValueError('not combined')),
+        )
     calls: list[list[str]] = []
     snapshots: list[Path] = []
 
@@ -530,7 +540,16 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         )
 
     monkeypatch.setattr(subprocess, 'run', run)
-    request = Upload(image=firmware_path, sha256=digest, serial='12345')
+    request = (
+        Upload(image=firmware_path, sha256=digest, serial='12345')
+        if mode == 'manual'
+        else upload_helper.ManagedUpload(
+            image=firmware_path,
+            sha256=digest,
+            serial='12345',
+            first_install=mode != 'update',
+        )
+    )
     result = upload_helper.process_request(
         request.model_dump_json().encode() + b'\n', '12345'
     )
@@ -556,3 +575,4 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         assert "I/O error while writing to 'IOService:/…'" in entries
         assert '/private/device' not in entries
         assert '12345' not in entries
+        assert ('I/O error' in capsys.readouterr().out) == (mode == 'manual')

@@ -72,6 +72,16 @@ through transactional deployment. It sends no MIDI, defines no instruments and
 disables MIDI routes and forwarding. Upload your own setup afterward. The SD
 card is never formatted, and vendor presets are not converted into cntrl setups.
 
+If the upload reports an error, the installer checks which firmware boots. If
+the expected build reports ready, it continues with the starter installation.
+Otherwise it can retry up to five times, with delays of 100 ms, 200 ms, 300 ms,
+1 s, and 2 s. Each upload requires the selected pedal to be in HalfKay again.
+After those attempts, it can make up to five attempts to restore the pinned
+Morningstar image. It confirms rollback when the stock upload finishes and
+the same pedal returns in Morningstar mode. If recovery fails, the terminal
+shows instructions for the internal PROGRAM button. Upload errors and retries
+are recorded in [the flash log](../../../../doc/flash-record.md).
+
 ## Updating cntrl
 
 ```sh
@@ -79,15 +89,17 @@ cntrl flash --controller mc6-pro --port PORT
 ```
 
 The installer discovers the serial from the selected cntrl USB port, checks it
-against the running helper, makes a fresh backup, prepares offline conversion,
-requests bootloader entry, uploads once, then restores and verifies the saved
-data. Add `--legacy-usb` only for the earlier cntrl USB transport.
+against the running helper, makes a fresh backup, and prepares offline conversion.
+It uses the same boot verification and silent retries as a first install. Once
+the expected firmware boots, the installer restores and verifies the saved data.
+Add `--legacy-usb` only for the earlier cntrl USB transport.
 
 Every installation uses a fresh `.cntrl-install/<id>/` directory by default.
 `--output PATH` selects another new directory. Keep its `installation.toml`,
-image, `before/` and `restore/` trees for recovery. A failed uploader/reset/restore
-is reported as a failure; there is no automatic recovery upload. The installation
-record identifies our source commit, stock/components/image hashes and uploader.
+image, `before/` and `restore/` trees for recovery. If retries are exhausted,
+the update reports failure and keeps the backup. Stock rollback applies only
+to first installs. The installation record identifies the source commit,
+stock, component and image hashes, and the uploader.
 
 To populate the cache and inspect an image without opening any device:
 
