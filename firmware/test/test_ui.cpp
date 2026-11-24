@@ -297,18 +297,6 @@ static void pong_motion_only_changes_intersecting_displays() {
         assert((a.x != b.x || a.y != b.y || a.width != b.width || a.height != b.height) == (i == 1));
     }
 }
-static void focused_outline_follows_the_rounded_page_corners() {
-    Fonts fonts;
-    uint16_t pixels[8 * 8];
-    cntrl::ui::Raster raster(fonts, pixels);
-    cntrl::ScreenGraphics settings; settings.background = 0xffff; settings.foreground = 0xf800;
-    raster.configure({8, 8, 0, 3}, settings);
-    raster.corners(true);
-    const char *rows[] = {".######.", "##    ##", "#      #", "#      #", "#      #", "#      #", "##    ##", ".######."};
-    for (unsigned y = 0; y < 8; ++y) for (unsigned x = 0; x < 8; ++x)
-        assert(pixels[y * 8 + x] == (rows[y][x] == '.' ? 0 : rows[y][x] == '#' ? 0xf800 : 0xffff));
-}
-
 static void panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed() {
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
     cntrl::PageSettings settings;
@@ -529,6 +517,31 @@ static void circles_clip_before_iterating_and_do_not_overflow() {
     // This viewport lies entirely within the very large outer annulus.
     for (auto pixel : pixels) assert(pixel == 0x1234);
 }
+static void display_corners_smooth_the_curve_and_focus_outline() {
+    struct RoundedDisplay : Display {
+        cntrl::ui::Viewport viewport(unsigned) const override { return {24, 18, 0, 8}; }
+    } display;
+    Fonts fonts;
+    uint16_t work[24 * 18] = {};
+    cntrl::ui::Renderer renderer(display, fonts, work, 24 * 18);
+    cntrl::Pane pane;
+    pane.graphics.background = 0xffff;
+    pane.graphics.foreground = 0xf800;
+    auto draw = [&] {
+        renderer.show(0, pane);
+        for (unsigned i = 0; i < 200; ++i) { renderer.draw(i); display.complete(); }
+        assert(renderer.ready());
+    };
+    draw();
+    assert(display.pixels[0] == 0 && display.pixels[8] == 0xffff);
+    for (unsigned row : {1u, 16u}) for (unsigned col : {3u, 20u})
+        assert(display.pixels[row * 24 + col] == 0xbdf7);
+    pane.focused = true;
+    draw();
+    assert(display.pixels[0] == 0 && display.pixels[8] == 0xf800);
+    assert(display.pixels[24 + 3] == 0xb800);
+    assert(display.pixels[8 * 24 + 8] == 0xffff);
+}
 static void minimum_viewports_follow_declared_surfaces() {
     struct Geometry : cntrl::ui::Display {
         unsigned count() const override { return 3; }
@@ -731,7 +744,6 @@ int main() {
     test_time_sources_and_clock_output();
     cable_test_preserves_its_original_font_and_indicators();
     panic_keeps_its_caption_visible_and_shows_the_current_phase_when_pressed();
-    focused_outline_follows_the_rounded_page_corners();
     cntrl::memory_budget = 192 * 1024;
     setups_page_shows_its_physical_confirm_label();
     moving_shapes_repaint_only_their_damage_and_restore_overlaps();
@@ -745,6 +757,7 @@ int main() {
     title_text_is_drawn_over_its_indicator();
     minimum_viewports_follow_declared_surfaces();
     circles_clip_before_iterating_and_do_not_overflow();
+    display_corners_smooth_the_curve_and_focus_outline();
     distinct_geometries_and_reserved_displays();
     portable_font_bearings_and_character_advances();
     font_bounds_preserve_bearings_spaces_and_shaped_offsets();

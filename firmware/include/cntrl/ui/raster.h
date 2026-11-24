@@ -224,6 +224,9 @@ public:
             if (distance <= int64_t(span) * span) pixel(x, y, distance <= int64_t(c.diameter) * c.diameter ? c.color : c.ring_color);
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(raster_toggle)
+#endif
     void toggle(const ToggleIcon &t) {
         if (!t.visible) return;
         const unsigned height = std::max(4u, viewport_.height * 7 / 64), width = height * 13 / 7;
@@ -236,22 +239,42 @@ public:
             pixel(t.x + col, t.y + row, knob * knob + dy * dy <= (int(height) - 4) * (int(height) - 4) ? (t.disabled ? 0xc618 : 0xffff) : t.disabled ? 0x8410 : t.enabled ? 0x07e0 : 0);
         }
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(raster_corners)
+#endif
     void corners(bool outlined = false) {
-        const unsigned radius = std::min({viewport_.corner_radius, viewport_.width / 2, viewport_.height / 2}), diameter = 2 * radius;
+        const unsigned radius = std::min({viewport_.corner_radius, viewport_.width / 2, viewport_.height / 2});
         if (outlined) {
             rectangle(radius, 0, viewport_.width - 2 * radius, 1, settings_.foreground);
             rectangle(radius, int(viewport_.height) - 1, viewport_.width - 2 * radius, 1, settings_.foreground);
             rectangle(0, radius, 1, viewport_.height - 2 * radius, settings_.foreground);
             rectangle(int(viewport_.width) - 1, radius, 1, viewport_.height - 2 * radius, settings_.foreground);
         }
+        if (!radius) return;
+        // Sample at the centers of four subpixels so the curve keeps its
+        // shape when the emulator enlarges individual display pixels.
+        const uint64_t outer = uint64_t(4) * radius;
+        const uint64_t inner = outlined ? outer - 4 : outer;
         for (unsigned y = 0; y < radius; ++y) for (unsigned x = 0; x < radius; ++x) {
-            const unsigned dx = diameter - 2 * x - 1, dy = diameter - 2 * y - 1;
-            const unsigned distance = dx * dx + dy * dy;
-            const bool outside = distance > diameter * diameter;
-            if (!outside && (!outlined || distance <= (diameter - 2) * (diameter - 2))) continue;
-            const uint16_t color = outside ? 0 : settings_.foreground;
-            pixel(x, y, color); pixel(viewport_.width - 1 - x, y, color);
-            pixel(x, viewport_.height - 1 - y, color); pixel(viewport_.width - 1 - x, viewport_.height - 1 - y, color);
+            unsigned fill = 0, stroke = 0;
+            for (unsigned sy : {1u, 3u}) for (unsigned sx : {1u, 3u}) {
+                const uint64_t dx = outer - 4u * x - sx, dy = outer - 4u * y - sy;
+                const uint64_t distance = dx * dx + dy * dy;
+                if (distance <= inner * inner) ++fill;
+                else if (distance <= outer * outer) ++stroke;
+            }
+            if (fill == 4) continue;
+            for (unsigned row : {y, viewport_.height - 1 - y})
+                for (unsigned col : {x, viewport_.width - 1 - x}) {
+                    if (int(col) < clip_.left || int(col) >= clip_.right
+                        || int(row) < clip_.top || int(row) >= clip_.bottom) continue;
+                    auto &color = pixels_[row * viewport_.width + col];
+                    const unsigned edge = settings_.foreground;
+                    const unsigned red = ((color >> 11) * fill + (edge >> 11) * stroke + 2) / 4;
+                    const unsigned green = (((color >> 5) & 63) * fill + ((edge >> 5) & 63) * stroke + 2) / 4;
+                    const unsigned blue = ((color & 31) * fill + (edge & 31) * stroke + 2) / 4;
+                    color = uint16_t(red << 11 | green << 5 | blue);
+                }
         }
     }
 private:
