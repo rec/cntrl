@@ -167,6 +167,11 @@ display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time
 page.
 
+In the setup's **Display** group, **Frame buffers** reserves zero, one, or two
+full-display buffers. Zero disables scrolling. **Use animations** controls
+scrolling and movie playback. The setup checks its display memory budget as
+you accept each draft value.
+
 In the setup's **MIDI** group, **Pickup** sets the default for controls that
 inherit the setup policy. **Pickup pairing (ms)** changes the pairing window.
 **Reset controls on loop stop** enables the setup's reset policy and preserves

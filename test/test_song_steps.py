@@ -82,7 +82,11 @@ def test_song_step_navigation_and_boundaries(
         [str(runner), str(fixture), str(setup), '--setup-preferences', str(edited)],
         check=True,
     )
-    saved = tomlkit.parse(resolved.export(edited.read_bytes()))
+    edited_setup = edited.read_bytes()
+    saved = tomlkit.parse(resolved.export(edited_setup))
+    assert saved['frame_buffers'] == 2
+    assert saved['use_animations'] is False
+    assert resolved.refresh_memory(edited_setup, {}, target=target) == edited_setup
     assert saved['pickup'] is True
     assert saved['pickup_pairing_ms'] == 3
     assert saved['loop_stop_reset_controls'] is True

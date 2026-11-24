@@ -13,7 +13,7 @@ namespace cntrl::ui {
 class Renderer {
 public:
 #if UINTPTR_MAX == UINT32_MAX
-    static_assert(sizeof(Pane) == 1976, "Update display.estimate_frame_ram for changed transition snapshots");
+    static_assert(sizeof(Pane) == pane_arm_bytes, "Update display.estimate_frame_ram for changed transition snapshots");
 #endif
     Renderer(Display &display, const Fonts &fonts, uint16_t *work, unsigned work_capacity)
         : display_(display), fonts_(fonts), raster_(fonts, work), screens_(display.count()) {

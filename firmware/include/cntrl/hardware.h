@@ -79,6 +79,7 @@ struct ScenePanel {
     TextLine title;
     Bitmap bitmap;
 };
+inline constexpr unsigned pane_arm_bytes = 1976;
 enum class SwitchLabelAlignment : uint8_t { center, left, right };
 struct Pane {
     Bitmap bitmap;
@@ -157,6 +158,7 @@ struct Hardware : RelayDriver {
     virtual unsigned display_width() const = 0;
     virtual unsigned display_height() const = 0;
     virtual unsigned display_count() const { return 0; }
+    virtual unsigned display_pixels() const { return 0; }
     virtual const char *display_id(unsigned) const { return nullptr; }
     virtual const char *control_label(ControlRole) const { return ""; }
     // Pane indices follow physical left-to-right order: 0, 1, 2.

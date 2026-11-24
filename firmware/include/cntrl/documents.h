@@ -226,11 +226,9 @@ public:
         return false;
     }
     static bool setup_preference_editable(unsigned field) {
-        // Frame and animation settings require recalculating the memory estimate.
-        constexpr uint64_t unavailable = (uint64_t(1) << 7) | (uint64_t(1) << 8);
         if (field >= GlobalSettings::count)
             return field < GlobalSettings::count + PageSettings::count && field != GlobalSettings::count + PageSettings::clock_outputs;
-        return (GlobalSettings::fields & ~unavailable) & (uint64_t(1) << field);
+        return GlobalSettings::fields & (uint64_t(1) << field);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_setup_preference)
@@ -462,6 +460,29 @@ private:
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_setup_frame_budget)
+#endif
+    bool setup_frame_budget(const Document &draft, uint8_t *scroll, uint64_t mask) const {
+        const unsigned pixels = hardware_.display_pixels(), count = hardware_.display_count();
+        if (!pixels || !count) return false;
+        const uint64_t frame = memory_charge(pixels * sizeof(uint16_t));
+        const uint64_t transition = memory_charge(count * pane_arm_bytes);
+        const auto frame_ram = [&](unsigned buffers, bool animations) {
+            return buffers * frame + (buffers == 1 && animations ? transition : 0);
+        };
+        const auto *old = draft.data() + draft.metadata() + scrolling_offset;
+        const uint64_t previous = frame_ram(old[6], old[7]);
+        if (previous > draft.page_ram2()) return false;
+        const uint64_t other = draft.page_ram2() - previous + hardware_.memory_runtime();
+        const uint64_t compiled = frame_ram(scroll[6], scroll[7]);
+        const auto *pedal = global_preferences();
+        const uint64_t effective = frame_ram(GlobalSettings::resolve(pedal, mask, 7, scroll[6]),
+            GlobalSettings::resolve(pedal, mask, 8, scroll[7]));
+        if (other + std::max(compiled, effective) > hardware_.memory_capacity()) return false;
+        put32(scroll + 8, uint32_t(draft.page_ram2() - previous + compiled));
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_write_setup_preference)
 #endif
     bool write_setup_preference(const Document &draft, unsigned field, uint32_t value, bool inherit) {
@@ -542,6 +563,7 @@ private:
             case 2: case 3: case 4: flag(core[19], 1u << (field == 2 ? 1 : field), value); break;
             case 5: flag(scroll[5], 2, !value); break;
             case 6: flag(scroll[5], 1, value); break;
+            case 7: case 8: scroll[field - 1] = uint8_t(value); break;
             case 9: flag(core[19], 4, value); break;
             case 10: bytes[record_at + 6] = value ? 2 : 1; break;
             case 11: word(bytes + record_at + 7); break;
@@ -559,9 +581,11 @@ private:
             default: return false;
             }
         }
+        const uint64_t mask = inherit ? draft.explicit_settings() & ~bit : draft.explicit_settings() | bit;
+        if ((field == 7 || field == 8) && !setup_frame_budget(draft, bytes + draft.metadata() + scrolling_offset, mask))
+            return false;
         if (!page_field && draft.global_mask_offset()) {
             const unsigned offset = draft.global_mask_offset() + growth;
-            const uint64_t mask = inherit ? draft.explicit_settings() & ~bit : draft.explicit_settings() | bit;
             for (unsigned i = 0; i < 8; ++i) bytes[offset + i] = uint8_t(mask >> (8 * i));
         }
         binary::seal_setup(bytes, scratch_.size);

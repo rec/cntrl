@@ -176,6 +176,7 @@ public:
     }
     const char *control_label(ControlRole role) const override { return input_label(control_input(role)); }
     unsigned display_count() const override { return target::display_count; }
+    unsigned display_pixels() const override { return ui::count_display_pixels(target::viewports); }
     const char *display_id(unsigned i) const override { return target::display_ids[i]; }
     unsigned display_width() const override { return target::viewports[0].width; }
     unsigned display_height() const override { return target::viewports[0].height; }

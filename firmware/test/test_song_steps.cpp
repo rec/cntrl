@@ -20,7 +20,10 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     std::string last_error;
     uint32_t now = 0;
     unsigned displays = 3;
+    unsigned available_memory = TestPatchHardware::memory_capacity();
+    unsigned memory_capacity() const override { return available_memory; }
     unsigned display_count() const override { return displays; }
+    unsigned display_pixels() const override { return displays * 160 * 128; }
     unsigned input_count() const override { return 6; }
     unsigned switch_capacity() const override { return 5; }
     const char *input_label(unsigned input) const override { static const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[input]; }
@@ -291,7 +294,7 @@ int main(int argc, char **argv) {
         assert(documents.document().brightness() == 100 && !(documents.document().explicit_settings() & 1));
 
         open_setup_preferences();
-        for (unsigned i = 0; i < 5; ++i) tap(1);
+        for (unsigned i = 0; i < 7; ++i) tap(1);
         assert(!std::strcmp(board.panes[1].lines[1].text, "Target pulse maximum"));
         tap(2); tap(4); tap(4); tap(0); tap(2);
         assert(!std::strcmp(board.panes[2].lines[2].text, "Invalid for this setup"));
@@ -369,7 +372,38 @@ int main(int argc, char **argv) {
         tap(2); tap(1); tap(2);
         assert(!documents.document().pickup() && !documents.document().loop_stop_reset_controls());
         save("Save and reload setup");
+
+        assert(documents.global_change(7, 0, false, false));
+        const unsigned before_display = documents.document().page_ram2();
+        const unsigned maximum_memory = board.available_memory;
+        const auto open_frame_buffers = [&] {
+            open_setup_preferences(); tap(1); tap(1);
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Frame buffers"));
+        };
+        assert(documents.document().frame_buffers() == 0);
+        open_frame_buffers();
+        tap(2); tap(1); tap(1); // Two frame buffers.
+        board.available_memory = before_display;
+        tap(2);
+        assert(!std::strcmp(board.panes[2].lines[2].text, "Invalid for this setup"));
+        assert(documents.document().frame_buffers() == 0);
+        board.available_memory = maximum_memory;
+        tap(2);
+        tap(1);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Use animations"));
+        tap(2); tap(0); tap(2);
+        save("Save and reload setup");
+        const unsigned frame = 2 * board.display_pixels() + 8;
+        const unsigned transition = 3 * 1976 + 8;
+        const unsigned budget = before_display + frame - transition;
+        assert(documents.document().frame_buffers() == 2 && !documents.document().use_animations());
+        assert(documents.document().page_ram2() == budget);
+
+        open_frame_buffers(); tap(2); tap(3); // Use the pedal's zero-frame value.
+        save("Save and reload setup");
         const auto &document = documents.document();
+        assert(!document.frame_buffers() && document.page_ram2() == budget);
+        assert(!(document.explicit_settings() & (1u << 7)));
         assert(document.length() == before_pickup + 9 + document.nodes() + 7);
         assert(document.pickup() && document.pickup_pairing_ms() == 3 && document.loop_stop_reset_controls());
         assert((document.explicit_settings() & (uint64_t(1) << 33)) && !preferences.values().values[10]);

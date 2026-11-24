@@ -6,6 +6,12 @@ namespace cntrl::ui {
 struct Viewport {
     unsigned width = 0, height = 0, gap = 0, corner_radius = 8;
 };
+template<class Viewports>
+constexpr unsigned count_display_pixels(const Viewports &viewports) {
+    unsigned pixels = 0;
+    for (const auto &viewport : viewports) pixels += viewport.width * viewport.height;
+    return pixels;
+}
 struct Display {
     virtual ~Display() = default;
     virtual unsigned count() const = 0;

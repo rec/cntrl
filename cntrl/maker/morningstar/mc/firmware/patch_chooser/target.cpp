@@ -244,6 +244,7 @@ public:
     }
 #endif
     unsigned display_count() const override { return display_.count(); }
+    unsigned display_pixels() const override { return cntrl::ui::count_display_pixels(cntrl::target::viewports); }
     const char *display_id(unsigned index) const override {
         return index < cntrl::target::display_count ? cntrl::target::display_ids[index] : nullptr;
     }
