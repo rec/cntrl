@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/movie_library.h"
 #include "ui/messages.h"
 #include "ui/fonts.h"
 #include "ui/presentation.h"
@@ -108,6 +109,10 @@ public:
     bool return_to_performance() {
         if (!settings_ || !open() || docs_.busy() || browsing_ || mode_ == Mode::language_saving) return false;
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
+        if (mode_ == Mode::movie_scan) {
+            hardware_.movie_library()->close();
+            mode_ = Mode::movie_entries;
+        }
         if ((mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value) && !stage_neutral()) {
             render();
             return true;
@@ -143,6 +148,7 @@ public:
 #endif
     void poll(uint8_t held) {
         if (locked_ && !held) locked_ = false;
+        if (mode_ == Mode::movie_scan) poll_movies();
         if (mode_ == Mode::language_saving && !hardware_.language_change_pending()) {
             if (language_changed()) mode_ = Mode::decision;
             else leave_device_editor();
@@ -281,6 +287,8 @@ public:
             preference_button(button);
         } else if (mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value) {
             neutral_button(button);
+        } else if (is_movie_view()) {
+            movie_button(button);
         } else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
@@ -421,7 +429,8 @@ public:
 private:
     enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, calibration, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value,
-                      calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value };
+                      calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value,
+                      movie_lists, movie_entries, movie_picker, movie_scan };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -442,6 +451,9 @@ private:
     bool preference_known_ = false;
     Mode setup_preference_return_ = Mode::closed;
     uint64_t setup_changes_ = 0;
+    std::optional<uint32_t> movie_pivot_, movie_choice_, movie_original_;
+    unsigned movie_index_ = 0;
+    bool movie_idle_ = false, movie_reverse_ = false, movie_advance_ = false, movie_rejected_ = false;
     midi::Parameter neutral_{};
     unsigned neutral_index_ = 0, neutral_output_ = 0, neutral_field_ = 0;
     bool neutral_changed_ = false, neutral_rejected_ = false;
@@ -653,6 +665,74 @@ private:
         preference_initial_known_ = preference_known_;
         return true;
     }
+    bool is_movie_view() const {
+        return mode_ == Mode::movie_lists || mode_ == Mode::movie_entries
+            || mode_ == Mode::movie_picker || mode_ == Mode::movie_scan;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_poll_movies)
+#endif
+    void poll_movies() {
+        std::optional<uint32_t> key;
+        if (hardware_.movie_library()->step(key)) {
+            mode_ = Mode::movie_picker;
+            render();
+        } else if (key) {
+            const auto rank = [&](uint32_t candidate) {
+                if (!movie_pivot_) return uint64_t(movie_reverse_ ? UINT32_MAX - candidate : candidate);
+                const uint32_t distance = movie_reverse_ ? *movie_pivot_ - candidate : candidate - *movie_pivot_;
+                return !distance && movie_advance_ ? uint64_t(1) << 32 : uint64_t(distance);
+            };
+            if (!movie_choice_ || rank(*key) < rank(*movie_choice_)) movie_choice_ = key;
+        }
+    }
+    void scan_movies(std::optional<uint32_t> pivot, bool reverse = false, bool advance = false) {
+        movie_pivot_ = pivot;
+        movie_reverse_ = reverse;
+        movie_advance_ = advance;
+        movie_choice_.reset();
+        hardware_.movie_library()->start();
+        mode_ = Mode::movie_scan;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_movie_button)
+#endif
+    void movie_button(unsigned button) {
+        movie_rejected_ = false;
+        if (mode_ == Mode::movie_lists) {
+            if (button < 2) movie_idle_ = !movie_idle_;
+            else if (button == 2) { movie_index_ = 0; mode_ = Mode::movie_entries; }
+            else if (button == 5) mode_ = Mode::preferences;
+            return;
+        }
+        if (mode_ == Mode::movie_scan || mode_ == Mode::movie_picker) {
+            if (button == 5) {
+                hardware_.movie_library()->close();
+                mode_ = Mode::movie_entries;
+            } else if (mode_ == Mode::movie_picker && button < 2) scan_movies(movie_choice_, button == 0, true);
+            else if (mode_ == Mode::movie_picker && button == 2 && movie_choice_) {
+                if (movie_choice_ == movie_original_) mode_ = Mode::movie_entries;
+                else if (hardware_.movie_library()->playable(*movie_choice_) && docs_.edit_movie(movie_idle_, movie_index_, movie_choice_)) {
+                    changed_fields_ |= 1u << 11;
+                    mode_ = Mode::movie_entries;
+                } else movie_rejected_ = true;
+            }
+            return;
+        }
+        Document draft;
+        if (!docs_.edit_document(draft)) return;
+        const unsigned count = draft.movies(movie_idle_);
+        if (button < 2) movie_index_ = (movie_index_ + (button ? 1 : count)) % (count + 1);
+        else if (button == 5) mode_ = Mode::movie_lists;
+        else if (button == 3 && movie_index_ < count) {
+            if (docs_.edit_movie(movie_idle_, movie_index_, {})) changed_fields_ |= 1u << 11;
+            else movie_rejected_ = true;
+        } else if (button == 2) {
+            movie_original_.reset();
+            if (movie_index_ < count) movie_original_ = u32(draft.movie_keys(movie_idle_) + 4 * movie_index_);
+            scan_movies(movie_original_);
+        }
+    }
     bool stage_neutral() {
         if (!neutral_changed_) return true;
         neutral_rejected_ = !docs_.edit_loop_neutral(neutral_index_, neutral_output_, &neutral_);
@@ -825,6 +905,11 @@ private:
                 preference_component_ = 0;
                 if (!preference_output()) browse_preference_output(false);
                 mode_ = Mode::preference_value;
+            }
+        } else if (button == 4 && setup_preferences_ && field.field == 8 && hardware_.movie_library()) {
+            if (stage_setup_preference()) {
+                movie_idle_ = movie_rejected_ = false;
+                mode_ = Mode::movie_lists;
             }
         } else if (button == 4 && setup_preferences_ && field.field == 33) {
             if (stage_setup_preference()) {
@@ -1078,6 +1163,49 @@ private:
         if (docs_.browse(name_, backward)) browsing_ = true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render_movies)
+#endif
+    void render_movies(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
+        using Role = ControlRole;
+        auto &center = views[1].lines;
+        auto &right = views[2].lines;
+        const char *list = movie_idle_ ? "Idle movies" : "Startup movies";
+        ui::copy_caption(center[1], list);
+        const unsigned count = draft.movies(movie_idle_);
+        const char *confirm = "Open", *value = "";
+        char number[24];
+        if (mode_ == Mode::movie_lists) {
+            std::snprintf(number, sizeof(number), "%u selected", count);
+            value = number;
+        } else if (mode_ == Mode::movie_entries) {
+            if (movie_index_ == count) {
+                confirm = "Add";
+                value = "Add installed movie";
+            } else {
+                confirm = "Replace";
+                std::snprintf(center[2].text, 64, "%u/%u", movie_index_ + 1, count);
+                std::snprintf(number, sizeof(number), "%08lx", (unsigned long)u32(draft.movie_keys(movie_idle_) + 4 * movie_index_));
+                value = number;
+                ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Remove").text());
+            }
+        } else {
+            confirm = movie_choice_ && mode_ == Mode::movie_picker ? "Use movie" : "";
+            ui::copy_caption(center[1], "Installed movies");
+            if (mode_ == Mode::movie_scan) value = "Scanning card";
+            else if (!movie_choice_) value = "No compatible movies";
+            else {
+                std::snprintf(number, sizeof(number), "%08lx", (unsigned long)*movie_choice_);
+                value = number;
+            }
+        }
+        ui::copy_caption(right[0], list);
+        ui::copy_caption(right[1], value);
+        if (movie_rejected_) ui::copy_caption(right[2], "Could not change selection");
+        prompt.clear();
+        if (*confirm) prompt.add(Role::confirm, confirm);
+        ui::copy_caption(views[0].lines[1], prompt.add(Role::back, "Back", ", ").text());
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render_neutral)
 #endif
     void render_neutral(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
@@ -1147,9 +1275,10 @@ private:
             || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
         const bool preference_view = mode_ == Mode::preferences || mode_ == Mode::preference_value;
         const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
+        const bool movie_view = is_movie_view();
         const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
         const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
-            || instrument_view || neutral_view || (setup_preferences_ && preference_view);
+            || instrument_view || neutral_view || movie_view || (setup_preferences_ && preference_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
         if (mode_ == Mode::current) {
@@ -1472,10 +1601,13 @@ private:
                     }
                     if (setup_preferences_ && preference().field == 33)
                         prompt.add(Role::next_section, "Neutral values");
+                    if (setup_preferences_ && preference().field == 8 && hardware_.movie_library())
+                        prompt.add(Role::next_section, "Movies");
                     ui::copy_caption(views[0].lines[2], prompt.text());
                 }
             }
             if (neutral_view) render_neutral(views, draft, prompt);
+            if (movie_view) render_movies(views, draft, prompt);
             if (mode_ == Mode::decision) {
                 const bool pedal = device_editor_ != Mode::closed;
                 ui::copy_caption(views[1].lines[0], pedal ? ui::i18n::text(ui::i18n::Message::pedal) : docs_.edit_name());

@@ -374,16 +374,18 @@ def _page_offsets(data: bytes) -> tuple[int, int | None, int | None]:
     return cursor, gestures, shifted
 
 
+def _movie_offset(data: bytes) -> int:
+    return banked.section_end(data, layout.section_end(data, _page_offsets(data)[0]))
+
+
 def _sections(data: bytes) -> tuple[int, int, int]:
     """Locate sections in the original bytes, including supported old formats."""
     if data.startswith(binary_format.MAGIC):
         offset = binary_format.core_offset(data)
         graph, endpoints, labels = _sections(binary_format.core(data))
         return graph + offset, endpoints + offset, labels + offset
-    cursor = _page_offsets(data)[0]
+    cursor = _movie_offset(data)
     np = HEADER.unpack_from(data)[6]
-    cursor = layout.section_end(data, cursor)
-    cursor = banked.section_end(data, cursor)
     if cursor + 8 > len(data) or data[cursor : cursor + 4] != b'CMOV':
         raise binary_format.DocumentFormatError('missing movie metadata')
     startup, idle = struct.unpack_from('<HH', data, cursor + 4)
@@ -710,6 +712,14 @@ def _decode(data: bytes) -> dict[str, object]:
     if combined:
         result['auxiliary_switches'] = combined
     result.update(source)
+    movie_offset = _movie_offset(data)
+    startup, idle = struct.unpack_from('<HH', data, movie_offset + 4)
+    cursor = movie_offset + 8
+    for field, count in (('splash_movie', startup), ('idle_movie', idle)):
+        if count or field in result:
+            keys = struct.unpack_from(f'<{count}I', data, cursor)
+            result[field] = [f'movies/{k:08x}.cnsa' for k in keys]
+        cursor += count * 4
     input_offset = _sections(data)[2]
     relay_offset = input_offset + inputs.HEADER.size + len(labels) * inputs.RECORD.size
     if relays := relay_outputs.unpack(data, relay_offset):

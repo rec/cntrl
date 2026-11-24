@@ -6,6 +6,7 @@ from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 from time import monotonic
+from zlib import crc32
 
 import pytest
 import tomlkit
@@ -23,6 +24,7 @@ from cntrl.patch_chooser import (
     device_globals,
     languages,
     models,
+    resolved,
     setup_bundle,
 )
 from cntrl.patch_chooser.cli import compile_to_file
@@ -1059,6 +1061,107 @@ def test_startup_animation_uses_the_shared_asset_player(
         session.button('a', False)
         session.advance(1500000)
         assert any(f != red for f in session.frames.values())
+
+
+def test_settings_saves_installed_startup_and_idle_movies(
+    backend_files: BackendFiles, tmp_path: Path
+) -> None:
+    files = backend_files
+    if 'f' not in files.target.buttons:
+        pytest.skip('Movie editing requires the Settings back and section controls')
+    geometry = files.target.animation
+    assert geometry is not None
+    target = files.target.model_copy(
+        update={
+            'controls': models.TargetControls(
+                previous='a',
+                next='b',
+                confirm='c',
+                previous_section='d',
+                next_section='e',
+                back='f',
+            ),
+        }
+    )
+    bundle = tmp_path / 'settings.bin'
+    write_bundle(
+        {'show': {'pages': {'settings': {'type': 'settings'}}}}, target, bundle
+    )
+    executable = backend.build(
+        target, files.setup.parent / 'movie-editor-native', Path(__file__).parents[1]
+    )
+    colors = [
+        pixel * (geometry.width * geometry.height) for pixel in (b'\xf8\0', b'\0\x1f')
+    ]
+    clips = [(c, asset.encode_frames(c, [1000], geometry)) for c in colors]
+    movies_by_key = {crc32(d): (c, d) for c, d in clips}
+    idle, startup = sorted(movies_by_key)
+    storage = tmp_path / 'session'
+    movies = storage / 'cntrl' / 'movies'
+    movies.mkdir(parents=True)
+    for key, (_, movie) in movies_by_key.items():
+        (movies / f'{key:08x}.cnsa').write_bytes(movie)
+    (movies / '00000000.bin').write_bytes(b'uncommitted')
+    with backend.Session(files.layout, target, executable, storage, bundle) as session:
+
+        def press(button: str) -> None:
+            session.button(button, True)
+            session.advance(session.time_us + 60000)
+            session.button(button, False)
+            session.advance(session.time_us + 60000)
+
+        session.advance(1000000)
+        press('c')  # Open Settings from the utility page.
+        for button in (
+            'c',
+            'b',
+            'b',
+            'b',
+            'c',
+            'e',
+        ):  # Display > Use animations > Movies.
+            press(button)
+        for buttons in (
+            (
+                'c',
+                'c',
+                'c',
+                'c',
+                'b',
+                'c',
+                'f',
+            ),  # Add, then replace with the next movie.
+            (
+                'b',
+                'c',
+                'c',
+                'c',
+                'd',
+                'c',
+                'c',
+                'f',
+            ),  # Remove an entry and add it again.
+        ):
+            for button in buttons:
+                press(button)
+        for button in ('f', 'f', 'b', 'c'):  # Review and save the setup.
+            press(button)
+        session.advance(session.time_us + 250000)
+        assert not [m for m in session.messages if m.kind in ('midi', 'error')]
+    slots = list((storage / 'cntrl/setups/bundle').glob('*.bin'))
+    assert len(slots) == 2
+    saved = max(
+        (p.read_bytes() for p in slots), key=lambda b: struct.unpack_from('<I', b, 4)[0]
+    )
+    assert saved[-4:] == b'DONE'
+    source = tomlkit.parse(resolved.export(setup_bundle.unpack(saved[96:-4])['show']))
+    assert source['splash_movie'] == [f'movies/{startup:08x}.cnsa']
+    assert source['idle_movie'] == [f'movies/{idle:08x}.cnsa']
+    with backend.Session(files.layout, target, executable, storage, bundle) as session:
+        session.advance(250000)
+        assert all(
+            frame == movies_by_key[startup][0] for frame in session.frames.values()
+        )
 
 
 def test_large_sysex_keeps_its_message_across_transport_chunks(

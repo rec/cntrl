@@ -12,6 +12,14 @@ public:
     AssetStorage(files::FileSystem &filesystem, files::File &reader, files::File &writer)
         : filesystem_(filesystem), reader_(reader), writer_(writer) {}
     bool ready = false;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(asset_storage_movies)
+#endif
+    std::unique_ptr<files::Directory> movies() {
+        auto directory = ready && filesystem_.available() ? filesystem_.directory() : nullptr;
+        if (directory && !directory->open(directory_)) directory.reset();
+        return directory;
+    }
     unsigned size(unsigned key) override { return open(key) ? reader_.size() : 0; }
     bool read(unsigned key, unsigned offset, uint8_t *data, unsigned length) override {
         return open(key) && reader_.read(offset, data, length);
@@ -26,6 +34,9 @@ public:
         if (!writer_.opened() || !writer_.write(position_, data, length)) return false;
         position_ += length; return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(asset_storage_finish)
+#endif
     bool finish() override {
         if (!writer_.opened()) return false;
         uint8_t trailer[4]; unsigned length = writer_.size();

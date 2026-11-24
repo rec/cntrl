@@ -264,6 +264,28 @@ public:
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_movie)
+#endif
+    bool edit_movie(bool idle, unsigned index, std::optional<uint32_t> key) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const unsigned count = draft.movies(idle);
+        const bool append = index == count;
+        if (index > count || (append && (!key || count == UINT16_MAX))) return false;
+        const unsigned position = unsigned(draft.movie_keys(idle) - draft.data()) + 4 * index;
+        if (!splice_setup(draft, position, append ? 0 : 4, key ? 4 : 0)) return false;
+        auto *bytes = scratch_.data;
+        const unsigned size = count + unsigned(append) - unsigned(!key);
+        auto *movie = bytes + (draft.movie_section() - draft.data());
+        binary::write16(movie + (idle ? 6 : 4), uint16_t(size));
+        if (key) put32(bytes + position, *key);
+        if (!idle) {
+            auto &flags = bytes[draft.core_offset() + 19];
+            flags = uint8_t((flags & ~1u) | unsigned(size != 0));
+        }
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_instrument)
 #endif
     bool edit_instrument(unsigned index, const char *output, unsigned channel) {

@@ -172,6 +172,11 @@ full-display buffers. Zero disables scrolling. **Use animations** controls
 scrolling and movie playback. The setup checks its display memory budget as
 you accept each draft value.
 
+Open **Use animations** and press E for **Movies** to edit the startup or idle
+list. Add or replace an entry by choosing an installed movie. Use D to remove a
+highlighted entry. Movies are shown by the eight-digit ID used in backup file
+names. Save the setup to apply the lists.
+
 In the setup's **MIDI** group, **Pickup** sets the default for controls that
 inherit the setup policy. **Pickup pairing (ms)** changes the pairing window.
 **Reset controls on loop stop** enables the setup's reset policy and preserves

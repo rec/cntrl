@@ -130,6 +130,7 @@ public:
     const ui::Fonts *fonts = nullptr;
     StoredPatchSources *sources = nullptr;
     animation::Session *animation = nullptr;
+    animation::MovieLibrary *installed_movies = nullptr;
     animation::Player *movie_player = nullptr;
     uint64_t time = 0;
     uint64_t accepted_packets = 0;
@@ -266,6 +267,11 @@ public:
     bool display_busy() const { return false; }
     void displayed() { midi_runtime.displayed(); }
     animation::Session &animation_session() { return *animation; }
+    animation::MovieLibrary *movie_library() override {
+        for (const auto &viewport : target::viewports)
+            if (viewport.width != target::viewports[0].width || viewport.height != target::viewports[0].height) return nullptr;
+        return target::animation_stream_count ? installed_movies : nullptr;
+    }
     void set_animation_color_cycle(bool enabled) override { if (!movie_player->set_color_cycle(enabled)) error("Animation color memory unavailable"); }
     midi::Monitor &midi_monitor() { return midi_runtime.monitor(); }
     TextMessages &text_messages() { return midi_runtime.text_messages; }
@@ -468,7 +474,9 @@ class Session {
 public:
     Session(const char *directory,const char *setup,PreviewFonts &fonts,bool replace_setup)
         : preview_fonts(fonts), filesystem(std::filesystem::u8path(directory)), movie_reader(filesystem), movie_writer(filesystem), movie_storage(filesystem,movie_reader,movie_writer),
-          movie_assets(movie_storage,board), movie_output(display), movie_player(movie_assets,movie_output), movie_session(movie_assets,movie_player),
+          movie_assets(movie_storage,board),
+          movies(movie_storage, movie_assets, target::viewports[0].width, target::viewports[0].height, target::animation_stream_count),
+          movie_output(display), movie_player(movie_assets,movie_output), movie_session(movie_assets,movie_player),
           reader(filesystem), writer(filesystem), history(filesystem),
           card(filesystem,reader,writer,history), storage(card,board), sources(storage.setups()), font_reader(filesystem), font_writer(filesystem), font_storage(filesystem,font_reader,font_writer), primary(board,board,board,Switches::capacity),
           documents(storage,board,primary,board), global_settings(filesystem), global_commands(global_settings,documents,board,board), languages(filesystem), song_writer(filesystem), song_storage(filesystem,song_writer,4,"/cntrl/songs",card.ready),
@@ -482,6 +490,7 @@ public:
           host(board,application,documents,display,fonts,renderer,target::controls),
           input(buttons.data(),target::controls,documents.document(),application,board), action_router{board}, cooperative(target::scan_interval_ms) {
         board.app = &application; board.documents = &documents; board.host = &host;
+        board.installed_movies = &movies;
         board.globals = &global_commands;
         board.global_store = &global_settings;
         board.languages = &languages;
@@ -518,6 +527,7 @@ public:
     host::File movie_reader,movie_writer;
     AssetStorage movie_storage;
     animation::Receiver movie_assets;
+    animation::MovieLibrary movies;
     MovieDisplay movie_output;
     animation::Player movie_player;
     animation::Session movie_session;

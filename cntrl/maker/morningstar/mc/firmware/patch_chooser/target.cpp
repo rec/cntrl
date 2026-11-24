@@ -101,6 +101,7 @@ extern cntrl::HistoryImport history_import;
 extern cntrl::SongsTransfer songs_transfer;
 extern cntrl::animation::Session splash_session;
 extern cntrl::animation::Player splash_player;
+extern cntrl::animation::MovieLibrary installed_movies;
 extern cntrl::splash::Panels splash_panels;
 font_assets::Files font_files;
 TrsPorts trs_ports;
@@ -191,6 +192,7 @@ public:
     cntrl::ExpressionPedals *expression_calibration() override { return &expression_controls(); }
     bool expression_available(unsigned jack) const override { return trs_ports.expression_pin(jack) >= 0; }
     auto &animation_session() { return splash_session; }
+    cntrl::animation::MovieLibrary *movie_library() override { return &installed_movies; }
     bool display_priority_due() const { return switch_scan_due(); }
     bool display_busy() const { return display_dma_pending(); }
     PerformanceStatus status() const { return performance_status(); }
@@ -949,6 +951,8 @@ bool append_boot_record(uint32_t value) {
 
 cntrl::splash::SdSlots splash_card;
 DMAMEM cntrl::animation::Receiver splash_assets(splash_card, board);
+cntrl::animation::MovieLibrary installed_movies(splash_card, splash_assets,
+    cntrl::target::viewports[0].width, cntrl::target::viewports[0].height, cntrl::target::animation_stream_count);
 cntrl::splash::Panels splash_panels;
 cntrl::animation::Player splash_player(splash_assets, splash_panels);
 unsigned random_movie(unsigned count) { return unsigned(random(count)); }
