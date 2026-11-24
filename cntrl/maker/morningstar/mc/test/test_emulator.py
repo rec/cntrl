@@ -17,6 +17,7 @@ from cntrl.patch_chooser import (
     compiler,
     data_files,
     device_globals,
+    global_config,
     languages,
     models,
     resolved,
@@ -124,6 +125,8 @@ def test_short_command_compiles_a_setup_and_preserves_session_data(
         'controller=7, value=100}]\n'
     )
     monkeypatch.chdir(tmp_path)
+    defaults = tmp_path / 'global.toml'
+    monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
     build = tmp_path / 'cntrl/maker/morningstar/mc/doom/build'
     build.mkdir(parents=True)
     host = build / ('doom-host.exe' if os.name == 'nt' else 'doom-host')
@@ -147,11 +150,26 @@ def test_short_command_compiles_a_setup_and_preserves_session_data(
     assert all(Path(p).is_file() for p in target.font_sources.values())
     saved = storage / 'saved-pedal-state'
     saved.write_bytes(b'keep me')
+    font = Path(next(iter(target.font_sources.values())))
+    setup_time, font_time = setup.stat().st_mtime_ns, font.stat().st_mtime_ns
     _, _, second, _ = cli.prepare(command, compile_to_file)
     assert second.read_bytes() == compiled
+    assert second.stat().st_mtime_ns == setup_time
+    assert font.stat().st_mtime_ns == font_time
     assert saved.read_bytes() == b'keep me'
     assert source.read_text().startswith('[patch_cycles]')
     assert capsys.readouterr().out == ''
+    defaults.write_text('brightness = 123\n')
+    _, _, changed, _ = cli.prepare(command, compile_to_file)
+    updated = setup_bundle.unpack(changed.read_bytes())['performance']
+    assert tomlkit.parse(resolved.export(updated))['brightness'] == 123
+    expected_setup = changed.read_bytes()
+    expected_font = font.read_bytes()
+    changed.write_bytes(b'CSTB partial setup')
+    font.write_bytes(b'partial font')
+    _, _, repaired, _ = cli.prepare(command, compile_to_file)
+    assert repaired.read_bytes() == expected_setup
+    assert font.read_bytes() == expected_font
 
 
 def test_custom_layout_accepts_a_compiled_bundle_and_explicit_storage(

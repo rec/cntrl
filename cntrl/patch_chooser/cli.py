@@ -48,7 +48,12 @@ from . import (
     source_archive,
     transport,
 )
-from .setup_compiler import compile_inputs, document_references
+from .setup_compiler import (
+    SetupInputs,
+    compile_inputs,
+    compile_loaded,
+    document_references,
+)
 
 
 class Compile(data_files.Sources, frozen=True):
@@ -683,18 +688,32 @@ def report_bundle(bundle: setup_bundle.SetupBundle) -> None:
 
 
 def compile_to_file(
-    command: data_files.Sources, output: Path
+    command: data_files.Sources,
+    output: Path,
+    *,
+    loaded: tuple[SetupInputs, data_files.Trace] | None = None,
 ) -> setup_bundle.SetupBundle:
     assets: dict[str, dict[int, bytes]] = {}
     movies: dict[int, bytes] = {}
-    bundle = compile_inputs(command, assets, movies)
+    if loaded is None:
+        bundle = compile_inputs(command, assets, movies)
+    else:
+        bundle = compile_loaded(*loaded, assets, movies)
     data = bundle.pack()
     try:
         for fonts in assets.values():
             for key, font in fonts.items():
-                save_asset(output.parent / 'fonts' / f'{key:08x}.cfont', font)
+                path = output.parent / 'fonts' / f'{key:08x}.cfont'
+                if loaded is not None and path.is_file() and path.read_bytes() != font:
+                    setup_sync_store.replace(path, font)
+                else:
+                    save_asset(path, font)
         for key, movie in movies.items():
-            save_asset(output.parent / 'movies' / f'{key:08x}.cnsa', movie)
+            path = output.parent / 'movies' / f'{key:08x}.cnsa'
+            if loaded is not None and path.is_file() and path.read_bytes() != movie:
+                setup_sync_store.replace(path, movie)
+            else:
+                save_asset(path, movie)
         output.write_bytes(data)
     except OSError as error:
         raise CompileOutputError(str(error)) from error

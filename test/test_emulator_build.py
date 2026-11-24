@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from cntrl import crashes
 from cntrl.emulator import backend
 from cntrl.fonts import catalogue, ui
 from cntrl.patch_chooser import compiler_inputs, models
@@ -20,8 +21,9 @@ class BuildFiles:
         self.source = self.root / 'firmware/emulator/main.cpp'
         self.protocol = self.source.with_name('protocol.h')
         self.header = self.root / 'firmware/include/cntrl/example.h'
+        self.artwork = self.header.with_suffix('.inc')
         self.manifest = self.root / 'scripts/windows-native.manifest'
-        for p in (self.source, self.protocol, self.header, self.manifest):
+        for p in (self.source, self.protocol, self.header, self.artwork, self.manifest):
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text('original input\n')
         self.compiler = directory / (
@@ -42,6 +44,8 @@ class BuildFiles:
             update={'font_sources': {n: str(self.font) for n in self.target.ui_fonts}}
         )
         self.version = b'test compiler 1'
+        self.commit = b'1234567'
+        self.built_commit = b''
         self.compilations = 0
         self.fail = False
         monkeypatch.setattr(backend.subprocess, 'run', self.run)
@@ -50,10 +54,13 @@ class BuildFiles:
         self, command: list[str], *, check: bool, capture_output: bool = False
     ) -> subprocess.CompletedProcess[bytes]:
         if command[0] == 'git':
-            return subprocess.CompletedProcess(command, 0, b'123456789abcdef\n', b'')
+            return subprocess.CompletedProcess(command, 0, self.commit, b'')
+        if command[1:] == ['--build-gitref']:
+            return subprocess.CompletedProcess(command, 0, self.built_commit, b'')
         if '--version' in command:
             return subprocess.CompletedProcess(command, 0, self.version, b'')
         self.compilations += 1
+        self.built_commit = b'0x' + self.commit
         output = (
             command[command.index('-o') + 1]
             if '-o' in command
@@ -81,12 +88,25 @@ def test_identical_reexported_inputs_reuse_the_executable(files: BuildFiles) -> 
     assert executable.stat().st_mtime_ns == timestamp
 
 
+def test_unrelated_commit_reuses_native_build_and_reports_original_ref(
+    files: BuildFiles,
+) -> None:
+    backend.build(files.target, files.output, files.root)
+    original = files.commit.decode()
+    files.commit = b'abcdef0'
+    backend.build(files.target, files.output, files.root)
+    backend.build(files.target, files.output.with_name('other'), files.root)
+    assert files.compilations == 1
+    assert crashes.native_emulator_ref == original
+
+
 @pytest.mark.parametrize(
     'changed',
     [
         'source',
         'protocol',
         'header',
+        'artwork',
         'added_header',
         'removed_header',
         'target',
@@ -104,7 +124,7 @@ def test_changed_build_inputs_recompile(
     if changed == 'options':
         monkeypatch.setenv('CL', '/O2')
     executable = backend.build(files.target, files.output, files.root)
-    if changed in ('source', 'protocol', 'header', 'manifest'):
+    if changed in ('source', 'protocol', 'header', 'artwork', 'manifest'):
         path = getattr(files, changed)
         path.write_text('changed input\n')
     elif changed == 'added_header':

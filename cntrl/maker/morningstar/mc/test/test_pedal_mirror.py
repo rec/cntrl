@@ -138,7 +138,9 @@ def test_mirrored_native_session_keeps_selection_language_and_installed_packs(
     ) -> tuple[str, Path, Path]:
         return 'mc6-pro', mirror.capture(pedal, captured, status), captured
 
-    def compile_forbidden(sources: object, path: Path) -> setup_bundle.SetupBundle:
+    def compile_forbidden(
+        sources: object, path: Path, *, loaded: object = None
+    ) -> setup_bundle.SetupBundle:
         pytest.fail('mirrored setups must never be recompiled')
 
     monkeypatch.setattr(cli, 'download', download)

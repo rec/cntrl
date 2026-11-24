@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from . import (
     compiler,
@@ -15,6 +15,16 @@ from . import (
 )
 
 
+class SetupInputs(BaseModel, frozen=True):
+    sources: dict[str, object]
+    paths: dict[str, Path]
+    target: models.Target
+    definitions: object
+    tables: list[object]
+    memory_margin: int
+    errors: list[str]
+
+
 def compile_inputs(
     command: data_files.Sources,
     assets: dict[str, dict[int, bytes]] | None = None,
@@ -23,9 +33,18 @@ def compile_inputs(
     trace: data_files.Trace | None = None,
     overrides: dict[Path, bytes] | None = None,
 ) -> setup_bundle.SetupBundle:
-    errors: list[str] = []
     if trace is None:
         trace = data_files.Trace()
+    inputs = load_inputs(command, trace, overrides)
+    return compile_loaded(inputs, trace, assets, movies)
+
+
+def load_inputs(
+    command: data_files.Sources,
+    trace: data_files.Trace,
+    overrides: dict[Path, bytes] | None = None,
+) -> SetupInputs:
+    errors: list[str] = []
     command = global_config.resolve_inputs(command, trace=trace, overrides=overrides)
 
     documents = data_files.expressions(command.document, errors)
@@ -82,7 +101,6 @@ def compile_inputs(
             errors.append(f'target: {error}')
     if not documents:
         errors.append('at least one setup data-file expression is required')
-    result: dict[str, bytes] = {}
     seen: set[str] = set()
     sources: dict[str, object] = {}
     # Companion documents use the same logical names on the host and SD card.
@@ -133,7 +151,6 @@ def compile_inputs(
             )
             documents.append(companion)
     for e in documents:
-        document = sources[e.name]
         try:
             data_files.validate_name(e.name)
         except ValueError as error:
@@ -141,25 +158,6 @@ def compile_inputs(
         if e.name.lower() in seen:
             errors.append(f'{e.name}: duplicate destination name')
         seen.add(e.name.lower())
-        if target is not None:
-            try:
-                fonts: dict[int, bytes] = {}
-                result[e.name] = compiler.compile_show(
-                    document,
-                    definition_data[0] if definition_data else {'profiles': []},
-                    table_data,
-                    target,
-                    fonts,
-                    sources,
-                    movies,
-                    source_snapshots=trace.files,
-                    setting_overrides=trace.setting_overrides.get(e.name),
-                    include_catalogue=True,
-                )
-                if assets is not None:
-                    assets[e.name] = fonts
-            except compiler_errors.CompilationError as error:
-                errors.extend(f'{e.paths[0]} ({e.name}): {x}' for x in error.errors)
     if trace is not None:
         global_names = {e.name for e in [*targets, *definitions, *tables]}
         for consumers in trace.consumers.values():
@@ -170,11 +168,52 @@ def compile_inputs(
                         + [e.name for e in documents]
                     )
                 )
+    if target is None:
+        raise compiler_errors.CompilationError(errors)
+    return SetupInputs(
+        sources=sources,
+        paths={e.name: e.paths[0] for e in documents},
+        target=target,
+        definitions=definition_data[0] if definition_data else {'profiles': []},
+        tables=table_data,
+        memory_margin=command.memory_margin,
+        errors=errors,
+    )
+
+
+def compile_loaded(
+    inputs: SetupInputs,
+    trace: data_files.Trace,
+    assets: dict[str, dict[int, bytes]] | None = None,
+    movies: dict[int, bytes] | None = None,
+) -> setup_bundle.SetupBundle:
+    errors = list(inputs.errors)
+    result: dict[str, bytes] = {}
+    for name, document in inputs.sources.items():
+        try:
+            fonts: dict[int, bytes] = {}
+            result[name] = compiler.compile_show(
+                document,
+                inputs.definitions,
+                inputs.tables,
+                inputs.target,
+                fonts,
+                inputs.sources,
+                movies,
+                source_snapshots=trace.files,
+                setting_overrides=trace.setting_overrides.get(name),
+                include_catalogue=True,
+            )
+            if assets is not None:
+                assets[name] = fonts
+        except compiler_errors.CompilationError as error:
+            errors.extend(f'{inputs.paths[name]} ({name}): {x}' for x in error.errors)
     if errors:
         raise compiler_errors.CompilationError(errors)
     try:
-        assert target is not None
-        return setup_bundle.build(result, sources, target.memory, command.memory_margin)
+        return setup_bundle.build(
+            result, inputs.sources, inputs.target.memory, inputs.memory_margin
+        )
     except ValidationError as error:
         raise compiler_errors.CompilationError([str(error)]) from error
 

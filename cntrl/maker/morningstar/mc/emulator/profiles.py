@@ -1,7 +1,7 @@
 """Export catalogue-bound virtual targets from an MC6 Pro target export."""
 
 import os
-import shutil
+from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
@@ -13,7 +13,7 @@ from .....emulator.backend import bind_target
 from .....emulator.errors import EmulatorError, emulator_files
 from .....emulator.layout import EmulatorLayout
 from .....fonts.catalogue import UI_FONTS
-from .....patch_chooser import data_files, models
+from .....patch_chooser import data_files, models, source_archive
 from ..export_fonts import embedded_font
 
 
@@ -136,13 +136,16 @@ def export(
     with emulator_files():
         fonts.mkdir(parents=True, exist_ok=True)
     sources: dict[str, str] = {}
+    exporter = source_archive.compiler_identity()
     for n in dict.fromkeys([*profile.ui_fonts, *profile.font_sources]):
         destination = fonts / f'{n}.cfont'
         if n in profile.font_sources:
             source = Path(profile.font_sources[n])
             with emulator_files():
                 if source.resolve() != destination.resolve():
-                    shutil.copyfile(source, destination)
+                    content = source.read_bytes()
+                    if not destination.is_file() or destination.read_bytes() != content:
+                        destination.write_bytes(content)
         else:
             source = (
                 Path(__file__).parents[1]
@@ -151,14 +154,27 @@ def export(
                 / f'font_{n}.cpp'
             )
             with emulator_files():
-                destination.write_bytes(embedded_font(source, n, UI_FONTS[n]))
+                key = sha256(
+                    repr((exporter, n, UI_FONTS[n])).encode() + source.read_bytes()
+                ).hexdigest()
+                record = destination.with_suffix('.sha256')
+                if (
+                    not record.is_file()
+                    or not destination.is_file()
+                    or record.read_bytes()
+                    != (key + sha256(destination.read_bytes()).hexdigest()).encode()
+                ):
+                    content = embedded_font(source, n, UI_FONTS[n])
+                    destination.write_bytes(content)
+                    record.write_bytes((key + sha256(content).hexdigest()).encode())
         sources[n] = f'fonts/{destination.name}'
     data = profile.model_dump(mode='json', exclude_none=True)
     data['font_sources'] = sources
     path = output / 'target.toml'
     text = tomlkit.dumps(data)
     with emulator_files():
-        path.write_text(text)
+        if not path.is_file() or path.read_text() != text:
+            path.write_text(text)
     return path
 
 

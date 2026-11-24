@@ -142,17 +142,17 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
             '-o',
             str(executable),
         ]
-    if commit := commit_id(source_root):
-        command.insert(
-            1, f'{"/D" if sys.platform == "win32" else "-D"}CNTRL_GIT_COMMIT=0x{commit}'
-        )
     with emulator_files():
         for name, text in generated.items():
             (directory / name).write_text(text)
         inputs = [
             source,
-            *source.parent.rglob('*.h'),
-            *include.rglob('*.h'),
+            *(
+                p
+                for d in (source.parent, include)
+                for p in d.rglob('*')
+                if p.suffix in ('.h', '.inc')
+            ),
             *(directory / n for n in generated),
         ]
     if sys.platform == 'win32':
@@ -167,10 +167,20 @@ def build(target: Target, directory: Path, source_root: Path) -> Path:
             # A failed compiler may truncate an old executable. Never reuse its old key.
             record.write_text('')
             if not native_cache.restore(cache, key, executable):
+                if commit := commit_id(source_root):
+                    define = '/D' if sys.platform == 'win32' else '-D'
+                    command.insert(1, f'{define}CNTRL_GIT_COMMIT=0x{commit}')
                 subprocess.run(command, check=True)
                 native_cache.store(cache, key, executable)
             record.write_text(key)
-    crashes.native_emulator_ref = commit
+    revision = subprocess.run(
+        [str(executable), '--build-gitref'], check=False, capture_output=True
+    )
+    crashes.native_emulator_ref = (
+        revision.stdout.decode('ascii').strip().removeprefix('0x')
+        if revision.returncode == 0
+        else ''
+    )
     return executable
 
 

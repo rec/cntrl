@@ -892,7 +892,15 @@ void Session::command(const std::vector<uint8_t> &bytes) {
 }
 } // namespace cntrl::emulator
 
+#define CNTRL_STRINGIFY_VALUE(value) #value
+#define CNTRL_STRINGIFY(value) CNTRL_STRINGIFY_VALUE(value)
 int main(int argc,char **argv) {
+    if (argc == 2 && !std::strcmp(argv[1], "--build-gitref")) {
+#ifdef CNTRL_GIT_COMMIT
+        std::cout << CNTRL_STRINGIFY(CNTRL_GIT_COMMIT) << '\n';
+#endif
+        return 0;
+    }
 #ifdef _WIN32
     _setmode(_fileno(stdin),_O_BINARY); _setmode(_fileno(stdout),_O_BINARY);
 #endif

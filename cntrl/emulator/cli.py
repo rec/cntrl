@@ -1,12 +1,12 @@
 """Launch or replay a controller against the production native runtime."""
 
-from collections.abc import Callable
 from contextlib import nullcontext
 from functools import cached_property
+from hashlib import sha256
 from importlib import import_module
 from pathlib import Path
 from shutil import copyfile
-from typing import Annotated, Self
+from typing import Annotated, Protocol, Self
 
 import pint
 import tomlkit
@@ -18,14 +18,26 @@ from tomlkit.exceptions import ParseError
 from ..file_lock import writer_lock
 from ..localization import catalogue
 from ..maker.morningstar.mc.emulator.profiles import built_doom_host
-from ..patch_chooser import data_files, device_globals, languages
+from ..patch_chooser import data_files, device_globals, languages, setup_compiler
 from ..patch_chooser.models import Target
 from ..patch_chooser.setup_bundle import SetupBundle
 from .backend import Session, bind_target, build
 from .errors import EmulatorError, emulator_files
 from .layout import EmulatorLayout
 from .mirror import download
+from .preview_cache import PreviewRecord, key_for, output_digests, read_record
 from .replay import Scenario
+
+
+class CompileSetup(Protocol):
+    def __call__(
+        self,
+        command: data_files.Sources,
+        output: Path,
+        /,
+        *,
+        loaded: tuple[setup_compiler.SetupInputs, data_files.Trace] | None = None,
+    ) -> SetupBundle: ...
 
 
 class Emulate(BaseModel, frozen=True):
@@ -112,7 +124,7 @@ def caret_blink_interval_ms(period: str) -> int:
 
 
 def prepare(
-    command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
+    command: Emulate, compile_setup: CompileSetup
 ) -> tuple[EmulatorLayout, Target, Path, Path]:
     """Resolve a profile and compile source inputs without starting the runtime."""
     if command.port is not None:
@@ -196,12 +208,32 @@ def prepare(
         setup = storage / '.emulator-build' / 'setup' / 'setup.bin'
         with emulator_files():
             setup.parent.mkdir(parents=True, exist_ok=True)
-        compile_setup(
-            data_files.Sources(
-                document=[str(command.setup)], target=[str(target_path)]
-            ),
-            setup,
+        sources = data_files.Sources(
+            document=[str(command.setup)], target=[str(target_path)]
         )
+        trace = data_files.Trace()
+        with emulator_files():
+            loaded = setup_compiler.load_inputs(sources, trace)
+            key = key_for(loaded, trace)
+        record_path = setup.with_suffix('.cache.toml')
+        with emulator_files():
+            record = read_record(record_path)
+            hit = (
+                not loaded.errors
+                and record is not None
+                and record.matches(key, setup, trace)
+            )
+        if not hit:
+            compile_setup(sources, setup, loaded=(loaded, trace))
+            with emulator_files():
+                record = PreviewRecord(
+                    key=key,
+                    inputs={
+                        str(p): sha256(b).hexdigest() for p, b in trace.files.items()
+                    },
+                    outputs=output_digests(setup),
+                )
+                record_path.write_text(tomlkit.dumps(record.model_dump()))
     return layout, target, setup, storage
 
 
@@ -265,9 +297,7 @@ def preview_storage(command: Emulate) -> Path:
     return Path('.cntrl-emulator') / command.layout.stem
 
 
-def emulate(
-    command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
-) -> None:
+def emulate(command: Emulate, compile_setup: CompileSetup) -> None:
     # Live mirrors allocate their own fresh snapshot directory.
     lock = (
         writer_lock(preview_storage(command), operation='emulator session')
@@ -278,9 +308,7 @@ def emulate(
         emulate_locked(command, compile_setup)
 
 
-def emulate_locked(
-    command: Emulate, compile_setup: Callable[[data_files.Sources, Path], SetupBundle]
-) -> None:
+def emulate_locked(command: Emulate, compile_setup: CompileSetup) -> None:
     layout, target, setup, storage = prepare(command, compile_setup)
     print(
         f'Pedal mirror: {command.port}\nSnapshot: {storage}'

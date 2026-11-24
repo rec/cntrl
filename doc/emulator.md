@@ -113,12 +113,15 @@ no SD card or formatting operation is involved. Source previews do not access a
 connected pedal. Reopen the same
 directory to retain its saved data; choose a new directory for a fresh session.
 
-The native executable is reused when its source and header contents, compiled
-target capabilities, compiler identity, options and compiler environment are
-unchanged. Changes to these inputs rebuild it automatically. Fonts and target
-font metrics are runtime data and never trigger a native rebuild. Setup compilation
-still runs when a source setup is supplied. A failed build is never recorded as
-reusable.
+The native executable is reused when its sources, headers, compiled target
+capabilities, compiler identity, options and environment are unchanged. It
+reports the Git revision from its original build. Fonts and target font
+metrics load at runtime.
+
+A source preview resolves the setup and its defaults on each launch. It reuses
+the compiled setup and generated assets when the inputs and cached files match.
+The emulator also reuses exported controller fonts. A failed build never
+produces a valid cache entry.
 
 All fonts load from `.cfont` files when the emulator starts. UI font files come
 from the execution target's `font_sources`; their existing family identities and
