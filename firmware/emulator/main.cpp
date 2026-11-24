@@ -133,6 +133,7 @@ public:
     uint64_t time = 0;
     uint64_t accepted_packets = 0;
     bool firmware_exited = false, stock_pending = false;
+    BootFirmware simulated_boot_firmware = BootFirmware::cntrl;
     uint8_t held = 0;
     unsigned blocked = 0, connected = 0xffff;
     std::array<uint64_t,16> generations{};
@@ -206,6 +207,16 @@ public:
     void finish_fonts(bool commit) override { font_assets::cache.finish(commit); }
     bool supports_keyboard() const override { return target::supports_keyboard; }
     bool supports_function(unsigned function) const override { return function == 1 && target::supports_stock_firmware; }
+    BootFirmware boot_firmware() const override {
+        return target::supports_stock_firmware ? simulated_boot_firmware : BootFirmware::unavailable;
+    }
+    const char *save_boot_firmware(BootFirmware firmware) override {
+        if (firmware_exited || stock_pending || documents->busy() || app->patch_pending() || !output_idle()) return "busy";
+        simulated_boot_firmware = firmware;
+        std::vector<uint8_t> bytes{16}; integer(bytes,time,8);
+        bytes.push_back(firmware == BootFirmware::stock); frame(bytes);
+        return nullptr;
+    }
     bool keyboard_connected() const { return supports_keyboard() && !firmware_exited; }
     bool keyboard_report(const KeyboardReport &report) override {
         if (firmware_exited) return false;

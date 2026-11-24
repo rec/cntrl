@@ -59,6 +59,7 @@ public:
         const bool changed = device_editor_ == Mode::contact ? std::strcmp(contact_draft_, docs_.name_and_contact()) != 0
             : device_editor_ == Mode::startup_set ? std::strcmp(startup_draft_, docs_.startup_set()) != 0
             : device_editor_ == Mode::preference_value ? preference_changed()
+            : device_editor_ == Mode::boot_firmware ? boot_draft_ != hardware_.boot_firmware()
             : docs_.dirty() && changed_fields_;
         if (!changed) {
             if (docs_.dirty()) docs_.edit_cancel();
@@ -146,15 +147,28 @@ public:
                 }
             }
         } else if (mode_ == Mode::pedal) {
-            const unsigned count = docs_.global_preferences() ? 3 : 2;
-            if (button < 2) item_ = (item_ + count + (button ? 1 : -1)) % count;
+            const unsigned count = hardware_.boot_firmware() != BootFirmware::unavailable ? 4 : docs_.global_preferences() ? 3 : 2;
+            if (button < 2) {
+                do { item_ = (item_ + count + (button ? 1 : -1)) % count; }
+                while (item_ == 2 && !docs_.global_preferences());
+            }
             else if (button == 5) mode_ = Mode::current;
             else if (button == 2 && !item_) begin_startup_set(docs_.startup_set());
             else if (button == 2 && item_ == 1) {
                 std::strcpy(contact_draft_, docs_.name_and_contact());
                 contact_cursor_ = 0;
                 mode_ = device_editor_ = Mode::contact;
-            } else if (button == 2) { preference_index_ = 0; mode_ = Mode::preferences; }
+            } else if (button == 2 && item_ == 2) { preference_index_ = 0; mode_ = Mode::preferences; }
+            else if (button == 2) {
+                boot_draft_ = hardware_.boot_firmware();
+                mode_ = device_editor_ = Mode::boot_firmware;
+            }
+        } else if (mode_ == Mode::boot_firmware) {
+            if (button < 2) boot_draft_ = boot_draft_ == BootFirmware::stock ? BootFirmware::cntrl : BootFirmware::stock;
+            else if (button == 2 || button == 5) {
+                if (boot_draft_ == hardware_.boot_firmware()) leave_device_editor();
+                else { mode_ = Mode::decision; item_ = 2; }
+            }
         } else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
             preference_button(button);
         } else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
@@ -259,8 +273,11 @@ public:
             else if (button == 2) {
                 const bool reload = device_editor_ == Mode::preference_value && preference_reloads();
                 if (!item_ && !save_device_editor()) {
-                    const char *reason = device_editor_ == Mode::preference_value ? docs_.last_error() : "";
-                    hardware_.error(*reason ? reason : ui::i18n::text(ui::i18n::Message::save_failed)); return;
+                    if (device_editor_ != Mode::boot_firmware) {
+                        const char *reason = device_editor_ == Mode::preference_value ? docs_.last_error() : "";
+                        hardware_.error(*reason ? reason : ui::i18n::text(ui::i18n::Message::save_failed));
+                    }
+                    return;
                 }
                 if (!item_ && reload) { close(); return; }
                 leave_device_editor();
@@ -277,7 +294,7 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
+    enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -297,6 +314,7 @@ private:
     unsigned preference_index_ = 0, preference_route_ = 0;
     uint32_t preference_value_ = 0, setup_preference_ = 0, preference_step_ = 1;
     bool preference_known_ = false;
+    BootFirmware boot_draft_ = BootFirmware::unavailable;
     Library library_request_ = Library::none;
     unsigned startup_choice_ = 0;
     char startup_draft_[64] = {};
@@ -341,10 +359,19 @@ private:
             mode_ = Mode::preferences; device_editor_ = Mode::closed; return;
         }
         mode_ = shortcut_ == Shortcut::pedal ? Mode::pedal : Mode::current;
-        item_ = device_editor_ == Mode::contact ? 1 : 0;
+        item_ = device_editor_ == Mode::boot_firmware ? 3 : device_editor_ == Mode::contact ? 1 : 0;
         device_editor_ = Mode::closed;
     }
     bool save_device_editor() {
+        if (device_editor_ == Mode::boot_firmware) {
+            if (const char *error = hardware_.save_boot_firmware(boot_draft_)) {
+                hardware_.error(!std::strcmp(error, "busy") ? "Pedal busy. Try again."
+                    : !std::strcmp(error, "boot-default-journal-unavailable") ? "Boot settings storage unavailable"
+                    : "Could not save boot firmware");
+                return false;
+            }
+            return true;
+        }
         if (device_editor_ == Mode::contact) return docs_.name_and_contact(contact_draft_);
         if (device_editor_ == Mode::preference_value)
             return docs_.global_change(preference().field, preference_value_, !preference_known_, hardware_.global_settings_busy());
@@ -658,7 +685,12 @@ private:
         }
         else if (mode_ == Mode::pedal) {
             title = ui::i18n::text(ui::i18n::Message::pedal);
-            value = item_ == 2 ? "Preferences" : ui::i18n::text(item_ ? ui::i18n::Message::owner_contact : ui::i18n::Message::startup_set);
+            value = item_ == 3 ? "Boot firmware" : item_ == 2 ? "Preferences"
+                : ui::i18n::text(item_ ? ui::i18n::Message::owner_contact : ui::i18n::Message::startup_set);
+        }
+        else if (mode_ == Mode::boot_firmware) {
+            title = "Boot firmware";
+            value = boot_draft_ == BootFirmware::stock ? "Stock firmware" : "CNTRL";
         }
         else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
             const auto &field = preference();
@@ -813,6 +845,11 @@ private:
                 ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::changed));
             if (device_editor_ == Mode::startup_set)
                 ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::startup_set_scope));
+            if (device_editor_ == Mode::boot_firmware) {
+                ui::copy_caption(views[0].lines[2], "Applies at next boot");
+                if (mode_ == Mode::boot_firmware)
+                    ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
+            }
             if (mode_ == Mode::contact) {
                 ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
                 ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
@@ -853,6 +890,10 @@ private:
                     ui::copy_caption(views[2].lines[2], startup_draft_[0] ? startup_draft_ : ui::i18n::text(ui::i18n::Message::none));
                 else if (device_editor_ == Mode::contact)
                     ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::owner_contact));
+                else if (device_editor_ == Mode::boot_firmware) {
+                    ui::copy_caption(views[2].lines[0], "Boot firmware");
+                    ui::copy_caption(views[2].lines[2], boot_draft_ == BootFirmware::stock ? "Stock firmware" : "CNTRL");
+                }
                 else if (device_editor_ == Mode::preference_value) {
                     ui::copy_caption(views[2].lines[0], preference().label);
                     preference_text(views[2].lines[2].text, sizeof(views[2].lines[2].text), preference_value_);

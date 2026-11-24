@@ -111,6 +111,7 @@ inline bool button_pair_valid(unsigned mask) {
 struct SongContinuation;
 class Document;
 enum class ControlRole { previous, next, confirm, previous_section, next_section, back };
+enum class BootFirmware { unavailable, cntrl, stock };
 struct Hardware : RelayDriver {
     RelayOutputs relays{*this};
     Counters counters;
@@ -127,6 +128,8 @@ struct Hardware : RelayDriver {
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
     virtual bool supports_function(unsigned) const { return false; }
     virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
+    virtual BootFirmware boot_firmware() const { return BootFirmware::unavailable; }
+    virtual const char *save_boot_firmware(BootFirmware) { return "boot-default-unavailable"; }
     virtual bool launch_doom() { return false; }
     virtual void configure_trs_ports(const uint8_t *) {}
     virtual bool supports_keyboard() const { return false; }

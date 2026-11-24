@@ -308,6 +308,14 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         cntrl::ui::PageHost<PagePlatform> *presentation = nullptr;
         unsigned sent = 0, taps = 0;
         std::string settings_text[3];
+        cntrl::BootFirmware saved_boot = cntrl::BootFirmware::unavailable;
+        bool boot_save_blocked = false;
+        cntrl::BootFirmware boot_firmware() const override { return saved_boot; }
+        const char *save_boot_firmware(cntrl::BootFirmware firmware) override {
+            if (boot_save_blocked) return "busy";
+            saved_boot = firmware;
+            return nullptr;
+        }
         std::vector<unsigned> operations;
         void show(unsigned pane, const cntrl::Pane &content) override {
             if (pane < 3) settings_text[pane] = content.lines[1].text;
@@ -564,6 +572,29 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         button(5); button(0); button(2); // Discard the route change.
         assert(!(preferences.values().known & (uint64_t(1) << 28)));
         button(5); button(5); button(5); app.finish_tool();
+        assert(!app.setups.open() && hardware.sent == before_tools);
+    }
+    {
+        hardware.saved_boot = cntrl::BootFirmware::cntrl;
+        assert(app.open_tool(cntrl::PageLayout::settings, platform));
+        app.setups.poll(0);
+        app.controls_locked = false;
+        const auto button = [&](unsigned control) { click(control, 3530); };
+        button(0); button(2); // Pedal.
+        button(0); button(2); // Boot firmware.
+        assert(hardware.settings_text[1] == "Boot firmware" && hardware.settings_text[2] == "CNTRL");
+        button(1);
+        assert(hardware.settings_text[2] == "Stock firmware" && hardware.saved_boot == cntrl::BootFirmware::cntrl);
+        button(5); button(0); button(2); // Discard.
+        assert(hardware.saved_boot == cntrl::BootFirmware::cntrl);
+        button(2); button(1); button(2); button(1); // Select Save.
+        hardware.boot_save_blocked = true;
+        button(2);
+        assert(app.setups.open() && hardware.saved_boot == cntrl::BootFirmware::cntrl);
+        hardware.boot_save_blocked = false;
+        button(2);
+        assert(hardware.saved_boot == cntrl::BootFirmware::stock);
+        button(5); button(5); app.finish_tool();
         assert(!app.setups.open() && hardware.sent == before_tools);
     }
     click(5, 3600);

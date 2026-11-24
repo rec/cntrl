@@ -268,8 +268,9 @@ want to share the contact details. The text is an editable owner label.
 
 ## Default boot firmware
 
-On an MC6 Pro with the combined image installed, connect over USB while CNTRL is
-running to choose the firmware that starts after a reset or power cycle:
+On an MC6 Pro with the combined image installed, open **Settings**, choose
+**Pedal**, then **Boot firmware**. Saving there changes the next boot. To change
+the same preference over USB while CNTRL is running, use these commands.
 
 ```sh
 cntrl global list default_firmware --port PORT

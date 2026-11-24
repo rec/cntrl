@@ -425,6 +425,7 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
             'performance': {'type': 'patch-chooser', 'min_displays': 0},
             'status': {'type': 'status'},
             'panic': {'type': 'panic'},
+            'settings': {'type': 'settings'},
         },
         'layout': {'focus': 'tools'},
         'patches': {'stock': {'operation': 'stock-firmware', 'exit_buttons': 'a+f'}},
@@ -473,13 +474,30 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
             e.kind == 'midi' and e.endpoint == 'din' and e.data == b'\xb0\x7b\0'
             for e in session.messages
         ), session.messages
+        before_settings = len(session.messages)
+        press('f')  # Settings utility page.
+        press('c')
+        for button in ('a', 'c', 'a', 'c', 'b', 'c', 'b', 'c'):
+            press(button)
+        events = session.messages[before_settings:]
+        assert [e.message for e in events] == [
+            'Simulated boot default saved: stock firmware.'
+        ]
+        assert not session.stock_firmware
         press('f')
-        assert not any(e.kind == 'firmware' for e in session.messages)
+        press('f')
+        press('f')
+        before_switch = len(session.messages)
         press('a')  # The stock-firmware patch remains available without its old page.
-        assert len([e for e in session.messages if e.kind == 'firmware']) == 1
+        assert (
+            len([e for e in session.messages[before_switch:] if e.kind == 'firmware'])
+            == 1
+        )
         assert session.stock_firmware
         transition = next(
-            i for i, e in enumerate(session.messages) if e.kind == 'firmware'
+            i
+            for i, e in enumerate(session.messages)
+            if i >= before_switch and e.kind == 'firmware'
         )
         assert not any(
             e.kind in ('midi', 'keyboard', 'relay')
@@ -489,7 +507,10 @@ def test_pedal_utility_pages_keep_their_controls_and_simulate_hardware(
         press('f')
         session.advance(session.time_us + 1000000)
         assert session.frames == before
-        assert len([e for e in session.messages if e.kind == 'firmware']) == 1
+        assert (
+            len([e for e in session.messages[before_switch:] if e.kind == 'firmware'])
+            == 1
+        )
         assert not any(
             e.kind in ('midi', 'keyboard', 'relay')
             for e in session.messages[transition + 1 :]

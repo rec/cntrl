@@ -495,6 +495,15 @@ class Session:
                         message='Doom selected. Restart to return to CNTRL.',
                     )
                 )
+            elif payload[0] == 16 and len(payload) == 10 and payload[9] in (0, 1):
+                firmware = 'stock firmware' if payload[9] else 'CNTRL'
+                self.messages.append(
+                    OutputEvent(
+                        kind='firmware',
+                        time_us=struct.unpack_from('<Q', payload, 1)[0],
+                        message=f'Simulated boot default saved: {firmware}.',
+                    )
+                )
             elif payload[0] == 8 and len(payload) == 2 and payload[1] <= 1:
                 self.editing_name = bool(payload[1])
             elif payload[0] == 9:
