@@ -174,6 +174,35 @@ int main(int argc, char **argv) {
         release(2); release(5);
         if (app.editing_tool && !app.tool_editor_open(board)) app.finish_tool();
     };
+    if (argc == 5 && !std::strcmp(argv[3], "--page-layout")) {
+        app.allocation.configure(configuration.page_layout());
+        settings(); tap(2); tap(3); // Current setup, last Settings group.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Page layout"));
+        tap(2);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Time"));
+        tap(2); tap(4); tap(2); // Both regions would need two displays.
+        assert(!std::strcmp(board.panes[1].lines[2].text, "Displays unavailable"));
+        tap(5);
+        tap(2); tap(1); tap(2); // Move Time later in its region.
+        tap(1);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Empty"));
+        tap(2); tap(4); tap(1); tap(2); // Move Empty after Status.
+        assert(!std::strcmp(board.panes[2].lines[2].text, "Position 2/2"));
+        assert(documents.document().page_layout().region_size(1) == 1);
+        settings(); tap(1);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Save and reload setup"));
+        tap(2);
+        while (documents.busy()) sample(0);
+        const auto &document = documents.document();
+        const auto layout = document.page_layout();
+        assert(layout.region_page(0, 0) == 1 && layout.region_page(0, 1) == 0);
+        assert(layout.region_page(1, 0) == 3 && layout.region_page(1, 1) == 2);
+        assert(layout.initial_focus() == 1 && document.length() == configuration.length() && board.sent.empty());
+        std::ofstream exported(argv[4], std::ios::binary);
+        exported.write(reinterpret_cast<const char *>(document.data()), document.length());
+        assert(exported);
+        return 0;
+    }
     if (argc == 5 && !std::strcmp(argv[3], "--song-appearance")) {
         songs.choose("Set"); app.song_ui.perform(); sample(0); next();
         const auto sent = board.sent.size();

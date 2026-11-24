@@ -285,6 +285,8 @@ public:
             }
         } else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
             preference_button(button);
+        } else if (mode_ == Mode::layout_pages || mode_ == Mode::layout_move) {
+            layout_button(button);
         } else if (mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value) {
             neutral_button(button);
         } else if (is_movie_view()) {
@@ -430,7 +432,7 @@ private:
     enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, calibration, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value,
                       calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value,
-                      movie_lists, movie_entries, movie_picker, movie_scan };
+                      movie_lists, movie_entries, movie_picker, movie_scan, layout_pages, layout_move };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -454,6 +456,8 @@ private:
     std::optional<uint32_t> movie_pivot_, movie_choice_, movie_original_;
     unsigned movie_index_ = 0;
     bool movie_idle_ = false, movie_reverse_ = false, movie_advance_ = false, movie_rejected_ = false;
+    unsigned page_region_ = 0, page_position_ = 0, destination_region_ = 0, destination_position_ = 0;
+    bool layout_rejected_ = false;
     midi::Parameter neutral_{};
     unsigned neutral_index_ = 0, neutral_output_ = 0, neutral_field_ = 0;
     bool neutral_changed_ = false, neutral_rejected_ = false;
@@ -639,6 +643,10 @@ private:
         return known != preference_known_ || (known && values->values[field] != preference_value_);
     }
     bool preference_supported(unsigned index) const {
+        if (index == ui::layout_preference_index) {
+            Document draft;
+            return setup_preferences_ && docs_.edit_document(draft) && draft.page_layout().pages();
+        }
         const unsigned field = ui::preference_at(index).field;
         if (setup_preferences_ && !Documents::setup_preference_editable(field)) return false;
         if (field >= 23 && field <= 26) return hardware_.supports_trs_mode(field - 23, midi::TrsMode::aux);
@@ -654,6 +662,41 @@ private:
         setup_preference_return_ = back;
         preference_index_ = 0;
         mode_ = Mode::preferences;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_layout_button)
+#endif
+    void layout_button(unsigned button) {
+        Document draft;
+        if (!docs_.edit_document(draft)) return;
+        const auto layout = draft.page_layout();
+        const bool moving = mode_ == Mode::layout_move;
+        auto &region = moving ? destination_region_ : page_region_;
+        auto &position = moving ? destination_position_ : page_position_;
+        const unsigned count = layout.region_size(region) + unsigned(moving && region != page_region_);
+        layout_rejected_ = false;
+        if (button < 2) position = (position + (button ? 1 : count - 1)) % count;
+        else if (button == 3 || button == 4) {
+            region = (region + (button == 4 ? 1 : layout.regions() - 1)) % layout.regions();
+            if (moving && region == page_region_) position = page_position_;
+            else position = 0;
+        } else if (button == 5) mode_ = moving ? Mode::layout_pages : Mode::preferences;
+        else if (button == 2 && !moving) {
+            destination_region_ = region;
+            destination_position_ = position;
+            mode_ = Mode::layout_move;
+        } else if (button == 2) {
+            if (region != page_region_ || position != page_position_) {
+                if (!docs_.edit_page_position(page_region_, page_position_, region, position)) {
+                    layout_rejected_ = true;
+                    return;
+                }
+                changed_fields_ |= 1u << 12;
+            }
+            page_region_ = region;
+            page_position_ = position;
+            mode_ = Mode::layout_pages;
+        }
     }
     bool stage_setup_preference() {
         if (preference_known_ == preference_initial_known_ && preference_value_ == preference_initial_) return true;
@@ -882,6 +925,12 @@ private:
                 else { mode_ = setup_preference_return_; setup_preferences_ = false; }
             }
             else if (button == 2) {
+                if (preference_index_ == ui::layout_preference_index) {
+                    page_region_ = page_position_ = 0;
+                    layout_rejected_ = false;
+                    mode_ = Mode::layout_pages;
+                    return;
+                }
                 const uint64_t bit = uint64_t(1) << field.field;
                 const bool page_field = field.field >= ui::page_preference;
                 const bool pedal_known = !page_field && values && (values->known & bit);
@@ -1163,6 +1212,28 @@ private:
         if (docs_.browse(name_, backward)) browsing_ = true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render_layout)
+#endif
+    void render_layout(Pane (&views)[3], PageLayout layout, ui::Prompt &prompt) const {
+        using Role = ControlRole;
+        const bool moving = mode_ == Mode::layout_move;
+        const unsigned region = moving ? destination_region_ : page_region_;
+        const unsigned position = moving ? destination_position_ : page_position_;
+        const unsigned page = layout.region_page(page_region_, page_position_);
+        const unsigned count = layout.region_size(region) + unsigned(moving && region != page_region_);
+        ui::copy_caption(views[1].lines[1], layout.name(page));
+        ui::copy_caption(views[2].lines[0], moving ? "Move to" : "Region");
+        ui::copy_caption(views[2].lines[1], layout.region_name(region));
+        std::snprintf(views[2].lines[2].text, 64, "Position %u/%u", position + 1, count);
+        if (layout_rejected_) ui::copy_caption(views[1].lines[2], layout.region_size(page_region_) == 1
+            ? "Keep one page in each region" : "Displays unavailable");
+        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, moving ? "Position" : "Browse").text());
+        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, moving ? "Accept move" : "Move")
+            .add(Role::back, moving ? "Cancel" : "Back", ", ").text());
+        if (layout.regions() > 1)
+            ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Region").text());
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render_movies)
 #endif
     void render_movies(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
@@ -1273,12 +1344,14 @@ private:
         char number[64] = {}, calibration_title[32] = {};
         const bool adding_cycle = mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
             || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
-        const bool preference_view = mode_ == Mode::preferences || mode_ == Mode::preference_value;
+        const bool layout_entry = mode_ == Mode::preferences && preference_index_ == ui::layout_preference_index;
+        const bool preference_view = !layout_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
+        const bool layout_view = mode_ == Mode::layout_pages || mode_ == Mode::layout_move;
         const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
         const bool movie_view = is_movie_view();
         const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
         const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
-            || instrument_view || neutral_view || movie_view || (setup_preferences_ && preference_view);
+            || instrument_view || neutral_view || movie_view || layout_view || layout_entry || (setup_preferences_ && preference_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
         if (mode_ == Mode::current) {
@@ -1333,6 +1406,10 @@ private:
                 value = number;
             }
             value_label = ui::i18n::text(ui::i18n::Message::pedal);
+        }
+        else if (layout_entry) {
+            title = "Page layout";
+            value = "Move pages";
         }
         else if (preference_view) {
             const auto &field = preference();
@@ -1608,6 +1685,9 @@ private:
             }
             if (neutral_view) render_neutral(views, draft, prompt);
             if (movie_view) render_movies(views, draft, prompt);
+            if (layout_view) render_layout(views, draft.page_layout(), prompt);
+            if (layout_entry)
+                ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Group").text());
             if (mode_ == Mode::decision) {
                 const bool pedal = device_editor_ != Mode::closed;
                 ui::copy_caption(views[1].lines[0], pedal ? ui::i18n::text(ui::i18n::Message::pedal) : docs_.edit_name());

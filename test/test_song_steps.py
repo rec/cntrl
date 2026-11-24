@@ -78,6 +78,36 @@ def test_song_step_navigation_and_boundaries(
     runner = native_programs.build('test/test_song_steps.cpp')
     subprocess.run([str(runner), str(fixture), str(setup)], check=True)
     edited = tmp_path / 'edited.bin'
+    layout_setup = tmp_path / 'layout.bin'
+    layout_setup.write_bytes(
+        compiler.compile_show(
+            {
+                'pages': {
+                    'Time': {'type': 'time', 'ram2_bytes': 16},
+                    'Language': {'type': 'language'},
+                    'Empty': {'type': 'None'},
+                    'Status': {'type': 'status'},
+                },
+                'regions': {
+                    'tools': {'pages': ['Time', 'Language', 'Empty']},
+                    'performance': {'pages': ['Status']},
+                },
+                'layout': {'focus': 'performance'},
+            },
+            {},
+            [],
+            target,
+        )
+    )
+    subprocess.run(
+        [str(runner), str(fixture), str(layout_setup), '--page-layout', str(edited)],
+        check=True,
+    )
+    saved_layout = tomlkit.parse(resolved.export(edited.read_bytes()))
+    assert saved_layout['regions']['tools']['pages'] == ['Language', 'Time']
+    assert saved_layout['regions']['performance']['pages'] == ['Status', 'Empty']
+    assert saved_layout['pages']['Time']['ram2_bytes'] == 16
+    assert saved_layout['layout']['focus'] == 'performance'
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--setup-preferences', str(edited)],
         check=True,

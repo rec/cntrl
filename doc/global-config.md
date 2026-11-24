@@ -162,6 +162,10 @@ override when a pedal value is
 available. Save commits the draft as a setup revision. Saving the loaded setup
 reloads it.
 
+Choose **Page layout** in Setup fields to move existing pages. A/B browse
+within a region, D/E select a region, and C picks a page to move. Choose its
+destination region and position, then accept the move into the draft.
+
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time

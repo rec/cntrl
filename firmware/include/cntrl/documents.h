@@ -286,6 +286,40 @@ public:
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_page_position)
+#endif
+    bool edit_page_position(unsigned from_region, unsigned from, unsigned to_region, unsigned to) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        if (from_region >= layout.regions() || to_region >= layout.regions()
+            || from >= layout.region_size(from_region)) return false;
+        const bool different = from_region != to_region;
+        if (different ? layout.region_size(from_region) <= 1 || to > layout.region_size(to_region)
+                      : to >= layout.region_size(to_region)) return false;
+        if (!allocate(scratch_, draft.length())) return false;
+        auto *bytes = scratch_.data;
+        std::memcpy(bytes, draft.data(), draft.length());
+        auto *assignments = bytes + (layout.region(layout.regions()) - draft.data());
+        const unsigned source = layout.region(from_region)[32] + from;
+        unsigned destination = layout.region(to_region)[32] + to;
+        if (different && source < destination) --destination;
+        const uint8_t page = assignments[source];
+        if (source < destination) std::memmove(assignments + source, assignments + source + 1, destination - source);
+        else if (source > destination) std::memmove(assignments + destination + 1, assignments + destination, source - destination);
+        assignments[destination] = page;
+        if (different) {
+            unsigned start = 0;
+            for (unsigned r = 0; r < layout.regions(); ++r) {
+                auto *region = bytes + (layout.region(r) - draft.data());
+                region[32] = uint8_t(start);
+                region[33] = uint8_t(layout.region_size(r) + (r == to_region) - (r == from_region));
+                start += region[33];
+            }
+        }
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_instrument)
 #endif
     bool edit_instrument(unsigned index, const char *output, unsigned channel) {
