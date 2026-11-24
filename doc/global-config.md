@@ -179,6 +179,13 @@ and its editable export. Choose a name, edit it with A/B and D/E or a USB
 keyboard, then use F or Enter to accept it into the draft. Names in each list
 must be unique and contain 1 to 31 printable ASCII characters.
 
+**Split region** starts a new region at the selected page and moves the pages
+from there onward into it. Pick a page after the first one and name the new
+region. The split must fit within the available displays. **Join regions**
+shows two neighbors. It appends the right region's pages to the left region
+in order and keeps the left region's name. If the right region had startup
+focus, the joined region gets that focus.
+
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time

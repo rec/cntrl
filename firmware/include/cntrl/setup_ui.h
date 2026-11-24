@@ -116,9 +116,12 @@ public:
     bool return_to_performance() {
         if (!settings_ || !open() || docs_.busy() || browsing_ || mode_ == Mode::language_saving) return false;
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
-        if (editing_layout_name() && !stage_layout_name()) {
-            render();
-            return true;
+        if (editing_layout_name()) {
+            if (!stage_layout_name()) {
+                render();
+                return true;
+            }
+            if (layout_option_ == LayoutOption::split) leave_layout_name();
         }
         if (mode_ == Mode::layout_chooser_minimum && !stage_chooser_minimum()) {
             render();
@@ -450,7 +453,7 @@ private:
                       movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
                       layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
                       layout_chooser_order, layout_chooser_order_move, layout_name, layout_name_action };
-    enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, count };
+    enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, split, join, count };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -479,7 +482,7 @@ private:
     bool layout_rejected_ = false, layout_left_ = false;
     unsigned chooser_minimum_ = 0;
     static constexpr const char *layout_options[] = {"Move pages", "Move regions", "Startup focus", "Spare displays", "Patch Chooser displays",
-        "Rename pages", "Rename regions"};
+        "Rename pages", "Rename regions", "Split region", "Join regions"};
     midi::Parameter neutral_{};
     unsigned neutral_index_ = 0, neutral_output_ = 0, neutral_field_ = 0;
     bool neutral_changed_ = false, neutral_rejected_ = false;
@@ -709,9 +712,15 @@ private:
         const bool region = layout_option_ == LayoutOption::region_names;
         const unsigned index = region ? page_region_ : layout.region_page(page_region_, page_position_);
         const char *original = region ? layout.region_name(index) : layout.name(index);
-        if (!std::strcmp(original, contact_draft_)) return true;
-        layout_rejected_ = !docs_.rename_layout_entry(region, index, contact_draft_);
+        const bool split = layout_option_ == LayoutOption::split;
+        if (!split && !std::strcmp(original, contact_draft_)) return true;
+        layout_rejected_ = split ? !docs_.split_region(page_region_, page_position_, contact_draft_)
+            : !docs_.rename_layout_entry(region, index, contact_draft_);
         if (layout_rejected_) return false;
+        if (split) {
+            ++page_region_;
+            page_position_ = 0;
+        }
         changed_fields_ |= 1u << 12;
         return true;
     }
@@ -775,7 +784,8 @@ private:
     CNTRL_FLASH_ROUTINE(setup_ui_region_button)
 #endif
     void region_button(unsigned button, PageLayout layout) {
-        const unsigned regions = layout.regions();
+        const bool joining = layout_option_ == LayoutOption::join;
+        const unsigned regions = layout.regions() - unsigned(joining);
         const bool moving = mode_ == Mode::layout_region_move;
         auto &region = moving ? destination_region_ : page_region_;
         if (button == 5) { mode_ = moving ? Mode::layout_region : Mode::layout_menu; return; }
@@ -785,6 +795,15 @@ private:
             return;
         }
         if (button != 2) return;
+        if (joining) {
+            layout_rejected_ = !docs_.join_regions(region);
+            if (!layout_rejected_) {
+                changed_fields_ |= 1u << 12;
+                if (regions == 1) layout_option_ = LayoutOption::regions;
+                mode_ = Mode::layout_menu;
+            }
+            return;
+        }
         if (layout_option_ == LayoutOption::region_names) {
             begin_layout_name(layout.region_name(region));
             return;
@@ -817,15 +836,19 @@ private:
             if (button < 2) {
                 constexpr unsigned count = unsigned(LayoutOption::count);
                 const unsigned step = button ? 1 : count - 1;
-                layout_option_ = LayoutOption((unsigned(layout_option_) + step) % count);
-                if (layout_option_ == LayoutOption::chooser_displays && !layout.controllers())
+                do {
                     layout_option_ = LayoutOption((unsigned(layout_option_) + step) % count);
-            } else if (button == 5) mode_ = Mode::preferences;
-            else if (button == 2) {
+                } while ((layout_option_ == LayoutOption::chooser_displays && !layout.controllers())
+                    || (layout_option_ == LayoutOption::split && layout.pages() == layout.regions())
+                    || (layout_option_ == LayoutOption::join && layout.regions() < 2));
+            } else if (button == 5) {
+                mode_ = Mode::preferences;
+            } else if (button == 2) {
                 page_region_ = layout_option_ == LayoutOption::focus ? layout.initial_focus() : 0;
                 page_position_ = 0;
                 layout_left_ = layout.left_wins();
-                mode_ = layout_option_ == LayoutOption::pages || layout_option_ == LayoutOption::page_names ? Mode::layout_pages
+                mode_ = layout_option_ == LayoutOption::pages || layout_option_ == LayoutOption::page_names
+                    || layout_option_ == LayoutOption::split ? Mode::layout_pages
                     : layout_option_ == LayoutOption::chooser_displays ? Mode::layout_chooser : Mode::layout_region;
             }
             return;
@@ -849,6 +872,10 @@ private:
             else position = 0;
         } else if (button == 5) mode_ = moving ? Mode::layout_pages : Mode::layout_menu;
         else if (button == 2 && !moving) {
+            if (layout_option_ == LayoutOption::split) {
+                if (position) begin_layout_name("");
+                return;
+            }
             if (layout_option_ == LayoutOption::page_names) {
                 begin_layout_name(layout.name(layout.region_page(region, position)));
                 return;
@@ -1428,6 +1455,17 @@ private:
             render_chooser_displays(views, layout, prompt);
             return;
         }
+        if (layout_option_ == LayoutOption::join) {
+            ui::copy_caption(views[1].lines[0], "Keep this region");
+            ui::copy_caption(views[1].lines[1], layout.region_name(page_region_));
+            ui::copy_caption(views[2].lines[0], "Append pages from");
+            ui::copy_caption(views[2].lines[1], layout.region_name(page_region_ + 1));
+            if (layout_rejected_) ui::copy_caption(views[1].lines[2], "Could not join regions");
+            ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, "Browse pairs").text());
+            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Join")
+                .add(Role::back, "Back", ", ").text());
+            return;
+        }
         if (mode_ == Mode::layout_region || mode_ == Mode::layout_region_move) {
             const bool moving_region = mode_ == Mode::layout_region_move;
             const bool priority = layout_option_ == LayoutOption::priority;
@@ -1459,9 +1497,13 @@ private:
         if (layout_rejected_) ui::copy_caption(views[1].lines[2], layout.region_size(page_region_) == 1
             ? "Keep one page in each region" : "Displays unavailable");
         ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, moving ? "Position" : "Browse").text());
-        const char *confirm = moving ? "Accept move" : layout_option_ == LayoutOption::page_names ? "Rename" : "Move";
-        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, confirm)
-            .add(Role::back, moving ? "Cancel" : "Back", ", ").text());
+        const bool split = layout_option_ == LayoutOption::split;
+        const char *confirm = moving ? "Accept move" : layout_option_ == LayoutOption::page_names ? "Rename"
+            : split ? "Split here" : "Move";
+        prompt.clear();
+        if (!split || position) prompt.add(Role::confirm, confirm);
+        else ui::copy_caption(views[1].lines[2], "Choose a later page");
+        ui::copy_caption(views[0].lines[1], prompt.add(Role::back, moving ? "Cancel" : "Back", ", ").text());
         if (layout.regions() > 1)
             ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Region").text());
     }
@@ -1664,7 +1706,8 @@ private:
         }
         else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
             title = ui::i18n::text(ui::i18n::Message::owner_contact);
-            if (editing_layout_name()) title = layout_option_ == LayoutOption::region_names ? "Region name" : "Page name";
+            if (editing_layout_name()) title = layout_option_ == LayoutOption::split ? "New region name"
+                : layout_option_ == LayoutOption::region_names ? "Region name" : "Page name";
             else if (device_editor_ == Mode::calibration_name) {
                 std::snprintf(calibration_title, sizeof(calibration_title), "Jack %u name", calibration_choice_ + 1);
                 title = calibration_title;
@@ -1685,7 +1728,8 @@ private:
             value = number;
             if (mode_ == Mode::contact_action || mode_ == Mode::layout_name_action) {
                 const ui::i18n::Message actions[] = {ui::i18n::Message::insert_space, ui::i18n::Message::insert_line_break, ui::i18n::Message::delete_character};
-                value_label = mode_ == Mode::layout_name_action && item_ == 1 ? "Cancel rename" : ui::i18n::text(actions[item_]);
+                value_label = mode_ == Mode::layout_name_action && item_ == 1
+                    ? (layout_option_ == LayoutOption::split ? "Cancel split" : "Cancel rename") : ui::i18n::text(actions[item_]);
             } else if (code == '\n') value_label = ui::i18n::text(ui::i18n::Message::line_break);
             else value_label = ui::i18n::text(ui::i18n::Message::value);
         }
@@ -1870,7 +1914,8 @@ private:
                     .add(Role::back, mode_ == Mode::layout_name ? "Accept name" : ui::i18n::text(ui::i18n::Message::back), ", ").text());
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, ui::i18n::text(ui::i18n::Message::position_action)).text());
                 if (mode_ == Mode::layout_name && layout_rejected_)
-                    ui::copy_caption(views[1].lines[2], "Could not use that name");
+                    ui::copy_caption(views[1].lines[2], layout_option_ == LayoutOption::split
+                        ? "Check name and display space" : "Could not use that name");
             }
             if (preference_view) {
                 if (!setup_preferences_) ui::copy_caption(views[1].lines[0], preference().group);

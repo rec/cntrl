@@ -306,6 +306,44 @@ public:
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_split_region)
+#endif
+    bool split_region(unsigned index, unsigned position, const char *name) {
+        Document draft;
+        const auto length = std::strlen(name);
+        if (!length || length > 31 || busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        if (index >= layout.regions() || !position || position >= layout.region_size(index)) return false;
+        const unsigned offset = unsigned(layout.region(index + 1) - draft.data());
+        if (!splice_setup(draft, offset, 0, 34)) return false;
+        auto *header = scratch_.data + (layout.records - draft.data());
+        ++header[7];
+        header[9] += layout.initial_focus() > index;
+        auto *next = scratch_.data + offset;
+        auto *original = next - 34;
+        std::memcpy(next, name, length);
+        next[32] = uint8_t(original[32] + position);
+        next[33] = uint8_t(original[33] - position);
+        original[33] = uint8_t(position);
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_join_regions)
+#endif
+    bool join_regions(unsigned left) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        if (left >= layout.regions() || left + 1 >= layout.regions()) return false;
+        const unsigned offset = unsigned(layout.region(left + 1) - draft.data());
+        if (!splice_setup(draft, offset, 34, 0)) return false;
+        auto *header = scratch_.data + (layout.records - draft.data());
+        --header[7];
+        header[9] -= layout.initial_focus() > left;
+        scratch_.data[offset - 1] = uint8_t(layout.region_size(left) + layout.region_size(left + 1));
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_movie)
 #endif
     bool edit_movie(bool idle, unsigned index, std::optional<uint32_t> key) {

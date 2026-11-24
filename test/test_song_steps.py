@@ -125,10 +125,10 @@ def test_song_step_navigation_and_boundaries(
         'left',
         'right',
     ]
-    assert saved_layout['regions']['Xextra']['pages'] == ['Gap']
+    assert saved_layout['regions']['Omitted']['pages'] == ['Gap']
     assert saved_layout['layout'] == {
-        'order': ['performance', 'Xextra', 'tools'],
-        'focus': 'Xextra',
+        'order': ['performance', 'Omitted', 'tools'],
+        'focus': 'performance',
         'left_wins': True,
     }
     subprocess.run(

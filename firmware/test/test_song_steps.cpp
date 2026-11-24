@@ -220,6 +220,23 @@ int main(int argc, char **argv) {
         tap(5); tap(1); tap(2); // Rename regions.
         tap(1); tap(2); app.text_key('X', board.now); tap(5);
         assert(!std::strcmp(board.panes[1].lines[1].text, "Xextra"));
+        tap(5); tap(1); tap(2); // Split region.
+        tap(1); tap(2); // A split before Empty exceeds the display budget.
+        app.text_key('X', board.now); app.text_key('\n', board.now);
+        assert(!std::strcmp(board.panes[1].lines[2].text, "Check name and display space"));
+        app.text_key(27, board.now);
+        tap(5); tap(1); tap(2); // Join regions.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "performance"));
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Xextra"));
+        tap(2);
+        assert(documents.edit_document(draft));
+        assert(draft.page_layout().regions() == 2 && draft.page_layout().initial_focus() == 0);
+        tap(0); tap(2); tap(0); tap(2); // Split before Gap.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "New region name"));
+        for (const char c : std::string("Omitted")) app.text_key(uint8_t(c), board.now);
+        settings(); tap(2); // Keep editing after accepting the pending split.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Gap"));
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Omitted"));
         settings(); tap(1);
         assert(!std::strcmp(board.panes[2].lines[1].text, "Save and reload setup"));
         tap(2);
@@ -228,8 +245,8 @@ int main(int argc, char **argv) {
         const auto layout = document.page_layout();
         assert(layout.region_page(2, 0) == 1 && layout.region_page(2, 1) == 0);
         assert(layout.region_page(0, 0) == 3 && layout.region_page(0, 1) == 2);
-        assert(layout.initial_focus() == 1 && layout.left_wins());
-        assert(!std::strcmp(layout.region_name(layout.initial_focus()), "Xextra"));
+        assert(layout.initial_focus() == 0 && layout.left_wins());
+        assert(!std::strcmp(layout.region_name(layout.initial_focus()), "performance"));
         const unsigned chooser = layout.controller_page(0);
         assert(layout.minimum_displays(chooser) == 1 && layout.page(chooser)[2] == 1);
         app.allocation.configure(layout);
