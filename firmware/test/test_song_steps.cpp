@@ -171,6 +171,72 @@ int main(int argc, char **argv) {
         release(2); release(5);
         if (app.editing_tool && !app.tool_editor_open(board)) app.finish_tool();
     };
+    if (argc == 4 && !std::strcmp(argv[3], "--setup-preferences")) {
+        assert(preferences.boot());
+        documents.bind_globals(preferences);
+        assert(documents.global_change(0, 100, false, false));
+        assert(documents.document().brightness() == 100);
+        const auto open_setup_preferences = [&] {
+            settings(); tap(2);
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Brightness"));
+        };
+        const auto save = [&](const char *action) {
+            settings(); tap(1);
+            assert(!std::strcmp(board.panes[2].lines[1].text, action));
+            tap(2);
+            while (documents.busy()) sample(0);
+            sample(0);
+            if (!app.tool_editor_open(board)) app.finish_tool();
+            assert(!app.settings_frontmost());
+        };
+        open_setup_preferences();
+        assert(!std::strcmp(board.panes[2].lines[0].text, "Pedal"));
+        tap(2); tap(1); tap(2);
+        assert(!std::strcmp(board.panes[2].lines[0].text, "Setup"));
+        assert(!std::strcmp(board.panes[2].lines[1].text, "101"));
+        assert(documents.document().brightness() == 100);
+        save("Save and reload setup");
+        assert(documents.document().brightness() == 101 && preferences.values().values[0] == 100);
+
+        open_setup_preferences();
+        tap(2);
+        assert(std::strstr(board.panes[0].lines[2].text, "Use pedal value"));
+        tap(3); // Clear the override and go directly to review.
+        save("Save and reload setup");
+        assert(documents.document().brightness() == 100 && !(documents.document().explicit_settings() & 1));
+
+        open_setup_preferences();
+        for (unsigned i = 0; i < 5; ++i) tap(1);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Target pulse maximum"));
+        tap(2); tap(4); tap(4); tap(0); tap(2);
+        assert(!std::strcmp(board.panes[2].lines[2].text, "Invalid for this setup"));
+        tap(5);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "128"));
+        settings();
+        assert(!app.settings_frontmost());
+
+        upload_setup("5370617265"); // Spare, an inactive setup.
+        settings(); tap(1); tap(2); // Setups.
+        tap(1);
+        while (documents.busy()) sample(0);
+        sample(0); tap(2);
+        while (documents.busy()) sample(0);
+        sample(0); tap(2); // Setup fields.
+        tap(4); tap(4); tap(1); // Navigation, horizontal scroll duration.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Horizontal scroll (ms)"));
+        const unsigned original = documents.document().scroll_ms();
+        tap(2); tap(1); tap(2);
+        save("Save");
+        assert(!std::strcmp(documents.selected(), "Live") && documents.document().scroll_ms() == original);
+        assert(documents.edit_begin("Spare"));
+        while (documents.busy()) documents.tick(board.now);
+        cntrl::Document draft;
+        assert(documents.edit_document(draft));
+        assert(draft.scroll_ms() == original + 1 && (draft.explicit_settings() & (1u << 12)));
+        documents.edit_cancel();
+        assert(board.sent.empty());
+        return 0;
+    }
     if (argc == 4 && !std::strcmp(argv[3], "--named-patch-settings")) {
         upload_setup("5370617265"); // Spare, an inactive setup.
         songs.choose("Set"); app.song_ui.perform(); sample(0); next();

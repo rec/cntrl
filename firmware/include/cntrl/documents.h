@@ -225,6 +225,19 @@ public:
                 if (!name_compare(name, reinterpret_cast<const char *>(current.patch_cycle(i)))) return true;
         return false;
     }
+    static bool setup_preference_editable(unsigned field) {
+        // These fields can affect memory estimates or optional wire records.
+        constexpr uint64_t unavailable = (uint64_t(1) << 7) | (uint64_t(1) << 8)
+            | (uint64_t(1) << 10) | (uint64_t(1) << 11) | (uint64_t(1) << 28) | (uint64_t(1) << 33);
+        return field < GlobalSettings::count && ((GlobalSettings::fields & ~unavailable) & (uint64_t(1) << field));
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_setup_preference)
+#endif
+    bool edit_setup_preference(unsigned field, uint32_t value, bool inherit) {
+        Document draft;
+        return edit_document(draft) && write_setup_preference(draft, field, value, inherit);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_value)
 #endif
@@ -264,6 +277,8 @@ public:
         uint8_t selection[11];
         if (field <= 4) std::memcpy(selection, d.node(unsigned(node)) + 4, sizeof(selection));
         int64_t old = edit_value(d, patch, field), value = old + delta;
+        if (field >= 5)
+            return value >= 0 && value <= UINT32_MAX && write_setup_preference(d, field - 5, uint32_t(value), false);
         if (field == 0 && value >= 1 && value <= 128) selection[2] = uint8_t(value - 1);
         else if (field == 1) {
             uint32_t bank = 0xffffffffu; const uint8_t *mapping = nullptr;
@@ -279,10 +294,7 @@ public:
             put32(selection + 7, bank);
         } else if (field == 3 && value >= -1 && value <= 127) selection[5] = value < 0 ? 255 : uint8_t(value);
         else if (field == 4 && value >= -65 && value <= 63) selection[6] = value == -65 ? 255 : uint8_t(value + 64);
-        else if (!(field == 2 && value >= 1 && value <= 16)
-            && !(field == 5 && value >= 0 && value <= 255)
-            && !(field == 6 && value >= 0 && value <= 2147483)
-            && !(field == 7 && value >= 0 && value <= 1)) return false;
+        else if (!(field == 2 && value >= 1 && value <= 16)) return false;
         if (field <= 4 && field != 2 && ((reference && !original) || d.cycle_catalogue().contains_node(unsigned(node)))) {
             if (!detach_patch(d, patch, scratch_) || !d.load(scratch_.data, scratch_.size, hardware_, global_values())) {
                 hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed));
@@ -304,12 +316,6 @@ public:
                 std::memcpy(address(d.patch(i)) + 4, selection + 2, 5);
                 std::memcpy(address(d.bank(i)), selection + 7, 4);
             }
-        } else if (field == 5) bytes[d.core_offset() + 18] = uint8_t(value);
-        else if (field == 6) put32(bytes + d.core_offset() + 24, unsigned(value) * 1000);
-        else bytes[d.core_offset() + 19] = (bytes[d.core_offset() + 19] & ~uint8_t(2)) | (uint8_t(value) << 1);
-        if (field >= 5 && d.global_mask_offset()) {
-            uint64_t mask = d.explicit_settings() | (uint64_t(1) << (field - 5));
-            for (unsigned i = 0; i < 8; ++i) bytes[d.global_mask_offset() + i] = uint8_t(mask >> (i * 8));
         }
         binary::seal_setup(bytes, scratch_.size);
         Document candidate;
@@ -422,6 +428,58 @@ public:
     bool history_compare(const char *name, uint64_t number) { return begin_history(HistoryAction::compare, name, number); }
     bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_write_setup_preference)
+#endif
+    bool write_setup_preference(const Document &draft, unsigned field, uint32_t value, bool inherit) {
+        if (busy() || hardware_.configuration_locked() || !setup_preference_editable(field)
+            || !GlobalSettings::valid(field, value)) return false;
+        const uint64_t bit = uint64_t(1) << field;
+        const auto *pedal = global_preferences();
+        if (inherit && (!draft.global_mask_offset() || !pedal || !(pedal->known & bit))) return false;
+        if (!allocate(scratch_, draft.length())) return false;
+        auto *bytes = scratch_.data;
+        std::memcpy(bytes, draft.data(), draft.length());
+        if (!inherit) {
+            auto *core = bytes + draft.core_offset();
+            auto *metadata = bytes + draft.metadata();
+            auto *scroll = metadata + scrolling_offset;
+            const auto word = [&](uint8_t *p) { p[0] = uint8_t(value); p[1] = uint8_t(value >> 8); };
+            const auto flag = [](uint8_t &byte, unsigned mask, bool enabled) {
+                byte = uint8_t(enabled ? byte | mask : byte & ~mask);
+            };
+            switch (field) {
+            case 0: core[18] = uint8_t(value); break;
+            case 1: put32(core + 24, value * 1000); break;
+            case 2: case 3: case 4: flag(core[19], 1u << (field == 2 ? 1 : field), value); break;
+            case 5: flag(scroll[5], 2, !value); break;
+            case 6: flag(scroll[5], 1, value); break;
+            case 9: flag(core[19], 4, value); break;
+            case 12: word(metadata + 6); break;
+            case 13: word(scroll); break;
+            case 14: case 15: case 16: scroll[2 + field - 14] = uint8_t(value); break;
+            case 17: word(core + 6); break;
+            case 18: word(metadata + 12); break;
+            case 19: case 20: case 21: case 22: metadata[trs_modes_offset + field - 19] = uint8_t(value); break;
+            case 23: case 24: case 25: case 26: flag(scroll[5], 4u << (field - 23), value); break;
+            case 29: word(metadata + 8); break;
+            case 30: case 31: metadata[10 + field - 30] = uint8_t(value); break;
+            case 32: word(metadata + 14); break;
+            default: return false;
+            }
+        }
+        if (const unsigned offset = draft.global_mask_offset()) {
+            const uint64_t mask = inherit ? draft.explicit_settings() & ~bit : draft.explicit_settings() | bit;
+            for (unsigned i = 0; i < 8; ++i) bytes[offset + i] = uint8_t(mask >> (8 * i));
+        }
+        binary::seal_setup(bytes, scratch_.size);
+        Document candidate;
+        // Check the saved fallback independently from today's pedal values.
+        if (!candidate.load(bytes, scratch_.size, hardware_, nullptr)
+            || !candidate.load(bytes, scratch_.size, hardware_, global_values())) return false;
+        staging_.swap(scratch_);
+        return true;
+    }
     enum class BrowsePhase { idle, scan, header, body, trailer, activate };
     struct Browse {
         char reference[64] = {}, candidate[64] = {}, canonical[64] = {}, result[64] = {};

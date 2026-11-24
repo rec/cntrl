@@ -153,6 +153,14 @@ as instruments, patches and routes. Those still use compilation-time defaults.
 Setups uploaded before explicit-setting metadata was introduced must be
 recompiled and uploaded before they can inherit live device-global preferences.
 
+On the pedal, open **Settings** and choose the current setup, or choose **Setups**
+and open a saved setup. **Setup fields** groups the compiled preferences by
+Display, MIDI, Navigation, and Ports. The value display says whether it comes
+from the setup, the pedal, or the compiled fallback. Adjusting a value makes a
+setup override. **Use pedal value** clears the override when a pedal value is
+available. Save commits the draft as a setup revision. Saving the loaded setup
+reloads it.
+
 Use the USB connection to inspect, set or clear preferences:
 
 ```sh

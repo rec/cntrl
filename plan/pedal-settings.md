@@ -146,8 +146,8 @@ occur and repeat those tasks after changing the labels or controls.
 | Pedal language | Installed languages | Device preference journal and deferred language loader |
 | Expression calibration | Heel and toe capture for enabled expression jacks, with review before Save | Device calibration file |
 | Device preferences | 33 scalar registry fields, including choices and a named clock-output picker. Port fields depend on hardware support. | Device preference journal with inherited values, setup overrides, and reload validation |
-| Loaded setup | Brightness, screensaver timeout, MIDI interface mode | Setup draft, revision, and reload |
-| Saved setups | Browse and edit the existing setup fields and patch cycles | Named setup draft and revision, with reload for the loaded setup |
+| Loaded setup | Grouped Display, MIDI, Navigation, and Ports settings with value origin and a way to inherit an existing pedal preference | Setup draft, revision, and reload |
+| Saved setups | The same grouped settings and the existing patch-cycle editor | Named setup draft and revision, with reload for the loaded setup |
 | Setlists | Rename and browse, move, add, and remove numbered occurrences, with save, discard, and keep editing | Song library journal, with playback position tracking and startup-name recovery |
 | Songs | Browse, rename, and move or remove patches with review | Song library journal, including setlist references and playback position |
 | Embedded song patch | Pick a supported MIDI action by its switch and trigger or activation order. Edit program, bank, volume, and pan for instrument programs, channel and program for direct Program Change, or channel, controller, and value for single Control Change. | Song library journal with a private source copy or an in-place replacement in the new revision |
@@ -171,7 +171,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Owner | Fields with an on-pedal save path | Fields still requiring an editor or save path |
 | --- | --- | --- |
 | Pedal | Boot firmware, startup set, language, contact text, calibration endpoints, and the 33 scalar preferences | Calibration names and settling time |
-| Setup | Brightness 0–255, screensaver timeout 0–2,147,483 seconds, MIDI interface mode on/off, and cycle names and membership | The rest of the compiled scalar settings, TRS and auxiliary configuration, routing, controls, counter definitions, startup and idle movie selections, and page layout and appearance |
+| Setup | Brightness, screensaver timeout, animation color cycling, target pulse, MIDI interface and USB modes, USB forwarding, scrolling, fast debounce, navigation timing, TRS modes, auxiliary switch mode, and patch cycles | Frame buffers, animation resources, pickup, clock outputs, loop reset, page-specific scalar settings, routing, controls, counter definitions, startup and idle movie selections, and page layout and appearance |
 | Setup instrument | MIDI channel 1–16, shared by every patch using that instrument in the setup | Output, profile, and instrument identity. Profile choices can affect bank mappings and SysEx. |
 | Setup patch | Instrument program 1–128, banks available in the assigned profile, optional volume 0–127, and optional pan −64–63 on supported program patches | Other MIDI action types and their parameters, names, style, nested actions, and binding definitions |
 | Song | Name and ordered patch occurrences | Display name, foreground, background, font, installed artwork, song enter and exit actions, MIDI and bindings, and editing a patch occurrence or its shared source |
@@ -179,9 +179,9 @@ occur and repeat those tasks after changing the labels or controls.
 
 The [device preference registry](../firmware/include/cntrl/ui/device_preferences.h)
 defines scalar types, bounds, and choices. Explicit setup values take priority
-over pedal preferences. The editor shows the loaded value and offers to clear
-the device preference. Setup and song edits
-need equivalent support wherever the compiled data retains override ownership.
+over pedal preferences. The pedal preference editor shows the loaded setup
+value and offers to clear the device preference. The setup editor can clear a
+setup override when the corresponding pedal value is available.
 
 The [setup schema](../cntrl/patch_chooser/models.py) and
 [song schema](../cntrl/patch_chooser/songs.py) define authoring values. Fields

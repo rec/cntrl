@@ -70,9 +70,14 @@ def test_song_step_navigation_and_boundaries(
     fixture.write_bytes(encoded)
     setup = tmp_path / 'setup.bin'
     pages = {'pages': {'Live': {'type': 'patch-chooser'}}}
-    setup.write_bytes(compiler.compile_show(pages, {}, [], target))
+    setup.write_bytes(
+        compiler.compile_show(pages, {}, [], target, setting_overrides={})
+    )
     runner = native_programs.build('test/test_song_steps.cpp')
     subprocess.run([str(runner), str(fixture), str(setup)], check=True)
+    subprocess.run(
+        [str(runner), str(fixture), str(setup), '--setup-preferences'], check=True
+    )
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--song-settings'], check=True
     )
