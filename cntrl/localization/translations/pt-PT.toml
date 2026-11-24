@@ -385,3 +385,36 @@ text = 'Canal do instrumento'
 
 [messages.owner_contact]
 text = 'Contacto'
+
+[messages.settings]
+text = "Definições"
+
+[messages.pedal]
+text = "Pedal"
+
+[messages.instrument_channel_scope]
+text = "Todos os patches deste instrumento"
+
+[messages.save_reload_setup]
+text = "Guardar e recarregar a configuração"
+
+[messages.reload_stops_playback]
+text = "Recarregar interrompe a reprodução"
+
+[messages.keep_editing]
+text = "Continuar a editar"
+
+[messages.startup_set_scope]
+text = "Aplica-se em cada arranque"
+
+[messages.setlist]
+text = "Lista de músicas"
+
+[messages.between_songs]
+text = "Entre músicas"
+
+[messages.next_song_name]
+text = "Próxima música: {name:s}"
+
+[messages.use_set_at_startup]
+text = "Usar no arranque"

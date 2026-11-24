@@ -93,7 +93,7 @@ public:
             pages_.revisit();
             return true;
         }
-        if ((pages_.page() == Pages::Page::setups || pages_.page() == Pages::Page::songs || pages_.page() == Pages::Page::switches) && input == controls_.confirm) {
+        if ((pages_.page() == Pages::Page::setups || pages_.page() == Pages::Page::songs || pages_.page() == Pages::Page::switches || pages_.page() == Pages::Page::settings) && input == controls_.confirm) {
             if (pressed) application_.open_tool(unsigned(pages_.page()), platform_);
             return true;
         }

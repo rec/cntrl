@@ -367,9 +367,20 @@ enum class Message : uint16_t {
     edit_patch_entry,
     instrument_channel,
     owner_contact,
+    settings,
+    pedal,
+    instrument_channel_scope,
+    save_reload_setup,
+    reload_stops_playback,
+    keep_editing,
+    startup_set_scope,
+    setlist,
+    between_songs,
+    next_song_name,
+    use_set_at_startup,
 };
-inline constexpr unsigned message_count = 364;
-inline constexpr uint32_t catalogue_schema = 0xa023baf6u;
+inline constexpr unsigned message_count = 375;
+inline constexpr uint32_t catalogue_schema = 0x0c2a55dbu;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -1527,6 +1538,33 @@ inline const char instrument_channel_text[] CNTRL_I18N_STORAGE = "Instrument cha
 inline const char instrument_channel_short[] CNTRL_I18N_STORAGE = "";
 inline const char owner_contact_text[] CNTRL_I18N_STORAGE = "Contact";
 inline const char owner_contact_short[] CNTRL_I18N_STORAGE = "";
+inline const char settings_text[] CNTRL_I18N_STORAGE = "Settings";
+inline const char settings_short[] CNTRL_I18N_STORAGE = "";
+inline const char pedal_text[] CNTRL_I18N_STORAGE = "Pedal";
+inline const char pedal_short[] CNTRL_I18N_STORAGE = "";
+inline const char instrument_channel_scope_text[] CNTRL_I18N_STORAGE = "All patches using this instrument";
+inline const char instrument_channel_scope_short[] CNTRL_I18N_STORAGE = "";
+inline const char save_reload_setup_text[] CNTRL_I18N_STORAGE = "Save and reload setup";
+inline const char save_reload_setup_short[] CNTRL_I18N_STORAGE = "";
+inline const char reload_stops_playback_text[] CNTRL_I18N_STORAGE = "Reload stops current playback";
+inline const char reload_stops_playback_short[] CNTRL_I18N_STORAGE = "";
+inline const char keep_editing_text[] CNTRL_I18N_STORAGE = "Keep editing";
+inline const char keep_editing_short[] CNTRL_I18N_STORAGE = "";
+inline const char startup_set_scope_text[] CNTRL_I18N_STORAGE = "Applies whenever this pedal boots";
+inline const char startup_set_scope_short[] CNTRL_I18N_STORAGE = "";
+inline const char setlist_text[] CNTRL_I18N_STORAGE = "Setlist";
+inline const char setlist_short[] CNTRL_I18N_STORAGE = "";
+inline const char between_songs_text[] CNTRL_I18N_STORAGE = "Between songs";
+inline const char between_songs_short[] CNTRL_I18N_STORAGE = "";
+inline const char next_song_name_text[] CNTRL_I18N_STORAGE = "Next song: {name:s}";
+inline const char next_song_name_short[] CNTRL_I18N_STORAGE = "";
+inline const char next_song_name_name_name[] CNTRL_I18N_STORAGE = "name";
+inline const char next_song_name_name_spec[] CNTRL_I18N_STORAGE = "s";
+inline const Field next_song_name_fields[] CNTRL_I18N_STORAGE = {
+    {next_song_name_name_name, next_song_name_name_spec},
+};
+inline const char use_set_at_startup_text[] CNTRL_I18N_STORAGE = "Use at startup";
+inline const char use_set_at_startup_short[] CNTRL_I18N_STORAGE = "";
 inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {patch_chooser_text, patch_chooser_short, nullptr, 0},
     {browse_text, browse_short, nullptr, 0},
@@ -1892,6 +1930,17 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {edit_patch_entry_text, edit_patch_entry_short, nullptr, 0},
     {instrument_channel_text, instrument_channel_short, nullptr, 0},
     {owner_contact_text, owner_contact_short, nullptr, 0},
+    {settings_text, settings_short, nullptr, 0},
+    {pedal_text, pedal_short, nullptr, 0},
+    {instrument_channel_scope_text, instrument_channel_scope_short, nullptr, 0},
+    {save_reload_setup_text, save_reload_setup_short, nullptr, 0},
+    {reload_stops_playback_text, reload_stops_playback_short, nullptr, 0},
+    {keep_editing_text, keep_editing_short, nullptr, 0},
+    {startup_set_scope_text, startup_set_scope_short, nullptr, 0},
+    {setlist_text, setlist_short, nullptr, 0},
+    {between_songs_text, between_songs_short, nullptr, 0},
+    {next_song_name_text, next_song_name_short, next_song_name_fields, 1},
+    {use_set_at_startup_text, use_set_at_startup_short, nullptr, 0},
 };
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(i18n_text)

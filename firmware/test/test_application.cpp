@@ -435,6 +435,26 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     }
     const auto after_tools = primary.navigation(); std::vector<uint8_t> after_bytes(after_tools.encoded_size());
     assert(after_tools.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes && hardware.sent == before_tools);
+    {
+        const auto &doc = documents.document();
+        const unsigned instrument = cntrl::u16(doc.patch(primary.selected_patch()));
+        const unsigned channel = doc.instrument(instrument)[64];
+        assert(app.open_tool(cntrl::PageLayout::settings, platform));
+        app.setups.poll(0);
+        const auto edit = [&](unsigned button) { app.setups.button(button, true, 3500); };
+        edit(2); // Current patch
+        edit(2); // Instrument MIDI channel
+        edit(channel == 15 ? 0 : 1);
+        assert(documents.edit_value(primary.selected_patch(), 2) == (channel == 15 ? 15 : channel + 2));
+        assert(doc.instrument(instrument)[64] == channel);
+        edit(5); edit(5); // Back to the field, then open the unsaved changes prompt.
+        edit(0); edit(2); // Discard.
+        assert(!app.setups.open() && !documents.dirty());
+        app.finish_tool(); app.controls_locked = false;
+        const auto navigation = primary.navigation();
+        assert(navigation.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes);
+        assert(hardware.sent == before_tools && doc.instrument(instrument)[64] == channel);
+    }
     click(5, 3600);
     assert(host.pages_.index() == layout.region_page(tools, 1));
     edge(3, true, 3700); click(5, 3800); edge(3, false, 3900);
@@ -456,6 +476,16 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     platform.idle = true;
     host.display(4052, false);
     assert(platform.panic.active() && platform.panic_owns_midi);
+
+    songs.choose("Friday show");
+    app.song_ui.perform();
+    const unsigned before_settings = hardware.sent;
+    assert(songs.boundary() && app.open_tool(cntrl::PageLayout::settings, platform));
+    app.setups.poll(0);
+    app.setups.button(5, true, 4100);
+    app.finish_tool();
+    assert(songs.boundary() && songs.next_position() == 0 && app.song_ui.performing());
+    assert(hardware.sent == before_settings);
 }
 static void selecting_pages_preserves_state_and_background_work(const char *path) {
     struct Context : Hardware {

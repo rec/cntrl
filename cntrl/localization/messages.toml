@@ -1453,3 +1453,47 @@ context = 'Setup editor field for the shared instrument MIDI channel'
 en = 'Contact'
 context = 'Status page owner contact information view'
 
+[messages.settings]
+en = 'Settings'
+context = 'Settings utility page and editor title'
+
+[messages.pedal]
+en = 'Pedal'
+context = 'Device-wide settings category'
+
+[messages.instrument_channel_scope]
+en = 'All patches using this instrument'
+context = 'Scope of an instrument MIDI channel change'
+
+[messages.save_reload_setup]
+en = 'Save and reload setup'
+context = 'Commit draft edits and reactivate the edited setup'
+
+[messages.reload_stops_playback]
+en = 'Reload stops current playback'
+context = 'Consequence of applying setup edits'
+
+[messages.keep_editing]
+en = 'Keep editing'
+context = 'Return to the draft with changes intact'
+
+[messages.startup_set_scope]
+en = 'Applies whenever this pedal boots'
+context = 'Explain when the device-wide startup set takes effect'
+
+[messages.setlist]
+en = 'Setlist'
+context = 'Label for the active setlist in Settings'
+
+[messages.between_songs]
+en = 'Between songs'
+context = 'Settings opened from an empty position in a setlist'
+
+[messages.next_song_name]
+en = 'Next song: {name:s}'
+context = 'Name of the song that starts on the next step'
+
+[messages.use_set_at_startup]
+en = 'Use at startup'
+context = 'Open the startup set editor with the displayed setlist selected'
+

@@ -385,3 +385,36 @@ text = 'Instrumentkanal'
 
 [messages.owner_contact]
 text = 'Kontakt'
+
+[messages.settings]
+text = "Innstillinger"
+
+[messages.pedal]
+text = "Pedal"
+
+[messages.instrument_channel_scope]
+text = "Alle patcher med dette instrumentet"
+
+[messages.save_reload_setup]
+text = "Lagre og last oppsettet på nytt"
+
+[messages.reload_stops_playback]
+text = "Ny innlasting stopper avspilling"
+
+[messages.keep_editing]
+text = "Fortsett å redigere"
+
+[messages.startup_set_scope]
+text = "Gjelder ved hver oppstart"
+
+[messages.setlist]
+text = "Settliste"
+
+[messages.between_songs]
+text = "Mellom sanger"
+
+[messages.next_song_name]
+text = "Neste sang: {name:s}"
+
+[messages.use_set_at_startup]
+text = "Bruk ved oppstart"

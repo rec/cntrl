@@ -385,3 +385,36 @@ text = 'Canalul instrumentului'
 
 [messages.owner_contact]
 text = 'Contact'
+
+[messages.settings]
+text = "Setări"
+
+[messages.pedal]
+text = "Pedală"
+
+[messages.instrument_channel_scope]
+text = "Toate patchurile acestui instrument"
+
+[messages.save_reload_setup]
+text = "Salvează și reîncarcă configurația"
+
+[messages.reload_stops_playback]
+text = "Reîncărcarea oprește redarea"
+
+[messages.keep_editing]
+text = "Continuă editarea"
+
+[messages.startup_set_scope]
+text = "Se aplică la fiecare pornire"
+
+[messages.setlist]
+text = "Listă de piese"
+
+[messages.between_songs]
+text = "Între piese"
+
+[messages.next_song_name]
+text = "Piesa următoare: {name:s}"
+
+[messages.use_set_at_startup]
+text = "Utilizează la pornire"

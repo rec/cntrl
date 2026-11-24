@@ -30,7 +30,8 @@ public:
         bool consumed = services.animation_controls(pressed, now, replay);
         consumed = services.diagnostic_controls(events.data(), pressed, now) || consumed;
         if (consumed) application_.controller().cancel_gesture();
-        application_.setups.poll(pressed); application_.song_ui.poll(pressed);
+        application_.setups.poll(pressed);
+        if (!application_.setups.open()) application_.song_ui.poll(pressed);
         if (!pressed) application_.controls_locked = false;
         if (auto *visit = services.visit()) { visit->poll(!pressed); consumed = consumed || visit->busy(); }
         const bool performing = application_.song_navigation_active();
@@ -39,7 +40,7 @@ public:
         const bool song_gestures = performing && !setup && controls_.back < controls_.count;
         route_chords(services, events, pressed, performing, consumed, assigned_pages, setup);
         route_song_gestures(services.actions(), events, song_gestures && !consumed, assigned_pages);
-        if (song_gestures && application_.song_boundary() && application_.binding_return_songs)
+        if (song_gestures && application_.song_boundary() && application_.binding_return_songs && !application_.utility_visible())
             for (auto &event : events) event &= release_event;
         if (!consumed) router_.route(services.actions(), events.data(), pressed, now, application_.utility_visible(), assigned_pages, song_gestures, performing);
     }

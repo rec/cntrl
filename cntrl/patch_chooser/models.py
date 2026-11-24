@@ -1189,6 +1189,7 @@ class Page(BaseModel, frozen=True):
         'setups',
         'songs-and-setlists',
         'switches',
+        'settings',
     ] = 'patch-chooser'
     ram2_bytes: units.Bytes = Field(default=0, ge=0, le=4294967295)
     min_displays: Annotated[int, Field(strict=True, ge=0, le=255)] = 1
@@ -1340,6 +1341,7 @@ class Setup(BindingScope, frozen=True):
                     'setups',
                     'songs-and-setlists',
                     'switches',
+                    'settings',
                 )
             },
             'calibration': Page(type='calibrate'),

@@ -385,3 +385,36 @@ text = 'Instrumentkanal'
 
 [messages.owner_contact]
 text = 'Kontakt'
+
+[messages.settings]
+text = "Inställningar"
+
+[messages.pedal]
+text = "Pedal"
+
+[messages.instrument_channel_scope]
+text = "Alla patchar med det här instrumentet"
+
+[messages.save_reload_setup]
+text = "Spara och läs in inställningen igen"
+
+[messages.reload_stops_playback]
+text = "Omladdning stoppar uppspelningen"
+
+[messages.keep_editing]
+text = "Fortsätt redigera"
+
+[messages.startup_set_scope]
+text = "Gäller vid varje start"
+
+[messages.setlist]
+text = "Setlista"
+
+[messages.between_songs]
+text = "Mellan låtar"
+
+[messages.next_song_name]
+text = "Nästa låt: {name:s}"
+
+[messages.use_set_at_startup]
+text = "Använd vid start"

@@ -173,14 +173,22 @@ public:
     bool feature_open(const ApplicationServices &services) const { return !utility_visible() && (setups.open() || song_ui.open() || services.switch_editor_open()); }
     bool tool_editor_open(const ApplicationServices &services) const {
         if (song_ui.patch_chooser_requested) return true;
-        if (editing_tool == PageLayout::setups) return setups.open();
+        if (editing_tool == PageLayout::setups || editing_tool == PageLayout::settings) return setups.open();
         if (editing_tool == PageLayout::songs) return song_ui.open() && !song_ui.performing();
         return editing_tool == PageLayout::switches && services.switch_editor_open();
     }
     bool open_tool(unsigned page, ApplicationServices &services) {
         if (documents_.busy()) return false;
-        if (page == PageLayout::setups) setups.enter();
-        else if (page == PageLayout::songs) {
+        if (page == PageLayout::settings) {
+            if (editing_tool || pending_song_step_ || songs_.executing() || services.switch_editor_open()) return false;
+            const bool performing = song_navigation_active();
+            const auto patch = !performing && layout.controllers() ? controller().selected_patch() : UINT16_MAX;
+            editing_tool = page;
+            if (!setups.enter_settings(patch, songs_, performing)) { editing_tool = 0; return false; }
+        } else if (page == PageLayout::setups) {
+            if (documents_.dirty()) return false;
+            setups.enter();
+        } else if (page == PageLayout::songs) {
             if (services.song_transfer_busy() || !services.output_idle()) return false;
             resume_song_ui_ = song_ui.performing();
             song_ui.enter();
@@ -233,7 +241,8 @@ public:
     CNTRL_FLASH_ROUTINE(application_language_changed)
 #endif
     void language_changed() {
-        setups.refresh(); song_ui.refresh();
+        if (setups.open()) setups.refresh();
+        else song_ui.refresh();
         for (auto &view : views) { view.dirty = true; view.refreshed = 0; }
     }
     void tick(uint32_t now) {

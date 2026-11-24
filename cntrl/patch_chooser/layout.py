@@ -404,6 +404,7 @@ PAGE_TYPES = (
     'setups',
     'songs-and-setlists',
     'switches',
+    'settings',
 )
 
 RETIRED_CLOCK_PAGES = (0, 7, 8)

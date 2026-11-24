@@ -4,6 +4,7 @@
 #include "ui/presentation.h"
 #include "ui/prompts.h"
 #include "documents.h"
+#include "songs.h"
 
 namespace cntrl {
 // Foot-operated management. A/B browse or adjust, C confirms, F goes back.
@@ -13,11 +14,27 @@ public:
     bool open() const { return mode_ != Mode::closed; }
     void refresh() { if (open()) render(); }
     void enter() {
-        if (docs_.busy()) return;
+        if (docs_.busy() || docs_.dirty()) return;
+        settings_ = false;
         mode_ = Mode::catalogue; locked_ = true;
         std::snprintf(name_, sizeof(name_), "%s", docs_.selected());
         if (!name_[0]) browse(false);
         render();
+    }
+    bool enter_settings(unsigned patch, const Songs &songs, bool performing) {
+        if (open() || docs_.busy() || docs_.dirty() || !docs_.document().valid()) return false;
+        settings_ = true;
+        const auto &doc = docs_.document();
+        current_patch_ = patch < doc.patches() && u16(doc.patch(patch)) != UINT16_MAX
+            && patch_edit_node(doc, doc.browser_root(patch)) >= 0 ? patch : UINT16_MAX;
+        songs_ = &songs;
+        std::snprintf(current_set_, sizeof(current_set_), "%s", performing ? songs.active_set() : "");
+        shortcut_ = has_performance_shortcut() ? Shortcut::performance : Shortcut::setup;
+        startup_edit_ = false;
+        locked_ = true;
+        mode_ = Mode::current;
+        render();
+        return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_poll)
@@ -62,7 +79,48 @@ public:
             }
             return;
         }
-        if (mode_ == Mode::catalogue) {
+        if (mode_ == Mode::current) {
+            if (button == 5) { close(); return; }
+            const unsigned first = has_performance_shortcut() ? 0 : 1;
+            if (button < 2) {
+                const unsigned count = 3 - first;
+                shortcut_ = Shortcut(first + (unsigned(shortcut_) - first + count + (button == 0 ? -1 : 1)) % count);
+            }
+            if (button == 2) {
+                if (shortcut_ == Shortcut::pedal || (shortcut_ == Shortcut::performance && current_set_[0])) {
+                    startup_edit_ = true;
+                    startup_choice_ = 0;
+                    const char *initial = shortcut_ == Shortcut::performance ? current_set_ : docs_.startup_set();
+                    Setlist set;
+                    for (unsigned i = 0; i < songs_->counts().sets && songs_->set_at(i, set); ++i)
+                        if (!std::strcmp(initial, set.name)) { startup_choice_ = i + 1; break; }
+                    std::snprintf(startup_draft_, sizeof(startup_draft_), "%s", initial);
+                    mode_ = Mode::startup_set;
+                    render();
+                    return;
+                }
+                if (!docs_.edit_begin()) { hardware_.error(ui::i18n::text(ui::i18n::Message::operation_failed)); return; }
+                original_ = false;
+                changed_fields_ = 0;
+                current_field_ = shortcut_ == Shortcut::performance;
+                patch_ = current_field_ ? current_patch_ : 0;
+                field_ = current_field_ ? 2 : 5;
+                mode_ = Mode::field;
+            }
+        } else if (mode_ == Mode::startup_set) {
+            if (button < 2) {
+                const unsigned count = songs_->counts().sets + 1;
+                const unsigned choice = (startup_choice_ + count + (button == 0 ? -1 : 1)) % count;
+                Setlist set;
+                if (choice && !songs_->set_at(choice - 1, set)) {
+                    hardware_.error(ui::i18n::text(ui::i18n::Message::operation_failed)); return;
+                }
+                startup_choice_ = choice;
+                std::snprintf(startup_draft_, sizeof(startup_draft_), "%s", set.name);
+            } else if ((button == 2 || button == 5) && std::strcmp(startup_draft_, docs_.startup_set())) {
+                mode_ = Mode::decision; item_ = 2;
+            } else if (button == 2 || button == 5) { mode_ = Mode::current; startup_edit_ = false; }
+        } else if (mode_ == Mode::catalogue) {
             if (button < 2) browse(button == 0);
             else if (button == 2 && name_[0]) { mode_ = Mode::action; item_ = 0; }
             else if (button == 5) { close(); return; }
@@ -127,29 +185,44 @@ public:
             else if (button == 5) { mode_ = Mode::decision; item_ = 2; }
         } else if (mode_ == Mode::field) {
             if (button < 2) {
-                unsigned first = docs_.document().patches() ? 0 : 5;
-                unsigned count = 8 - first + (first == 0 && docs_.edit_has_original(patch_));
+                if (settings_ && current_field_) return;
+                const unsigned first = settings_ || !docs_.document().patches() ? 5 : 0;
+                const unsigned count = 8 - first + (first == 0 && docs_.edit_has_original(patch_));
                 field_ = first + (field_ - first + count + (button == 0 ? -1 : 1)) % count;
             }
             else if (button == 2 && field_ == 8) { original_ = !original_; field_ = 0; }
             else if (button == 2) mode_ = Mode::value;
+            else if (button == 5 && settings_) {
+                if (changed_fields_) { mode_ = Mode::decision; item_ = 2; }
+                else { docs_.edit_cancel(); mode_ = Mode::current; }
+            }
             else if (button == 5) { mode_ = docs_.document().patches() ? Mode::patch : Mode::decision; item_ = 2; }
         } else if (mode_ == Mode::value) {
-            if (button < 2) docs_.edit_adjust(patch_, field_, button == 0 ? -1 : 1, original_ && field_ < 5);
+            if (button < 2 && docs_.edit_adjust(patch_, field_, button == 0 ? -1 : 1, original_ && field_ < 5))
+                changed_fields_ |= 1u << field_;
             else if (button == 2 || button == 5) mode_ = Mode::field;
+        } else if (mode_ == Mode::decision && startup_edit_) {
+            if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
+            else if (button == 5 || (button == 2 && item_ == 2)) mode_ = Mode::startup_set;
+            else if (button == 2) {
+                if (!item_ && ((startup_draft_[0] && !songs_->setlist(startup_draft_)) || !docs_.startup_set(startup_draft_))) {
+                    hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed)); return;
+                }
+                close(); return;
+            }
         } else if (mode_ == Mode::decision) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
-            else if (button == 5) mode_ = docs_.document().patches() ? Mode::patch : Mode::field;
+            else if (button == 5) mode_ = settings_ || !docs_.document().patches() ? Mode::field : Mode::patch;
             else if (button == 2) {
                 if (item_ == 0) { if (docs_.edit_save(now)) mode_ = Mode::saving; else { hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed)); return; } }
                 else if (item_ == 1) { docs_.edit_cancel(); close(); return; }
-                else mode_ = docs_.document().patches() ? Mode::patch : Mode::field;
+                else mode_ = settings_ || !docs_.document().patches() ? Mode::field : Mode::patch;
             }
         }
         render();
     }
 private:
-    enum class Mode { closed, catalogue, action, selecting, patch, field, value, decision, saving, failed, history, comparison, history_work,
+    enum class Mode { closed, current, startup_set, catalogue, action, selecting, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -157,6 +230,16 @@ private:
     unsigned changed_patches_ = 0, changed_routes_ = 0;
     bool changed_settings_ = false, changed_formatting_ = false;
     bool locked_ = false, browsing_ = false, select_edit_ = false, original_ = false;
+    bool settings_ = false, current_field_ = false;
+    unsigned current_patch_ = UINT16_MAX, changed_fields_ = 0;
+    enum class Shortcut { performance, setup, pedal };
+    Shortcut shortcut_ = Shortcut::setup;
+    const Songs *songs_ = nullptr;
+    bool startup_edit_ = false;
+    unsigned startup_choice_ = 0;
+    char startup_draft_[64] = {};
+    char current_set_[64] = {};
+    bool has_performance_shortcut() const { return current_patch_ != UINT16_MAX || current_set_[0]; }
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
     Mode cycle_return_ = Mode::closed;
@@ -267,7 +350,29 @@ private:
         const char *title = ui::i18n::text(ui::i18n::Message::setups), *value = browsing_ ? ui::i18n::text(ui::i18n::Message::working) : name_[0] ? name_ : ui::i18n::text(ui::i18n::Message::no_setups);
         const char *value_label = ui::i18n::text(ui::i18n::Message::action);
         char number[64] = {};
-        if (mode_ == Mode::action) { title = name_; value = item_ == 2 ? ui::i18n::text(ui::i18n::Message::history) : item_ ? ui::i18n::text(ui::i18n::Message::edit) : ui::i18n::text(ui::i18n::Message::select); }
+        if (mode_ == Mode::current) {
+            const auto &doc = docs_.document();
+            title = ui::i18n::text(ui::i18n::Message::current);
+            if (shortcut_ == Shortcut::performance && current_set_[0]) {
+                value_label = ui::i18n::text(ui::i18n::Message::setlist);
+                value = current_set_;
+            } else if (shortcut_ == Shortcut::performance) {
+                value_label = ui::i18n::text(ui::i18n::Message::patch);
+                value = reinterpret_cast<const char *>(doc.patch(current_patch_) + 12);
+            } else if (shortcut_ == Shortcut::setup) {
+                value_label = ui::i18n::text(ui::i18n::Message::setup);
+                value = docs_.selected();
+            } else {
+                value_label = ui::i18n::text(ui::i18n::Message::pedal);
+                value = ui::i18n::text(ui::i18n::Message::startup_set);
+            }
+        }
+        else if (mode_ == Mode::startup_set) {
+            title = ui::i18n::text(ui::i18n::Message::startup_set);
+            value_label = ui::i18n::text(ui::i18n::Message::pedal);
+            value = startup_draft_[0] ? startup_draft_ : ui::i18n::text(ui::i18n::Message::none);
+        }
+        else if (mode_ == Mode::action) { title = name_; value = item_ == 2 ? ui::i18n::text(ui::i18n::Message::history) : item_ ? ui::i18n::text(ui::i18n::Message::edit) : ui::i18n::text(ui::i18n::Message::select); }
         else if (mode_ == Mode::patch) {
             title = reinterpret_cast<const char *>(docs_.document().patch_cycle(u16(docs_.document().patch(patch_) + 2)));
             value = reinterpret_cast<const char *>(docs_.document().patch(patch_) + 12);
@@ -358,6 +463,40 @@ private:
             ui::copy_caption(views[1].lines[1], title);
             ui::copy_caption(views[2].lines[0], value_label);
             ui::copy_caption(views[2].lines[1], value);
+        }
+        if (settings_) {
+            views[2].lines[2].graphics.line_height = views[2].lines[2].graphics.size = 16;
+            views[0].lines[2].wrap = true;
+            ui::copy_caption(views[1].lines[0], ui::i18n::text(ui::i18n::Message::settings));
+            if (mode_ == Mode::current && shortcut_ == Shortcut::performance && current_set_[0])
+                ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::use_set_at_startup)).text());
+            if (mode_ == Mode::current && current_set_[0] && songs_->boundary()) {
+                ui::copy_caption(views[1].lines[1], ui::i18n::text(ui::i18n::Message::between_songs));
+                views[1].lines[2].graphics.line_height = views[1].lines[2].graphics.size = 16;
+                SongEntry entry;
+                if (songs_->entry(current_set_, songs_->next_position(), entry))
+                    ui::i18n::format(views[1].lines[2].text, sizeof(views[1].lines[2].text), ui::i18n::Message::next_song_name, entry.song);
+            }
+            if ((mode_ == Mode::field || mode_ == Mode::value) && field_ == 2) {
+                const auto &doc = docs_.document();
+                ui::copy_caption(views[2].lines[0], reinterpret_cast<const char *>(doc.instrument(u16(doc.patch(patch_)))));
+                ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::instrument_channel_scope));
+            }
+            if ((mode_ == Mode::field || mode_ == Mode::value) && !current_field_)
+                ui::copy_caption(views[2].lines[0], docs_.selected());
+            if ((mode_ == Mode::field || mode_ == Mode::value) && (changed_fields_ & (1u << field_)))
+                ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::changed));
+            if (startup_edit_)
+                ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::startup_set_scope));
+            if (mode_ == Mode::decision) {
+                ui::copy_caption(views[1].lines[0], startup_edit_ ? ui::i18n::text(ui::i18n::Message::pedal) : docs_.selected());
+                const auto save = startup_edit_ ? ui::i18n::Message::save : ui::i18n::Message::save_reload_setup;
+                const auto action = item_ == 0 ? save : item_ == 1 ? ui::i18n::Message::discard : ui::i18n::Message::keep_editing;
+                ui::copy_caption(views[2].lines[1], ui::i18n::text(action));
+                if (startup_edit_)
+                    ui::copy_caption(views[2].lines[2], startup_draft_[0] ? startup_draft_ : ui::i18n::text(ui::i18n::Message::none));
+                else ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::reload_stops_playback));
+            }
         }
         ui::present(hardware_, views, 1);
     }

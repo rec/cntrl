@@ -32,6 +32,7 @@ def target() -> models.Target:
         {'setups': {'type': 'setups'}},
         {'songs': {'type': 'songs-and-setlists'}},
         {'switches': {'type': 'switches'}},
+        {'settings': {'type': 'settings'}},
         {'live': {}, 'status': {'type': 'status'}},
     ],
 )
@@ -122,10 +123,11 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     ]
     assert {'looper', 'arpeggiator'} <= exported['page_settings'].keys()
     if count == 3:
-        assert exported['regions']['tools']['pages'][-5:] == [
+        assert exported['regions']['tools']['pages'][-6:] == [
             'setups',
             'songs-and-setlists',
             'switches',
+            'settings',
             'calibration',
             'None',
         ]
@@ -134,6 +136,7 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
         assert 'pong' not in pages
         assert 'None' in pages
     assert ('language' in pages) == (count >= 2)
+    assert pages['settings']['type'] == 'settings'
     assert ('time' in pages) == (count >= 2)
     assert pages['calibration']['type'] == 'calibrate'
     assert pages['calibration']['min_displays'] == 1

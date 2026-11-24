@@ -385,3 +385,36 @@ text = 'Instrumentkanaal'
 
 [messages.owner_contact]
 text = 'Contact'
+
+[messages.settings]
+text = "Instellingen"
+
+[messages.pedal]
+text = "Pedaal"
+
+[messages.instrument_channel_scope]
+text = "Alle patches met dit instrument"
+
+[messages.save_reload_setup]
+text = "Opslaan en setup herladen"
+
+[messages.reload_stops_playback]
+text = "Herladen stopt het afspelen"
+
+[messages.keep_editing]
+text = "Verder bewerken"
+
+[messages.startup_set_scope]
+text = "Geldt bij elke start"
+
+[messages.setlist]
+text = "Setlijst"
+
+[messages.between_songs]
+text = "Tussen nummers"
+
+[messages.next_song_name]
+text = "Volgend nummer: {name:s}"
+
+[messages.use_set_at_startup]
+text = "Gebruiken bij opstarten"

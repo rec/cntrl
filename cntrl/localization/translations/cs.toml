@@ -385,3 +385,36 @@ text = 'Kanál nástroje'
 
 [messages.owner_contact]
 text = 'Kontakt'
+
+[messages.settings]
+text = "Nastavení"
+
+[messages.pedal]
+text = "Pedál"
+
+[messages.instrument_channel_scope]
+text = "Všechny patche tohoto nástroje"
+
+[messages.save_reload_setup]
+text = "Uložit a načíst sestavu"
+
+[messages.reload_stops_playback]
+text = "Načtení zastaví přehrávání"
+
+[messages.keep_editing]
+text = "Pokračovat v úpravách"
+
+[messages.startup_set_scope]
+text = "Platí při každém spuštění"
+
+[messages.setlist]
+text = "Seznam skladeb"
+
+[messages.between_songs]
+text = "Mezi skladbami"
+
+[messages.next_song_name]
+text = "Další skladba: {name:s}"
+
+[messages.use_set_at_startup]
+text = "Použít při spuštění"

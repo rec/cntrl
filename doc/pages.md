@@ -4,7 +4,7 @@ A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
 `patch-chooser`, `status`, `time`, `cable-test`, `panic`,
 `midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`,
-`setups`, `songs-and-setlists`, `switches`, and `None`.
+`setups`, `songs-and-setlists`, `switches`, `settings`, and `None`.
 In Patch mode, press F
 to cycle pages in the focused region. In Song and Setlist modes, the default
 controls are hold F to browse utility pages forward, or click F and hold the
@@ -13,8 +13,8 @@ Page and region names contain 1 to 31 printable ASCII characters.
 
 The default utility pages for testing are Status, MIDI Cable Test, Panic,
 MIDI Monitor, MIDI Looper, Arpeggiator, Time, Pong, Language, Setups,
-Songs and setlists, Switches, and Calibration, in that order.
-Press C on Setups, Songs and setlists, or Switches to open its editor.
+Songs and setlists, Switches, Settings, and Calibration, in that order.
+Press C on Setups, Songs and setlists, Switches, or Settings to open its editor.
 Pong requires three displays. Time and Language require two.
 MIDI Looper and Arpeggiator need an enabled MIDI input and output.
 Banked views are configured with the Banked patches they display.
@@ -31,6 +31,21 @@ Each patch-chooser page keeps its own navigation, sent-state and undo history.
 All configured patch-choosers continue executing queued patches and delays while
 hidden. They share the setup's patch library, cycles and display templates.
 Shared hardware services, including the MIDI clock, remain shared across pages.
+
+## Settings
+
+Open Settings to edit the loaded setup's brightness, screensaver timeout,
+or USB MIDI setting. In browser mode, the current patch is also available
+when it selects a program for an instrument. Its MIDI channel edit applies
+to every patch that uses that instrument in the setup.
+Under **Pedal**, choose the setlist to open on the next boot. Choose **None**
+to start in the Patch Chooser.
+In setlist mode, **Use at startup** opens the same editor with the current
+setlist selected.
+
+Adjustments are drafts. Back from a value returns to its field. Back from
+the field list offers to save and reload the setup, discard the draft, or
+keep editing. Saving a setup edit stops current playback during reload.
 
 ## Changing setups
 

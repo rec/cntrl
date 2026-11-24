@@ -187,7 +187,7 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!PageLayout::valid_name(p) || p[32] > PageLayout::switches || p[32] == 0 || p[32] == 2 || p[32] == 18 || (p[32] >= 5 && p[32] <= 9)
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::settings || p[32] == 0 || p[32] == 2 || p[32] == 18 || (p[32] >= 5 && p[32] <= 9)
                 || p[33] > displays || (p[32] == 10 && p[33])
                 || ((p[32] == PageLayout::language || p[32] == PageLayout::time) && p[33] != 2)) return false;
             bool seen[256] = {};

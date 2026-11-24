@@ -385,3 +385,36 @@ text = 'Canale dello strumento'
 
 [messages.owner_contact]
 text = 'Contatti'
+
+[messages.settings]
+text = "Impostazioni"
+
+[messages.pedal]
+text = "Pedale"
+
+[messages.instrument_channel_scope]
+text = "Tutte le patch che usano questo strumento"
+
+[messages.save_reload_setup]
+text = "Salva e ricarica la configurazione"
+
+[messages.reload_stops_playback]
+text = "La ricarica ferma la riproduzione"
+
+[messages.keep_editing]
+text = "Continua a modificare"
+
+[messages.startup_set_scope]
+text = "Vale a ogni avvio"
+
+[messages.setlist]
+text = "Scaletta"
+
+[messages.between_songs]
+text = "Tra due brani"
+
+[messages.next_song_name]
+text = "Prossimo brano: {name:s}"
+
+[messages.use_set_at_startup]
+text = "Usa all’avvio"

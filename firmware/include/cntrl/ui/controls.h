@@ -33,7 +33,7 @@ public:
             if (!utility && services.switches_open() && !services.songs_open() && !services.setup_open()) {
                 if (press) services.switch_button(i, true, now);
                 if (release) services.switch_button(i, false, now);
-            } else if (!utility && services.songs_open()) {
+            } else if (!utility && services.songs_open() && !services.setup_open()) {
                 if (press) {
                     if (i == controls_.previous) services.invoke(Operation::songs_previous);
                     else if (i == controls_.next) services.invoke(Operation::songs_next);

@@ -7,7 +7,7 @@
 int main(int argc,char **argv) {
     cntrl::memory_budget = 1024 * 1024;
     if (argc == 2 && !std::strcmp(argv[1],"caps")) {
-        for (unsigned type = 0; type <= cntrl::PageLayout::switches; ++type) {
+        for (unsigned type = 0; type <= cntrl::PageLayout::settings; ++type) {
             if (type == 0 || type == 2 || type == 18 || (type >= 5 && type <= 9)) continue; // Unassigned page IDs.
             for (unsigned displays : {1u,3u,5u}) std::printf("%u ",cntrl::PageLayout::maximum_displays(type,displays));
             std::puts("");
