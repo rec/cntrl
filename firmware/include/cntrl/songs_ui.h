@@ -38,7 +38,7 @@ public:
         if (!managing_library_ || songs_.busy() || waiting_ || named_work_ != NamedWork::none) return false;
         return_to_performance_ = true;
         if (mode_ == moving && cursor_ != entry_) review_move();
-        else if (mode_ == patch_value && patch_draft_ != patch_value_.value)
+        else if (mode_ == patch_value && patch_draft_.differs(patch_values_))
             review_library_edit(LibraryEdit::change_patch_value, patch_value);
         else if (mode_ == naming) {
             name_button(2);
@@ -118,10 +118,14 @@ private:
                 else if (button == 2) mode_ = patch_value;
                 else if (button == 5) mode_ = patch_actions;
             } else if (button < 2) {
-                const int minimum = patch_value_.program ? 1 : 0;
-                patch_draft_ = unsigned(std::clamp(int(patch_draft_) + (button ? 1 : -1), minimum, minimum + 127));
+                const auto &field = patch_fields[unsigned(patch_draft_.kind)][patch_field_];
+                auto &value = patch_draft_.values[patch_field_];
+                value = std::clamp(value + (button ? 1 : -1), field.minimum, field.maximum);
+            } else if (button == 3 || button == 4) {
+                const unsigned count = patch_draft_.kind == PatchKind::channel_program ? 2 : 3;
+                patch_field_ = (patch_field_ + (button == 3 ? count - 1 : 1)) % count;
             } else if (button == 2 || button == 5) {
-                if (patch_draft_ != patch_value_.value) review_library_edit(LibraryEdit::change_patch_value, patch_value);
+                if (patch_draft_.differs(patch_values_)) review_library_edit(LibraryEdit::change_patch_value, patch_value);
                 else mode_ = patch_actions;
             }
             render(); return;
@@ -201,9 +205,9 @@ private:
                     if (songs_.patch_at(song_name_, patch_cursor_, selection) && selection.document[0]) {
                         if (!begin_named_patch(NamedWork::inspect, selection))
                             ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot read the owning setup");
-                    } else if (songs_.patch_value(song_name_, patch_cursor_, hardware_, patch_value_)) {
+                    } else if (songs_.patch_values(song_name_, patch_cursor_, hardware_, patch_values_)) {
                         named_patch_ = false;
-                        patch_draft_ = patch_value_.value;
+                        patch_draft_ = patch_values_; patch_field_ = 0;
                         shared_patch_ = false;
                         mode_ = patch_scope;
                     } else ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot edit this patch value");
@@ -283,8 +287,8 @@ private:
     unsigned set_index_ = 0, library_choice_ = 0;
     uint32_t library_generation_ = 0;
     char managed_set_[64] = {};
-    PatchValue patch_value_;
-    unsigned patch_draft_ = 0;
+    PatchValues patch_values_, patch_draft_;
+    unsigned patch_field_ = 0;
     bool shared_patch_ = false, named_patch_ = false, patch_reloads_ = false;
     uint32_t named_patch_crc_ = 0;
     enum class NamedWork { none, inspect, load_for_save, saving };
@@ -356,11 +360,11 @@ private:
                 && !name_compare(documents_->edit_name(), selection.document) && documents_->edit_document(source);
             const int root = loaded ? source.named_patch(selection.key) : -1;
             if (work == NamedWork::inspect) {
-                if (root >= 0 && editable_patch_value(source, unsigned(root), patch_value_)) {
+                if (root >= 0 && editable_patch_values(source, unsigned(root), patch_values_)) {
                     named_patch_crc_ = checksum(source.data(), source.length());
                     patch_reloads_ = documents_->edit_reloads();
                     named_patch_ = true; shared_patch_ = false;
-                    patch_draft_ = patch_value_.value;
+                    patch_draft_ = patch_values_; patch_field_ = 0;
                     mode_ = patch_scope;
                 } else ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot edit this patch value");
                 documents_->edit_cancel();
@@ -369,11 +373,11 @@ private:
                 documents_->edit_cancel();
                 ui::utf8::copy(feedback_, sizeof(feedback_), "Setup changed. Reopen this patch to edit it.");
             } else if (shared_patch_) {
-                if (documents_->edit_named_patch_value(selection.key, patch_draft_) && documents_->edit_save(now))
+                if (documents_->edit_named_patch_values(selection.key, patch_draft_) && documents_->edit_save(now))
                     named_work_ = NamedWork::saving;
                 else { documents_->edit_cancel(); fail(); }
             } else {
-                const bool saved = songs_.save_patch_value(song_name_, patch_cursor_, hardware_, patch_draft_, false, &source);
+                const bool saved = songs_.save_patch_values(song_name_, patch_cursor_, hardware_, patch_draft_, false, &source);
                 documents_->edit_cancel();
                 if (saved) { finish_library_edit(); waiting_ = true; }
                 else fail();
@@ -391,7 +395,7 @@ private:
         case LibraryEdit::remove_patch: return songs_.remove_patch(song_name_, patch_cursor_);
         case LibraryEdit::move_patch_earlier: return songs_.move_patch(song_name_, patch_cursor_, true);
         case LibraryEdit::move_patch_later: return songs_.move_patch(song_name_, patch_cursor_, false);
-        case LibraryEdit::change_patch_value: return songs_.save_patch_value(song_name_, patch_cursor_, hardware_, patch_draft_, shared_patch_);
+        case LibraryEdit::change_patch_value: return songs_.save_patch_values(song_name_, patch_cursor_, hardware_, patch_draft_, shared_patch_);
         }
         return false;
     }
@@ -608,14 +612,30 @@ private:
                         ui::utf8::copy(title + used, sizeof(title) - used, selection.key);
                         text(0, 2, selection.document);
                     }
-                    if (patch_reloads_) text(2, 2, ui::i18n::text(ui::i18n::Message::reload_stops_playback));
                 }
-                text(2, 0, patch_value_.program ? "Program" : "Control Change value");
-                std::snprintf(panes[2].lines[1].text, 64, "%u", patch_draft_);
+                const auto &fields = patch_fields[unsigned(patch_draft_.kind)];
+                const auto show_field = [&](unsigned field, unsigned row) {
+                    const int value = patch_draft_.values[field];
+                    auto &line = panes[2].lines[row].text;
+                    if (value == -65 || (field == 1 && patch_draft_.kind == PatchKind::instrument_program && value == -1))
+                        std::snprintf(line, sizeof(line), "%s %s", fields[field].label, ui::i18n::text(ui::i18n::Message::none));
+                    else std::snprintf(line, sizeof(line), "%s %d", fields[field].label, value);
+                };
+                if (mode_ == library_decision) {
+                    unsigned row = 0;
+                    for (unsigned i = 0; i < 3; ++i)
+                        if (patch_draft_.values[i] != patch_values_.values[i]) show_field(i, row++);
+                } else show_field(patch_field_, 1);
+                if (named_patch_ && shared_patch_ && patch_reloads_ && mode_ != library_decision)
+                    text(2, 2, ui::i18n::text(ui::i18n::Message::reload_stops_playback));
                 text(1, 1, mode_ == patch_scope ? "Edit scope" : "Edit patch value");
-                if (mode_ == patch_scope || mode_ == patch_value)
+                if (mode_ == patch_scope || mode_ == patch_value) {
                     text(0, 3, prompt.clear().pair(Role::previous, Role::next,
                         ui::i18n::text(mode_ == patch_value ? ui::i18n::Message::adjust : ui::i18n::Message::browse)).text());
+                    if (mode_ == patch_value)
+                        text(1, 2, prompt.clear().pair(Role::previous_section, Role::next_section,
+                            ui::i18n::text(ui::i18n::Message::field)).text());
+                }
             }
             if (mode_ == library_decision) {
                 if (library_edit_ == LibraryEdit::rename_song) {
@@ -635,12 +655,12 @@ private:
             }
         }
         if (mode_ == library_decision) {
-            const auto save = library_edit_ == LibraryEdit::change_patch_value && named_patch_ && shared_patch_ && patch_reloads_
-                ? ui::i18n::Message::save_reload_setup : ui::i18n::Message::save;
+            const bool reload = library_edit_ == LibraryEdit::change_patch_value && named_patch_ && shared_patch_ && patch_reloads_;
+            const auto save = reload ? ui::i18n::Message::save_reload_setup : ui::i18n::Message::save;
             const auto action = library_choice_ == 0 ? save
                 : library_choice_ == 1 ? ui::i18n::Message::discard : ui::i18n::Message::keep_editing;
             text(1, 1, ui::i18n::text(action));
-            text(1, 2, ui::i18n::text(ui::i18n::Message::unsaved_edits));
+            text(1, 2, ui::i18n::text(reload ? ui::i18n::Message::reload_stops_playback : ui::i18n::Message::unsaved_edits));
         }
         if (named_work_ != NamedWork::none)
             text(1, 1, named_work_ == NamedWork::saving ? "Saving setup" : "Loading setup");

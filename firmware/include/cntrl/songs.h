@@ -188,18 +188,18 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_patch_value)
 #endif
-    bool patch_value(const char *name, unsigned at, Hardware &hardware, PatchValue &value) const {
+    bool patch_values(const char *name, unsigned at, Hardware &hardware, PatchValues &values) const {
         SongSelection selection;
         MemoryBuffer bytes;
         Document document;
         return patch_at(name, at, selection) && !selection.document[0]
             && read_patch_document(selection, hardware, bytes, document)
-            && editable_patch_value(document, selection.node, value);
+            && editable_patch_values(document, selection.node, values);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_save_patch_value)
 #endif
-    bool save_patch_value(const char *name, unsigned at, Hardware &hardware, unsigned value, bool shared,
+    bool save_patch_values(const char *name, unsigned at, Hardware &hardware, const PatchValues &values, bool shared,
                           const Document *named_source = nullptr) {
         if (busy() || executing()) return false;
         SongSelection selection;
@@ -218,7 +218,7 @@ public:
         } else if (!read_patch_document(selection, hardware, bytes, document)) {
             return false;
         }
-        if (!write_patch_value(document, selection.node, value, bytes.data)
+        if (!write_patch_values(document, selection.node, values, bytes.data)
             || !document.load(bytes.data, bytes.size, hardware)) return false;
         unsigned offset = 0, length = 0;
         if (shared && (!source_offset(selection.source, offset, length) || length != document.length())) return false;

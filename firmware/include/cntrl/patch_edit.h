@@ -19,22 +19,40 @@ inline int patch_edit_node(const Document &document, unsigned root, bool *refere
     return -1;
 }
 
-struct PatchValue { unsigned value = 0; bool program = false; };
+enum class PatchKind { instrument_program, channel_program, control_change };
+struct PatchField { const char *label; int minimum, maximum; };
+inline constexpr PatchField patch_fields[][3] = {
+    {{"Program", 1, 128}, {"Volume", -1, 127}, {"Pan", -65, 63}},
+    {{"Program", 1, 128}, {"MIDI channel", 1, 16}, {nullptr, 0, 0}},
+    {{"Control Change value", 0, 127}, {"Controller", 0, 127}, {"MIDI channel", 1, 16}},
+};
+struct PatchValues {
+    PatchKind kind = PatchKind::instrument_program;
+    int values[3] = {};
+    bool differs(const PatchValues &other) const {
+        return kind != other.kind || !std::equal(values, values + 3, other.values);
+    }
+};
 
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(editable_patch_value)
 #endif
-inline const uint8_t *editable_patch_value(const Document &document, unsigned root, PatchValue &value) {
+inline const uint8_t *editable_patch_values(const Document &document, unsigned root, PatchValues &values) {
     for (unsigned i = 0; i < document.nodes() && root < document.nodes(); ++i) {
         const auto *node = document.node(root);
         if (node[0] == 10) root = u16(node + 4);
         else if (node[0] == 6 && u16(node + 4) == 65535)
             root = unsigned(document.named_patch(reinterpret_cast<const char *>(node + 6)));
-        else if (node[0] == 1) { value = {unsigned(node[6]) + 1, true}; return node + 6; }
-        else if (node[0] == 2 && u16(node + 2) == 34 && (node[36] & 0xf0) == 0xc0) {
-            value = {unsigned(node[37]) + 1, true}; return node + 37;
+        else if (node[0] == 1) {
+            values = {PatchKind::instrument_program, {int(node[6]) + 1,
+                node[9] == 255 ? -1 : int(node[9]), node[10] == 255 ? -65 : int(node[10]) - 64}};
+            return node;
+        } else if (node[0] == 2 && u16(node + 2) == 34 && (node[36] & 0xf0) == 0xc0) {
+            values = {PatchKind::channel_program, {int(node[37]) + 1, (node[36] & 15) + 1, 0}};
+            return node;
         } else if (node[0] == 2 && node[1] == 0 && u16(node + 2) == 35 && (node[36] & 0xf0) == 0xb0) {
-            value = {node[38], false}; return node + 38;
+            values = {PatchKind::control_change, {node[38], node[37], (node[36] & 15) + 1}};
+            return node;
         } else break;
     }
     return nullptr;
@@ -43,18 +61,30 @@ inline const uint8_t *editable_patch_value(const Document &document, unsigned ro
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(write_patch_value)
 #endif
-inline bool write_patch_value(const Document &document, unsigned root, unsigned value, uint8_t *bytes) {
-    PatchValue previous;
-    const auto *parameter = editable_patch_value(document, root, previous);
-    const unsigned minimum = previous.program ? 1 : 0;
-    if (!parameter || value < minimum || value > minimum + 127 || value == previous.value) return false;
-    bytes[parameter - document.data()] = uint8_t(value - minimum);
-    if (previous.program) {
+inline bool write_patch_values(const Document &document, unsigned root, const PatchValues &draft, uint8_t *bytes) {
+    PatchValues previous;
+    const auto *node = editable_patch_values(document, root, previous);
+    if (!node || previous.kind != draft.kind || !previous.differs(draft)) return false;
+    const auto &fields = patch_fields[unsigned(draft.kind)];
+    for (unsigned i = 0; i < 3; ++i)
+        if (draft.values[i] < fields[i].minimum || draft.values[i] > fields[i].maximum) return false;
+    auto *edited = bytes + (node - document.data());
+    if (draft.kind == PatchKind::instrument_program) {
+        edited[6] = uint8_t(draft.values[0] - 1);
+        edited[9] = draft.values[1] == -1 ? 255 : uint8_t(draft.values[1]);
+        edited[10] = draft.values[2] == -65 ? 255 : uint8_t(draft.values[2] + 64);
         for (unsigned i = 0; i < document.patches(); ++i) {
             const int program = patch_edit_node(document, document.browser_root(i));
-            if (program >= 0 && document.node(unsigned(program)) + 6 == parameter)
-                bytes[document.patch(i) - document.data() + 4] = uint8_t(value - 1);
+            if (program >= 0 && document.node(unsigned(program)) == node)
+                std::memcpy(bytes + (document.patch(i) - document.data()) + 4, edited + 6, 5);
         }
+    } else if (draft.kind == PatchKind::channel_program) {
+        edited[36] = uint8_t(0xc0 | (draft.values[1] - 1));
+        edited[37] = uint8_t(draft.values[0] - 1);
+    } else {
+        edited[36] = uint8_t(0xb0 | (draft.values[2] - 1));
+        edited[37] = uint8_t(draft.values[1]);
+        edited[38] = uint8_t(draft.values[0]);
     }
     return binary::seal_setup(bytes, document.length());
 }

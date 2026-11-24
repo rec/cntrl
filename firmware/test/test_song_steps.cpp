@@ -197,12 +197,12 @@ int main(int argc, char **argv) {
             assert(documents.edit_begin(name));
             while (documents.busy()) documents.tick(board.now);
             cntrl::Document draft;
-            cntrl::PatchValue value;
+            cntrl::PatchValues value;
             assert(documents.edit_document(draft));
             const int root = draft.named_patch("Lead");
-            assert(root >= 0 && cntrl::editable_patch_value(draft, unsigned(root), value));
+            assert(root >= 0 && cntrl::editable_patch_values(draft, unsigned(root), value));
             documents.edit_cancel();
-            return value.value;
+            return value;
         };
         const auto save_and_return = [&] {
             settings(); tap(1); tap(2);
@@ -213,6 +213,8 @@ int main(int argc, char **argv) {
         };
         open_patch(0);
         tap(1); tap(2); tap(1); // Shared, then raise the value.
+        tap(4); tap(1); // Controller number.
+        tap(4); tap(1); // MIDI channel.
         settings(); tap(1);
         setup_storage.remaining = 0;
         tap(2);
@@ -220,13 +222,15 @@ int main(int argc, char **argv) {
         sample(0);
         assert(app.settings_frontmost() && !documents.dirty());
         setup_storage.remaining = -1;
-        assert(saved_setup_value("Spare") == 10);
+        assert(saved_setup_value("Spare").values[0] == 10);
         tap(2); // Retry the same shared edit.
         while (documents.busy()) sample(0);
         sample(0);
         if (!app.tool_editor_open(board)) app.finish_tool();
         assert(!app.settings_frontmost());
-        assert(saved_setup_value("Spare") == 11 && saved_setup_value("Live") == 10);
+        const auto shared = saved_setup_value("Spare");
+        assert(shared.values[0] == 11 && shared.values[1] == 21 && shared.values[2] == 2);
+        assert(saved_setup_value("Live").values[0] == 10);
         assert(!setup_storage.revisions.at("Spare").empty());
         for (unsigned index : {0u, 1u}) {
             cntrl::SongSelection unchanged;
@@ -235,10 +239,11 @@ int main(int argc, char **argv) {
         open_patch(0);
         tap(2); tap(1); // Local, then raise the value.
         save_and_return();
-        cntrl::PatchValue copy;
-        assert(songs.patch_value("One", 0, board, copy) && copy.value == 12);
+        cntrl::PatchValues copy;
+        assert(songs.patch_values("One", 0, board, copy) && copy.values[0] == 12);
+        assert(copy.values[1] == 21 && copy.values[2] == 2);
         assert(songs.patch_at("One", 1, selection) && !std::strcmp(selection.document, "Spare"));
-        assert(saved_setup_value("Spare") == 11);
+        assert(saved_setup_value("Spare").values[0] == 11);
         assert(songs.continuation().patch == 0 && board.sent.size() == sent);
         std::strcpy(selection.document, "Live");
         assert(songs.replace_patch("One", 1, selection));
@@ -248,7 +253,25 @@ int main(int argc, char **argv) {
         assert(std::strstr(board.panes[1].lines[1].text, "Save and reload"));
         tap(1); tap(2); // Discard the active-setup change.
         if (!app.tool_editor_open(board)) app.finish_tool();
-        assert(!app.settings_frontmost() && saved_setup_value("Live") == 10 && board.sent.size() == sent);
+        assert(!app.settings_frontmost() && saved_setup_value("Live").values[0] == 10 && board.sent.size() == sent);
+        std::strcpy(selection.document, "Spare"); std::strcpy(selection.key, "Voice");
+        assert(songs.replace_patch("One", 1, selection));
+        while (songs.busy()) songs.tick();
+        open_patch(1); tap(2);
+        tap(4); tap(1); // Add an optional volume at zero.
+        tap(4); tap(1); // Add optional pan at -64.
+        save_and_return();
+        assert(songs.patch_values("One", 1, board, copy) && copy.kind == cntrl::PatchKind::instrument_program);
+        assert(copy.values[0] == 12 && copy.values[1] == 0 && copy.values[2] == -64);
+        std::strcpy(selection.key, "Direct");
+        assert(songs.replace_patch("One", 1, selection));
+        while (songs.busy()) songs.tick();
+        open_patch(1); tap(2);
+        tap(4); tap(1); // Change the channel of the direct Program Change.
+        save_and_return();
+        assert(songs.patch_values("One", 1, board, copy) && copy.kind == cntrl::PatchKind::channel_program);
+        assert(copy.values[0] == 12 && copy.values[1] == 4);
+        assert(board.sent.size() == sent);
         return 0;
     }
     if (argc == 4 && !std::strcmp(argv[3], "--song-settings")) {
@@ -304,10 +327,11 @@ int main(int argc, char **argv) {
             tap(1); tap(2); // Edit patches.
             tap(2); tap(1); tap(1); tap(2); // Edit the first patch value.
         };
-        const auto expect_values = [&](unsigned first_value, unsigned second_value) {
-            cntrl::PatchValue value;
-            assert(songs.patch_value("Pne", 0, board, value) && !value.program && value.value == first_value);
-            assert(songs.patch_value("Pne", 1, board, value) && value.value == second_value);
+        const auto expect_values = [&](int first_value, int second_value) {
+            cntrl::PatchValues value;
+            assert(songs.patch_values("Pne", 0, board, value) && value.kind == cntrl::PatchKind::control_change
+                && value.values[0] == first_value);
+            assert(songs.patch_values("Pne", 1, board, value) && value.values[0] == second_value);
         };
         open_patch_value();
         tap(2); tap(1); // Only this song step. Draft +1.
@@ -342,10 +366,10 @@ int main(int argc, char **argv) {
         expect_values(3, 2);
         assert(songs.continuation().patch == 0 && board.sent.size() == sent);
         cntrl::Songs restored(song_storage, board);
-        cntrl::PatchValue value;
+        cntrl::PatchValues value;
         assert(restored.boot());
-        assert(restored.patch_value("Pne", 0, board, value) && value.value == 3);
-        assert(restored.patch_value("Pne", 1, board, value) && value.value == 2);
+        assert(restored.patch_values("Pne", 0, board, value) && value.values[0] == 3);
+        assert(restored.patch_values("Pne", 1, board, value) && value.values[0] == 2);
         return 0;
     }
     if (argc == 4 && !std::strcmp(argv[3], "--setlist-settings")) {

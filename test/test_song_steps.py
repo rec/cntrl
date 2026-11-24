@@ -131,6 +131,9 @@ def test_song_step_navigation_and_boundaries(
         compiler.compile_show(
             {
                 **pages,
+                'instruments': {
+                    'synth': {'instrument': 'synth', 'output': 'din', 'channel': 1}
+                },
                 'patches': {
                     'Lead': {
                         'type': 'control-change',
@@ -138,7 +141,14 @@ def test_song_step_navigation_and_boundaries(
                         'channel': 1,
                         'controller': 20,
                         'value': 10,
-                    }
+                    },
+                    'Voice': {'instrument': 'synth', 'program': 12},
+                    'Direct': {
+                        'type': 'program-change',
+                        'output': 'din',
+                        'channel': 3,
+                        'program': 12,
+                    },
                 },
             },
             {},
