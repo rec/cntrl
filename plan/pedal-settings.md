@@ -144,6 +144,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Pedal | Startup set, including the current setlist shortcut, and multiline Contact text | Device preference journal |
 | Pedal boot firmware | CNTRL or stock on controllers with a combined firmware image | Boot selection flash journal |
 | Pedal language | Installed languages | Device preference journal and deferred language loader |
+| Expression calibration | Heel and toe capture for enabled expression jacks, with review before Save | Device calibration file |
 | Device preferences | 33 scalar registry fields, including choices and a named clock-output picker. Port fields depend on hardware support. | Device preference journal with inherited values, setup overrides, and reload validation |
 | Loaded setup | Brightness, screensaver timeout, USB MIDI | Setup draft, revision, and reload |
 | Saved setups | Browse and edit the existing setup fields and patch cycles | Named setup draft and revision, with reload for the loaded setup |
@@ -153,8 +154,8 @@ occur and repeat those tasks after changing the labels or controls.
 
 - Setlist renaming still needs a Settings entry point that preserves active
   performance and the device-wide startup choice.
-- Calibration and other device-wide controls outside
-  the scalar registry still need a consolidated Settings entry point.
+- Device-wide controls outside the listed coverage still need a consolidated
+  Settings entry point.
 - Song-step edits need to resolve the library selection and save to
   either the individual occurrence or the shared patch. Fields derived from
   authoring inputs need a rebuild path for any compiled data they affect.

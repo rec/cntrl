@@ -239,9 +239,13 @@ public:
         select_available_clock(); tap_.flash(now, 0);
     }
     template<class Pedals, class Enabled>
-    cntrl::Pane calibration_view(uint32_t now, const Pedals &pedals, Enabled enabled) {
+    cntrl::Pane calibration_view(uint32_t now, const Pedals &pedals, Enabled enabled,
+                                Viewport settings_viewport = {}, const char *prompt = nullptr) {
         using R = cntrl::PageSettings;
-        dirty_ = false; refreshed_ = now;
+        const auto previous_viewport = viewport_;
+        const auto previous_page = page_;
+        if (prompt) { viewport_ = settings_viewport; page_ = Page::calibrate; }
+        else { dirty_ = false; refreshed_ = now; }
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background]; pane.graphics.pad = uint8_t(settings_[R::padding]);
         const bool active = pedals.calibrating();
@@ -278,6 +282,10 @@ public:
             ++row;
         }
         if (!row) line(pane, 3, i18n::text(i18n::Message::select_expression_role), vertical(52), vertical(30), localized_face, true);
+        if (prompt) {
+            line(pane, 15, prompt, vertical(123), vertical(17), localized_face, true);
+            viewport_ = previous_viewport; page_ = previous_page;
+        }
         return pane;
     }
 

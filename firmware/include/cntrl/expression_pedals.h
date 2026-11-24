@@ -49,7 +49,7 @@ public:
         if (!calibrating_) return;
         for (auto &input : inputs_) input.disarm();
         for (auto &values : delivered_) values = {-1, -1};
-        calibrating_ = false;
+        calibrating_ = capture_paused_ = false;
     }
     bool calibrate() {
         if (!calibrating_) {
@@ -57,8 +57,7 @@ public:
             calibrating_ = true;
             return true;
         }
-        const bool changed = std::any_of(captures_.begin(), captures_.end(), [](const auto &capture) { return capture.toe_ready; });
-        if (changed && (!calibration_ready_ || !calibrations_.save(captures_))) return false;
+        if (captured() && (!calibration_ready_ || !calibrations_.save(captures_))) return false;
         cancel();
         return true;
     }
@@ -81,7 +80,7 @@ public:
             inputs_[i].sample(low_[i], high, calibrations_.calibration(i));
             if (inputs_[i].position() < 0) delivered_[i] = {-1, -1};
             if (calibrating_) {
-                if (inputs_[i].reading() >= 0)
+                if (!capture_paused_ && inputs_[i].reading() >= 0)
                     captures_[i].sample((low_[i] + high + 1) / 2, now, calibrations_.settle_ms());
                 continue;
             }
@@ -102,6 +101,10 @@ public:
     }
     unsigned count() const { return inputs_.size(); }
     bool calibrating() const { return calibrating_; }
+    void pause_capture(bool paused) { capture_paused_ = paused; }
+    bool captured() const {
+        return calibrating_ && std::any_of(captures_.begin(), captures_.end(), [](const auto &capture) { return capture.toe_ready; });
+    }
     const CalibrationCapture &capture(unsigned jack) const { return captures_[jack]; }
     ExpressionCalibration calibration(unsigned jack) const { return calibrations_.calibration(jack); }
     const char *name(unsigned jack) const { return calibrations_.name(jack); }
@@ -127,7 +130,7 @@ private:
     CalibrationFile calibrations_;
     std::vector<CalibrationCapture> captures_;
     bool calibration_ready_ = false;
-    bool calibrating_ = false;
+    bool calibrating_ = false, capture_paused_ = false;
     uint32_t rest_ms_, bias_ms_;
     unsigned phase_ = 0, first_ = 0;
     uint32_t tick_ = 0;

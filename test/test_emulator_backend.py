@@ -197,14 +197,19 @@ def backend_files(
     )
 
 
+@pytest.mark.parametrize('settings', [False, True])
 def test_calibrate_page_saves_each_expression_jack(
-    backend_files: BackendFiles, tmp_path: Path
+    backend_files: BackendFiles, tmp_path: Path, settings: bool
 ) -> None:
     files = backend_files
+    if settings and 'c' not in files.target.buttons:
+        pytest.skip('Settings calibration requires a next switch to choose Save')
     jacks = [f'configurable-{i}' for i in range(1, 4)]
     target = files.target.model_copy(
         update={
-            'controls': models.TargetControls(confirm='a', previous='b'),
+            'controls': models.TargetControls(
+                confirm='a', previous='b', next='c' if settings else None
+            ),
             'trs_ports': {j: ['expression'] for j in jacks},
         }
     )
@@ -212,7 +217,7 @@ def test_calibrate_page_saves_each_expression_jack(
     write_bundle(
         {
             'expression': {
-                'pages': {'calibrate': {'type': 'calibrate'}},
+                'pages': {'tool': {'type': 'settings' if settings else 'calibrate'}},
                 'trs_ports': dict.fromkeys(jacks, 'expression'),
             }
         },
@@ -242,6 +247,9 @@ def test_calibrate_page_saves_each_expression_jack(
         for jack in range(3):
             session.expression(jack, 512)
         session.advance(1000000)
+        if settings:
+            for button in ('a', 'b', 'a', 'b', 'a'):
+                press(button)
         press('a')
         ranges = [(100, 900), (920, 120), (200, 820)]
         for jack in (2, 0, 1):
@@ -250,6 +258,12 @@ def test_calibrate_page_saves_each_expression_jack(
             move(jack, heel, toe)
         session.advance(session.time_us + 2100000)
         press('a')
+        if settings:
+            assert 'heel' not in calibration.read_text()
+            session.expression(0, 1000)
+            session.advance(session.time_us + 200000)
+            press('c')
+            press('a')
     saved = tomlkit.parse(calibration.read_text()).unwrap()
     assert saved['configurable-1']['name'] == 'Boss EV-30, left'
     assert saved['bits'] == 12

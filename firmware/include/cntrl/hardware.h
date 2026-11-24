@@ -112,6 +112,7 @@ struct SongContinuation;
 class Document;
 enum class ControlRole { previous, next, confirm, previous_section, next_section, back };
 enum class BootFirmware { unavailable, cntrl, stock };
+class ExpressionPedals;
 struct Hardware : RelayDriver {
     RelayOutputs relays{*this};
     Counters counters;
@@ -130,6 +131,7 @@ struct Hardware : RelayDriver {
     virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
     virtual BootFirmware boot_firmware() const { return BootFirmware::unavailable; }
     virtual const char *save_boot_firmware(BootFirmware) { return "boot-default-unavailable"; }
+    virtual ExpressionPedals *expression_calibration() { return nullptr; }
     virtual bool launch_doom() { return false; }
     virtual void configure_trs_ports(const uint8_t *) {}
     virtual bool supports_keyboard() const { return false; }

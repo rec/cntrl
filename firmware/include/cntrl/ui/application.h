@@ -191,7 +191,8 @@ public:
                 const auto type = layout.page(page)[0];
                 // These tools use press or release timing for their own controls.
                 if (type == PageLayout::time || type == PageLayout::midi_looper || type == PageLayout::arpeggiator
-                    || type == unsigned(Pages::Page::panic) || type == PageLayout::pong || type == PageLayout::memon) return false;
+                    || type == unsigned(Pages::Page::panic) || type == PageLayout::pong || type == PageLayout::memon
+                    || type == PageLayout::calibrate) return false;
             }
         }
         if (const auto *navigation = layout.navigation())

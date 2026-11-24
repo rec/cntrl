@@ -5,6 +5,7 @@
 #include "renderer.h"
 #include "pixel_throb.h"
 #include "memon_score.h"
+#include "prompts.h"
 #include <cntrl/midi_files.h>
 #include <cntrl/buttons.h>
 #include <cntrl/checked_array.h>
@@ -595,6 +596,17 @@ public:
             pages_.revisit();
 #endif
         save_view();
+        if (const auto *pedals = application_.setups.calibration(); pedals && !splash_visible_ && display_.count()
+            && uint32_t(now - calibration_view_at_) >= 100) {
+            calibration_view_at_ = now;
+            Prompt prompt(platform_);
+            if (!pedals->calibrating()) prompt.add(ControlRole::confirm, i18n::text(i18n::Message::calibrate));
+            else if (pedals->captured()) prompt.add(ControlRole::confirm, "Review");
+            prompt.add(ControlRole::back, i18n::text(i18n::Message::back), ", ");
+            const unsigned screen = display_.count() < 3 ? 0 : display_.count() / 2;
+            renderer_.show(screen, pages_.calibration_view(now, *pedals,
+                [&](unsigned jack) { return platform_.expression_available(jack); }, display_.viewport(screen), prompt.text()));
+        }
         if (!splash_visible_ && !application_.feature_open(platform_) && documents_.document().valid()) {
           for (unsigned r = 0; r < (application_.utility_visible() ? 1u : application_.layout.regions()); ++r) {
             const auto region = application_.utility_visible() ? PageAllocation::Region{application_.utility_page, 0, std::min(display_.count(), PageLayout::maximum_displays(application_.layout.page(application_.utility_page)[0], display_.count()))} : application_.allocation.region(r);
@@ -762,6 +774,7 @@ private:
     Controls controls_;
     PixelThrob throb_;
     bool splash_visible_ = false, management_visible_ = false;
+    uint32_t calibration_view_at_ = 0;
     bool pending_animations_ = true;
     int pending_patch_ = -1;
     bool brightness_feedback_ = false;

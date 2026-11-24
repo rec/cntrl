@@ -187,6 +187,7 @@ public:
     cntrl::midi::TrsMode port_mode(unsigned jack) const { return trs_ports.mode(jack); }
     unsigned port_count() const { return cntrl::target::port_count; }
     auto &expression_controls() { return expression_.controls(); }
+    cntrl::ExpressionPedals *expression_calibration() override { return &expression_controls(); }
     bool expression_available(unsigned jack) const override { return trs_ports.expression_pin(jack) >= 0; }
     auto &animation_session() { return splash_session; }
     bool display_priority_due() const { return switch_scan_due(); }

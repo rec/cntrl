@@ -270,6 +270,7 @@ public:
     TextMessages &text_messages() { return midi_runtime.text_messages; }
     midi::Bridge &midi_bridge() { return bridge; }
     ExpressionPedals &expression_controls() { return *expression; }
+    ExpressionPedals *expression_calibration() override { return expression; }
     bool expression_available(unsigned port) const override { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
     bool show_switch_performance() const override { return !app || !app->settings_frontmost(); }

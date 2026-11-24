@@ -5,6 +5,7 @@
 #include "ui/preferences.h"
 #include "ui/prompts.h"
 #include "documents.h"
+#include "expression_pedals.h"
 #include "songs.h"
 
 namespace cntrl {
@@ -13,6 +14,7 @@ class SetupUi {
 public:
     SetupUi(Documents &documents, Hardware &hardware) : docs_(documents), hardware_(hardware) {}
     bool open() const { return mode_ != Mode::closed; }
+    ExpressionPedals *calibration() const { return mode_ == Mode::calibration ? hardware_.expression_calibration() : nullptr; }
     enum class Library { none, songs, setlists };
     Library take_library_request() {
         const auto requested = library_request_;
@@ -61,11 +63,14 @@ public:
             : device_editor_ == Mode::preference_value ? preference_changed()
             : device_editor_ == Mode::boot_firmware ? boot_draft_ != hardware_.boot_firmware()
             : device_editor_ == Mode::language ? language_changed()
+            : device_editor_ == Mode::calibration ? hardware_.expression_calibration()->captured()
             : docs_.dirty() && changed_fields_;
         if (!changed) {
+            if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->cancel();
             if (docs_.dirty()) docs_.edit_cancel();
             close();
         } else {
+            if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->pause_capture(true);
             return_from_shortcut_ = true;
             resume_editor_ = mode_;
             mode_ = Mode::decision;
@@ -156,10 +161,12 @@ public:
             const bool preferences_available = docs_.global_preferences();
             const bool boot_available = hardware_.boot_firmware() != BootFirmware::unavailable;
             const bool language_available = preferences_available && hardware_.language_count();
+            const auto *pedals = hardware_.expression_calibration();
+            const bool calibration_available = pedals && pedals->count();
             if (button < 2) {
-                do { item_ = (item_ + (button ? 1 : 4)) % 5; }
+                do { item_ = (item_ + (button ? 1 : 5)) % 6; }
                 while ((item_ == 2 && !preferences_available) || (item_ == 3 && !boot_available)
-                    || (item_ == 4 && !language_available));
+                    || (item_ == 4 && !language_available) || (item_ == 5 && !calibration_available));
             }
             else if (button == 5) mode_ = Mode::current;
             else if (button == 2 && !item_) begin_startup_set(docs_.startup_set());
@@ -171,9 +178,20 @@ public:
             else if (button == 2 && item_ == 3) {
                 boot_draft_ = hardware_.boot_firmware();
                 mode_ = device_editor_ = Mode::boot_firmware;
-            } else if (button == 2 && language_available) {
+            } else if (button == 2 && item_ == 4 && language_available) {
                 std::snprintf(language_draft_, sizeof(language_draft_), "%s", hardware_.current_language());
                 mode_ = device_editor_ = Mode::language;
+            } else if (button == 2 && item_ == 5 && calibration_available) mode_ = device_editor_ = Mode::calibration;
+        } else if (mode_ == Mode::calibration) {
+            auto &pedals = *hardware_.expression_calibration();
+            if ((button == 2 || button == 5) && pedals.captured()) {
+                pedals.pause_capture(true);
+                mode_ = Mode::decision; item_ = 2;
+            }
+            else if (button == 5) leave_device_editor();
+            else if (button == 2 && !pedals.calibrating()) {
+                if (docs_.busy() || hardware_.configuration_locked()) hardware_.error(ui::i18n::text(ui::i18n::Message::operation_failed));
+                else pedals.calibrate();
             }
         } else if (mode_ == Mode::language) {
             if (button < 2) {
@@ -323,7 +341,7 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
+    enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, calibration, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -384,12 +402,14 @@ private:
         mode_ = device_editor_ = Mode::startup_set;
     }
     void leave_device_editor() {
+        if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->cancel();
         if (return_from_shortcut_) { close(); return; }
         if (device_editor_ == Mode::preference_value) {
             mode_ = Mode::preferences; device_editor_ = Mode::closed; return;
         }
         mode_ = shortcut_ == Shortcut::pedal ? Mode::pedal : Mode::current;
-        item_ = device_editor_ == Mode::language ? 4 : device_editor_ == Mode::boot_firmware ? 3 : device_editor_ == Mode::contact ? 1 : 0;
+        item_ = device_editor_ == Mode::calibration ? 5 : device_editor_ == Mode::language ? 4
+            : device_editor_ == Mode::boot_firmware ? 3 : device_editor_ == Mode::contact ? 1 : 0;
         device_editor_ = Mode::closed;
     }
     bool language_changed() const { return std::strcmp(language_draft_, hardware_.current_language()) != 0; }
@@ -404,6 +424,10 @@ private:
         return index < hardware_.language_count() ? hardware_.language_name(index) : language_draft_;
     }
     bool save_device_editor() {
+        if (device_editor_ == Mode::calibration) {
+            auto &pedals = *hardware_.expression_calibration();
+            return !docs_.busy() && !hardware_.configuration_locked() && pedals.captured() && pedals.calibrate();
+        }
         if (device_editor_ == Mode::boot_firmware) {
             if (const char *error = hardware_.save_boot_firmware(boot_draft_)) {
                 hardware_.error(!std::strcmp(error, "busy") ? "Pedal busy. Try again."
@@ -536,6 +560,7 @@ private:
         }
     }
     void keep_editing(Mode fallback) {
+        if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->pause_capture(false);
         mode_ = return_from_shortcut_ && resume_editor_ != Mode::closed && resume_editor_ != Mode::contact_action && resume_editor_ != Mode::failed
             ? resume_editor_ : fallback;
         return_from_shortcut_ = false;
@@ -726,7 +751,8 @@ private:
         }
         else if (mode_ == Mode::pedal) {
             title = ui::i18n::text(ui::i18n::Message::pedal);
-            value = item_ == 4 ? ui::i18n::text(ui::i18n::Message::language) : item_ == 3 ? "Boot firmware" : item_ == 2 ? "Preferences"
+            value = item_ == 5 ? ui::i18n::text(ui::i18n::Message::calibrate) : item_ == 4 ? ui::i18n::text(ui::i18n::Message::language)
+                : item_ == 3 ? "Boot firmware" : item_ == 2 ? "Preferences"
                 : ui::i18n::text(item_ ? ui::i18n::Message::owner_contact : ui::i18n::Message::startup_set);
         }
         else if (mode_ == Mode::boot_firmware) {
@@ -737,6 +763,7 @@ private:
             title = ui::i18n::text(ui::i18n::Message::language);
             value = language_name();
         }
+        else if (mode_ == Mode::calibration) title = ui::i18n::text(ui::i18n::Message::calibrate);
         else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
             const auto &field = preference();
             const auto *values = docs_.global_preferences();
@@ -901,6 +928,10 @@ private:
                 views[0].lines[0].text[0] = 0;
                 views[0].lines[1].text[0] = 0;
             }
+            if (mode_ == Mode::calibration) {
+                views[0].lines[0].text[0] = 0;
+                views[0].lines[1].text[0] = 0;
+            }
             if (mode_ == Mode::contact) {
                 ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
                 ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
@@ -949,6 +980,8 @@ private:
                     ui::copy_caption(views[2].lines[0], ui::i18n::text(ui::i18n::Message::language));
                     ui::copy_caption(views[2].lines[2], language_name());
                 }
+                else if (device_editor_ == Mode::calibration)
+                    ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::calibrate));
                 else if (device_editor_ == Mode::preference_value) {
                     ui::copy_caption(views[2].lines[0], preference().label);
                     preference_text(views[2].lines[2].text, sizeof(views[2].lines[2].text), preference_value_);
