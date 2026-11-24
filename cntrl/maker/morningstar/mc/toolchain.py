@@ -15,6 +15,7 @@ import tyro
 from pydantic import BaseModel
 
 from ....firmware.build_info import commit_id
+from ....source_files import write_if_changed
 
 
 class Provision(BaseModel, frozen=True):
@@ -161,8 +162,7 @@ def compile_command(
         cpp += ' -DCNTRL_MEMORY_QUALIFICATION'
     if doom:
         cpp += ' -DCNTRL_DOOM=1'
-    if commit := commit_id(source_root):
-        cpp += f' -DCNTRL_GIT_COMMIT=0x{commit}'
+    cpp += ' -DCNTRL_FIRMWARE_REVISION'
     properties = {
         'build.flags.ld': (
             '-Wl,--gc-sections,--relax,--no-warn-rwx-segments,--print-memory-usage '
@@ -210,10 +210,19 @@ def build(
         work.resolve(),
         linker.resolve(),
     )
+    revision = commit_id(source_root) or '0000000'
+    write_if_changed(
+        root / 'patch_chooser/build_revision.cpp',
+        (
+            '#include <stdint.h>\n'
+            'extern "C" const uint32_t cntrl_build_revision '
+            '__attribute__((section(".progmem"))) '
+            f'= 0x{revision};\n'
+        ).encode(),
+    )
     command = compile_command(
         root, source_root, work, linker, diagnostics=diagnostics, doom=doom
     )
-    (work / 'compiler-options.toml').write_text(tomlkit.dumps({'command': command}))
     subprocess.run(
         command,
         env=environment(root),
@@ -248,6 +257,28 @@ def build(
     )
     if binary.read_bytes() != decoded.read_bytes():
         raise ValueError('ELF and HEX image bytes differ')
+    symbols = subprocess.check_output(
+        [
+            str(arm_tool(root, 'nm')),
+            '--defined-only',
+            str(work / 'cntrl/patch_chooser.ino.elf'),
+        ],
+        text=True,
+        timeout=60,
+    )
+    address = next(
+        (
+            int(s.split()[0], 16)
+            for s in symbols.splitlines()
+            if s.endswith(' cntrl_build_revision')
+        ),
+        None,
+    )
+    if address is None:
+        raise ValueError('firmware is missing its build revision symbol')
+    (work / 'compiler-options.toml').write_text(
+        tomlkit.dumps({'command': command, 'revision_address': address})
+    )
     report = subprocess.check_output(
         [str(arm_tool(root, 'size')), '-A', str(work / 'cntrl/patch_chooser.ino.elf')],
         text=True,

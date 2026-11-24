@@ -12,6 +12,7 @@ from reccy.configuration import units
 
 from ....firmware.intel_hex import FirmwareImage, read_hex
 from ....patch_chooser.models import millisecond_resolution
+from ....source_files import write_if_changed
 from . import toolchain, upload_helper
 
 
@@ -225,7 +226,9 @@ def build(command: Build, *, source_root: Path | None = None) -> Components:
     toolchain.ensure(root)
     original = (core / 'cores/teensy4/imxrt1062_t41.ld').read_text()
     linker = work / 'cntrl.ld'
-    linker.write_text(linker_script(original, diagnostics=command.diagnostics))
+    write_if_changed(
+        linker, linker_script(original, diagnostics=command.diagnostics).encode()
+    )
     toolchain.build(
         root,
         source_root or Path(__file__).resolve().parents[4],

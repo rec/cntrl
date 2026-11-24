@@ -10,7 +10,7 @@ from PIL import ImageFont
 from cntrl.fonts.outline import Outline
 from cntrl.maker.morningstar.mc import build_bitmap_fonts
 from cntrl.maker.morningstar.mc.build_font_metrics import read_bits
-from cntrl.maker.morningstar.mc.export_fonts import FontExport, export, faces
+from cntrl.maker.morningstar.mc.export_fonts import FontExport, export_cached
 from cntrl.patch_chooser import compiler_inputs, models
 
 
@@ -123,14 +123,26 @@ def test_generated_fonts_and_exported_metrics_are_current(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).parents[1]
-    sources = export(FontExport(output=tmp_path / 'fonts', generated=tmp_path))
+    cache = tmp_path / 'cache'
+    options = FontExport(output=tmp_path / 'fonts', generated=tmp_path)
+    sources, metrics = export_cached(options, cache)
     target = models.Target.model_validate(
         compiler_inputs.read_document(root / 'patch-chooser-target.json')
     )
     assert (tmp_path / 'embedded_fonts.h').read_bytes() == (
         root / 'firmware/patch_chooser/embedded_fonts.h'
     ).read_bytes()
-    assert faces(tmp_path / 'fonts', sources) == target.fonts
+    assert metrics == target.fonts
+    header = tmp_path / 'embedded_fonts.h'
+    timestamp = header.stat().st_mtime_ns
+    cache_timestamp = (cache / 'export.toml').stat().st_mtime_ns
+    second = options.model_copy(update={'output': tmp_path / 'second'})
+    assert export_cached(second, cache) == (sources, metrics)
+    assert header.stat().st_mtime_ns == timestamp
+    assert (cache / 'export.toml').stat().st_mtime_ns == cache_timestamp
+    assert (second.output / sources['Arimo']).read_bytes() == (
+        options.output / sources['Arimo']
+    ).read_bytes()
 
 
 def test_small_page_font_has_equal_vertical_stems() -> None:

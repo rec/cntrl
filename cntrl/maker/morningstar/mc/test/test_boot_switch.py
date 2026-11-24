@@ -41,6 +41,8 @@ def test_build_enables_memory_qualification_only_when_requested(
     )
     flags = next(v for v in command if v.startswith('build.flags.cpp='))
     assert ('-DCNTRL_MEMORY_QUALIFICATION' in flags) is diagnostics
+    assert '-DCNTRL_FIRMWARE_REVISION' in flags
+    assert 'CNTRL_GIT_COMMIT' not in flags
 
 
 def test_linker_places_only_cold_container_methods_in_flash() -> None:

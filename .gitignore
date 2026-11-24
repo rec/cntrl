@@ -9,6 +9,7 @@ dist/
 .tools/
 build/
 *.hex
+/cntrl/maker/morningstar/mc/firmware/patch_chooser/build_revision.cpp
 /.cache/reccy-docs/
 /.cntrl-emulator/
 /.cntrl-install/

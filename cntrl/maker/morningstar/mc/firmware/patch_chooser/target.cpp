@@ -1,4 +1,5 @@
 #include "target.h"
+#include <cntrl/build_revision.h>
 #include "heap_trace.h"
 #include "qualification.h"
 // Capability declarations include shared UI headers, so placement comes first.
@@ -691,13 +692,13 @@ public:
             char response[288];
             if (!deployment.ready()) {
                 std::snprintf(response, sizeof(response), "CNTRL ERROR deployment-recovery model=mc6-pro git=%07x",
-                    unsigned(CNTRL_GIT_COMMIT));
+                    unsigned(cntrl_build_revision));
                 usb_session.reply(response);
                 return;
             }
             char status[192]; startup_counter.usb_status(text, status, sizeof(status));
             std::snprintf(response, sizeof(response), "%s persistent_format=%u persistent_root=%lu model=mc6-pro git=%07x", status,
-                cntrl::binary::development_format, (unsigned long)deployment.root(), unsigned(CNTRL_GIT_COMMIT));
+                cntrl::binary::development_format, (unsigned long)deployment.root(), unsigned(cntrl_build_revision));
             usb_session.reply(response);
         } else usb_session.reply(text);
     }

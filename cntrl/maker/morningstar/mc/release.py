@@ -168,10 +168,18 @@ def prepare(resources: Path, output: Path) -> distribution.Manifest:
     options = tomlkit.parse(
         distribution.resource(resources, 'compiler-options.toml').read_text()
     )
-    if not any(
-        f'CNTRL_GIT_COMMIT=0x{manifest.source_commit[:7]}' in str(a)
-        for a in options['command']
-    ):
+    application = distribution.resource(resources, manifest.application).read_bytes()
+    revision = manifest.source_commit[:7]
+    if 'revision_address' in options:
+        offset = int(options['revision_address']) - manifest.application_origin
+        matches = 0 <= offset <= len(application) - 4 and int.from_bytes(
+            application[offset : offset + 4], 'little'
+        ) == int(revision, 16)
+    else:
+        matches = any(
+            f'CNTRL_GIT_COMMIT=0x{revision}' in str(a) for a in options['command']
+        )
+    if not matches:
         raise ValueError('compiler source identity differs from the resource manifest')
     errors: list[str] = []
     target = models.Target.model_validate(
@@ -194,7 +202,6 @@ def prepare(resources: Path, output: Path) -> distribution.Manifest:
     for data in setup_bundle.unpack((starter / 'bundle.bin').read_bytes()).values():
         resolved.prepare_restore(data, fonts, target=target)
     songs.upgrade((starter / 'songs.bin').read_bytes(), fonts, target=target)
-    application = distribution.resource(resources, manifest.application).read_bytes()
     custom = FirmwareImage(
         origin=manifest.application_origin,
         entry=manifest.application_entry,

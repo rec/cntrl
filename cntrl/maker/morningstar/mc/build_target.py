@@ -7,10 +7,12 @@ import tomlkit
 import tyro
 from pydantic import BaseModel
 
+from ....file_lock import writer_lock
 from ....firmware.capabilities import header
 from ....firmware.intel_hex import read_hex
 from ....patch_chooser.compiler_inputs import read_document
 from ....patch_chooser.models import Target
+from ....source_files import write_if_changed
 from . import boot_switch, export_fonts, release, toolchain
 
 
@@ -23,13 +25,18 @@ class Build(BaseModel, frozen=True):
 
 
 def run(command: Build) -> None:
+    root = Path(__file__).parent
+    with writer_lock(root / 'firmware/build', operation='firmware build'):
+        build_export(command, root)
+
+
+def build_export(command: Build, root: Path) -> None:
     if command.output.exists() and any(
         p.name != 'tmp' for p in command.output.iterdir()
     ):
         raise ValueError(
             'choose a new build output directory to preserve previous exports'
         )
-    root = Path(__file__).parent
     doom = read_hex(command.doom_image) if command.doom_image else None
     toolchain.ensure(root / 'firmware')
     command.output.mkdir(parents=True, exist_ok=True)
@@ -37,21 +44,21 @@ def run(command: Build) -> None:
     if not isinstance(data, dict):
         raise ValueError('target description must be a table')
     target = Target.model_validate(data)
-    sources = export_fonts.export(
+    sources, metrics = export_fonts.export_cached(
         export_fonts.FontExport(
             output=command.output / 'fonts',
             ui_fonts=target.ui_fonts,
             display_height=target.display_height,
-        )
+        ),
+        root / 'firmware/build/font-export',
     )
     data['font_sources'] = {n: f'fonts/{p}' for n, p in sources.items()}
-    data['fonts'] = [
-        f.model_dump(mode='json')
-        for f in export_fonts.faces(command.output / 'fonts', sources)
-    ]
+    data['fonts'] = [f.model_dump(mode='json') for f in metrics]
     target = Target.model_validate(data)
     capabilities = header(target)
-    (root / 'firmware/patch_chooser/target_capabilities.h').write_text(capabilities)
+    write_if_changed(
+        root / 'firmware/patch_chooser/target_capabilities.h', capabilities.encode()
+    )
     if doom:
         target = target.model_copy(update={'functions': [*target.functions, 'doom']})
         capabilities = header(target)

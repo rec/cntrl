@@ -19,6 +19,7 @@
 #include "memon_artwork.h"
 #include "flags.h"
 #include "status_snapshot.h"
+#include "../build_revision.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -33,9 +34,7 @@ public:
         StatusSnapshot result{performance, uptime_, 0};
         result.tap_period_ms = tap_.period();
         result.clock_period_us = observed_clock().period_us(); result.clock_active = observed_clock().measured();
-#ifdef CNTRL_GIT_COMMIT
-        result.git_commit = CNTRL_GIT_COMMIT;
-#endif
+        result.git_commit = build_revision();
         return result;
     }
     Pages(const Fonts &fonts, Viewport viewport) : fonts_(fonts), viewport_(viewport) {}
@@ -521,10 +520,8 @@ public:
                 format_status(rows[4], 6, i18n::Message::starts_value, number);
             }
             else format_status(rows[4], 6, i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
-#ifdef CNTRL_GIT_COMMIT
-            format_status(git, 8, i18n::Message::git_value,
-                unsigned(status_snapshot ? status_snapshot->git_commit : CNTRL_GIT_COMMIT));
-#endif
+            if (const auto revision = status_snapshot ? status_snapshot->git_commit : build_revision())
+                format_status(git, 8, i18n::Message::git_value, unsigned(revision));
             format_status(tap_label, 3, i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
             const unsigned body_height = viewport_.height - pad - body_top;

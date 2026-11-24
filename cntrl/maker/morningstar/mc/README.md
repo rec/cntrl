@@ -83,6 +83,12 @@ uv run --frozen pytest
 ```
 
 See [cross-platform build and uploader setup](cross-platform.md).
+The firmware build reuses rasterized fonts and metrics from the adapter's
+`firmware/build/font-export` directory. Release exports still get their own
+font files and notices. Generated headers keep their timestamps when their
+contents match. The build revision lives in a separate compilation unit, so
+changing the Git ref alone recompiles that file and relinks the firmware.
+
 Builds do not flash anything. See [packaged firmware installation](firmware-distribution.md)
 for toolchain-free flashing. The helper accepts verified, user-owned images
 without requiring a checkout. Keep an existing helper
