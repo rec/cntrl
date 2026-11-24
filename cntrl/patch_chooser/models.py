@@ -1099,6 +1099,7 @@ class Memon(BaseModel, frozen=True):
     repeat_requests: bool = False
     timed: bool = True
     cooperative: bool = False
+    mono: bool = True
     style: MemonStyle = Field(default_factory=MemonStyle)
 
     @model_validator(mode='after')

@@ -178,6 +178,9 @@ public:
             && documents_.document().valid() && !pending_song_step_ && !songs_.executing()
             && (!services.switch_editor_open() || services.switch_performance_active()));
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_settings_chord_available)
+#endif
     bool settings_chord_available(const ApplicationServices &services, uint8_t chord) const {
         if (!chord || !settings_shortcut_available(services)) return false;
         if (settings_frontmost()) return true;
@@ -206,6 +209,9 @@ public:
         if (editing_tool == PageLayout::songs) return song_ui.open() && !song_ui.performing();
         return editing_tool == PageLayout::switches && services.switch_editor_open();
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_open_tool)
+#endif
     bool open_tool(unsigned page, ApplicationServices &services, bool shortcut_hint = false) {
         if (documents_.busy()) return false;
         if (page == PageLayout::settings) {

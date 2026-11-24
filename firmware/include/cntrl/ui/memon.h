@@ -115,41 +115,57 @@ private:
     Result result_ = Result::none;
     uint8_t sequence_[max_sequence] = {};
     unsigned length_ = 0, position_ = 0, playback_ = 0, round_ = 0, score_ = 0, lit_ = 0;
-    unsigned pending_ = no_tile, sound_count_ = 0, queued_count_ = 0;
+    unsigned pending_ = no_tile;
     uint32_t deadline_ = 0, pending_deadline_ = 0, sound_deadline_ = 0, lit_deadline_ = 0;
     uint32_t random_ = 1, updated_ = 0;
     uint64_t elapsed_ = 0;
     const char *sound_output_ = nullptr;
     const char *queued_output_ = nullptr;
-    uint32_t queued_deadline_ = 0;
-    uint8_t note_off_[12] = {};
-    uint8_t note_on_[12] = {};
+    uint32_t queued_start_ = 0, queued_deadline_ = 0;
+    uint8_t sound_notes_[4] = {}, queued_notes_[4] = {};
+    uint8_t sound_count_ = 0, released_ = 0, sound_channel_ = 0;
+    uint8_t queued_count_ = 0, next_note_ = 0;
+    bool sound_legato_ = false, queued_legato_ = false;
 
     static bool reached(uint32_t now, uint32_t deadline) { return int32_t(now - deadline) >= 0; }
     unsigned timeout() const { return settings_.flags & MemonSettings::timed ? settings_.timeout_ms : 0; }
     void wait_for(Phase phase, uint32_t now) { phase_ = phase; deadline_ = now + timeout(); }
 
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(memon_send_note)
+#endif
+    static bool send_note(Hardware &hardware, const char *output, unsigned channel,
+                          uint8_t note, uint8_t velocity, bool breath) {
+        const uint8_t message[] = {uint8_t((velocity ? 0x90 : 0x80) | channel), note, velocity,
+                                   uint8_t(0xb0 | channel), 2, uint8_t(velocity ? 100 : 0)};
+        return hardware.send(output, message, breath ? 6 : 3);
+    }
+
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(memon_stop_sound)
 #endif
     void stop_sound(uint32_t now, Hardware &hardware) {
         sound_deadline_ = now;
-        if (sound_count_ && hardware.send(sound_output_, note_off_, sound_count_ * 3)) sound_count_ = 0;
+        while (released_ < sound_count_) {
+            const bool breath = !sound_legato_ || released_ + 1 == sound_count_;
+            if (!send_note(hardware, sound_output_, sound_channel_, sound_notes_[released_], 0, breath)) return;
+            ++released_;
+        }
+        sound_count_ = released_ = 0;
     }
 
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(memon_sound)
 #endif
-    void sound(const uint8_t *notes, unsigned count, unsigned duration, uint32_t now, Hardware &hardware) {
+    void sound(const uint8_t *notes, unsigned count, unsigned duration, uint32_t now, Hardware &hardware,
+               bool legato = false) {
         sound_deadline_ = now;
         const auto *output = hardware.midi_outputs().route(settings_.route);
         queued_count_ = 0;
         if (!output) return;
-        for (unsigned i = 0; i < count; ++i) {
-            note_on_[3 * i] = uint8_t(0x90 | (settings_.channel - 1));
-            note_on_[3 * i + 1] = notes[i]; note_on_[3 * i + 2] = settings_.velocity;
-        }
-        queued_output_ = output->name; queued_count_ = count; queued_deadline_ = now + duration;
+        std::memcpy(queued_notes_, notes, count);
+        queued_output_ = output->name; queued_count_ = uint8_t(count); next_note_ = 0;
+        queued_legato_ = legato; queued_start_ = now; queued_deadline_ = now + duration;
         poll_sound(now, hardware);
     }
 
@@ -159,12 +175,18 @@ private:
     void poll_sound(uint32_t now, Hardware &hardware) {
         if (sound_count_ && reached(now, sound_deadline_)) stop_sound(now, hardware);
         if (queued_count_ && reached(now, queued_deadline_)) queued_count_ = 0;
-        if (sound_count_ || !queued_count_ || !hardware.send(queued_output_, note_on_, queued_count_ * 3)) return;
-        for (unsigned i = 0; i < queued_count_; ++i) {
-            note_off_[3 * i] = note_on_[3 * i] & 0x8f;
-            note_off_[3 * i + 1] = note_on_[3 * i + 1]; note_off_[3 * i + 2] = 0;
+        if (!queued_count_ || (sound_count_ && !next_note_)) return;
+        const unsigned channel = settings_.channel - 1;
+        while (next_note_ < queued_count_) {
+            if (queued_legato_ && !reached(now, queued_start_ +
+                (queued_deadline_ - queued_start_) * next_note_ / queued_count_)) return;
+            const uint8_t note = queued_notes_[next_note_];
+            if (!send_note(hardware, queued_output_, channel, note, settings_.velocity,
+                           !queued_legato_ || !next_note_)) return;
+            sound_notes_[sound_count_++] = note; ++next_note_;
+            sound_output_ = queued_output_; sound_channel_ = uint8_t(channel);
+            sound_legato_ = queued_legato_; sound_deadline_ = queued_deadline_;
         }
-        sound_output_ = queued_output_; sound_count_ = queued_count_; sound_deadline_ = queued_deadline_;
         queued_count_ = 0;
     }
 
@@ -198,7 +220,8 @@ private:
     void fail(Result reason, uint32_t now, Hardware &hardware) {
         phase_ = Phase::error; result_ = reason; deadline_ = now + settings_.error_ms;
         lit_ = 15; lit_deadline_ = deadline_;
-        sound(settings_.chord, settings_.chord_size, settings_.error_ms, now, hardware);
+        sound(settings_.chord, settings_.chord_size, settings_.error_ms, now, hardware,
+              !(settings_.flags & MemonSettings::polyphonic));
     }
 
 #ifdef CNTRL_FLASH_ROUTINE

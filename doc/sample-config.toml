@@ -128,6 +128,7 @@ show_remaining_time = true
 repeat_requests = false
 timed = true
 cooperative = false
+mono = true
 
 [page_settings.memon.style]
 

@@ -674,6 +674,9 @@ private:
 #endif
     BankedPage *expression_bank_ = nullptr;
     unsigned expression_revision_ = 0;
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_settings_hint)
+#endif
     void settings_hint(TextLine &line, uint16_t background) const {
         line.graphics.font = localized_face;
         line.graphics.size = line.graphics.line_height = 16;

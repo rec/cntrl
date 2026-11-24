@@ -157,6 +157,7 @@ show_remaining_time = true
 repeat_requests = false
 timed = true
 cooperative = false
+mono = true
 
 [page_settings.memon.style]
 font = 'AtkinsonNextSemiBold'
@@ -166,8 +167,12 @@ tile_colors = ['0x884DFF', '0xFF7A1A', '0x00B8A0', '0xFFF1D6']
 color_offset = 64
 ```
 
-By default, the error chord plays all four configured notes together. Set
-`error_chord` to a list of up to four intervals from `note_offset` to change it.
+Each Note On is followed by breath control (CC 2) at 100, and each Note Off
+by breath control at 0. With `mono = true`, the error notes play legato and
+divide `error_duration` evenly. Breath stays on from the first Note On until
+all notes are released together at the end. Set `mono = false` for a simultaneous
+error chord. Set `error_chord` to a list of up to four intervals from
+`note_offset` to override the default four game notes.
 The response timer restarts after each correct press. Set `timeout = 0` or
 `timed = false` for an untimed game. With `repeat_requests = true`, double-tap
 any tile switch during your turn to replay the sequence after a one-second

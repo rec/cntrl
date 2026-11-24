@@ -451,6 +451,9 @@ private:
         if (docs_.busy()) { mode_ = Mode::loading_draft; render(); return; }
         open_draft();
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_open_draft)
+#endif
     void open_draft() {
         Document draft;
         if (!docs_.edit_document(draft)) { docs_.edit_cancel(); mode_ = Mode::failed; render(); return; }

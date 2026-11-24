@@ -67,10 +67,6 @@ button-d = 'D Up / A Down'
 button-e = 'E Exit'
 button-f = 'F Up / C Down'
 
-[settings.en]
-display-1 = 'Settings'
-button-c = 'Open Settings'
-
 [memon.en]
 display-1 = 'Memon scores, round, position and elapsed time'
 display-2 = 'Memon tiles'

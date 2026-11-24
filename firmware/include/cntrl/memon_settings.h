@@ -4,7 +4,7 @@
 namespace cntrl {
 struct MemonSettings {
     static constexpr unsigned record_size = 47;
-    enum Flag : unsigned { countdown = 1, repeat = 2, timed = 4, cooperative = 8 };
+    enum Flag : unsigned { countdown = 1, repeat = 2, timed = 4, cooperative = 8, polyphonic = 32 };
 
     uint8_t route = 0, channel = 1, velocity = 100, flags = countdown | timed;
     uint8_t chord_size = 4, font = 16, color_offset = 64;
@@ -18,7 +18,7 @@ struct MemonSettings {
 #endif
     static bool valid(const uint8_t *p) {
         if (p[4] != 1 || p[5] >= 16 || !p[6] || p[6] > 16 || !p[7] || p[7] > 127
-            || p[8] > 31 || !p[9] || p[9] > 4 || p[10] > 127
+            || p[8] > 63 || !p[9] || p[9] > 4 || p[10] > 127
             || !binary::read16(p + 13) || !binary::read16(p + 17)) return false;
         for (unsigned i = 0; i < 4; ++i) {
             if (p[21 + i] > 127 || p[25 + i] > 127 || (i >= p[9] && p[25 + i])) return false;

@@ -156,6 +156,9 @@ public:
     const char *browse_result() const { return browse_.result; }
     bool rotate(bool backward) { return browse(selected_, backward, true); }
     void redraw() { if (document_.valid()) { if (!hardware_.refresh_pages()) controller_.refresh(); } else empty(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_begin)
+#endif
     bool edit_begin(const char *name = nullptr) {
         if (busy() || dirty_ || hardware_.configuration_locked()) return false;
         if (name && name_compare(name, selected_)) {
@@ -211,6 +214,9 @@ public:
         Document draft;
         return edit_document(draft) ? edit_value(draft, patch, field) : 0;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_value_for_document)
+#endif
     static int64_t edit_value(const Document &d, unsigned patch, unsigned field) {
         if (field <= 4 && patch >= d.patches()) return 0;
         const uint8_t *p = patch < d.patches() ? d.patch(patch) : nullptr;

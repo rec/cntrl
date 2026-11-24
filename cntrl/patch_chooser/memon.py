@@ -41,6 +41,7 @@ def pack(show: models.Setup, target: models.Target) -> bytes:
                 settings.timed,
                 settings.cooperative,
                 bool(settings.error_chord),
+                not settings.mono,
             )
         )
     )
@@ -102,7 +103,7 @@ def section_end(data: bytes, offset: int) -> int:
         or route >= 16
         or not 1 <= channel <= 16
         or not 1 <= velocity <= 127
-        or flags > 31
+        or flags > 63
         or not 1 <= count <= 4
         or base > 127
         or font not in UI_FONTS.values()
@@ -155,6 +156,7 @@ def unpack(data: bytes, offset: int, names: dict[int, str]) -> dict[str, object]
         repeat_requests=bool(flags & 2),
         timed=bool(flags & 4),
         cooperative=bool(flags & 8),
+        mono=not bool(flags & 32),
         style=dict(
             font=next(n for n, i in UI_FONTS.items() if i == font),
             color_offset=delta,
