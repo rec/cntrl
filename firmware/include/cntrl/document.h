@@ -783,9 +783,13 @@ public:
         p += 4 + slot * shifted_action_size;
         return u16(p) != 65535 ? p : nullptr;
     }
-    const uint8_t *arpeggiator_section() const {
+    const uint8_t *pickup_section() const {
         const uint8_t *end = counter_section() + (counters() ? 6 + counters() * 104 : 0);
         if (!std::memcmp(end, "CSTR", 4)) end += u32(end + 4);
+        return end;
+    }
+    const uint8_t *arpeggiator_section() const {
+        const uint8_t *end = pickup_section();
         if (!std::memcmp(end, "CPUP", 4)) end += 9 + u16(end + 4);
         if (!std::memcmp(end, "CLRS", 4)) end += 7 + u16(end + 5) * 7;
         if (!std::memcmp(end, "CLOP", 4)) end += 14;

@@ -82,13 +82,59 @@ def test_song_step_navigation_and_boundaries(
         [str(runner), str(fixture), str(setup), '--setup-preferences', str(edited)],
         check=True,
     )
-    saved_time = tomlkit.parse(resolved.export(edited.read_bytes()))['page_settings']
+    saved = tomlkit.parse(resolved.export(edited.read_bytes()))
+    assert saved['pickup'] is True
+    assert saved['pickup_pairing_ms'] == 3
+    assert saved['loop_stop_reset_controls'] is True
+    saved_time = saved['page_settings']
     assert saved_time['clock_outputs'] == ['din']
     assert saved_time['clock_timeout'] == 0.26
     assert saved_time['autoselect_clock'] is False
     assert saved_time['clock_bpms'] == [120, 20]
     assert saved_time['title_font'] == 'CourierPrime'
     assert saved_time['ring_color'] == '0x080400'
+    midi_setup = tmp_path / 'midi.bin'
+    midi_setup.write_bytes(
+        compiler.compile_show(
+            {
+                **pages,
+                'pickup': True,
+                'pickup_pairing_ms': 9,
+                'patches': {
+                    'held': {
+                        'output': 'din',
+                        'channel': 1,
+                        'controller': 7,
+                        'value': 12,
+                        'pickup': True,
+                    }
+                },
+                'loop_stop_reset_controls': True,
+                'loop_stop_neutral_values': [
+                    {
+                        'type': 'control-change',
+                        'output': 'din',
+                        'channel': 1,
+                        'controller': 7,
+                        'value': 12,
+                    }
+                ],
+            },
+            {},
+            [],
+            target,
+        )
+    )
+    subprocess.run(
+        [str(runner), str(fixture), str(midi_setup), '--midi-preferences', str(edited)],
+        check=True,
+    )
+    saved_midi = tomlkit.parse(resolved.export(edited.read_bytes()))
+    assert saved_midi['pickup'] is False
+    assert saved_midi['pickup_pairing_ms'] == 2
+    assert saved_midi['patches']['held']['pickup'] is True
+    assert saved_midi['loop_stop_reset_controls'] is False
+    assert saved_midi['loop_stop_neutral_values'][0]['value'] == 12
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--song-settings'], check=True
     )

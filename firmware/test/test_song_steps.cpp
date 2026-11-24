@@ -323,7 +323,7 @@ int main(int argc, char **argv) {
         const unsigned before_clock = documents.document().length();
         open_setup_preferences();
         tap(4); // MIDI.
-        for (unsigned i = 0; i < 4; ++i) tap(1);
+        for (unsigned i = 0; i < 6; ++i) tap(1);
         assert(!std::strcmp(board.panes[1].lines[1].text, "MIDI clock outputs"));
         tap(2);
         assert(!std::strcmp(board.panes[2].lines[1].text, "DIN  Off"));
@@ -350,13 +350,53 @@ int main(int argc, char **argv) {
         assert(board.panes[2].graphics.background == 0x820);
         tap(2);
         save("Save and reload setup");
+        assert(documents.document().length() == before_clock + cntrl::clock_section_size);
+        assert(documents.document().explicit_settings() & (1u << 28));
+
+        assert(documents.global_change(10, 0, false, false));
+        assert(!documents.document().pickup());
+        const unsigned before_pickup = documents.document().length();
+        open_setup_preferences();
+        tap(4); // MIDI.
+        for (unsigned i = 0; i < 4; ++i) tap(1);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Pickup"));
+        tap(2); tap(1); tap(2);
+        tap(1);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Pickup pairing (ms)"));
+        tap(2); tap(1); tap(2);
+        tap(1); tap(1);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Reset controls on loop stop"));
+        tap(2); tap(1); tap(2);
+        assert(!documents.document().pickup() && !documents.document().loop_stop_reset_controls());
+        save("Save and reload setup");
         const auto &document = documents.document();
-        assert(document.length() == before_clock + cntrl::clock_section_size);
-        assert(document.explicit_settings() & (1u << 28));
+        assert(document.length() == before_pickup + 9 + document.nodes() + 7);
+        assert(document.pickup() && document.pickup_pairing_ms() == 3 && document.loop_stop_reset_controls());
+        assert((document.explicit_settings() & (uint64_t(1) << 33)) && !preferences.values().values[10]);
         std::ofstream exported(argv[4], std::ios::binary);
         exported.write(reinterpret_cast<const char *>(document.data()), document.length());
         assert(exported);
         assert(board.sent.empty());
+        return 0;
+    }
+    if (argc == 5 && !std::strcmp(argv[3], "--midi-preferences")) {
+        assert(documents.document().pickup() && documents.document().pickup_pairing_ms() == 9);
+        assert(documents.document().loop_stop_reset_controls());
+        const unsigned length = documents.document().length();
+        assert(documents.edit_begin());
+        assert(documents.edit_setup_preference(10, 0, false));
+        assert(documents.edit_setup_preference(11, 2, false));
+        assert(documents.edit_setup_preference(33, 0, false));
+        assert(documents.edit_save(board.now));
+        while (documents.busy()) sample(0);
+        const auto &document = documents.document();
+        const int node = document.named_patch("held");
+        assert(document.length() == length && node >= 0);
+        assert(!document.pickup() && document.pickup(unsigned(node)) && document.pickup_pairing_ms() == 2);
+        assert(!document.loop_stop_reset_controls());
+        std::ofstream exported(argv[4], std::ios::binary);
+        exported.write(reinterpret_cast<const char *>(document.data()), document.length());
+        assert(exported);
         return 0;
     }
     if (argc == 4 && !std::strcmp(argv[3], "--named-patch-settings")) {

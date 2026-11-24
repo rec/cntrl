@@ -226,9 +226,8 @@ public:
         return false;
     }
     static bool setup_preference_editable(unsigned field) {
-        // These fields can affect memory estimates or optional wire records.
-        constexpr uint64_t unavailable = (uint64_t(1) << 7) | (uint64_t(1) << 8)
-            | (uint64_t(1) << 10) | (uint64_t(1) << 11) | (uint64_t(1) << 33);
+        // Frame and animation settings require recalculating the memory estimate.
+        constexpr uint64_t unavailable = (uint64_t(1) << 7) | (uint64_t(1) << 8);
         if (field >= GlobalSettings::count)
             return field < GlobalSettings::count + PageSettings::count && field != GlobalSettings::count + PageSettings::clock_outputs;
         return (GlobalSettings::fields & ~unavailable) & (uint64_t(1) << field);
@@ -478,17 +477,37 @@ private:
         const unsigned flags = draft.data()[draft.core_offset() + 19];
         const unsigned clock_at = unsigned(draft.bank(draft.patches()) - draft.data())
             + ((flags & 0x80) ? expression_section_size : 0);
-        const unsigned growth = clock_word && !inherit && !(flags & 0x20) ? clock_section_size : 0;
+        const bool pickup = field == 10 || field == 11;
+        const bool loop_reset = field == 33;
+        unsigned record_at = clock_at;
+        unsigned growth = 0;
+        if (!inherit) {
+            if (pickup || loop_reset) {
+                const auto *existing = pickup ? draft.pickup_record() : draft.loop_stop_settings();
+                const auto *position = existing ? existing : draft.pickup_section();
+                if (!existing && loop_reset && draft.pickup_record())
+                    position += 9 + draft.nodes();
+                record_at = unsigned(position - draft.data());
+                if (!existing) growth = pickup ? 9 + draft.nodes() : 7;
+            } else if (clock_word && !(flags & 0x20)) growth = clock_section_size;
+        }
         if ((growth && draft.has_opaque_metadata()) || !allocate(scratch_, draft.length() + growth)) return false;
         auto *bytes = scratch_.data;
         if (growth) {
-            std::memcpy(bytes, draft.data(), clock_at);
-            std::memcpy(bytes + clock_at + growth, draft.data() + clock_at, draft.length() - clock_at);
-            std::memset(bytes + clock_at, 0, growth);
-            binary::write16(bytes + clock_at + 2 * (PageSettings::slot1 - PageSettings::clock_outputs), 120);
+            std::memcpy(bytes, draft.data(), record_at);
+            std::memcpy(bytes + record_at + growth, draft.data() + record_at, draft.length() - record_at);
+            std::memset(bytes + record_at, 0, growth);
+            if (pickup) {
+                std::memcpy(bytes + record_at, "CPUP", 4);
+                binary::write16(bytes + record_at + 4, uint16_t(draft.nodes()));
+                binary::write16(bytes + record_at + 7, 2);
+            } else if (loop_reset) std::memcpy(bytes + record_at, "CLRS", 4);
+            else {
+                bytes[draft.core_offset() + 19] |= 0x20;
+                binary::write16(bytes + clock_at + 2 * (PageSettings::slot1 - PageSettings::clock_outputs), 120);
+            }
             auto *core = bytes + draft.core_offset();
             const unsigned length = draft.core_length() + growth;
-            core[19] |= 0x20;
             put32(core + 8, length);
             if (draft.core_offset()) {
                 put32(core - 4, length);
@@ -524,6 +543,8 @@ private:
             case 5: flag(scroll[5], 2, !value); break;
             case 6: flag(scroll[5], 1, value); break;
             case 9: flag(core[19], 4, value); break;
+            case 10: bytes[record_at + 6] = value ? 2 : 1; break;
+            case 11: word(bytes + record_at + 7); break;
             case 12: word(metadata + 6); break;
             case 13: word(scroll); break;
             case 14: case 15: case 16: scroll[2 + field - 14] = uint8_t(value); break;
@@ -534,6 +555,7 @@ private:
             case 29: word(metadata + 8); break;
             case 30: case 31: metadata[10 + field - 30] = uint8_t(value); break;
             case 32: word(metadata + 14); break;
+            case 33: bytes[record_at + 4] = uint8_t(value); break;
             default: return false;
             }
         }

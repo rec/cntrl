@@ -715,10 +715,16 @@ def _decode(data: bytes) -> dict[str, object]:
     if relays := relay_outputs.unpack(data, relay_offset):
         result['relays'] = relays
     counter_offset = relay_outputs.section_end(data, relay_offset)
-    looper_offset = pickup.section_end(
-        data,
-        midi_processing.section_end(data, counters.section_end(data, counter_offset)),
+    pickup_offset = midi_processing.section_end(
+        data, counters.section_end(data, counter_offset)
     )
+    looper_offset = pickup.section_end(data, pickup_offset)
+    if pickup_offset != looper_offset:
+        _, _, policy, pairing = pickup.HEADER.unpack_from(data, pickup_offset)
+        if policy:
+            result['pickup'] = policy == 2
+        if pairing != 2 or 'pickup_pairing_ms' in result:
+            result['pickup_pairing_ms'] = pairing
     result.update(loop_reset.unpack(data, looper_offset, names))
     looper_offset = loop_reset.section_end(data, looper_offset)
     if settings := looper.unpack(data, looper_offset, names):

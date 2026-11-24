@@ -167,6 +167,11 @@ display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time
 page.
 
+In the setup's **MIDI** group, **Pickup** sets the default for controls that
+inherit the setup policy. **Pickup pairing (ms)** changes the pairing window.
+**Reset controls on loop stop** enables the setup's reset policy and preserves
+any authored neutral values.
+
 Select **Instruments** from the current setup, from the current patch's MIDI
 channel field, or from a saved setup's field list. The instrument editor shows
 the current channel and output. Saving applies the new route to instrument
