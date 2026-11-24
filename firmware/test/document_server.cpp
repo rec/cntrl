@@ -13,7 +13,7 @@ struct Peer : TestPatchHardware, cntrl::Replies, TestStorage {
         return !std::strcmp(name, "din") || !std::strcmp(name, "trs");
     }
     void show(unsigned, const cntrl::Pane &) override {}
-    bool supports_font(unsigned font, unsigned size) const override { return font == 17 && size >= 8 && size <= 96 && size % 8 == 0; }
+    bool supports_font(unsigned font, unsigned size) const override { return (font == 16 || font == 17) && size >= 8 && size <= 96 && size % 8 == 0; }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     unsigned display_count() const override { return 3; }

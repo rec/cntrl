@@ -41,7 +41,7 @@ pages = ["patch-chooser"]
 
 [regions.tools]
 
-pages = ["status", "cable-test", "panic", "midi-monitor", "midi-looper", "arpeggiator", "time", "pong", "language", "setups", "songs-and-setlists", "switches", "settings", "calibration", "memon"]
+pages = ["status", "cable-test", "panic", "midi-monitor", "midi-looper", "arpeggiator", "time", "language", "setups", "songs-and-setlists", "switches", "settings", "calibration", "pong", "memon"]
 
 [layout]
 
@@ -229,14 +229,6 @@ min_displays = 2
 give_up_displays = []
 patch = "sample"
 
-[pages.pong]
-
-type = "pong"
-ram2_bytes = 0
-min_displays = 3
-give_up_displays = []
-patch = "sample"
-
 [pages.language]
 
 type = "language"
@@ -285,11 +277,11 @@ min_displays = 1
 give_up_displays = []
 patch = "sample"
 
-[pages.patch-chooser]
+[pages.pong]
 
-type = "patch-chooser"
+type = "pong"
 ram2_bytes = 0
-min_displays = 0
+min_displays = 3
 give_up_displays = []
 patch = "sample"
 
@@ -298,6 +290,14 @@ patch = "sample"
 type = "memon"
 ram2_bytes = 0
 min_displays = 3
+give_up_displays = []
+patch = "sample"
+
+[pages.patch-chooser]
+
+type = "patch-chooser"
+ram2_bytes = 0
+min_displays = 0
 give_up_displays = []
 patch = "sample"
 

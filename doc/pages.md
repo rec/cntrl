@@ -3,8 +3,9 @@
 A setup has a catalogue of named pages, arranged in independently cycling
 regions. Page types include
 `patch-chooser`, `status`, `time`, `cable-test`, `panic`,
-`midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `pong`, `language`,
-`setups`, `songs-and-setlists`, `switches`, `settings`, and `None`.
+`midi-monitor`, `midi-looper`, `arpeggiator`, `banked`, `language`,
+`setups`, `songs-and-setlists`, `switches`, `settings`, `pong`, `doom`,
+`memon`, and `None`.
 In Patch mode, press F
 to cycle pages in the focused region. In Song and Setlist modes, the default
 controls are hold F to browse utility pages forward, or click F and hold the
@@ -138,9 +139,10 @@ displays while Pong is selected, preserving its state and background execution.
 Controllers with fewer than three displays omit Pong from the implicit
 catalogue. Selecting None returns all displays to the Patch Chooser.
 
-On a Doom-enabled MC6 Pro, the default tools rotation ends with Calibration,
-Doom, then None. Doom uses one display. Press C on that page to start the
-standalone game. An explicit page catalogue can include `type = 'doom'`
+The default tools rotation ends with Pong, Doom, and Memon, followed by the
+None stop. It includes each game when the target supports it. Doom uses one
+display. Press C on that page to start the standalone game. An explicit page
+catalogue can include `type = 'doom'`
 in its chosen rotation. [Doom build and launch](../cntrl/maker/morningstar/mc/doom/README.md)
 
 Setups, Songs and setlists, and Switches each use one utility display. Back from
@@ -151,10 +153,9 @@ TRS roles and expression assignments remain setup configuration.
 
 ## Memon
 
-Add a page with `type = 'memon'` to a three-display setup. On layouts that
-use the default page catalogue and regions, adding `[page_settings.memon]`
-also adds Memon to the tools rotation. The
-[MC6 Pro example](../cntrl/maker/morningstar/mc/emulator/memon.toml)
+Memon appears in the default tools rotation on compatible three-display
+targets. To include it in a custom page catalogue, add a page with
+`type = 'memon'`. The [MC6 Pro example](../cntrl/maker/morningstar/mc/emulator/memon.toml)
 opens directly to the game.
 
 Press C to start and F to leave. D, E, A and B play tiles 1, 2, 3 and 4.

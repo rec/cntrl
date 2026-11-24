@@ -3,13 +3,14 @@
 from pathlib import Path
 
 import pytest
+import tomlkit
 from PIL import Image
 from pytest_regressions.file_regression import FileRegressionFixture
 
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_chooser import compiler, compiler_inputs, models, setup_bundle
+from cntrl.patch_chooser import compiler, compiler_inputs, resolved, setup_bundle
 
 
 @pytest.mark.parametrize('default_catalogue', [False, True])
@@ -23,15 +24,14 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         else compiler_inputs.read_document(BASE / 'emulator/pong.toml')
     )
     assert isinstance(source, dict)
-    utility_pages = [
-        p.type
-        for p in models.Setup.model_validate(source).pages.values()
-        if p.type != 'patch-chooser'
-    ]
-    # Inherited defaults also have one Empty stop in the compiled cycle.
-    steps_back_to_pong = len(utility_pages) if default_catalogue else 1
     source['page_settings'] = {'status_font': 'TamzenBold7x13'}
     raw = compiler.compile_show(source, {}, [], target)
+    if default_catalogue:
+        exported = tomlkit.parse(resolved.export(raw)).unwrap()
+        rotation = exported['regions']['tools']['pages']
+        steps_back_to_pong = len(rotation) - 1
+    else:
+        steps_back_to_pong = 1
     bundle = tmp_path / 'setup.bin'
     bundle.write_bytes(
         setup_bundle.build({'pong': raw}, {'pong': source}, target.memory).pack()
@@ -61,7 +61,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         advance(1000000)
         if default_catalogue:
             # Every compiled utility page, including Panic, stays available.
-            for _ in range(utility_pages.index('pong')):
+            for _ in range(rotation.index('pong')):
                 press('f')
             advance(500000)
         assert ball_on('lcd-2')
@@ -76,10 +76,14 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         press('f')  # Before serving, F browses past Pong.
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
-        session.button('d', True)
-        advance(60000)
-        press('f')  # D+F browses backward to the unstarted game.
-        session.button('d', False)
+        if default_catalogue:
+            for _ in range(steps_back_to_pong):
+                press('f')
+        else:
+            session.button('d', True)
+            advance(60000)
+            press('f')  # D+F browses backward to the unstarted game.
+            session.button('d', False)
         advance(500000)
         assert ball_on('lcd-2')
         middle = session.frames['lcd-2']
@@ -134,7 +138,7 @@ def test_pong_spans_screens_and_releases_navigation_controls(
         assert session.frames['lcd-1'] != paused['lcd-1']
         assert session.frames['lcd-3'] != paused['lcd-3']
         assert session.frames['lcd-2'] == paused['lcd-2']
-        press('e')  # The default cycle advances to the Language page.
+        press('e')  # Leave the paused game for the next page.
         advance(500000)
         assert not any(ball_on(s) for s in session.frames)
         for _ in range(steps_back_to_pong):

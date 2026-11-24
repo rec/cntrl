@@ -141,9 +141,9 @@ def test_short_command_compiles_a_setup_and_preserves_session_data(
     rotation = exported['regions']['tools']['pages']
     if controller is None:
         assert command.playable_doom_host == host
-        assert rotation[-2:] == ['doom', 'None']
+        assert rotation[-4:] == ['pong', 'doom', 'memon', 'None']
     else:
-        assert 'doom' not in rotation
+        assert not {'doom', 'memon'} & set(rotation)
     assert all(Path(p).is_file() for p in target.font_sources.values())
     saved = storage / 'saved-pedal-state'
     saved.write_bytes(b'keep me')

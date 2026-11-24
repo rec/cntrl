@@ -1394,7 +1394,6 @@ class Setup(BindingScope, frozen=True):
                     'midi-looper',
                     'arpeggiator',
                     'time',
-                    'pong',
                     'language',
                     'setups',
                     'songs-and-setlists',
@@ -1403,6 +1402,8 @@ class Setup(BindingScope, frozen=True):
                 )
             },
             'calibration': Page(type='calibrate'),
+            'pong': Page(type='pong'),
+            'memon': Page(type='memon'),
             'patch-chooser': Page(min_displays=0),
         },
         max_length=255,

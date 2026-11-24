@@ -122,7 +122,7 @@ def compile_show(
             pages = {
                 n: p
                 for n, p in show.pages.items()
-                if p.min_displays <= len(target.displays)
+                if p.min_displays <= len(target.displays) and p.type != 'memon'
             }
             if not looper.available_inputs(show, target) or not any(
                 e.name == target.default_midi_output and midi_endpoints.enabled(e, show)
@@ -134,8 +134,13 @@ def compile_show(
                     pages.pop('arpeggiator')
             if 'doom' in target.functions:
                 pages['doom'] = models.Page(type='doom')
-            if show.page_settings.memon is not None:
-                pages['memon'] = models.Page(type='memon')
+            defaults = models.Memon()
+            if show.page_settings.memon is not None or (
+                memon.supports_layout(target)
+                and defaults.style.font in target.ui_fonts
+                and memon.output(show, target, defaults.device) is not None
+            ):
+                pages['memon'] = show.pages['memon']
             pages['None'] = models.Page(type='None')
         show = show.model_copy(
             update={

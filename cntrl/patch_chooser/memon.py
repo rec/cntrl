@@ -7,24 +7,34 @@ from . import graphics, midi_endpoints, models
 from .binary_format import DocumentFormatError
 
 
+def supports_layout(target: models.Target) -> bool:
+    labels = {target.button_labels.get(b, b).upper() for b in target.buttons}
+    return len(target.displays) == 3 and set('ABCDEF') <= labels
+
+
+def output(
+    show: models.Setup, target: models.Target, device: str
+) -> models.MidiEndpoint | None:
+    return next(
+        (
+            e
+            for e in target.midi_endpoints
+            if e.name == device
+            and midi_endpoints.enabled(e, show)
+            and (e.port is None or show.trs_ports.get(e.name) in ('midi-a', 'midi-b'))
+        ),
+        None,
+    )
+
+
 def pack(show: models.Setup, target: models.Target) -> bytes:
     if not any(p.type == 'memon' for p in show.pages.values()):
         return b''
-    labels = {target.button_labels.get(b, b).upper() for b in target.buttons}
-    if len(target.displays) != 3 or not set('ABCDEF') <= labels:
+    if not supports_layout(target):
         raise ValueError('Memon requires three displays and switches A through F')
     settings = show.page_settings.memon or models.Memon()
-    endpoint = next(
-        (e for e in target.midi_endpoints if e.name == settings.device), None
-    )
-    if (
-        endpoint is None
-        or not midi_endpoints.enabled(endpoint, show)
-        or (
-            endpoint.port is not None
-            and show.trs_ports.get(endpoint.name) not in ('midi-a', 'midi-b')
-        )
-    ):
+    endpoint = output(show, target, settings.device)
+    if endpoint is None:
         raise ValueError(
             f'page_settings.memon.device: unavailable output {settings.device!r}'
         )

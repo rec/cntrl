@@ -123,17 +123,21 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     ]
     assert {'looper', 'arpeggiator'} <= exported['page_settings'].keys()
     if count == 3:
-        assert exported['regions']['tools']['pages'][-6:] == [
+        assert rotation[-8:] == [
             'setups',
             'songs-and-setlists',
             'switches',
             'settings',
             'calibration',
+            'pong',
+            'memon',
             'None',
         ]
         assert pages['pong']['min_displays'] == 3
+        assert pages['memon']['min_displays'] == 3
+        assert exported['page_settings']['memon']['mono'] is True
     else:
-        assert 'pong' not in pages
+        assert not {'pong', 'memon'} & pages.keys()
         assert 'None' in pages
     assert ('language' in pages) == (count >= 2)
     assert pages['settings']['type'] == 'settings'
@@ -145,12 +149,18 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     assert compiler.compile_show(exported, {}, [], device) == data
 
 
-def test_doom_is_before_the_empty_page_in_the_default_tools_rotation() -> None:
+def test_default_tools_rotation_ends_with_the_three_games_before_none() -> None:
     standard = target()
     device = standard.model_copy(update={'functions': [*standard.functions, 'doom']})
     data = compiler.compile_show({'fill_in_styles': False}, {}, [], device)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['regions']['tools']['pages'][-3:] == ['calibration', 'doom', 'None']
+    assert exported['regions']['tools']['pages'][-5:] == [
+        'calibration',
+        'pong',
+        'doom',
+        'memon',
+        'None',
+    ]
     assert exported['pages']['doom']['type'] == 'doom'
     assert exported['pages']['doom']['min_displays'] == 1
     assert compiler.compile_show(exported, {}, [], device) == data
