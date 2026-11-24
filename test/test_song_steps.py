@@ -87,10 +87,12 @@ def test_song_step_navigation_and_boundaries(
                     'Language': {'type': 'language'},
                     'Empty': {'type': 'None'},
                     'Status': {'type': 'status'},
+                    'Gap': {'type': 'None'},
                 },
                 'regions': {
                     'tools': {'pages': ['Time', 'Language', 'Empty']},
                     'performance': {'pages': ['Status']},
+                    'extra': {'pages': ['Gap']},
                 },
                 'layout': {'focus': 'performance'},
             },
@@ -107,7 +109,12 @@ def test_song_step_navigation_and_boundaries(
     assert saved_layout['regions']['tools']['pages'] == ['Language', 'Time']
     assert saved_layout['regions']['performance']['pages'] == ['Status', 'Empty']
     assert saved_layout['pages']['Time']['ram2_bytes'] == 16
-    assert saved_layout['layout']['focus'] == 'performance'
+    assert saved_layout['regions']['extra']['pages'] == ['Gap']
+    assert saved_layout['layout'] == {
+        'order': ['performance', 'extra', 'tools'],
+        'focus': 'extra',
+        'left_wins': True,
+    }
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--setup-preferences', str(edited)],
         check=True,

@@ -264,6 +264,48 @@ public:
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_region_position)
+#endif
+    bool edit_region_position(unsigned from, unsigned to) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        if (from >= layout.regions() || to >= layout.regions()
+            || !splice_setup(draft, unsigned(layout.records - draft.data()), 0, 0)) return false;
+        auto *bytes = scratch_.data;
+        auto *header = bytes + (layout.records - draft.data());
+        const auto *old_assignments = layout.region(layout.regions());
+        auto *assignments = bytes + (old_assignments - draft.data());
+        unsigned start = 0;
+        for (unsigned r = 0; r < layout.regions(); ++r) {
+            unsigned origin = r;
+            if (r == to) origin = from;
+            else if (from < to && r >= from && r < to) ++origin;
+            else if (to < from && r > to && r <= from) --origin;
+            const auto *original = layout.region(origin);
+            auto *region = bytes + (layout.region(r) - draft.data());
+            std::memcpy(region, original, 34);
+            region[32] = uint8_t(start);
+            std::memcpy(assignments + start, old_assignments + original[32], original[33]);
+            start += original[33];
+            if (origin == layout.initial_focus()) header[9] = uint8_t(r);
+        }
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_region_policy)
+#endif
+    bool edit_region_policy(unsigned focus, bool left_wins) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        const unsigned offset = unsigned(layout.records - draft.data());
+        if (focus >= layout.regions() || !splice_setup(draft, offset, 0, 0)) return false;
+        scratch_.data[offset + 8] = left_wins;
+        scratch_.data[offset + 9] = uint8_t(focus);
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_movie)
 #endif
     bool edit_movie(bool idle, unsigned index, std::optional<uint32_t> key) {

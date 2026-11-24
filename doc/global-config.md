@@ -162,9 +162,12 @@ override when a pedal value is
 available. Save commits the draft as a setup revision. Saving the loaded setup
 reloads it.
 
-Choose **Page layout** in Setup fields to move existing pages. A/B browse
-within a region, D/E select a region, and C picks a page to move. Choose its
-destination region and position, then accept the move into the draft.
+Choose **Page layout** in Setup fields. **Move pages** uses A/B to browse
+within a region, D/E to select a region, and C to pick a page to move.
+**Move regions** changes their left-to-right order. **Startup focus** chooses
+the region that gets focus when the setup loads. **Spare displays** chooses
+which side gets first claim on any displays left after each region gets its
+required minimum. Accept each change into the draft and save the setup to apply it.
 
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in

@@ -285,7 +285,7 @@ public:
             }
         } else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
             preference_button(button);
-        } else if (mode_ == Mode::layout_pages || mode_ == Mode::layout_move) {
+        } else if (is_layout_view()) {
             layout_button(button);
         } else if (mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value) {
             neutral_button(button);
@@ -432,7 +432,9 @@ private:
     enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, calibration, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value,
                       calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value,
-                      movie_lists, movie_entries, movie_picker, movie_scan, layout_pages, layout_move };
+                      movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
+                      layout_move, layout_region, layout_region_move };
+    enum class LayoutOption { pages, regions, focus, priority, count };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -457,7 +459,9 @@ private:
     unsigned movie_index_ = 0;
     bool movie_idle_ = false, movie_reverse_ = false, movie_advance_ = false, movie_rejected_ = false;
     unsigned page_region_ = 0, page_position_ = 0, destination_region_ = 0, destination_position_ = 0;
-    bool layout_rejected_ = false;
+    LayoutOption layout_option_ = LayoutOption::pages;
+    bool layout_rejected_ = false, layout_left_ = false;
+    static constexpr const char *layout_options[] = {"Move pages", "Move regions", "Startup focus", "Spare displays"};
     midi::Parameter neutral_{};
     unsigned neutral_index_ = 0, neutral_output_ = 0, neutral_field_ = 0;
     bool neutral_changed_ = false, neutral_rejected_ = false;
@@ -663,6 +667,39 @@ private:
         preference_index_ = 0;
         mode_ = Mode::preferences;
     }
+    bool is_layout_view() const {
+        return mode_ >= Mode::layout_menu && mode_ <= Mode::layout_region_move;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_region_button)
+#endif
+    void region_button(unsigned button, PageLayout layout) {
+        const unsigned regions = layout.regions();
+        const bool moving = mode_ == Mode::layout_region_move;
+        auto &region = moving ? destination_region_ : page_region_;
+        if (button == 5) { mode_ = moving ? Mode::layout_region : Mode::layout_menu; return; }
+        if (button < 2) {
+            if (layout_option_ == LayoutOption::priority) layout_left_ = !layout_left_;
+            else region = (region + (button ? 1 : regions - 1)) % regions;
+            return;
+        }
+        if (button != 2) return;
+        if (layout_option_ == LayoutOption::regions && !moving) {
+            destination_region_ = page_region_;
+            mode_ = Mode::layout_region_move;
+            return;
+        }
+        const unsigned focus = layout_option_ == LayoutOption::focus ? region : layout.initial_focus();
+        const bool changed = moving ? region != page_region_ : focus != layout.initial_focus() || layout_left_ != layout.left_wins();
+        if (changed) {
+            const bool saved = moving ? docs_.edit_region_position(page_region_, region)
+                : docs_.edit_region_policy(focus, layout_left_);
+            if (!saved) { layout_rejected_ = true; return; }
+            changed_fields_ |= 1u << 12;
+        }
+        page_region_ = region;
+        mode_ = moving ? Mode::layout_region : Mode::layout_menu;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_layout_button)
 #endif
@@ -670,17 +707,34 @@ private:
         Document draft;
         if (!docs_.edit_document(draft)) return;
         const auto layout = draft.page_layout();
+        layout_rejected_ = false;
+        if (mode_ == Mode::layout_menu) {
+            if (button < 2) {
+                constexpr unsigned count = unsigned(LayoutOption::count);
+                layout_option_ = LayoutOption((unsigned(layout_option_) + (button ? 1 : count - 1)) % count);
+            } else if (button == 5) mode_ = Mode::preferences;
+            else if (button == 2) {
+                page_region_ = layout_option_ == LayoutOption::focus ? layout.initial_focus() : 0;
+                page_position_ = 0;
+                layout_left_ = layout.left_wins();
+                mode_ = layout_option_ == LayoutOption::pages ? Mode::layout_pages : Mode::layout_region;
+            }
+            return;
+        }
+        if (mode_ == Mode::layout_region || mode_ == Mode::layout_region_move) {
+            region_button(button, layout);
+            return;
+        }
         const bool moving = mode_ == Mode::layout_move;
         auto &region = moving ? destination_region_ : page_region_;
         auto &position = moving ? destination_position_ : page_position_;
         const unsigned count = layout.region_size(region) + unsigned(moving && region != page_region_);
-        layout_rejected_ = false;
         if (button < 2) position = (position + (button ? 1 : count - 1)) % count;
         else if (button == 3 || button == 4) {
             region = (region + (button == 4 ? 1 : layout.regions() - 1)) % layout.regions();
             if (moving && region == page_region_) position = page_position_;
             else position = 0;
-        } else if (button == 5) mode_ = moving ? Mode::layout_pages : Mode::preferences;
+        } else if (button == 5) mode_ = moving ? Mode::layout_pages : Mode::layout_menu;
         else if (button == 2 && !moving) {
             destination_region_ = region;
             destination_position_ = position;
@@ -926,9 +980,9 @@ private:
             }
             else if (button == 2) {
                 if (preference_index_ == ui::layout_preference_index) {
-                    page_region_ = page_position_ = 0;
+                    layout_option_ = LayoutOption::pages;
                     layout_rejected_ = false;
-                    mode_ = Mode::layout_pages;
+                    mode_ = Mode::layout_menu;
                     return;
                 }
                 const uint64_t bit = uint64_t(1) << field.field;
@@ -1216,6 +1270,28 @@ private:
 #endif
     void render_layout(Pane (&views)[3], PageLayout layout, ui::Prompt &prompt) const {
         using Role = ControlRole;
+        if (mode_ == Mode::layout_menu) {
+            ui::copy_caption(views[1].lines[1], "Page layout");
+            ui::copy_caption(views[2].lines[1], layout_options[unsigned(layout_option_)]);
+            return;
+        }
+        if (mode_ == Mode::layout_region || mode_ == Mode::layout_region_move) {
+            const bool moving_region = mode_ == Mode::layout_region_move;
+            const bool priority = layout_option_ == LayoutOption::priority;
+            const bool focus = layout_option_ == LayoutOption::focus;
+            const bool choosing = priority || focus;
+            ui::copy_caption(views[1].lines[1], choosing ? layout_options[unsigned(layout_option_)] : layout.region_name(page_region_));
+            ui::copy_caption(views[2].lines[0], moving_region ? "Move to" : "Selection");
+            if (priority) ui::copy_caption(views[2].lines[1], layout_left_ ? "Left first" : "Right first");
+            else if (focus) ui::copy_caption(views[2].lines[1], layout.region_name(page_region_));
+            else std::snprintf(views[2].lines[1].text, 64, "Position %u/%u",
+                (moving_region ? destination_region_ : page_region_) + 1, layout.regions());
+            if (layout_rejected_) ui::copy_caption(views[1].lines[2], "Could not change layout");
+            ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, moving_region ? "Position" : "Browse").text());
+            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, moving_region ? "Accept move" : choosing ? "Accept" : "Move")
+                .add(Role::back, moving_region ? "Cancel" : "Back", ", ").text());
+            return;
+        }
         const bool moving = mode_ == Mode::layout_move;
         const unsigned region = moving ? destination_region_ : page_region_;
         const unsigned position = moving ? destination_position_ : page_position_;
@@ -1346,7 +1422,7 @@ private:
             || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
         const bool layout_entry = mode_ == Mode::preferences && preference_index_ == ui::layout_preference_index;
         const bool preference_view = !layout_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
-        const bool layout_view = mode_ == Mode::layout_pages || mode_ == Mode::layout_move;
+        const bool layout_view = is_layout_view();
         const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
         const bool movie_view = is_movie_view();
         const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
@@ -1409,7 +1485,7 @@ private:
         }
         else if (layout_entry) {
             title = "Page layout";
-            value = "Move pages";
+            value = "Pages and regions";
         }
         else if (preference_view) {
             const auto &field = preference();
