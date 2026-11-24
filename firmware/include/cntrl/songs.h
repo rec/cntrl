@@ -185,6 +185,56 @@ public:
         if (!prepare(Edit::replace_patch, name)) return false;
         job_.at = at; job_.selection = selection; return prepare_source(job_.selection);
     }
+    struct PatchValue { unsigned value = 0; bool program = false; };
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_patch_value)
+#endif
+    bool patch_value(const char *name, unsigned at, Hardware &hardware, PatchValue &value) const {
+        SongSelection selection;
+        MemoryBuffer bytes;
+        Document document;
+        const auto *parameter = load_patch_value(name, at, hardware, selection, bytes, document, value);
+        return parameter != nullptr;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_save_patch_value)
+#endif
+    bool save_patch_value(const char *name, unsigned at, Hardware &hardware, unsigned value, bool shared) {
+        if (busy() || executing()) return false;
+        SongSelection selection;
+        MemoryBuffer bytes;
+        Document document;
+        PatchValue previous;
+        const auto *parameter = load_patch_value(name, at, hardware, selection, bytes, document, previous);
+        const unsigned minimum = previous.program ? 1 : 0;
+        if (!parameter || value < minimum || value > minimum + 127 || value == previous.value) return false;
+        bytes.data[parameter - document.data()] = uint8_t(value - minimum);
+        if (previous.program) {
+            for (unsigned i = 0; i < document.patches(); ++i) {
+                const int program = patch_edit_node(document, document.browser_root(i));
+                if (program >= 0 && document.node(unsigned(program)) + 6 == parameter)
+                    bytes.data[document.patch(i) - document.data() + 4] = uint8_t(value - 1);
+            }
+        }
+        if (!binary::seal_setup(bytes.data, bytes.size) || !document.load(bytes.data, bytes.size, hardware)) return false;
+        unsigned offset = 0, length = 0;
+        if (shared && (!source_offset(selection.source, offset, length) || length != document.length())) return false;
+        if (!shared && document.length() > 0xffffffffu - 24 - length_) return false;
+        if (!prepare(shared ? Edit::none : Edit::replace_patch, name)) return false;
+        patch_value_bytes_.swap(bytes);
+        job_.source_data = patch_value_bytes_.data;
+        job_.source_data_size = document.length();
+        if (shared) {
+            job_.replacement_source = offset;
+            start_hash();
+        } else {
+            job_.appended_length = document.length() + 4;
+            job_.selection = selection;
+            job_.selection.source = source_count_;
+            job_.at = at;
+        }
+        return true;
+    }
     bool remove_patch(const char *name, unsigned at) {
         if (!prepare(Edit::remove_patch, name)) return false;
         job_.at = at; return true;
@@ -749,8 +799,10 @@ private:
     struct Job {
         unsigned source = 0, destination = 0, length = 0, offset = 0, erased = 0, inserted_size = 0, position = 0;
         SongCounts counts;
-        const Document *appended = nullptr;
+        const uint8_t *source_data = nullptr;
+        unsigned source_data_size = 0;
         unsigned appended_length = 0;
+        unsigned replacement_source = 0;
         uint8_t inserted[2 * sizeof(SongSelection)] = {};
         HeaderChange change = {}; Move move = {};
         bool has_change = false, has_move = false, undo = false, opened = false;
@@ -769,6 +821,7 @@ private:
         SongSelection selection, previous;
         Cursor cursor;
     } job_;
+    MemoryBuffer patch_value_bytes_;
     Phase phase_ = Phase::idle;
     bool good_ = true;
     Storage &storage_; SongResolver &resolver_;
@@ -924,8 +977,33 @@ private:
         if (!resolver_.capture_source(source) || !source || !source->valid()
             || source->length() > 0xffffffffu - 24 - length_) { finish_job(false); return false; }
         selection.source = source_count_;
-        job_.appended = source; job_.appended_length = source->length() + 4;
+        job_.source_data = source->data(); job_.source_data_size = source->length();
+        job_.appended_length = source->length() + 4;
         return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_load_patch_value)
+#endif
+    const uint8_t *load_patch_value(const char *name, unsigned at, Hardware &hardware, SongSelection &selection,
+                                    MemoryBuffer &bytes, Document &document, PatchValue &value) const {
+        if (!patch_at(name, at, selection) || selection.document[0]) return nullptr;
+        const unsigned size = source_size(selection.source);
+        if (!size || !bytes.resize(size) || !read_source(selection.source, 0, bytes.data, size)
+            || !document.load(bytes.data, size, hardware)) return nullptr;
+        unsigned root = selection.node;
+        for (unsigned i = 0; i < document.nodes() && root < document.nodes(); ++i) {
+            const auto *node = document.node(root);
+            if (node[0] == 10) root = u16(node + 4);
+            else if (node[0] == 6 && u16(node + 4) == 65535)
+                root = unsigned(document.named_patch(reinterpret_cast<const char *>(node + 6)));
+            else if (node[0] == 1) { value = {unsigned(node[6]) + 1, true}; return node + 6; }
+            else if (node[0] == 2 && u16(node + 2) == 34 && (node[36] & 0xf0) == 0xc0) {
+                value = {unsigned(node[37]) + 1, true}; return node + 37;
+            } else if (node[0] == 2 && node[1] == 0 && u16(node + 2) == 35 && (node[36] & 0xf0) == 0xb0) {
+                value = {node[38], false}; return node + 38;
+            } else break;
+        }
+        return nullptr;
     }
     bool find_song(const char *name, Song &s, unsigned &index) const {
         for (index = 0; index < counts_.songs; ++index)
@@ -1161,6 +1239,7 @@ private:
     void finish_job(bool good) {
         if (job_.opened) { storage_.finish(); job_.opened = false; }
         good_ = good; if (!good) error_ = ui::i18n::text(ui::i18n::Message::not_saved);
+        patch_value_bytes_.clear();
         phase_ = Phase::idle;
     }
     void header(uint8_t *bytes) const {
@@ -1180,10 +1259,13 @@ private:
             const auto &change = job_.change; const auto &move = job_.move;
             uint8_t appended_size[4];
             unsigned append_at = job_.length - job_.appended_length;
-            if (job_.appended && at >= append_at) {
+            if (job_.replacement_source && at >= job_.replacement_source && at < job_.replacement_source + job_.source_data_size) {
+                const unsigned relative = at - job_.replacement_source;
+                memory = job_.source_data + relative; take = job_.source_data_size - relative;
+            } else if (job_.appended_length && at >= append_at) {
                 unsigned relative = at - append_at;
-                if (relative < 4) { put32(appended_size, job_.appended->length()); memory = appended_size + relative; take = 4 - relative; }
-                else { memory = job_.appended->data() + relative - 4; take = job_.appended_length - relative; }
+                if (relative < 4) { put32(appended_size, job_.source_data_size); memory = appended_size + relative; take = 4 - relative; }
+                else { memory = job_.source_data + relative - 4; take = job_.appended_length - relative; }
             }
             else if (at < 8) { encode_song_record(job_.counts, encoded); memory = encoded + at; take = 8 - at; }
             else if (job_.has_change && at >= change.offset && at < change.offset + (change.song ? sizeof(Song) : sizeof(Setlist))) {
@@ -1219,7 +1301,8 @@ private:
                     else { memory = reinterpret_cast<const uint8_t *>(job_.name) + original - start; take = std::min(take, c.position - original); }
                 } else if (c.item && original < c.position) take = std::min(take, c.position - original);
             }
-            if (job_.appended && at < append_at) take = std::min(take, append_at - at);
+            if (job_.replacement_source && at < job_.replacement_source) take = std::min(take, job_.replacement_source - at);
+            if (job_.appended_length && at < append_at) take = std::min(take, append_at - at);
             if (memory) std::memcpy(buffer + j, memory, take);
             else if (!payload(job_.source, original, buffer + j, take)) return false;
             j += take;

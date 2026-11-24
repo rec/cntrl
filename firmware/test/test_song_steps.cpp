@@ -211,6 +211,56 @@ int main(int argc, char **argv) {
         assert(songs.continuation().patch == 0 && board.sent.size() == sent);
         settings();
         assert(!app.settings_frontmost());
+        assert(songs.insert_patch("Pne", 0, first)); // A second use of the same source node.
+        while (songs.busy()) sample(0);
+        assert(songs.success());
+        const auto open_patch_value = [&] {
+            open_songs();
+            tap(1); tap(2); // Edit patches.
+            tap(2); tap(1); tap(1); tap(2); // Edit the first patch value.
+        };
+        const auto expect_values = [&](unsigned first_value, unsigned second_value) {
+            cntrl::Songs::PatchValue value;
+            assert(songs.patch_value("Pne", 0, board, value) && !value.program && value.value == first_value);
+            assert(songs.patch_value("Pne", 1, board, value) && value.value == second_value);
+        };
+        open_patch_value();
+        tap(2); tap(1); // Only this song step. Draft +1.
+        settings();
+        expect_values(1, 1);
+        tap(0); tap(2); // Discard and return.
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        expect_values(1, 1);
+        open_patch_value();
+        tap(1); tap(2); // Every use of this patch.
+        tap(1); settings();
+        tap(1); tap(2); // Save and return.
+        while (songs.busy()) sample(0);
+        sample(0);
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        assert(songs.success());
+        expect_values(2, 2);
+        open_patch_value();
+        tap(2); tap(1); settings();
+        song_storage.remaining = 0;
+        tap(1); tap(2);
+        while (songs.busy()) sample(0);
+        sample(0);
+        assert(!songs.success() && app.settings_frontmost());
+        expect_values(2, 2);
+        song_storage.remaining = -1;
+        tap(2); // Retry the local draft.
+        while (songs.busy()) sample(0);
+        sample(0);
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        assert(songs.success());
+        expect_values(3, 2);
+        assert(songs.continuation().patch == 0 && board.sent.size() == sent);
+        cntrl::Songs restored(song_storage, board);
+        cntrl::Songs::PatchValue value;
+        assert(restored.boot());
+        assert(restored.patch_value("Pne", 0, board, value) && value.value == 3);
+        assert(restored.patch_value("Pne", 1, board, value) && value.value == 2);
         return 0;
     }
     if (argc == 4 && !std::strcmp(argv[3], "--setlist-settings")) {

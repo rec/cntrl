@@ -35,6 +35,8 @@ public:
         if (!managing_library_ || songs_.busy() || waiting_) return false;
         return_to_performance_ = true;
         if (mode_ == moving && cursor_ != entry_) review_move();
+        else if (mode_ == patch_value && patch_draft_ != patch_value_.value)
+            review_library_edit(LibraryEdit::change_patch_value, patch_value);
         else if (mode_ == naming) {
             name_button(2);
             if (mode_ != library_decision) leave();
@@ -106,6 +108,20 @@ private:
         feedback_[0] = 0;
         if (mode_ == naming) { name_button(button); render(); return; }
         if (mode_ == library_decision) { library_decision_button(button); if (open()) render(); return; }
+        if (mode_ == patch_scope || mode_ == patch_value) {
+            if (mode_ == patch_scope) {
+                if (button < 2) shared_patch_ = !shared_patch_;
+                else if (button == 2) mode_ = patch_value;
+                else if (button == 5) mode_ = patch_actions;
+            } else if (button < 2) {
+                const int minimum = patch_value_.program ? 1 : 0;
+                patch_draft_ = unsigned(std::clamp(int(patch_draft_) + (button ? 1 : -1), minimum, minimum + 127));
+            } else if (button == 2 || button == 5) {
+                if (patch_draft_ != patch_value_.value) review_library_edit(LibraryEdit::change_patch_value, patch_value);
+                else mode_ = patch_actions;
+            }
+            render(); return;
+        }
         if (button == 5) {
             if (managing_setlists_ && mode_ == moving && cursor_ != entry_) review_move();
             else if (managing_setlists_) {
@@ -127,7 +143,7 @@ private:
         unsigned count = mode_ == root ? 5 + bool(documents_ && documents_->document().valid() && documents_->document().page_layout().controllers()) : mode_ == sets ? songs_.counts().sets + !managing_setlists_
             : mode_ == library || mode_ == adding ? songs_.counts().songs
             : mode_ == editing ? 9 : mode_ == set_actions ? 3 + bool(current_set() && current_set()->count)
-            : mode_ == song_actions ? (managing_library_ ? 2 : 4) : mode_ == patch_actions ? (managing_library_ ? 3 : 5)
+            : mode_ == song_actions ? (managing_library_ ? 2 : 4) : mode_ == patch_actions ? (managing_library_ ? 4 : 5)
             : mode_ == patches ? (songs_.song(song_name_) ? songs_.song(song_name_)->count : 0)
             : mode_ == moving || mode_ == performance || mode_ == set_entries ? (current_set() ? current_set()->count : 0) : 0;
         if (button < 2 && (mode_ == library || mode_ == adding)) songs_.browse(picker_, picker_, button == 0);
@@ -176,6 +192,14 @@ private:
             library_generation_ = songs_.generation();
         } else if (mode_ == patch_actions && button == 2) {
             if (managing_library_) {
+                if (cursor_ == 2) {
+                    if (songs_.patch_value(song_name_, patch_cursor_, hardware_, patch_value_)) {
+                        patch_draft_ = patch_value_.value;
+                        shared_patch_ = false;
+                        mode_ = patch_scope;
+                    } else ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot edit this patch value");
+                    render(); return;
+                }
                 const auto *song = songs_.song(song_name_);
                 if (!song || (cursor_ == 0 ? song->count <= 1 : cursor_ == 1 ? !patch_cursor_ : patch_cursor_ + 1 >= song->count)) fail();
                 else review_library_edit(cursor_ == 0 ? LibraryEdit::remove_patch : cursor_ == 1 ? LibraryEdit::move_patch_earlier : LibraryEdit::move_patch_later, patch_actions);
@@ -232,7 +256,7 @@ private:
         render();
     }
 private:
-    enum Mode { closed, root, sets, set_entries, set_actions, library, song_actions, performance, editing, adding, moving, library_decision, naming, patches, patch_actions };
+    enum Mode { closed, root, sets, set_entries, set_actions, library, song_actions, performance, editing, adding, moving, library_decision, naming, patches, patch_actions, patch_scope, patch_value };
     Songs &songs_; Hardware &hardware_; SongCapture &capture_;
     Documents *documents_;
     Mode mode_ = closed, return_mode_ = root;
@@ -244,12 +268,15 @@ private:
     bool waiting_ = false;
     char feedback_[64] = {}, name_[64] = {};
     bool managing_library_ = false, managing_setlists_ = false, shortcut_hint_ = false, return_to_performance_ = false;
-    enum class LibraryEdit { move, insert, remove, rename_song, rename_setlist, remove_patch, move_patch_earlier, move_patch_later };
+    enum class LibraryEdit { move, insert, remove, rename_song, rename_setlist, remove_patch, move_patch_earlier, move_patch_later, change_patch_value };
     LibraryEdit library_edit_ = LibraryEdit::move;
     Mode library_resume_ = moving;
     unsigned set_index_ = 0, library_choice_ = 0;
     uint32_t library_generation_ = 0;
     char managed_set_[64] = {};
+    Songs::PatchValue patch_value_;
+    unsigned patch_draft_ = 0;
+    bool shared_patch_ = false;
     const Setlist *current_set() const { return songs_.setlist(managing_setlists_ ? managed_set_ : songs_.active_set()); }
     void review_move() { review_library_edit(LibraryEdit::move, moving); }
     void review_library_edit(LibraryEdit edit, Mode resume) {
@@ -293,6 +320,7 @@ private:
         case LibraryEdit::remove_patch: return songs_.remove_patch(song_name_, patch_cursor_);
         case LibraryEdit::move_patch_earlier: return songs_.move_patch(song_name_, patch_cursor_, true);
         case LibraryEdit::move_patch_later: return songs_.move_patch(song_name_, patch_cursor_, false);
+        case LibraryEdit::change_patch_value: return songs_.save_patch_value(song_name_, patch_cursor_, hardware_, patch_draft_, shared_patch_);
         }
         return false;
     }
@@ -407,7 +435,8 @@ private:
         } else if (mode_ == patch_actions) {
             const ui::i18n::Message actions[] = {ui::i18n::Message::replace_with_selected, ui::i18n::Message::insert_selected_after,
                 ui::i18n::Message::remove_patch, ui::i18n::Message::move_earlier, ui::i18n::Message::move_later};
-            text(1, 1, ui::i18n::text(actions[cursor_ + (managing_library_ ? 2 : 0)]));
+            if (managing_library_ && cursor_ == 2) text(1, 1, "Edit patch value");
+            else text(1, 1, ui::i18n::text(actions[managing_library_ ? (cursor_ == 3 ? 4 : cursor_ + 2) : cursor_]));
         }
         else if (mode_ == library || mode_ == adding) {
             ensure_picker();
@@ -496,11 +525,22 @@ private:
         }
         if (managing_library_ && !managing_setlists_) {
             text(1, 0, mode_ == library ? ui::i18n::text(ui::i18n::Message::songs) : song_name_);
+            if (mode_ == patch_scope || mode_ == patch_value || (mode_ == library_decision && library_edit_ == LibraryEdit::change_patch_value)) {
+                std::snprintf(panes[0].lines[0].text, 64, "Patch %u", patch_cursor_ + 1);
+                text(0, 1, shared_patch_ ? "Every use of this patch" : "Only this song step");
+                if (!shared_patch_) text(0, 2, "A copy stops following shared edits");
+                text(2, 0, patch_value_.program ? "Program" : "Control Change value");
+                std::snprintf(panes[2].lines[1].text, 64, "%u", patch_draft_);
+                text(1, 1, mode_ == patch_scope ? "Edit scope" : "Edit patch value");
+                if (mode_ == patch_scope || mode_ == patch_value)
+                    text(0, 3, prompt.clear().pair(Role::previous, Role::next,
+                        ui::i18n::text(mode_ == patch_value ? ui::i18n::Message::adjust : ui::i18n::Message::browse)).text());
+            }
             if (mode_ == library_decision) {
                 if (library_edit_ == LibraryEdit::rename_song) {
                     text(0, 0, ui::i18n::text(ui::i18n::Message::rename_song));
                     text(0, 1, name_);
-                } else {
+                } else if (library_edit_ != LibraryEdit::change_patch_value) {
                     const auto action = library_edit_ == LibraryEdit::remove_patch ? ui::i18n::Message::remove_patch
                         : library_edit_ == LibraryEdit::move_patch_earlier ? ui::i18n::Message::move_earlier : ui::i18n::Message::move_later;
                     text(0, 0, ui::i18n::text(action));
