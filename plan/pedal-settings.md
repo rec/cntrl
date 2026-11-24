@@ -145,10 +145,11 @@ occur and repeat those tasks after changing the labels or controls.
 | Loaded setup | Brightness, screensaver timeout, USB MIDI | Setup draft, revision, and reload |
 | Saved setups | Browse and edit the existing setup fields and patch cycles | Named setup draft and revision, with reload for the loaded setup |
 | Setlists | Browse, move, add, and remove numbered occurrences, with save, discard, and keep editing | Song library journal, with playback position tracking |
+| Songs | Browse, rename, and move or remove patches with review | Song library journal, including setlist references and playback position |
 | Current browser patch's instrument | MIDI channel, 1–16 | Shared instrument record in the setup draft |
 
-- Song editing and setlist renaming still need Settings
-  entry points that preserve active performance.
+- Setlist renaming still needs a Settings entry point that preserves active
+  performance and the device-wide startup choice.
 - The device settings service already stores the rest of the global registry.
   Settings still needs editors for those values and controls
   that show when a setup supplies its own override.

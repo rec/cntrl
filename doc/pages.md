@@ -58,6 +58,11 @@ opens the review if you try to return to playing with a move pending.
 Press D at an entry to add a song after it, add one at the end, or remove
 that occurrence. Each change has a review and save prompt.
 
+Open **Songs** from **Settings** to rename a song or reorder or remove its
+patches. The song picker starts on the playing song when one is active.
+Saving a rename updates each setlist occurrence and the live song name.
+The review shows the new name or the patch and position before saving.
+
 Under **Pedal → Contact**, use A/B to change the character in brackets and
 D/E to move the cursor. C opens the actions for inserting a space, inserting
 a line break, or deleting a character. F opens the save prompt when the text

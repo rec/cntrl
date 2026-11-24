@@ -150,6 +150,53 @@ int main(int argc, char **argv) {
         release(2); release(5);
         if (app.editing_tool && !app.tool_editor_open(board)) app.finish_tool();
     };
+    if (argc == 4 && !std::strcmp(argv[3], "--song-settings")) {
+        songs.choose("Set"); app.song_ui.perform(); sample(0); next();
+        const auto sent = board.sent.size();
+        const auto open_songs = [&] {
+            settings();
+            tap(0); tap(0); tap(0); tap(2);
+            assert(app.settings_frontmost() && app.song_ui.open());
+            assert(!std::strcmp(board.panes[1].lines[0].text, "Songs"));
+            tap(2);
+        };
+        open_songs();
+        tap(2); tap(1); // Change the first character of One to P.
+        settings();
+        assert(!std::strcmp(board.panes[0].lines[1].text, "Pne"));
+        assert(songs.song("One") && !songs.song("Pne"));
+        tap(1); tap(2); // Save the name and return.
+        while (songs.busy()) sample(0);
+        sample(0);
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        assert(songs.success() && !app.settings_frontmost());
+        assert(!std::strcmp(songs.current_name(), "Pne") && songs.continuation().patch == 0);
+        cntrl::SongEntry entry;
+        assert(songs.entry("Set", 0, entry) && !std::strcmp(entry.song, "Pne"));
+        assert(songs.entry("Set", 2, entry) && !std::strcmp(entry.song, "Pne"));
+        cntrl::SongSelection original, second;
+        assert(songs.patch_at("Pne", 0, original) && songs.patch_at("Pne", 1, second));
+        open_songs();
+        tap(1); tap(2); // Edit patches.
+        tap(2); tap(0); tap(2); // Move the first patch later.
+        cntrl::SongSelection first;
+        assert(songs.patch_at("Pne", 0, first) && first.node == original.node);
+        tap(1); tap(2); // Save.
+        while (songs.busy()) sample(0);
+        sample(0);
+        assert(songs.patch_at("Pne", 0, first) && first.node == second.node);
+        assert(songs.continuation().patch == 1 && board.sent.size() == sent);
+        tap(0); tap(2); tap(2); // Review removal of the preceding patch.
+        assert(songs.song("Pne")->count == 3);
+        tap(1); tap(2);
+        while (songs.busy()) sample(0);
+        sample(0);
+        assert(songs.song("Pne")->count == 2 && songs.patch_at("Pne", 0, first) && first.node == original.node);
+        assert(songs.continuation().patch == 0 && board.sent.size() == sent);
+        settings();
+        assert(!app.settings_frontmost());
+        return 0;
+    }
     if (argc == 4 && !std::strcmp(argv[3], "--setlist-settings")) {
         songs.choose("Set"); app.song_ui.perform(); sample(0);
         next();

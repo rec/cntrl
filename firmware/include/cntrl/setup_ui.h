@@ -12,11 +12,13 @@ class SetupUi {
 public:
     SetupUi(Documents &documents, Hardware &hardware) : docs_(documents), hardware_(hardware) {}
     bool open() const { return mode_ != Mode::closed; }
-    bool take_setlist_request() {
-        if (!setlists_requested_) return false;
-        setlists_requested_ = false;
+    enum class Library { none, songs, setlists };
+    Library take_library_request() {
+        const auto requested = library_request_;
+        if (requested == Library::none) return requested;
+        library_request_ = Library::none;
         mode_ = Mode::closed;
-        return true;
+        return requested;
     }
     void resume_settings() { mode_ = Mode::current; locked_ = true; render(); }
     void refresh() { if (open()) render(); }
@@ -41,7 +43,7 @@ public:
         device_editor_ = Mode::closed;
         resume_editor_ = Mode::closed;
         return_from_shortcut_ = false;
-        setlists_requested_ = false;
+        library_request_ = Library::none;
         locked_ = true;
         mode_ = Mode::current;
         render();
@@ -121,7 +123,10 @@ public:
             }
             if (button == 2) {
                 if (shortcut_ == Shortcut::pedal) { mode_ = Mode::pedal; item_ = 0; }
-                else if (shortcut_ == Shortcut::setlists) { setlists_requested_ = true; return; }
+                else if (shortcut_ == Shortcut::songs || shortcut_ == Shortcut::setlists) {
+                    library_request_ = shortcut_ == Shortcut::songs ? Library::songs : Library::setlists;
+                    return;
+                }
                 else if (shortcut_ == Shortcut::performance && current_set_[0]) begin_startup_set(current_set_);
                 else if (shortcut_ == Shortcut::setups) {
                     std::strcpy(name_, docs_.selected());
@@ -275,14 +280,14 @@ private:
     bool locked_ = false, browsing_ = false, original_ = false;
     bool settings_ = false, current_field_ = false;
     unsigned current_patch_ = UINT16_MAX, changed_fields_ = 0;
-    enum class Shortcut { performance, setup, setups, setlists, pedal, count };
+    enum class Shortcut { performance, setup, setups, songs, setlists, pedal, count };
     Shortcut shortcut_ = Shortcut::setup;
     const Songs *songs_ = nullptr;
     Mode device_editor_ = Mode::closed;
     Mode resume_editor_ = Mode::closed;
     bool return_from_shortcut_ = false;
     bool shortcut_hint_ = false;
-    bool setlists_requested_ = false;
+    Library library_request_ = Library::none;
     unsigned startup_choice_ = 0;
     char startup_draft_[64] = {};
     char current_set_[64] = {};
@@ -507,8 +512,8 @@ private:
             } else if (shortcut_ == Shortcut::setups) {
                 value_label = ui::i18n::text(ui::i18n::Message::setups);
                 value = ui::i18n::text(ui::i18n::Message::browse);
-            } else if (shortcut_ == Shortcut::setlists) {
-                value_label = ui::i18n::text(ui::i18n::Message::setlists);
+            } else if (shortcut_ == Shortcut::songs || shortcut_ == Shortcut::setlists) {
+                value_label = ui::i18n::text(shortcut_ == Shortcut::songs ? ui::i18n::Message::songs : ui::i18n::Message::setlists);
                 value = ui::i18n::text(ui::i18n::Message::browse);
             } else {
                 value_label = ui::i18n::text(ui::i18n::Message::pedal);

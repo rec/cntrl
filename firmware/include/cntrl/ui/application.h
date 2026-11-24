@@ -165,7 +165,7 @@ public:
         songs_.stop_execution(); pending_song_step_ = 0; pending_operation = 0;
         song_ui.patch_chooser_requested = false;
         song_ui.leave();
-        settings_setlists_ = resume_settings_performance_ = false;
+        settings_library_ = resume_settings_performance_ = false;
         pending_page = PageLayout::max_pages;
         utility_page = PageLayout::max_pages;
         editing_tool = 0;
@@ -173,7 +173,7 @@ public:
     }
     bool utility_visible() const { return !editing_tool && utility_page < layout.pages() && layout.page(utility_page)[0] != 10; }
     bool feature_open(const ApplicationServices &services) const { return !utility_visible() && (setups.open() || song_ui.open() || services.switch_editor_open()); }
-    bool settings_frontmost() const { return editing_tool == PageLayout::settings && (setups.open() || settings_setlists_); }
+    bool settings_frontmost() const { return editing_tool == PageLayout::settings && (setups.open() || settings_library_); }
     bool settings_shortcut_available(const ApplicationServices &services) const {
         return settings_frontmost() || (!editing_tool && !documents_.busy() && !documents_.dirty()
             && documents_.document().valid() && !pending_song_step_ && !songs_.executing()
@@ -201,9 +201,9 @@ public:
         return true;
     }
     bool settings_shortcut(ApplicationServices &services) {
-        if (settings_setlists_) {
-            if (!song_ui.return_from_setlists()) return false;
-            finish_settings_setlists();
+        if (settings_library_) {
+            if (!song_ui.return_from_library()) return false;
+            finish_settings_library();
             return true;
         }
         if (settings_frontmost()) return setups.return_to_performance();
@@ -211,7 +211,7 @@ public:
     }
     bool tool_editor_open(const ApplicationServices &services) const {
         if (song_ui.patch_chooser_requested) return true;
-        if (editing_tool == PageLayout::settings) return setups.open() || settings_setlists_;
+        if (editing_tool == PageLayout::settings) return setups.open() || settings_library_;
         if (editing_tool == PageLayout::setups) return setups.open();
         if (editing_tool == PageLayout::songs) return song_ui.open() && !song_ui.performing();
         return editing_tool == PageLayout::switches && services.switch_editor_open();
@@ -294,7 +294,7 @@ public:
     }
     void tick(uint32_t now) {
         if (stopping_setup_) return;
-        finish_settings_setlists();
+        finish_settings_library();
         if (!hardware_.relays.tick(now)) hardware_.error(i18n::text(i18n::Message::relay_pulse_restore_failed));
         for (unsigned i = 0; i < (layout.controllers() ? layout.controllers() : 1); ++i) { processing_index = i; at(i).tick(now); }
         processing_index = PageLayout::max_controllers;
@@ -368,14 +368,14 @@ public:
             const unsigned button = operation == Operation::setup_previous ? 0 : operation == Operation::setup_next ? 1 : operation == Operation::setup_confirm ? 2
                 : operation == Operation::setup_previous_section ? 3 : operation == Operation::setup_next_section ? 4 : 5;
             setups.button(button, true, services.application_time());
-            if (setups.take_setlist_request()) {
+            if (const auto library = setups.take_library_request(); library != SetupUi::Library::none) {
                 if (songs_.busy() || services.song_transfer_busy()) {
                     setups.resume_settings();
                     hardware_.error(i18n::text(i18n::Message::working));
                 } else {
                     resume_settings_performance_ |= song_ui.performing();
-                    settings_setlists_ = true;
-                    song_ui.edit_setlists(settings_shortcut_hint_);
+                    settings_library_ = true;
+                    song_ui.edit_library(library == SetupUi::Library::setlists, settings_shortcut_hint_);
                 }
                 controls_locked = true;
             }
@@ -390,7 +390,7 @@ public:
             if (!song_ui.open()) return false;
             const unsigned button = operation == Operation::songs_previous ? 0 : operation == Operation::songs_next ? 1 : operation == Operation::songs_confirm ? 2 : operation == Operation::songs_previous_section ? 3 : operation == Operation::songs_next_section ? 4 : 5;
             song_ui.button(button, true);
-            if (settings_setlists_) { finish_settings_setlists(); return true; }
+            if (settings_library_) { finish_settings_library(); return true; }
             if (!song_ui.open() && !song_ui.patch_chooser_requested) documents_.redraw();
             if (!song_ui.open()) controls_locked = true;
             return true;
@@ -426,10 +426,10 @@ public:
         return false;
     }
 private:
-    void finish_settings_setlists() {
-        if (!settings_setlists_ || song_ui.open()) return;
-        settings_setlists_ = false;
-        if (!song_ui.setlists_returning_to_performance()) setups.resume_settings();
+    void finish_settings_library() {
+        if (!settings_library_ || song_ui.open()) return;
+        settings_library_ = false;
+        if (!song_ui.library_returning_to_performance()) setups.resume_settings();
         controls_locked = true;
     }
     CheckedArray<Pages::ViewState> pending_views_;
@@ -462,7 +462,7 @@ private:
     Songs &songs_;
     bool has_switches_;
     bool resume_song_ui_ = false;
-    bool settings_setlists_ = false, resume_settings_performance_ = false, settings_shortcut_hint_ = false;
+    bool settings_library_ = false, resume_settings_performance_ = false, settings_shortcut_hint_ = false;
     int pending_song_step_ = 0;
     bool stopping_setup_ = false;
 };

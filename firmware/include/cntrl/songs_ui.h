@@ -21,24 +21,28 @@ public:
     bool editing_name() const { return mode_ == naming; }
     bool patch_chooser_requested = false;
     void refresh() { if (open()) { feedback_[0] = 0; render(); } }
-    void leave() { mode_ = closed; waiting_ = managing_setlists_ = false; }
-    void perform() { managing_setlists_ = false; mode_ = performance; cursor_ = 0; locked_ = true; ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error()); render(); }
-    void enter() { managing_setlists_ = false; mode_ = root; cursor_ = 0; locked_ = true; patch_chooser_requested = false; render(); }
-    void edit_setlists(bool shortcut_hint) {
-        managing_setlists_ = true; shortcut_hint_ = shortcut_hint;
-        mode_ = sets; cursor_ = set_index_ = 0; locked_ = true;
+    void leave() { mode_ = closed; waiting_ = managing_library_ = managing_setlists_ = false; }
+    void perform() { managing_library_ = managing_setlists_ = false; mode_ = performance; cursor_ = 0; locked_ = true; ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error()); render(); }
+    void enter() { managing_library_ = managing_setlists_ = false; mode_ = root; cursor_ = 0; locked_ = true; patch_chooser_requested = false; render(); }
+    void edit_library(bool setlists, bool shortcut_hint) {
+        managing_library_ = true; managing_setlists_ = setlists; shortcut_hint_ = shortcut_hint;
+        mode_ = setlists ? sets : library; cursor_ = set_index_ = 0; locked_ = true;
         return_to_performance_ = false; feedback_[0] = 0;
+        std::snprintf(picker_, sizeof(picker_), "%s", setlists ? "" : songs_.current_name());
         render();
     }
-    bool return_from_setlists() {
-        if (!managing_setlists_ || songs_.busy() || waiting_) return false;
+    bool return_from_library() {
+        if (!managing_library_ || songs_.busy() || waiting_) return false;
         return_to_performance_ = true;
         if (mode_ == moving && cursor_ != entry_) review_move();
-        else if (mode_ != set_decision) leave();
+        else if (mode_ == naming) {
+            name_button(2);
+            if (mode_ != library_decision) leave();
+        } else if (mode_ != library_decision) leave();
         if (open()) render();
         return true;
     }
-    bool setlists_returning_to_performance() const { return return_to_performance_; }
+    bool library_returning_to_performance() const { return return_to_performance_; }
     void poll(uint8_t held) {
         if (!held) locked_ = false;
         if (mode_ == performance && !songs_.busy() && std::strcmp(feedback_, songs_.last_error())) {
@@ -50,7 +54,15 @@ public:
                 mode_ = saved_.mode; cursor_ = saved_.cursor; insertion_ = saved_.insertion;
                 added_ = saved_.added; std::snprintf(picker_, 64, "%s", saved_.picker);
                 std::snprintf(song_name_, 64, "%s", saved_.song); fail();
-            } else if (!feedback_[0]) ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::saved));
+            } else {
+                if (saved_.mode == library_decision && library_edit_ == LibraryEdit::rename_song) {
+                    std::strcpy(song_name_, name_);
+                    std::strcpy(picker_, name_);
+                }
+                if (mode_ == patches && saved_.mode == library_decision && library_edit_ == LibraryEdit::remove_patch)
+                    if (const auto *song = songs_.song(song_name_)) cursor_ = std::min(cursor_, unsigned(song->count) - 1);
+                if (!feedback_[0]) ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::saved));
+            }
             if (open()) render();
         }
     }
@@ -91,13 +103,19 @@ private:
         uint32_t before = songs_.generation();
         feedback_[0] = 0;
         if (mode_ == naming) { name_button(button); render(); return; }
-        if (mode_ == set_decision) { set_decision_button(button); if (open()) render(); return; }
+        if (mode_ == library_decision) { library_decision_button(button); if (open()) render(); return; }
         if (button == 5) {
             if (managing_setlists_ && mode_ == moving && cursor_ != entry_) review_move();
             else if (managing_setlists_) {
                 if (mode_ == sets) leave();
                 else if (mode_ == set_entries) { mode_ = sets; cursor_ = set_index_; }
                 else { mode_ = set_entries; cursor_ = entry_; }
+            } else if (managing_library_) {
+                if (mode_ == library) leave();
+                else {
+                    mode_ = mode_ == patch_actions ? patches : mode_ == patches ? song_actions : library;
+                    cursor_ = mode_ == patches ? patch_cursor_ : 0;
+                }
             } else {
                 mode_ = mode_ == root ? closed : mode_ == adding ? performance : mode_ == patch_actions ? patches : mode_ == patches ? song_actions : root;
                 cursor_ = 0;
@@ -107,7 +125,8 @@ private:
         unsigned count = mode_ == root ? 5 + bool(documents_ && documents_->document().valid() && documents_->document().page_layout().controllers()) : mode_ == sets ? songs_.counts().sets + !managing_setlists_
             : mode_ == library || mode_ == adding ? songs_.counts().songs
             : mode_ == editing ? 9 : mode_ == set_actions ? 2 + bool(current_set() && current_set()->count)
-            : mode_ == song_actions ? 4 : mode_ == patch_actions ? 5 : mode_ == patches ? (songs_.song(song_name_) ? songs_.song(song_name_)->count : 0)
+            : mode_ == song_actions ? (managing_library_ ? 2 : 4) : mode_ == patch_actions ? (managing_library_ ? 3 : 5)
+            : mode_ == patches ? (songs_.song(song_name_) ? songs_.song(song_name_)->count : 0)
             : mode_ == moving || mode_ == performance || mode_ == set_entries ? (current_set() ? current_set()->count : 0) : 0;
         if (button < 2 && (mode_ == library || mode_ == adding)) songs_.browse(picker_, picker_, button == 0);
         else if (button < 2 && count) cursor_ = (cursor_ + count + (button == 0 ? -1 : 1)) % count;
@@ -143,7 +162,7 @@ private:
                 if (song) begin_name(song->name, false);
                 else ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::song_read_failed));
             }
-            else if (cursor_ == 2) { mode_ = patches; cursor_ = 0; }
+            else if (cursor_ == 2 || managing_library_) { mode_ = patches; cursor_ = 0; }
             else if (cursor_ == 3) { songs_.choose_song(song_name_); perform(); }
             else {
                 Song item;
@@ -152,7 +171,14 @@ private:
             }
         } else if (mode_ == patches && button == 2 && count) {
             patch_cursor_ = cursor_; mode_ = patch_actions; cursor_ = 0;
+            library_generation_ = songs_.generation();
         } else if (mode_ == patch_actions && button == 2) {
+            if (managing_library_) {
+                const auto *song = songs_.song(song_name_);
+                if (!song || (cursor_ == 0 ? song->count <= 1 : cursor_ == 1 ? !patch_cursor_ : patch_cursor_ + 1 >= song->count)) fail();
+                else review_library_edit(cursor_ == 0 ? LibraryEdit::remove_patch : cursor_ == 1 ? LibraryEdit::move_patch_earlier : LibraryEdit::move_patch_later, patch_actions);
+                render(); return;
+            }
             bool good = false; Song captured;
             if (cursor_ < 2) {
                 if (capture_.capture(captured, false)) good = cursor_ == 0 ? songs_.replace_patch(song_name_, patch_cursor_, captured) : songs_.insert_patch(song_name_, patch_cursor_, captured);
@@ -161,7 +187,7 @@ private:
             if (!good) fail(); else { mode_ = patches; cursor_ = 0; }
         } else if (mode_ == adding && button == 2 && count) {
             ensure_picker(); const Song *found = songs_.song(picker_); if (!found) { fail(); render(); return; } Song item = *found;
-            if (managing_setlists_) review_set_edit(SetEdit::insert, adding);
+            if (managing_setlists_) review_library_edit(LibraryEdit::insert, adding);
             else if (!songs_.insert(songs_.active_set(), insertion_, item.name)) fail();
             else { ++insertion_; ++added_; ui::i18n::format(feedback_, 64, ui::i18n::Message::song_added, item.name); }
         } else if (mode_ == editing && button == 2) {
@@ -182,16 +208,16 @@ private:
             }
             else { mode_ = performance; cursor_ = 0; }
         } else if (mode_ == set_entries && button == 2 && count > 1) {
-            entry_ = cursor_; set_generation_ = songs_.generation(); mode_ = moving;
+            entry_ = cursor_; library_generation_ = songs_.generation(); mode_ = moving;
         } else if (mode_ == set_entries && button == 3) {
-            entry_ = cursor_; cursor_ = 0; set_generation_ = songs_.generation(); mode_ = set_actions;
+            entry_ = cursor_; cursor_ = 0; library_generation_ = songs_.generation(); mode_ = set_actions;
         } else if (mode_ == set_actions && button == 2) {
             const auto *set = current_set();
             if (!set) { fail(); return; }
             if (cursor_ < 2) {
                 insertion_ = cursor_ == 0 ? std::min(entry_ + 1, unsigned(set->count)) : set->count;
                 mode_ = adding; picker_[0] = 0;
-            } else if (set->count) review_set_edit(SetEdit::remove, set_actions);
+            } else if (set->count) review_library_edit(LibraryEdit::remove, set_actions);
         } else if (mode_ == moving && button == 2) {
             if (managing_setlists_) {
                 if (cursor_ != entry_) review_move();
@@ -203,7 +229,7 @@ private:
         render();
     }
 private:
-    enum Mode { closed, root, sets, set_entries, set_actions, library, song_actions, performance, editing, adding, moving, set_decision, naming, patches, patch_actions };
+    enum Mode { closed, root, sets, set_entries, set_actions, library, song_actions, performance, editing, adding, moving, library_decision, naming, patches, patch_actions };
     Songs &songs_; Hardware &hardware_; SongCapture &capture_;
     Documents *documents_;
     Mode mode_ = closed, return_mode_ = root;
@@ -214,47 +240,64 @@ private:
     struct Saved { Mode mode; unsigned cursor, insertion, added; char picker[64], song[64]; } saved_ = {};
     bool waiting_ = false;
     char feedback_[64] = {}, name_[64] = {};
-    bool managing_setlists_ = false, shortcut_hint_ = false, return_to_performance_ = false;
-    enum class SetEdit { move, insert, remove };
-    SetEdit set_edit_ = SetEdit::move;
-    Mode set_resume_ = moving;
-    unsigned set_index_ = 0, set_choice_ = 0;
-    uint32_t set_generation_ = 0;
+    bool managing_library_ = false, managing_setlists_ = false, shortcut_hint_ = false, return_to_performance_ = false;
+    enum class LibraryEdit { move, insert, remove, rename_song, remove_patch, move_patch_earlier, move_patch_later };
+    LibraryEdit library_edit_ = LibraryEdit::move;
+    Mode library_resume_ = moving;
+    unsigned set_index_ = 0, library_choice_ = 0;
+    uint32_t library_generation_ = 0;
     char managed_set_[64] = {};
     const Setlist *current_set() const { return songs_.setlist(managing_setlists_ ? managed_set_ : songs_.active_set()); }
-    void review_move() { review_set_edit(SetEdit::move, moving); }
-    void review_set_edit(SetEdit edit, Mode resume) {
-        set_edit_ = edit; set_resume_ = resume; mode_ = set_decision; set_choice_ = 2;
+    void review_move() { review_library_edit(LibraryEdit::move, moving); }
+    void review_library_edit(LibraryEdit edit, Mode resume) {
+        library_edit_ = edit; library_resume_ = resume; mode_ = library_decision; library_choice_ = 2;
     }
-    void set_decision_button(unsigned button) {
-        if (button < 2) set_choice_ = (set_choice_ + (button ? 1 : 2)) % 3;
-        else if (button == 5 || (button == 2 && set_choice_ == 2)) {
-            mode_ = set_resume_; return_to_performance_ = false;
+    void library_decision_button(unsigned button) {
+        if (button < 2) library_choice_ = (library_choice_ + (button ? 1 : 2)) % 3;
+        else if (button == 5 || (button == 2 && library_choice_ == 2)) {
+            mode_ = library_resume_; return_to_performance_ = false;
         } else if (button == 2) {
-            const auto *set = current_set();
-            if (!set_choice_) {
-                if (!set || songs_.generation() != set_generation_) { fail(); return; }
-                const bool accepted = set_edit_ == SetEdit::move ? songs_.move(set->name, entry_, cursor_)
-                    : set_edit_ == SetEdit::insert ? songs_.insert(set->name, insertion_, picker_)
-                    : songs_.remove(set->name, entry_);
-                if (!accepted) { fail(); return; }
-                if (set_edit_ == SetEdit::insert) cursor_ = insertion_;
-                else if (set_edit_ == SetEdit::remove) cursor_ = entry_;
-            } else cursor_ = entry_;
-            mode_ = return_to_performance_ ? closed : set_entries;
+            if (!library_choice_) {
+                if (songs_.generation() != library_generation_ || !save_library_edit()) { fail(); return; }
+                if (managing_setlists_) {
+                    if (library_edit_ == LibraryEdit::insert) cursor_ = insertion_;
+                    else if (library_edit_ == LibraryEdit::remove) cursor_ = entry_;
+                }
+            } else if (managing_setlists_) cursor_ = entry_;
+            if (managing_setlists_) mode_ = set_entries;
+            else if (library_edit_ == LibraryEdit::rename_song) { mode_ = song_actions; cursor_ = 0; }
+            else {
+                mode_ = patches; cursor_ = patch_cursor_;
+                if (!library_choice_ && library_edit_ == LibraryEdit::move_patch_earlier) --cursor_;
+                if (!library_choice_ && library_edit_ == LibraryEdit::move_patch_later) ++cursor_;
+            }
+            if (return_to_performance_) mode_ = closed;
         }
+    }
+    bool save_library_edit() {
+        switch (library_edit_) {
+        case LibraryEdit::move: return songs_.move(managed_set_, entry_, cursor_);
+        case LibraryEdit::insert: return songs_.insert(managed_set_, insertion_, picker_);
+        case LibraryEdit::remove: return songs_.remove(managed_set_, entry_);
+        case LibraryEdit::rename_song: return songs_.rename_song(song_name_, name_);
+        case LibraryEdit::remove_patch: return songs_.remove_patch(song_name_, patch_cursor_);
+        case LibraryEdit::move_patch_earlier: return songs_.move_patch(song_name_, patch_cursor_, true);
+        case LibraryEdit::move_patch_later: return songs_.move_patch(song_name_, patch_cursor_, false);
+        }
+        return false;
     }
     void fail() { ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::not_saved)); }
     void ensure_picker() { if (!songs_.song(picker_)) songs_.browse("", picker_, false); }
     void jump(bool backward) { ensure_picker(); songs_.browse(picker_, picker_, backward, true); }
     void begin_name(const char *name, bool set) {
         std::snprintf(name_, 64, "%s", name); naming_set_ = set;
+        library_generation_ = songs_.generation();
         dropped_keys_ = false;
         return_mode_ = mode_; mode_ = naming; character_ = 0;
     }
     void name_button(unsigned button) {
         unsigned length = unsigned(std::strlen(name_));
-        if (button == 5) { mode_ = return_mode_; return; }
+        if (button == 5 && !managing_library_) { mode_ = return_mode_; return; }
         if (button == 3 && character_) --character_;
         if (button == 4 && character_ < 62) ++character_;
         if (button < 2 && character_ < sizeof(name_) - 1) {
@@ -262,9 +305,14 @@ private:
             name_[length] = 0;
             char &c = name_[character_]; c = char(32 + (c - 32 + 95 + (button == 0 ? -1 : 1)) % 95);
         }
-        if (button == 2) {
+        if (button == 2 || button == 5) {
             dropped_keys_ = false;
             while (length && name_[length - 1] == ' ') name_[--length] = 0;
+            if (managing_library_) {
+                if (std::strcmp(song_name_, name_)) review_library_edit(LibraryEdit::rename_song, naming);
+                else mode_ = return_mode_;
+                return;
+            }
             bool good = naming_set_ ? songs_.rename_setlist(songs_.active_set(), name_) : songs_.rename_song(song_name_, name_);
             if (!good) fail(); else { if (!naming_set_) { std::snprintf(song_name_, 64, "%s", name_); std::snprintf(picker_, 64, "%s", name_); } ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::saved)); mode_ = return_mode_; cursor_ = 0; }
         }
@@ -281,7 +329,7 @@ private:
             for (auto &line : p.lines) { line.graphics.foreground = song->foreground; line.graphics.background = song->background; }
             if (pane != 1 || (mode_ != song_actions && mode_ != patch_actions)) { p.lines[1].graphics.font = song->font; p.lines[1].fit = true; }
         };
-        if (!managing_setlists_) style(0, songs_.song(songs_.current_name()));
+        if (!managing_library_) style(0, songs_.song(songs_.current_name()));
         if (mode_ == song_actions || mode_ == patches || mode_ == patch_actions || (mode_ == naming && !naming_set_)) style(1, songs_.song(song_name_));
         if (songs_.busy()) {
             ui::copy_caption(panes[1].lines[0], ui::i18n::text(ui::i18n::Message::saving_wait));
@@ -304,11 +352,11 @@ private:
         text(2, 0, ui::i18n::text(ui::i18n::Message::next));
         SongEntry next_entry;
         const Song *upcoming = set && next < set->count && songs_.entry(set->name, next, next_entry) ? songs_.song(next_entry.song) : nullptr;
-        if (!managing_setlists_) style(2, upcoming);
+        if (!managing_library_) style(2, upcoming);
         text(2, 1, upcoming ? upcoming->name : set && !set->count ? ui::i18n::text(ui::i18n::Message::add_songs) : ui::i18n::text(ui::i18n::Message::end_of_set));
         SongSelection next_patch;
         if (songs_.upcoming_patch(next_patch)) {
-            if (!managing_setlists_) style(2, songs_.song(songs_.current_name()));
+            if (!managing_library_) style(2, songs_.song(songs_.current_name()));
             text(2, 0, ui::i18n::text(ui::i18n::Message::next_patch));
             text(2, 1, next_patch.label[0] ? next_patch.label : next_patch.document[0] ? next_patch.key : ui::i18n::text(ui::i18n::Message::patch));
         }
@@ -332,7 +380,11 @@ private:
             if (cursor_ == 7 && documents_) text(1, 2, documents_->startup_set());
         }
         else if (mode_ == naming) { text(1, 1, name_); ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::character_number, character_ + 1); }
-        else if (mode_ == song_actions) { const char *actions[] = {ui::i18n::text(ui::i18n::Message::rename_song), ui::i18n::text(ui::i18n::Message::use_selected_patch), ui::i18n::text(ui::i18n::Message::edit_patches), ui::i18n::text(ui::i18n::Message::perform_song)}; text(1, 1, actions[cursor_]); }
+        else if (mode_ == song_actions) {
+            const ui::i18n::Message actions[] = {ui::i18n::Message::rename_song, ui::i18n::Message::use_selected_patch,
+                ui::i18n::Message::edit_patches, ui::i18n::Message::perform_song};
+            text(1, 1, ui::i18n::text(actions[managing_library_ && cursor_ ? 2 : cursor_]));
+        }
         else if (mode_ == patches) {
             SongSelection selected;
             if (songs_.patch_at(song_name_, cursor_, selected)) {
@@ -341,7 +393,11 @@ private:
                 if (song) ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::patch_position, cursor_ + 1, (unsigned long)song->count);
                 else text(1, 2, ui::i18n::text(ui::i18n::Message::song_read_failed));
             }
-        } else if (mode_ == patch_actions) { const char *actions[] = {ui::i18n::text(ui::i18n::Message::replace_with_selected), ui::i18n::text(ui::i18n::Message::insert_selected_after), ui::i18n::text(ui::i18n::Message::remove_patch), ui::i18n::text(ui::i18n::Message::move_earlier), ui::i18n::text(ui::i18n::Message::move_later)}; text(1, 1, actions[cursor_]); }
+        } else if (mode_ == patch_actions) {
+            const ui::i18n::Message actions[] = {ui::i18n::Message::replace_with_selected, ui::i18n::Message::insert_selected_after,
+                ui::i18n::Message::remove_patch, ui::i18n::Message::move_earlier, ui::i18n::Message::move_later};
+            text(1, 1, ui::i18n::text(actions[cursor_ + (managing_library_ ? 2 : 0)]));
+        }
         else if (mode_ == library || mode_ == adding) {
             ensure_picker();
             if (!songs_.counts().songs) text(1, 1, ui::i18n::text(ui::i18n::Message::save_song_first));
@@ -378,15 +434,17 @@ private:
             if (nav[0]) text(2, 3, prompt.clear().chord(nav[0], ui::i18n::text(ui::i18n::Message::next_action)).text());
             if (nav[1]) text(2, 2, prompt.clear().chord(nav[1], ui::i18n::text(ui::i18n::Message::back)).text());
         }
-        if (managing_setlists_) {
+        if (managing_library_) {
             for (unsigned pane : {0u, 2u})
                 for (unsigned line = 0; line < 3; ++line) panes[pane].lines[line].text[0] = 0;
-            text(1, 0, mode_ == sets ? ui::i18n::text(ui::i18n::Message::setlists) : managed_set_);
             text(1, 3, ui::i18n::text(ui::i18n::Message::settings));
             if (shortcut_hint_) {
                 std::snprintf(panes[2].lines[4].text, 64, "%s+%s %s", hardware_.control_label(Role::confirm),
                     hardware_.control_label(Role::back), ui::i18n::text(ui::i18n::Message::back));
             }
+        }
+        if (managing_setlists_) {
+            text(1, 0, mode_ == sets ? ui::i18n::text(ui::i18n::Message::setlists) : managed_set_);
             if (mode_ == set_actions) {
                 const ui::i18n::Message actions[] = {ui::i18n::Message::add_next,
                     ui::i18n::Message::add_to_end, ui::i18n::Message::remove_from_setlist};
@@ -398,10 +456,10 @@ private:
                     std::snprintf(panes[0].lines[2].text, 64, "%u/%u", entry_ + 1, unsigned(set->count));
                 }
             }
-            if ((mode_ == moving || mode_ == set_decision) && set) {
+            if ((mode_ == moving || mode_ == library_decision) && set) {
                 SongEntry entry;
-                const auto action = mode_ == moving || set_edit_ == SetEdit::move ? ui::i18n::Message::move
-                    : set_edit_ == SetEdit::insert ? ui::i18n::Message::add_action : ui::i18n::Message::remove_from_setlist;
+                const auto action = mode_ == moving || library_edit_ == LibraryEdit::move ? ui::i18n::Message::move
+                    : library_edit_ == LibraryEdit::insert ? ui::i18n::Message::add_action : ui::i18n::Message::remove_from_setlist;
                 text(0, 0, ui::i18n::text(action));
                 if (action == ui::i18n::Message::add_action) {
                     text(0, 1, picker_);
@@ -414,16 +472,36 @@ private:
                 }
                 if (panes[2].lines[2].text[0]) text(2, 0, ui::i18n::text(ui::i18n::Message::position_action));
             }
-            if (mode_ == set_decision) {
-                const auto action = set_choice_ == 0 ? ui::i18n::Message::save
-                    : set_choice_ == 1 ? ui::i18n::Message::discard : ui::i18n::Message::keep_editing;
-                text(1, 1, ui::i18n::text(action));
-                text(1, 2, ui::i18n::text(ui::i18n::Message::unsaved_edits));
-            } else if (mode_ == set_entries) {
+            if (mode_ == set_entries) {
                 prompt.clear().add(Role::previous_section, ui::i18n::text(ui::i18n::Message::edit_action));
                 if (set && set->count > 1) prompt.add(Role::confirm, ui::i18n::text(ui::i18n::Message::move));
                 text(2, 3, prompt.add(Role::back, ui::i18n::text(ui::i18n::Message::back)).text());
             }
+        }
+        if (managing_library_ && !managing_setlists_) {
+            text(1, 0, mode_ == library ? ui::i18n::text(ui::i18n::Message::songs) : song_name_);
+            if (mode_ == library_decision) {
+                if (library_edit_ == LibraryEdit::rename_song) {
+                    text(0, 0, ui::i18n::text(ui::i18n::Message::rename_song));
+                    text(0, 1, name_);
+                } else {
+                    const auto action = library_edit_ == LibraryEdit::remove_patch ? ui::i18n::Message::remove_patch
+                        : library_edit_ == LibraryEdit::move_patch_earlier ? ui::i18n::Message::move_earlier : ui::i18n::Message::move_later;
+                    text(0, 0, ui::i18n::text(action));
+                    SongSelection patch;
+                    if (songs_.patch_at(song_name_, patch_cursor_, patch)) {
+                        text(0, 1, patch.label[0] ? patch.label : patch.document[0] ? patch.key : ui::i18n::text(ui::i18n::Message::patch));
+                        if (const auto *song = songs_.song(song_name_))
+                            ui::i18n::format(panes[0].lines[2].text, 64, ui::i18n::Message::patch_position, patch_cursor_ + 1, (unsigned long)song->count);
+                    }
+                }
+            }
+        }
+        if (mode_ == library_decision) {
+            const auto action = library_choice_ == 0 ? ui::i18n::Message::save
+                : library_choice_ == 1 ? ui::i18n::Message::discard : ui::i18n::Message::keep_editing;
+            text(1, 1, ui::i18n::text(action));
+            text(1, 2, ui::i18n::text(ui::i18n::Message::unsaved_edits));
         }
         const char *feedback = mode_ == naming && dropped_keys_
             ? ui::i18n::text(ui::i18n::Message::keyboard_input_dropped) : feedback_;
