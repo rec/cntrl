@@ -2,7 +2,9 @@
 #include "ui/messages.h"
 #include "ui/fonts.h"
 #include "ui/presentation.h"
+#include "ui/preferences.h"
 #include "ui/prompts.h"
+#include "ui/raster.h"
 #include "ui/utf8.h"
 #include "songs.h"
 #include <algorithm>
@@ -44,8 +46,12 @@ public:
             review_library_edit(LibraryEdit::change_patch_value, patch_value);
         else if (mode_ == naming) {
             name_button(2);
-            if (mode_ != library_decision) leave();
-        } else if (mode_ != library_decision) leave();
+            if (mode_ == appearance_fields && appearance_changes_)
+                review_library_edit(LibraryEdit::appearance, appearance_fields);
+            else if (mode_ != library_decision) leave();
+        } else if ((mode_ == appearance_fields || mode_ == appearance_value) && appearance_changes_)
+            review_library_edit(LibraryEdit::appearance, mode_);
+        else if (mode_ != library_decision) leave();
         if (open()) render();
         return true;
     }
@@ -96,8 +102,9 @@ public:
         character_ = std::min(character_, length);
         if (key == '\b') {
             if (!character_) return;
-            std::memmove(name_ + character_ - 1, name_ + character_, length - character_ + 1);
-            --character_;
+            const unsigned previous = previous_character(character_);
+            std::memmove(name_ + previous, name_ + character_, length - character_ + 1);
+            character_ = previous;
         } else {
             if (length == sizeof(name_) - 1) return;
             std::memmove(name_ + character_ + 1, name_ + character_, length - character_ + 1);
@@ -118,6 +125,7 @@ private:
         feedback_[0] = 0;
         if (mode_ == naming) { name_button(button); render(); return; }
         if (mode_ == library_decision) { library_decision_button(button); if (open()) render(); return; }
+        if (mode_ == appearance_fields || mode_ == appearance_value) { appearance_button(button); render(); return; }
         if (mode_ == pick_patch_action) {
             const unsigned count = patch_actions_.size();
             if (button < 2) patch_action_ = (patch_action_ + (button ? 1 : count - 1)) % count;
@@ -174,7 +182,7 @@ private:
         unsigned count = mode_ == root ? 5 + bool(documents_ && documents_->document().valid() && documents_->document().page_layout().controllers()) : mode_ == sets ? songs_.counts().sets + !managing_setlists_
             : mode_ == library || mode_ == adding ? songs_.counts().songs
             : mode_ == editing ? 9 : mode_ == set_actions ? 3 + bool(current_set() && current_set()->count)
-            : mode_ == song_actions ? (managing_library_ ? 2 : 4) : mode_ == patch_actions ? (managing_library_ ? 4 : 5)
+            : mode_ == song_actions ? (managing_library_ ? 3 : 4) : mode_ == patch_actions ? (managing_library_ ? 4 : 5)
             : mode_ == patches ? (songs_.song(song_name_) ? songs_.song(song_name_)->count : 0)
             : mode_ == moving || mode_ == performance || mode_ == set_entries ? (current_set() ? current_set()->count : 0) : 0;
         if (button < 2 && (mode_ == library || mode_ == adding)) songs_.browse(picker_, picker_, button == 0);
@@ -210,6 +218,13 @@ private:
                 const Song *song = songs_.song(song_name_);
                 if (song) begin_name(song->name, false);
                 else ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::song_read_failed));
+            }
+            else if (managing_library_ && cursor_ == 2) {
+                if (songs_.song_appearance(song_name_, appearance_)) {
+                    library_generation_ = songs_.generation();
+                    appearance_field_ = appearance_changes_ = 0;
+                    mode_ = appearance_fields;
+                } else fail();
             }
             else if (cursor_ == 2 || managing_library_) { mode_ = patches; cursor_ = 0; }
             else if (cursor_ == 3) { songs_.choose_song(song_name_); perform(); }
@@ -294,7 +309,7 @@ private:
         render();
     }
 private:
-    enum Mode { closed, root, sets, set_entries, set_actions, library, song_actions, performance, editing, adding, moving, library_decision, naming, patches, patch_actions, pick_patch_action, patch_scope, patch_value };
+    enum Mode { closed, root, sets, set_entries, set_actions, library, song_actions, performance, editing, adding, moving, library_decision, naming, patches, patch_actions, pick_patch_action, patch_scope, patch_value, appearance_fields, appearance_value };
     Songs &songs_; Hardware &hardware_; SongCapture &capture_;
     Documents *documents_;
     Mode mode_ = closed, return_mode_ = root;
@@ -306,8 +321,12 @@ private:
     bool waiting_ = false;
     char feedback_[64] = {}, name_[64] = {};
     bool managing_library_ = false, managing_setlists_ = false, shortcut_hint_ = false, return_to_performance_ = false;
-    enum class LibraryEdit { move, insert, remove, rename_song, rename_setlist, remove_patch, move_patch_earlier, move_patch_later, change_patch_value };
+    enum class LibraryEdit { move, insert, remove, rename_song, rename_setlist, remove_patch, move_patch_earlier, move_patch_later, change_patch_value, appearance };
     LibraryEdit library_edit_ = LibraryEdit::move;
+    SongAppearance appearance_;
+    unsigned appearance_field_ = 0, appearance_changes_ = 0, color_component_ = 0;
+    int color_step_ = 1;
+    bool naming_caption_ = false;
     Mode library_resume_ = moving;
     unsigned set_index_ = 0, library_choice_ = 0;
     uint32_t library_generation_ = 0;
@@ -358,7 +377,9 @@ private:
             patch_banks_.release(); patch_actions_.release();
         }
         if (managing_setlists_) mode_ = set_entries;
-        else if (library_edit_ == LibraryEdit::rename_song) { mode_ = song_actions; cursor_ = 0; }
+        else if (library_edit_ == LibraryEdit::rename_song || library_edit_ == LibraryEdit::appearance) {
+            mode_ = song_actions; cursor_ = library_edit_ == LibraryEdit::appearance ? 2 : 0;
+        }
         else {
             mode_ = patches; cursor_ = patch_cursor_;
             if (!library_choice_ && library_edit_ == LibraryEdit::move_patch_earlier) --cursor_;
@@ -444,6 +465,7 @@ private:
         case LibraryEdit::insert: return songs_.insert(managed_set_, insertion_, picker_);
         case LibraryEdit::remove: return songs_.remove(managed_set_, entry_);
         case LibraryEdit::rename_song: return songs_.rename_song(song_name_, name_);
+        case LibraryEdit::appearance: return songs_.save_appearance(song_name_, appearance_);
         case LibraryEdit::rename_setlist: return songs_.rename_setlist(managed_set_, name_);
         case LibraryEdit::remove_patch: return songs_.remove_patch(song_name_, patch_cursor_);
         case LibraryEdit::move_patch_earlier: return songs_.move_patch(song_name_, patch_cursor_, true);
@@ -456,25 +478,109 @@ private:
     void fail() { ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::not_saved)); }
     void ensure_picker() { if (!songs_.song(picker_)) songs_.browse("", picker_, false); }
     void jump(bool backward) { ensure_picker(); songs_.browse(picker_, picker_, backward, true); }
-    void begin_name(const char *name, bool set) {
+    void begin_name(const char *name, bool set, bool caption = false) {
         std::snprintf(name_, 64, "%s", name); naming_set_ = set;
-        library_generation_ = songs_.generation();
+        naming_caption_ = caption;
+        if (!caption) library_generation_ = songs_.generation();
         dropped_keys_ = false;
         return_mode_ = mode_; mode_ = naming; character_ = 0;
+    }
+    unsigned previous_character(unsigned at) const {
+        do { --at; } while (at && (uint8_t(name_[at]) & 0xc0) == 0x80);
+        return at;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_appearance_button)
+#endif
+    void appearance_button(unsigned button) {
+        if (mode_ == appearance_fields) {
+            if (button < 2) appearance_field_ = (appearance_field_ + (button ? 1 : 3)) % 4;
+            else if (button == 2) {
+                if (!appearance_field_) begin_name(appearance_.title, false, true);
+                else { mode_ = appearance_value; color_component_ = 0; color_step_ = 1; }
+            } else if (button == 3 && (appearance_.fields & (1u << appearance_field_))) {
+                SongAppearance compiled;
+                if (songs_.generation() != library_generation_ || !songs_.song_appearance(song_name_, compiled, true)) {
+                    fail();
+                    return;
+                }
+                switch (appearance_field_) {
+                case 0: std::memcpy(appearance_.title, compiled.title, sizeof(appearance_.title)); break;
+                case 1: appearance_.foreground = compiled.foreground; break;
+                case 2: appearance_.background = compiled.background; break;
+                case 3: appearance_.font = compiled.font; break;
+                }
+                appearance_.fields &= ~(1u << appearance_field_);
+                appearance_changes_ |= 1u << appearance_field_;
+            } else if (button == 5) {
+                if (appearance_changes_) review_library_edit(LibraryEdit::appearance, appearance_fields);
+                else { mode_ = song_actions; cursor_ = 2; }
+            }
+            return;
+        }
+        if (button == 2 || button == 5) { mode_ = appearance_fields; return; }
+        if (appearance_field_ == 3) {
+            if (button >= 2) return;
+            constexpr unsigned count = sizeof(ui::preference_faces);
+            const unsigned start = ui::preference_face_index(appearance_.font);
+            for (unsigned i = 1; i <= count; ++i) {
+                const uint8_t font = ui::preference_faces[(start + (button ? i : count - i)) % count];
+                if (!hardware_.supports_font(font, 16)) continue;
+                if (font != appearance_.font) {
+                    appearance_.font = font;
+                    appearance_.fields |= SongAppearance::font_choice;
+                    appearance_changes_ |= SongAppearance::font_choice;
+                }
+                break;
+            }
+        } else if (button == 3) color_component_ = (color_component_ + 1) % 3;
+        else if (button == 4) color_step_ = color_step_ == 1 ? 10 : 1;
+        else if (button < 2) {
+            auto &color = appearance_field_ == 1 ? appearance_.foreground : appearance_.background;
+            const uint16_t adjusted = ui::adjust_color(color, color_component_, button ? color_step_ : -color_step_);
+            if (adjusted != color) {
+                color = adjusted;
+                const auto flag = appearance_field_ == 1 ? SongAppearance::text_color : SongAppearance::background_color;
+                appearance_.fields |= flag;
+                appearance_changes_ |= flag;
+            }
+        }
     }
     void name_button(unsigned button) {
         unsigned length = unsigned(std::strlen(name_));
         if (button == 5 && !managing_library_) { mode_ = return_mode_; return; }
-        if (button == 3 && character_) --character_;
-        if (button == 4 && character_ < 62) ++character_;
+        if (button == 3 && character_) character_ = character_ > length ? character_ - 1 : previous_character(character_);
+        if (button == 4 && character_ < 62) {
+            const char *next = name_ + character_;
+            uint32_t code;
+            if (character_ < length && ui::utf8::next(next, code)) character_ = unsigned(next - name_);
+            else ++character_;
+        }
         if (button < 2 && character_ < sizeof(name_) - 1) {
             while (length <= character_) name_[length++] = ' ';
             name_[length] = 0;
-            char &c = name_[character_]; c = char(32 + (c - 32 + 95 + (button == 0 ? -1 : 1)) % 95);
+            char &c = name_[character_];
+            if (uint8_t(c) >= 128) {
+                const char *next = &c;
+                uint32_t code;
+                if (!ui::utf8::next(next, code)) return;
+                std::memmove(&c + 1, next, name_ + length - next + 1);
+                c = button ? 'A' : ' ';
+            } else c = char(32 + (c - 32 + 95 + (button == 0 ? -1 : 1)) % 95);
         }
         if (button == 2 || button == 5) {
             dropped_keys_ = false;
             while (length && name_[length - 1] == ' ') name_[--length] = 0;
+            if (naming_caption_) {
+                if (std::strcmp(appearance_.title, name_)) {
+                    std::memset(appearance_.title, 0, sizeof(appearance_.title));
+                    std::memcpy(appearance_.title, name_, length);
+                    appearance_.fields |= SongAppearance::caption;
+                    appearance_changes_ |= SongAppearance::caption;
+                }
+                mode_ = appearance_fields;
+                return;
+            }
             if (managing_library_) {
                 if (std::strcmp(naming_set_ ? managed_set_ : song_name_, name_))
                     review_library_edit(naming_set_ ? LibraryEdit::rename_setlist : LibraryEdit::rename_song, naming);
@@ -505,7 +611,11 @@ private:
             return;
         }
         auto text = [&](unsigned pane, unsigned line, const char *s) { ui::copy_caption(panes[pane].lines[line], s); };
-        text(0, 0, songs_.removed() ? ui::i18n::text(ui::i18n::Message::current_removed) : ui::i18n::text(ui::i18n::Message::current)); text(0, 1, songs_.current_name());
+        const auto title = [&](unsigned pane, unsigned line, const char *name) {
+            songs_.song_title(name, panes[pane].lines[line].text);
+        };
+        text(0, 0, songs_.removed() ? ui::i18n::text(ui::i18n::Message::current_removed) : ui::i18n::text(ui::i18n::Message::current));
+        title(0, 1, songs_.current_name());
         SongSelection current_patch;
         if (songs_.current_patch(current_patch)) {
             text(0, 2, current_patch.label[0] ? current_patch.label : current_patch.document[0] ? current_patch.key : ui::i18n::text(ui::i18n::Message::patch));
@@ -521,7 +631,8 @@ private:
         SongEntry next_entry;
         const Song *upcoming = set && next < set->count && songs_.entry(set->name, next, next_entry) ? songs_.song(next_entry.song) : nullptr;
         if (!managing_library_) style(2, upcoming);
-        text(2, 1, upcoming ? upcoming->name : set && !set->count ? ui::i18n::text(ui::i18n::Message::add_songs) : ui::i18n::text(ui::i18n::Message::end_of_set));
+        if (upcoming) title(2, 1, upcoming->name);
+        else text(2, 1, ui::i18n::text(set && !set->count ? ui::i18n::Message::add_songs : ui::i18n::Message::end_of_set));
         SongSelection next_patch;
         if (songs_.upcoming_patch(next_patch)) {
             if (!managing_library_) style(2, songs_.song(songs_.current_name()));
@@ -551,7 +662,8 @@ private:
         else if (mode_ == song_actions) {
             const ui::i18n::Message actions[] = {ui::i18n::Message::rename_song, ui::i18n::Message::use_selected_patch,
                 ui::i18n::Message::edit_patches, ui::i18n::Message::perform_song};
-            text(1, 1, ui::i18n::text(actions[managing_library_ && cursor_ ? 2 : cursor_]));
+            if (managing_library_ && cursor_ == 2) text(1, 1, "Appearance");
+            else text(1, 1, ui::i18n::text(actions[managing_library_ && cursor_ ? 2 : cursor_]));
         }
         else if (mode_ == patches) {
             SongSelection selected;
@@ -573,18 +685,20 @@ private:
             else {
                 const auto *found = songs_.song(picker_); if (!found) return; const Song s = *found;
                 style(1, &s);
-                text(1, 1, s.name);
+                if (managing_library_) text(1, 1, s.name);
+                else title(1, 1, s.name);
                 ui::i18n::format(panes[1].lines[2].text, 64, ui::i18n::Message::patches_count, (unsigned long)s.count);
             }
         } else if (mode_ == performance && !set && songs_.performing()) {
             style(1, songs_.song(songs_.performance_name()));
             text(1, 0, ui::i18n::text(ui::i18n::Message::perform_song));
-            text(1, 1, songs_.performance_name());
+            title(1, 1, songs_.performance_name());
         } else if (set && set->count) {
             cursor_ %= set->count; SongEntry selected;
             const auto *item = songs_.entry(set->name, cursor_, selected) ? songs_.song(selected.song) : nullptr;
             style(1, item);
-            text(1, 1, item ? item->name : ui::i18n::text(ui::i18n::Message::missing_song));
+            if (item) title(1, 1, item->name);
+            else text(1, 1, ui::i18n::text(ui::i18n::Message::missing_song));
             std::snprintf(panes[1].lines[2].text, 64, "%u/%u", cursor_ + 1, unsigned(set->count));
         } else text(1, 1, ui::i18n::text(ui::i18n::Message::add_songs));
         prompt.pair(Role::previous, Role::next, mode_ == performance ? ui::i18n::text(ui::i18n::Message::entry_action) : mode_ == naming ? ui::i18n::text(ui::i18n::Message::letter_action) : ui::i18n::text(ui::i18n::Message::browse));
@@ -654,6 +768,37 @@ private:
         }
         if (managing_library_ && !managing_setlists_) {
             text(1, 0, mode_ == library ? ui::i18n::text(ui::i18n::Message::songs) : song_name_);
+            if (mode_ == naming && naming_caption_) text(0, 0, "Display name");
+            if (mode_ == appearance_fields || mode_ == appearance_value) {
+                constexpr const char *fields[] = {"Display name", "Text color", "Background color", "Font"};
+                text(1, 1, fields[appearance_field_]);
+                text(1, 2, "");
+                text(0, 3, prompt.clear().pair(Role::previous, Role::next,
+                    ui::i18n::text(mode_ == appearance_value ? ui::i18n::Message::adjust : ui::i18n::Message::browse)).text());
+                if (appearance_changes_ & (1u << appearance_field_))
+                    text(2, 2, ui::i18n::text(ui::i18n::Message::changed));
+                if (mode_ == appearance_fields && (appearance_.fields & (1u << appearance_field_)))
+                    text(1, 2, prompt.clear().add(Role::previous_section, "Use compiled value").text());
+                if (!appearance_field_) text(2, 1, appearance_.title[0] ? appearance_.title : song_name_);
+                else if (appearance_field_ == 3) {
+                    const unsigned selected = ui::preference_face_index(appearance_.font);
+                    text(2, 1, ui::preference_faces[selected] == appearance_.font ? ui::preference_face_names[selected] : "Embedded font");
+                    panes[2].lines[1].graphics.font = appearance_.font;
+                } else {
+                    const uint16_t color = appearance_field_ == 1 ? appearance_.foreground : appearance_.background;
+                    ui::color_caption(panes[2].lines[1].text, 64, color);
+                    if (mode_ == appearance_value) {
+                        if (hardware_.display_count() >= 3) {
+                            panes[2].graphics.background = color;
+                            const uint16_t foreground = ui::Raster::luminance(color) < 1790 ? 0xffff : 0;
+                            for (auto &line : panes[2].lines) line.graphics.foreground = foreground;
+                        }
+                        char step[16]; std::snprintf(step, sizeof(step), "Step %d", color_step_);
+                        text(1, 2, prompt.clear().add(Role::previous_section, ui::preference_color_channel[color_component_])
+                            .add(Role::next_section, step).text());
+                    }
+                }
+            }
             if (show_action_picker() && (mode_ == pick_patch_action || mode_ == patch_scope || mode_ == patch_value
                 || (mode_ == library_decision && library_edit_ == LibraryEdit::change_patch_value))) {
                 const auto &action = patch_actions_[patch_action_];
@@ -728,6 +873,9 @@ private:
                 if (library_edit_ == LibraryEdit::rename_song) {
                     text(0, 0, ui::i18n::text(ui::i18n::Message::rename_song));
                     text(0, 1, name_);
+                } else if (library_edit_ == LibraryEdit::appearance) {
+                    text(0, 0, "Appearance");
+                    text(0, 1, appearance_.title[0] ? appearance_.title : song_name_);
                 } else if (library_edit_ != LibraryEdit::change_patch_value) {
                     const auto action = library_edit_ == LibraryEdit::remove_patch ? ui::i18n::Message::remove_patch
                         : library_edit_ == LibraryEdit::move_patch_earlier ? ui::i18n::Message::move_earlier : ui::i18n::Message::move_later;

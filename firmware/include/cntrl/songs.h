@@ -29,6 +29,12 @@ struct SongEntry { char song[64] = {}; };
 struct Setlist { char name[64] = {}; uint32_t count = 0, reserved = 0xffffffff; };
 struct SongCounts { uint32_t songs = 0, sets = 0; };
 #pragma pack(pop)
+struct SongAppearance {
+    enum Field : uint8_t { caption = 1, text_color = 2, background_color = 4, font_choice = 8 };
+    char title[64] = {};
+    uint16_t foreground = 0, background = 0xffff;
+    uint8_t font = 17, fields = 0;
+};
 static_assert(sizeof(SongSelection) == 200 && sizeof(Song) == 285 && sizeof(Setlist) == 72 && sizeof(SongEntry) == 64 && sizeof(SongCounts) == 8);
 template<class T>
 #ifdef CNTRL_FLASH_ROUTINE
@@ -137,6 +143,7 @@ public:
     bool boot(bool initialize_empty = true) {
         if (busy()) return false;
         counts_ = {}; active_ = length_ = source_count_ = 0;
+        song_cache_ = Song();
         can_undo_ = invalid_ = false;
         for (auto &slot : slots_) slot = Slot{};
         bool found = false, supported = false; uint32_t best = 0;
@@ -237,8 +244,8 @@ public:
         if (shared && (!source_offset(selection.source, offset, length) || length != document.length())) return false;
         if (!shared && document.length() > 0xffffffffu - 24 - length_) return false;
         if (!prepare(shared ? Edit::none : Edit::replace_patch, name)) return false;
-        patch_value_bytes_.swap(bytes);
-        job_.source_data = patch_value_bytes_.data;
+        edit_bytes_.swap(bytes);
+        job_.source_data = edit_bytes_.data;
         job_.source_data_size = document.length();
         if (shared) {
             job_.replacement_source = offset;
@@ -263,11 +270,81 @@ public:
         if (!name[0]) return nullptr;
         if (!std::strcmp(song_cache_.name, name)) return &song_cache_;
         for (unsigned i = 0; i < counts_.songs; ++i) {
-            if (!song_at(i, song_cache_)) return nullptr;
+            if (!song_at(i, song_cache_)) break;
+            if (std::strcmp(song_cache_.name, name)) continue;
+            if (!cache_appearance(i)) break;
             song_cache_index_ = i;
-            if (!std::strcmp(song_cache_.name, name)) return &song_cache_;
+            return &song_cache_;
         }
+        song_cache_.name[0] = 0;
         return nullptr;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_title_read)
+#endif
+    void song_title(const char *name, char (&title)[64]) const {
+        if (song(name) && (song_appearance_fields_ & SongAppearance::caption)
+            && read_caption(song_appearance_at_, title) && title[0]) return;
+        ui::utf8::copy(title, sizeof(title), name);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_appearance_read)
+#endif
+    bool song_appearance(const char *name, SongAppearance &appearance, bool compiled = false) const {
+        const auto *item = song(name);
+        if (!item) return false;
+        Song original;
+        if (compiled) {
+            if (!song_at(song_cache_index_, original)) return false;
+            item = &original;
+        }
+        appearance = SongAppearance{};
+        if (!compiled && !read_appearance(song_appearance_at_, appearance)) return false;
+        appearance.foreground = item->foreground;
+        appearance.background = item->background;
+        appearance.font = item->font;
+        if (!(appearance.fields & SongAppearance::caption)) read_compiled_title(appearance.title);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_appearance_save)
+#endif
+    bool save_appearance(const char *name, const SongAppearance &appearance) {
+        if ((appearance.fields & ~15u)
+            || ((appearance.fields & SongAppearance::font_choice) && !ui_font_valid(appearance.font))
+            || (appearance.title[0] && !label_valid(reinterpret_cast<const uint8_t *>(appearance.title), 64))
+            || !song(name)) return false;
+        const unsigned index = song_cache_index_;
+        const auto section = extended_artwork(slots_[active_].view.auxiliary_record_offset).appearance;
+        unsigned offset; bool found;
+        if (!appearance_position(section, index, offset, found) || (!found && !appearance.fields)
+            || !prepare(Edit::appearance, name)) return false;
+        if (!edit_bytes_.resize(sizeof(AppearanceEdit))) { finish_job(false); return false; }
+        auto &edit = *new (edit_bytes_.data) AppearanceEdit{};
+        const auto &source = slots_[job_.source];
+        const auto &view = source.view;
+        const unsigned start = view.offset + view.length;
+        unsigned header = 0;
+        if (!section.offset) {
+            offset = source.length;
+            header = binary::record_size;
+            binary::write16(edit.bytes, binary::song_appearance);
+            put32(edit.bytes + 4, binary::song_appearance_size);
+        } else if (!found) {
+            edit.size_at = section.offset - start - 4;
+            edit.size = section.length + binary::song_appearance_size;
+        }
+        auto *row = edit.bytes + header;
+        put32(row, index);
+        row[4] = appearance.fields; row[5] = appearance.font;
+        binary::write16(row + 6, appearance.foreground);
+        binary::write16(row + 8, appearance.background);
+        std::memcpy(row + 10, appearance.title, sizeof(appearance.title));
+        edit.at = offset - start;
+        edit.written = header + binary::song_appearance_size;
+        edit.growth = found ? 0 : edit.written;
+        start_hash();
+        return busy();
     }
     bool set_at(unsigned index, Setlist &result, unsigned *position = nullptr) const {
         unsigned offset; if (!songs_end(offset)) return false;
@@ -330,6 +407,9 @@ public:
         if (!prepare(Edit::change_song, name)) return false;
         job_.selection = selection; return prepare_source(job_.selection);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_new_setlist)
+#endif
     bool new_setlist(char *name) {
         Setlist s;
         for (unsigned n = counts_.sets + 1;; ++n) {
@@ -375,7 +455,7 @@ public:
     }
     bool insert(const char *set, unsigned at, const char *song_name) {
         if (!prepare(Edit::insert, set)) return false;
-        job_.at = at; std::snprintf(job_.song, 64, "%s", song_name); return true;
+        job_.at = at; std::snprintf(job_.name, 64, "%s", song_name); return true;
     }
     bool remove(const char *set, unsigned at) {
         if (!prepare(Edit::remove, set)) return false;
@@ -547,11 +627,15 @@ public:
         std::snprintf(song.title.text, sizeof(song.title.text), "%s", current_song_);
         std::snprintf(set.title.text, sizeof(set.title.text), "%s", active_set());
         const auto &view = slots_[active_].view;
-        if (view.artwork_offset) if (const auto *current = this->song(current_song_)) {
-            presentation_record(song, view.artwork_offset, view.artwork_length, song_cache_index_);
+        if (const auto *current = this->song(current_song_)) {
+            if (view.artwork_offset)
+                presentation_record(song, view.artwork_offset, view.artwork_length, song_cache_index_);
+            if ((song_appearance_fields_ & SongAppearance::caption) && read_caption(song_appearance_at_, song.title.text)
+                && !song.title.text[0] && !song.bitmap.source) std::strcpy(song.title.text, current->name);
             const unsigned contrast = view.title_contrast_offset;
             uint8_t mode = 0, length[4];
-            if (song.bitmap.source && song.title.text[0] && contrast && read_payload(contrast - 4, length, 4)
+            if (song.bitmap.source && song_appearance_fields_) song.title.auto_contrast = true;
+            else if (song.bitmap.source && song.title.text[0] && contrast && read_payload(contrast - 4, length, 4)
                 && song_cache_index_ < binary::read32(length)
                 && read_payload(contrast + song_cache_index_, &mode, 1))
                 title_contrast(song.title, mode, current->foreground);
@@ -580,8 +664,82 @@ public:
 private:
     struct ArtworkRecords {
         struct Record { unsigned offset = 0, length = 0; };
-        Record set, set_style, scene, scene_style;
+        Record set, set_style, scene, scene_style, appearance;
     };
+    struct AppearanceEdit {
+        uint8_t bytes[binary::song_appearance_size + binary::record_size] = {};
+        unsigned at = 0, written = 0, growth = 0, size_at = UINT32_MAX, size = 0;
+    };
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_compiled_title)
+#endif
+    void read_compiled_title(char (&title)[64]) const {
+        const auto &view = slots_[active_].view;
+        uint8_t count[4];
+        if (view.artwork_offset && read_payload(view.artwork_offset, count, sizeof(count))
+            && song_cache_index_ < u32(count)
+            && read_payload(view.artwork_offset + 4 + 72 * song_cache_index_, reinterpret_cast<uint8_t *>(title), sizeof(title))
+            && label_valid(reinterpret_cast<const uint8_t *>(title), sizeof(title))) return;
+        std::memset(title, 0, sizeof(title));
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_appearance_position)
+#endif
+    bool appearance_position(ArtworkRecords::Record section, unsigned index, unsigned &offset, bool &found) const {
+        unsigned begin = 0, end = section.length / binary::song_appearance_size;
+        found = false;
+        while (begin < end) {
+            const unsigned mid = begin + (end - begin) / 2;
+            const unsigned at = section.offset + mid * binary::song_appearance_size;
+            uint8_t key[4];
+            if (!read_payload(at, key, sizeof(key))) return false;
+            const unsigned value = binary::read32(key);
+            if (value == index) { offset = at; found = true; return true; }
+            if (value < index) begin = mid + 1;
+            else end = mid;
+        }
+        offset = section.offset + begin * binary::song_appearance_size;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_cache_appearance)
+#endif
+    bool cache_appearance(unsigned index) const {
+        const auto section = extended_artwork(slots_[active_].view.auxiliary_record_offset).appearance;
+        unsigned offset; bool found;
+        if (!appearance_position(section, index, offset, found)) return false;
+        song_appearance_at_ = found ? offset : 0;
+        uint8_t style[6] = {};
+        if (found && !read_payload(offset + 4, style, sizeof(style))) return false;
+        song_appearance_fields_ = style[0];
+        if (style[0] & SongAppearance::font_choice) song_cache_.font = style[1];
+        if (style[0] & SongAppearance::text_color) song_cache_.foreground = u16(style + 2);
+        if (style[0] & SongAppearance::background_color) song_cache_.background = u16(style + 4);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_read_caption)
+#endif
+    bool read_caption(unsigned offset, char (&title)[64]) const {
+        char caption[64];
+        if (!read_payload(offset + 10, reinterpret_cast<uint8_t *>(caption), sizeof(caption))
+            || (caption[0] && !label_valid(reinterpret_cast<const uint8_t *>(caption), sizeof(caption)))) return false;
+        std::strcpy(title, caption);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_read_appearance)
+#endif
+    bool read_appearance(unsigned offset, SongAppearance &appearance) const {
+        if (!offset) return true;
+        uint8_t row[binary::song_appearance_size];
+        if (!read_payload(offset, row, sizeof(row))) return false;
+        if (row[10] && !label_valid(row + 10, 64)) return false;
+        appearance.fields = row[4]; appearance.font = row[5];
+        appearance.foreground = u16(row + 6); appearance.background = u16(row + 8);
+        std::memcpy(appearance.title, row + 10, sizeof(appearance.title));
+        return true;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(song_extended_artwork)
 #endif
@@ -597,6 +755,7 @@ private:
             case 9: result.set_style = {position, size}; break;
             case 10: result.scene = {position, size}; break;
             case 11: result.scene_style = {position, size}; break;
+            case binary::song_appearance: result.appearance = {position, size}; break;
             }
             position += size;
         }
@@ -808,7 +967,7 @@ private:
             if (!selection_value.document[0]) { inline_source = true; greatest_source = std::max(greatest_source, unsigned(selection_value.source)); }
         }
     };
-    enum class Edit { none, append_song, rename_song, change_song, rename_set, insert, remove, move,
+    enum class Edit { none, append_song, rename_song, change_song, rename_set, insert, remove, move, appearance,
         insert_patch, replace_patch, remove_patch, move_patch };
     enum class Phase { idle, prepare, source_envelope, source_structure,
         hash, begin, header, write, footer, close, verify_header, verify_envelope, verify_structure };
@@ -831,13 +990,13 @@ private:
         bool removed = false;
         char choose[64] = {};
         Edit edit = Edit::none;
-        char target[64] = {}, song[64] = {};
+        char target[64] = {};
         unsigned at = 0, to = 0;
         char name[64] = {};
         SongSelection selection, previous;
         Cursor cursor;
     } job_;
-    MemoryBuffer patch_value_bytes_;
+    MemoryBuffer edit_bytes_;
     Phase phase_ = Phase::idle;
     bool good_ = true;
     Storage &storage_; SongResolver &resolver_;
@@ -854,7 +1013,8 @@ private:
     SongCounts counts_;
     Documents *documents_ = nullptr;
     mutable Song song_cache_;
-    mutable unsigned song_cache_index_ = 0;
+    mutable unsigned song_cache_index_ = 0, song_appearance_at_ = 0;
+    mutable uint8_t song_appearance_fields_ = 0;
     mutable Setlist set_cache_;
     mutable unsigned set_offset_ = 0, set_cache_index_ = 0;
     uint32_t generation_ = 0, crc_ = checksum(reinterpret_cast<const uint8_t *>(&counts_), sizeof(counts_));
@@ -1139,7 +1299,7 @@ private:
             if (job_.edit == Edit::insert) {
                 if (length_ > 0xffffffffu - 20 - sizeof(SongEntry)) { finish_job(false); return; }
                 ++job_.change.value.count; job_.has_change = true;
-                SongEntry e; std::snprintf(e.song, 64, "%s", job_.song);
+                SongEntry e; std::snprintf(e.song, 64, "%s", job_.name);
                 if (!solo_ && !std::strcmp(active_set_, job_.target) && position_ != 0xffffffffu
                     && (job_.at < position_ || (!boundary() && !removed_ && job_.at == position_))) ++job_.playback.entry;
                 plan(c.position + job_.at * sizeof(SongEntry), 0, &e, sizeof(e));
@@ -1239,7 +1399,7 @@ private:
     void finish_job(bool good) {
         if (job_.opened) { storage_.finish(); job_.opened = false; }
         good_ = good; if (!good) error_ = ui::i18n::text(ui::i18n::Message::not_saved);
-        patch_value_bytes_.clear();
+        edit_bytes_.clear();
         phase_ = Phase::idle;
     }
     void header(uint8_t *bytes) const {
@@ -1315,9 +1475,42 @@ private:
     void start_hash() {
         const auto &source = slots_[job_.source];
         job_.extensions = source.length - source.view.offset - source.view.length;
+        if (job_.edit == Edit::appearance)
+            job_.extensions += reinterpret_cast<const AppearanceEdit *>(edit_bytes_.data)->growth;
         if (!job_.sealed && !binary::prefix(job_.prefix, binary::Kind::songs, job_.length, job_.extensions)) { finish_job(false); return; }
         job_.position = 0; job_.running_crc = 0xffffffff; job_.cursor = Cursor(); job_.cursor.verify_sources = false; phase_ = Phase::hash;
         update_crc(job_.running_crc, job_.prefix, 28);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(song_stream_extensions)
+#endif
+    bool stream_extensions(uint8_t *buffer, unsigned n) {
+        const auto &source = slots_[job_.source];
+        const unsigned start = source.base + source.view.offset + source.view.length;
+        if (job_.edit != Edit::appearance)
+            return storage_.read(job_.source, start + job_.position - job_.length, buffer, n);
+        const auto &edit = *reinterpret_cast<const AppearanceEdit *>(edit_bytes_.data);
+        for (unsigned i = 0; i < n;) {
+            const unsigned at = job_.position - job_.length + i;
+            unsigned take = n - i;
+            if (at >= edit.at && at - edit.at < edit.written) {
+                const unsigned within = at - edit.at;
+                take = std::min(take, edit.written - within);
+                std::memcpy(buffer + i, edit.bytes + within, take);
+            } else if (at >= edit.size_at && at - edit.size_at < 4) {
+                const unsigned within = at - edit.size_at;
+                uint8_t size[4]; put32(size, edit.size);
+                take = std::min(take, 4 - within);
+                std::memcpy(buffer + i, size + within, take);
+            } else {
+                if (at < edit.at) take = std::min(take, edit.at - at);
+                if (at < edit.size_at) take = std::min(take, edit.size_at - at);
+                const unsigned original = at >= edit.at ? at - edit.growth : at;
+                if (!storage_.read(job_.source, start + original, buffer + i, take)) return false;
+            }
+            i += take;
+        }
+        return true;
     }
     void publish() {
         undo_slot_ = active_; undo_cursor_ = continuation(); undo_removed_ = removed_;
@@ -1375,11 +1568,7 @@ private:
             if (job_.position < job_.length) {
                 n = std::min(n, job_.length - job_.position);
                 if (!stream(buffer, n)) { finish_job(false); return; }
-            } else {
-                const auto &source = slots_[job_.source];
-                unsigned offset = source.base + source.view.offset + source.view.length + job_.position - job_.length;
-                if (!storage_.read(job_.source, offset, buffer, n)) { finish_job(false); return; }
-            }
+            } else if (!stream_extensions(buffer, n)) { finish_job(false); return; }
             update_crc(job_.running_crc, buffer, n);
             if (phase_ == Phase::write && !storage_.write(buffer, n)) { finish_job(false); return; }
             job_.position += n;

@@ -39,6 +39,7 @@ struct TextLine {
     bool artwork_foreground = false;
     bool artwork_background = false;
     bool flag_marked = false;
+    bool auto_contrast = false;
     uint16_t artwork_index = 0;
     uint32_t artwork_generation = 0;
 #ifdef CNTRL_EMULATOR

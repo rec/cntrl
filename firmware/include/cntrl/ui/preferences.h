@@ -10,6 +10,22 @@ inline constexpr const char *preference_face_names[] = {"Arimo", "AtkinsonNextSe
 inline constexpr unsigned preference_color_shift[] = {11, 5, 0};
 inline constexpr unsigned preference_color_max[] = {31, 63, 31};
 inline constexpr const char *preference_color_channel[] = {"Red", "Green", "Blue"};
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(adjust_preference_color)
+#endif
+inline uint16_t adjust_color(uint16_t color, unsigned component, int delta) {
+    const unsigned shift = preference_color_shift[component];
+    const unsigned maximum = preference_color_max[component];
+    const int value = int((color >> shift) & maximum) + delta;
+    return uint16_t((color & ~(maximum << shift)) | (unsigned(std::clamp(value, 0, int(maximum))) << shift));
+}
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(preference_color_caption)
+#endif
+inline void color_caption(char *text, unsigned capacity, uint16_t color) {
+    std::snprintf(text, capacity, "#%02X%02X%02X", unsigned((color >> 11) * 255 / 31),
+        unsigned(((color >> 5) & 63) * 255 / 63), unsigned((color & 31) * 255 / 31));
+}
 
 inline constexpr Preference utility_preferences[] = {
     {page_preference + PageSettings::clock_timeout, PreferenceKind::milliseconds, 1, 65535, "Time", "Clock timeout (ms)", {}},
@@ -49,6 +65,9 @@ inline const Preference &preference_at(unsigned index) {
 inline bool optional_tempo_preference(unsigned field) {
     return field >= page_preference + PageSettings::slot2 && field <= page_preference + PageSettings::slot4;
 }
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(preference_face_index)
+#endif
 inline unsigned preference_face_index(unsigned face) {
     for (unsigned i = 0; i < sizeof(preference_faces); ++i)
         if (preference_faces[i] == face) return i;

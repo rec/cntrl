@@ -292,7 +292,7 @@ private:
                 || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.fit != b.fit || a.stippled != b.stippled
                 || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color || a.outline != b.outline
                 || a.artwork_index != b.artwork_index || a.artwork_generation != b.artwork_generation
-                || a.flag_marked != b.flag_marked;
+                || a.flag_marked != b.flag_marked || a.auto_contrast != b.auto_contrast;
 #ifdef CNTRL_EMULATOR
             if (!translation_regions_.empty())
                 changed = changed || a.translation_id != b.translation_id || a.translation_short != b.translation_short
@@ -503,7 +503,7 @@ private:
         }
         auto &line = painting_.lines[field_];
         const int y = text_y(field_);
-        if (field_ && painting_.styled_body && !letter_ && !outline_painted_ && line.text[0])
+        if ((line.auto_contrast || (field_ && painting_.styled_body)) && !letter_ && !outline_painted_ && line.text[0])
             raster_.artwork_contrast(line, y);
         if (line.artwork_index && paint_line_artwork(line, v, y)) return;
         const bool heavier = painting_.scene && (field_ == 0 || field_ == 2);

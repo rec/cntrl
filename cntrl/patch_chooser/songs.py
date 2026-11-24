@@ -21,6 +21,7 @@ from pydantic import (
 )
 from tomlkit.exceptions import ParseError
 
+from ..fonts.catalogue import UI_FONTS
 from . import (
     binary_format,
     compiler,
@@ -655,6 +656,7 @@ def _decode(data: bytes) -> Library:
     setlist_artwork: list[tuple[str, str, bytes]] = []
     scene_artwork: list[tuple[str, str, bytes]] = []
     scene_image_sources: dict[str, str] = {}
+    appearances: dict[int, tuple[int, int, int, int, str]] = {}
     if data.startswith(binary_format.MAGIC):
         for record in binary_format.unpack(data, binary_format.Kind.songs).records:
             if record.tag == binary_format.SONG_ARTWORK:
@@ -663,6 +665,30 @@ def _decode(data: bytes) -> Library:
                 setlist_artwork = song_artwork.unpack(record.data)
             if record.tag == binary_format.SCENE_ARTWORK:
                 scene_artwork = song_artwork.unpack(record.data)
+            if record.tag == binary_format.SONG_APPEARANCE:
+                previous = -1
+                for (
+                    index,
+                    fields,
+                    font,
+                    foreground,
+                    background,
+                    title,
+                ) in APPEARANCE.iter_unpack(record.data):
+                    if (
+                        not previous < index < len(song_headers)
+                        or fields & ~15
+                        or b'\0' not in title
+                    ):
+                        raise SongLibraryError('invalid saved song appearance')
+                    appearances[index] = (
+                        fields,
+                        font,
+                        foreground,
+                        background,
+                        _string(title),
+                    )
+                    previous = index
             if record.tag == binary_format.SONG_FORMATTING:
                 preferences = tomlkit.parse(record.data.decode()).unwrap()
                 authored_styles = preferences.pop('authored_styles', [])
@@ -772,6 +798,28 @@ def _decode(data: bytes) -> Library:
         )
         if index < len(artwork) and artwork[index][1]:
             style['image'] = artwork[index][1]
+        caption = artwork[index][0] if index < len(artwork) else ''
+        if index in appearances:
+            fields, font, foreground, background, title = appearances[index]
+            if fields & 1:
+                caption = title
+            for flag, key, color in (
+                (2, 'foreground_color', foreground),
+                (4, 'background_color', background),
+            ):
+                if fields & flag:
+                    style[key] = '0x{:02X}{:02X}{:02X}'.format(
+                        (color >> 11) * 255 // 31,
+                        ((color >> 5) & 63) * 255 // 63,
+                        (color & 31) * 255 // 31,
+                    )
+            if fields & 8:
+                name_for_font = next(
+                    (n for n, f in UI_FONTS.items() if f == font), None
+                )
+                if name_for_font is None:
+                    raise SongLibraryError('invalid saved song font')
+                style['font_name'] = name_for_font
         songs.append(
             Song.model_validate(
                 {
@@ -780,9 +828,7 @@ def _decode(data: bytes) -> Library:
                     'fast_switches': song_fast_switches.get(str(index)),
                     'navigation': scope.get('navigation'),
                     'midi': scope_patches[0].get('midi') if scope_patches else None,
-                    'display_name': artwork[index][0] or None
-                    if index < len(artwork)
-                    else None,
+                    'display_name': caption or None,
                     'patches': patches,
                     'bindings': bindings,
                     **{
@@ -1467,4 +1513,5 @@ def _read_authoring[Document: BaseModel](
 
 SELECTION = struct.Struct('<64s64s64sII')
 SONG = struct.Struct('<64sIIIIHHB')
+APPEARANCE = struct.Struct('<IBBHH64s')
 SET = struct.Struct('<64sII')

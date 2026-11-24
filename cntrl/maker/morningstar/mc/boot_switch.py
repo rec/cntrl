@@ -139,6 +139,7 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             # Management screens, browsing and saved-return decoding are cold.
             # Leave the MIDI preparation/queue iteration paths in ITCM.
             '*(.text._ZN5cntrl7SongsUi*)',
+            '*(.text._ZZN5cntrl7SongsUi*)',
             # The action picker only walks and lists actions while editing.
             '*(.text._ZN5cntrl11CheckedListI*EditableAction*)',
             '*(.text._ZZN5cntrl18read_patch_actions*)',

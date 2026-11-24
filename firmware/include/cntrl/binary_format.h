@@ -11,6 +11,8 @@ constexpr unsigned header_size = 20, record_size = 8, maximum_payload = 16u * 10
 constexpr uint16_t patch_edit_origins = 6;
 constexpr uint16_t cycle_recipe = 12;
 constexpr uint16_t cycle_catalogue = 13;
+constexpr uint16_t song_appearance = 14;
+constexpr unsigned song_appearance_size = 74;
 inline uint16_t read16(const uint8_t *p) { return uint16_t(p[0]) | uint16_t(p[1]) << 8; }
 inline void write16(uint8_t *p, uint16_t n) { p[0] = uint8_t(n); p[1] = uint8_t(n >> 8); }
 inline uint32_t read32(const uint8_t *p) {
@@ -37,7 +39,7 @@ struct View {
     unsigned offset = 0, length = 0;
     bool opaque = false;
     uint64_t global_explicit_mask = UINT64_MAX;
-    unsigned auxiliary_record_offset = 0; // Global mask for setups, first extended artwork record for songs.
+    unsigned auxiliary_record_offset = 0; // Global mask for setups, first extended presentation record for songs.
     unsigned artwork_offset = 0, artwork_length = 0;
     unsigned title_contrast_offset = 0;
 };
@@ -92,6 +94,20 @@ public:
             }
             return true;
         }
+        if (phase_ == Phase::song_style) {
+            const unsigned rows = std::min(6u, (appearance_end_ - position_) / song_appearance_size);
+            if (!reader.read(position_, bytes, rows * song_appearance_size)) return false;
+            for (unsigned i = 0; i < rows; ++i) {
+                const auto *row = bytes + i * song_appearance_size;
+                const unsigned index = read32(row);
+                if (index >= songs_ || index < next_song_ || (row[4] & ~15u)
+                    || ((row[4] & 8) && row[5] == 255) || !std::memchr(row + 10, 0, 64)) return false;
+                next_song_ = index + 1;
+            }
+            position_ += rows * song_appearance_size;
+            if (position_ == appearance_end_) phase_ = Phase::records;
+            return true;
+        }
         if (position_ == length_) { phase_ = Phase::done; return records_ != 0; }
         if (++records_ > 4096 || length_ - position_ < record_size || !reader.read(position_, bytes, record_size)) return false;
         unsigned tag = read16(bytes), flags = read16(bytes + 2), n = read32(bytes + 4);
@@ -126,8 +142,16 @@ public:
                 if (!(tag & 1)) {
                     if (n < 4 || !reader.read(position_, bytes, 4) || read32(bytes) > (n - 4) / 72) return false;
                 } else if (!n || n % (tag == 9 ? 6 : 10)) return false;
-                if (!extended_artwork_seen_) view_.auxiliary_record_offset = position_ - record_size;
+                if (!view_.auxiliary_record_offset) view_.auxiliary_record_offset = position_ - record_size;
                 extended_artwork_seen_ |= bit;
+            } else if (tag == song_appearance && kind_ == Kind::songs) {
+                if (appearance_end_ || !n || n % song_appearance_size || view_.length < 8
+                    || !reader.read(view_.offset, bytes, 4)) return false;
+                songs_ = read32(bytes);
+                if (!view_.auxiliary_record_offset) view_.auxiliary_record_offset = position_ - record_size;
+                appearance_end_ = position_ + n;
+                phase_ = Phase::song_style;
+                return true;
             } else if (tag == patch_edit_origins && kind_ == Kind::setup) {
                 if (n < 8 || n % 4) return false;
             } else if (tag == cycle_recipe && kind_ == Kind::setup) {
@@ -142,11 +166,12 @@ public:
 private:
     bool song_formatting_ = false;
     uint8_t extended_artwork_seen_ = 0;
-    enum class Phase { header, hash, records, done };
+    enum class Phase { header, hash, records, song_style, done };
     Phase phase_ = Phase::header;
     unsigned length_, position_ = 0, records_ = 0;
     Kind kind_;
     View view_;
+    unsigned songs_ = 0, next_song_ = 0, appearance_end_ = 0;
     uint32_t wire_crc_ = 0xffffffffu, envelope_crc_ = 0xffffffffu, expected_ = 0;
     bool envelope_ = false, wire_ = false, source_ = false, catalogue_ = false;
     static void update(uint32_t &crc, uint8_t byte) {

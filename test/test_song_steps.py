@@ -92,6 +92,38 @@ def test_song_step_navigation_and_boundaries(
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--song-settings'], check=True
     )
+    styled = library.model_copy(
+        update={
+            'songs': [
+                library.songs[0].model_copy(
+                    update={
+                        'display_name': 'Écho',
+                        'style': models.Style(
+                            foreground_color='blue',
+                            background_color='white',
+                            font_name='Arimo',
+                        ),
+                    }
+                ),
+                library.songs[1].model_copy(
+                    update={'style': models.Style(foreground_color='black')}
+                ),
+            ]
+        }
+    )
+    fixture.write_bytes(songs.encode(styled, target))
+    subprocess.run(
+        [str(runner), str(fixture), str(setup), '--song-appearance', str(edited)],
+        check=True,
+    )
+    first, second = songs.decode(edited.read_bytes()).songs
+    assert first.name == 'One' and first.display_name == '!SÉcho'
+    assert first.style == models.Style(
+        foreground_color='blue',
+        background_color='0xF6FFFF',
+        font_name='AtkinsonNextSemiBold',
+    )
+    assert second.style == models.Style(foreground_color='0x080000')
     with_spare = library.model_copy(
         update={
             'setlists': [

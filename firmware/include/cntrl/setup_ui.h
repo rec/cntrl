@@ -654,8 +654,7 @@ private:
         else if (field.kind == Kind::font)
             ui::utf8::copy(text, capacity, ui::preference_face_names[ui::preference_face_index(value)]);
         else if (field.kind == Kind::color)
-            std::snprintf(text, capacity, "#%02X%02X%02X", unsigned((value >> 11) * 255 / 31),
-                unsigned(((value >> 5) & 63) * 255 / 63), unsigned((value & 31) * 255 / 31));
+            ui::color_caption(text, capacity, uint16_t(value));
         else if (field.kind == Kind::outputs) {
             if (const auto *output = by_output ? preference_output() : nullptr) {
                 std::snprintf(text, capacity, "%s  %s", output->label, ui::i18n::text(value & (1u << output->route) ? Message::on : Message::off));
@@ -744,12 +743,9 @@ private:
                 if (field.kind == ui::PreferenceKind::font) {
                     const int index = int(ui::preference_face_index(previous)) + delta;
                     preference_value_ = ui::preference_faces[std::clamp(index, int(field.minimum), int(field.maximum))];
-                } else if (field.kind == ui::PreferenceKind::color) {
-                    const unsigned shift = ui::preference_color_shift[preference_component_];
-                    const unsigned maximum = ui::preference_color_max[preference_component_];
-                    const int component = int((previous >> shift) & maximum) + delta;
-                    preference_value_ = (previous & ~(maximum << shift)) | (unsigned(std::clamp(component, 0, int(maximum))) << shift);
-                } else preference_value_ = uint32_t(std::clamp(int64_t(preference_value_) + delta, int64_t(field.minimum), int64_t(field.maximum)));
+                } else if (field.kind == ui::PreferenceKind::color)
+                    preference_value_ = ui::adjust_color(uint16_t(previous), preference_component_, delta);
+                else preference_value_ = uint32_t(std::clamp(int64_t(preference_value_) + delta, int64_t(field.minimum), int64_t(field.maximum)));
                 if (ui::optional_tempo_preference(field.field)) {
                     if (!previous && button == 1) preference_value_ = 20;
                     else if (preference_value_ < 20) preference_value_ = 0;

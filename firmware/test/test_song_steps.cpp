@@ -171,6 +171,75 @@ int main(int argc, char **argv) {
         release(2); release(5);
         if (app.editing_tool && !app.tool_editor_open(board)) app.finish_tool();
     };
+    if (argc == 5 && !std::strcmp(argv[3], "--song-appearance")) {
+        songs.choose("Set"); app.song_ui.perform(); sample(0); next();
+        const auto sent = board.sent.size();
+        const auto open_appearance = [&](bool next_song) {
+            settings();
+            tap(0); tap(0); tap(0); tap(2);
+            if (next_song) tap(1);
+            tap(2); tap(1); tap(1); tap(2);
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Display name"));
+        };
+        const auto finish = [&] {
+            while (songs.busy()) sample(0);
+            sample(0);
+            if (!app.tool_editor_open(board)) app.finish_tool();
+        };
+        open_appearance(true);
+        assert(!std::strcmp(board.panes[1].lines[0].text, "Two"));
+        tap(1); tap(2); tap(1);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "#080000"));
+        tap(2); // Red text on Two.
+        settings(); tap(1);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Save"));
+        tap(2); finish();
+        assert(songs.success());
+        assert(songs.song("Two") && songs.song("Two")->foreground == 0x800);
+
+        open_appearance(false);
+        tap(2);
+        app.song_ui.key('S');
+        tap(2); // Display name; retain the song's library key.
+        tap(1); tap(1); tap(2); tap(0); tap(2); // Background color.
+        tap(1); tap(2); tap(1); tap(2); // Font.
+        settings(); tap(1);
+        song_storage.remaining = 0;
+        tap(2); finish();
+        assert(!songs.success() && app.settings_frontmost());
+        assert(songs.song("One")->background == 0xffff && songs.song("Two")->foreground == 0x800);
+        song_storage.remaining = -1;
+        tap(2); finish(); // Retry the same draft.
+        assert(songs.success() && !app.settings_frontmost());
+        assert(songs.song("One")->background == 0xf7ff && songs.song("One")->font == 16);
+        assert(songs.continuation().patch == 0 && !std::strcmp(songs.current_name(), "One") && board.sent.size() == sent);
+        cntrl::SongEntry entry;
+        assert(songs.entry("Set", 0, entry) && !std::strcmp(entry.song, "One"));
+
+        open_appearance(false);
+        tap(2); app.song_ui.key('!'); tap(2); // Replace an existing override row.
+        settings(); tap(1); tap(2); finish();
+        assert(songs.success() && !app.settings_frontmost() && board.sent.size() == sent);
+        cntrl::ScenePanel scene, song, set;
+        songs.presentation(scene, song, set, board.document, nullptr);
+        assert(!std::strcmp(song.title.text, "!SÉcho"));
+        cntrl::Songs restored(song_storage, board);
+        cntrl::SongAppearance appearance;
+        assert(restored.boot() && restored.song_appearance("One", appearance));
+        assert(!std::strcmp(appearance.title, "!SÉcho") && appearance.font == 16);
+        std::vector<uint8_t> bytes(restored.length());
+        assert(restored.read_payload(0, bytes.data(), unsigned(bytes.size())));
+        std::ofstream exported(argv[4], std::ios::binary);
+        exported.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+        assert(exported);
+        open_appearance(true);
+        tap(1);
+        assert(std::strstr(board.panes[1].lines[2].text, "Use compiled value"));
+        tap(3);
+        settings(); tap(1); tap(2); finish();
+        assert(songs.success() && songs.song("Two")->foreground == 0 && board.sent.size() == sent);
+        return 0;
+    }
     if (argc == 5 && !std::strcmp(argv[3], "--setup-preferences")) {
         assert(preferences.boot());
         documents.bind_globals(preferences);

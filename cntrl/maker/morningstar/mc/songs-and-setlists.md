@@ -33,6 +33,13 @@ current Program Change or Control Change. Choose **Only this song step** to
 make a private copy, or edit the shared action for every use. The review shows
 the proposed values before saving.
 
+Choose **Appearance** in the same song menu to edit its display name, text
+color, background color, and font. The name used in setlist entries stays the
+same. Use D to select a color component and E to change its adjustment step.
+The right display previews the color, and **Use compiled value** removes a
+saved override for that field. Save writes the appearance to the song library
+and includes it in an editable export.
+
 Under Setlists, choose **New setlist**. It receives a unique default name and
 opens the alphabetically sorted song picker. C adds the highlighted song and
 keeps the picker open; A/B browse and D/E jump between initial letters. F returns
