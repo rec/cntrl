@@ -526,6 +526,46 @@ int main(int argc, char **argv) {
         assert(board.sent.empty());
         return 0;
     }
+    if (argc == 5 && !std::strcmp(argv[3], "--expression-settings")) {
+        board.follow_setup_pages = true;
+        app.allocation.configure(configuration.page_layout());
+        const auto open_expression = [&] {
+            settings(); tap(2); tap(3); tap(3); tap(3);
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Expression MIDI"));
+            tap(2);
+            assert(!std::strcmp(board.panes[1].lines[1].text, "TRS 2"));
+        };
+        const auto save = [&] {
+            settings(); tap(1); tap(2);
+            while (documents.busy()) sample(0);
+            sample(0);
+            if (!app.tool_editor_open(board)) app.finish_tool();
+        };
+        open_expression();
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Unassigned"));
+        tap(2); tap(1); tap(2); tap(1); tap(2); // Assign and add a mirror.
+        tap(1); tap(2); tap(1); tap(2); // Set channel 2.
+        tap(0); tap(0); tap(2); tap(1); tap(2); // Change primary output; skip the selected mirror.
+        tap(5);
+        assert(!documents.document().page_settings().expression[1].channel && board.sent.empty());
+        save();
+        const auto &document = documents.document();
+        const auto a = document.page_settings().expression[1];
+        assert(a.channel == 2 && a.controller == 11 && a.maximum == 127);
+        assert(a.mirror_route == 1 && std::strcmp(a.output, "trs"));
+        assert(document.page_settings()[cntrl::PageSettings::clock_outputs] == 1);
+        std::ofstream exported(argv[4], std::ios::binary);
+        exported.write(reinterpret_cast<const char *>(document.data()), document.length());
+        assert(exported);
+        open_expression();
+        tap(3); // Clear the assignment.
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Unassigned"));
+        save();
+        assert(!documents.document().page_settings().expression[1].channel);
+        assert(documents.document().page_settings()[cntrl::PageSettings::clock_outputs] == 1);
+        assert(documents.document().length() == configuration.length() && board.sent.empty());
+        return 0;
+    }
     if (argc == 5 && !std::strcmp(argv[3], "--navigation-settings")) {
         board.follow_setup_pages = true;
         app.allocation.configure(configuration.page_layout());

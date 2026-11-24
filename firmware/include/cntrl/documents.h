@@ -238,6 +238,41 @@ public:
         return edit_document(draft) && write_setup_preference(draft, field, value, inherit);
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_expression)
+#endif
+    bool edit_expression(unsigned jack, const ExpressionAssignment &value) {
+        Document draft;
+        if (jack >= 4 || busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const unsigned offset = unsigned(draft.bank(draft.patches()) - draft.data());
+        const bool present = draft.data()[draft.core_offset() + 19] & 0x80;
+        bool retain = value.channel != 0;
+        if (present) for (unsigned i = 0; i < 4; ++i)
+            if (i != jack && draft.data()[offset + i * expression_record_size + 32]) retain = true;
+        if (value.channel && value.mirror_route != UINT8_MAX) {
+            const auto *mirror = hardware_.midi_outputs().route(value.mirror_route);
+            if (!mirror || !std::strcmp(mirror->name, value.output)) return false;
+        }
+        if (!splice_setup(draft, offset, present ? expression_section_size : 0, retain ? expression_section_size : 0)) return false;
+        auto *bytes = scratch_.data;
+        auto &flags = bytes[draft.core_offset() + 19];
+        flags = uint8_t((flags & ~0x80u) | (retain ? 0x80 : 0));
+        if (retain) {
+            if (present) std::memcpy(bytes + offset, draft.data() + offset, expression_section_size);
+            auto *row = bytes + offset + jack * expression_record_size;
+            std::memset(row, 0, expression_record_size);
+            if (value.channel) {
+                std::memcpy(row, value.output, sizeof(value.output));
+                row[32] = value.channel;
+                row[33] = value.controller;
+                row[34] = value.minimum;
+                row[35] = value.maximum;
+                row[36] = value.reverse;
+                row[37] = uint8_t(unsigned(value.curve) | (value.mirror_route == UINT8_MAX ? 0u : (value.mirror_route + 1u) << 2));
+            }
+        }
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_loop_neutral)
 #endif
     bool edit_loop_neutral(unsigned index, unsigned output, const midi::Parameter *parameter) {

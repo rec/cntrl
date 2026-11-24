@@ -144,6 +144,10 @@ public:
             render();
             return true;
         }
+        if ((mode_ == Mode::expression_fields || mode_ == Mode::expression_value) && !stage_expression()) {
+            render();
+            return true;
+        }
         if (setup_preferences_ && mode_ == Mode::preference_value && !stage_setup_preference()) {
             render();
             return true;
@@ -322,6 +326,8 @@ public:
             counter_button(button);
         } else if (is_navigation_view()) {
             navigation_button(button);
+        } else if (is_expression_view()) {
+            expression_button(button);
         } else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
@@ -466,7 +472,8 @@ private:
                       movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
                       layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
                       layout_chooser_order, layout_chooser_order_move, layout_add_type, layout_name, layout_name_action,
-                      counters, counter_fields, counter_value, navigation_shortcuts, navigation_value };
+                      counters, counter_fields, counter_value, navigation_shortcuts, navigation_value,
+                      expression_jacks, expression_fields, expression_value };
     enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, split, join, add, count };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -499,6 +506,16 @@ private:
     unsigned navigation_index_ = 0, navigation_slot_ = 0, navigation_buttons_[2] = {};
     const char *navigation_feedback_ = nullptr;
     static constexpr const char *navigation_names[] = {"Next song patch", "Previous song patch", "Next page", "Previous page"};
+    enum ExpressionField { expression_output, expression_mirror, expression_channel, expression_controller,
+        expression_minimum, expression_maximum, expression_reverse, expression_curve, expression_field_count };
+    unsigned expression_jack_ = 0, expression_field_ = 0;
+    ExpressionAssignment expression_assignment_;
+    bool expression_changed_ = false;
+    const char *expression_feedback_ = nullptr;
+    static constexpr const char *expression_fields[] = {
+        "MIDI output", "Mirror output", "MIDI channel", "Controller", "Minimum", "Maximum", "Reverse", "Response curve",
+    };
+    static constexpr const char *expression_curves[] = {"Linear", "Slow", "Fast"};
     enum CounterField { counter_output, counter_type, counter_channel, counter_controller,
         counter_initial, counter_minimum, counter_maximum, counter_step, counter_boundary, counter_field_count };
     unsigned counter_index_ = 0, counter_field_ = 0;
@@ -723,6 +740,10 @@ private:
         if (index == ui::navigation_preference_index) {
             Document draft;
             return setup_preferences_ && hardware_.input_count() && docs_.edit_document(draft) && draft.page_layout().pages();
+        }
+        if (index == ui::expression_preference_index) {
+            Document draft;
+            return setup_preferences_ && docs_.edit_document(draft) && expression_jacks(draft);
         }
         const unsigned field = ui::preference_at(index).field;
         if (setup_preferences_ && !Documents::setup_preference_editable(field)) return false;
@@ -1153,6 +1174,112 @@ private:
     }
     bool is_counter_view() const { return mode_ >= Mode::counters && mode_ <= Mode::counter_value; }
     bool is_navigation_view() const { return mode_ == Mode::navigation_shortcuts || mode_ == Mode::navigation_value; }
+    bool is_expression_view() const { return mode_ >= Mode::expression_jacks && mode_ <= Mode::expression_value; }
+    static unsigned expression_jacks(const Document &draft) {
+        unsigned mask = 0;
+        Document fallback = draft;
+        fallback.bind_globals(nullptr);
+        const auto *own = fallback.trs_modes();
+        const auto *ports = draft.trs_modes();
+        for (unsigned i = 0; i < 4; ++i)
+            if (own[i] == unsigned(midi::TrsMode::expression) && ports[i] == own[i]) mask |= 1u << i;
+        return mask;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_stage_expression)
+#endif
+    bool stage_expression() {
+        if (!expression_changed_) return true;
+        if (expression_assignment_.minimum > expression_assignment_.maximum) {
+            expression_feedback_ = "Check min and max";
+            return false;
+        }
+        if (!docs_.edit_expression(expression_jack_, expression_assignment_)) {
+            expression_feedback_ = "Could not change assignment";
+            return false;
+        }
+        changed_fields_ |= 1u << 15;
+        expression_changed_ = false;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_expression_outputs)
+#endif
+    unsigned expression_outputs(const Document &draft) const {
+        Document fallback = draft;
+        fallback.bind_globals(nullptr);
+        unsigned mask = 0;
+        for (const auto &output : hardware_.midi_outputs())
+            if (draft.has_output(hardware_, output.name) && fallback.has_output(hardware_, output.name)) mask |= 1u << output.route;
+        return mask;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_expression_button)
+#endif
+    void expression_button(unsigned button) {
+        Document draft;
+        if (!docs_.edit_document(draft)) return;
+        expression_feedback_ = nullptr;
+        if (mode_ == Mode::expression_jacks) {
+            if (button < 2) {
+                const unsigned mask = expression_jacks(draft);
+                do { expression_jack_ = (expression_jack_ + (button ? 1 : 3)) % 4; }
+                while (!(mask & (1u << expression_jack_)));
+            } else if (button == 5) mode_ = Mode::preferences;
+            else if (button == 3 && draft.page_settings().expression[expression_jack_].channel) {
+                expression_assignment_ = ExpressionAssignment{};
+                expression_changed_ = true;
+                if (!stage_expression()) expression_changed_ = false;
+            } else if (button == 2) {
+                expression_assignment_ = draft.page_settings().expression[expression_jack_];
+                expression_changed_ = !expression_assignment_.channel;
+                if (expression_changed_) {
+                    const unsigned mask = expression_outputs(draft);
+                    if (!mask) { expression_feedback_ = "No enabled MIDI output"; return; }
+                    expression_assignment_ = ExpressionAssignment{};
+                    for (const auto &output : hardware_.midi_outputs()) if (mask & (1u << output.route)) {
+                        std::snprintf(expression_assignment_.output, sizeof(expression_assignment_.output), "%s", output.name);
+                        break;
+                    }
+                    expression_assignment_.channel = 1;
+                    expression_assignment_.controller = 11;
+                }
+                expression_field_ = 0;
+                mode_ = Mode::expression_fields;
+            }
+        } else if (mode_ == Mode::expression_fields) {
+            if (button < 2) expression_field_ = (expression_field_ + (button ? 1 : expression_field_count - 1)) % expression_field_count;
+            else if (button == 2) { preference_step_ = 1; mode_ = Mode::expression_value; }
+            else if (button == 3 || (button == 5 && stage_expression())) mode_ = Mode::expression_jacks;
+        } else if (button == 2 || button == 5) mode_ = Mode::expression_fields;
+        else if (button == 4 && expression_field_ >= expression_controller && expression_field_ <= expression_maximum)
+            preference_step_ = preference_step_ < 100 ? preference_step_ * 10 : 1;
+        else if (button < 2) {
+            auto &a = expression_assignment_;
+            const int direction = button ? 1 : -1;
+            if (expression_field_ == expression_output || expression_field_ == expression_mirror) {
+                const auto outputs = hardware_.midi_outputs();
+                const auto *primary = outputs.find(a.output);
+                const bool mirror = expression_field_ == expression_mirror;
+                const unsigned exclude = mirror ? (primary ? primary->route : 255) : a.mirror_route;
+                unsigned mask = expression_outputs(draft);
+                if (exclude < 16) mask &= ~(1u << exclude);
+                if (mirror) mask |= 1u << 16;
+                if (!mask) return;
+                unsigned route = mirror ? std::min(unsigned(a.mirror_route), 16u) : primary ? primary->route : 16;
+                do { route = (route + (button ? 1 : 16)) % 17; } while (!(mask & (1u << route)));
+                if (mirror) a.mirror_route = uint8_t(route == 16 ? UINT8_MAX : route);
+                else std::snprintf(a.output, sizeof(a.output), "%s", outputs.route(route)->name);
+            } else if (expression_field_ == expression_reverse) a.reverse = !a.reverse;
+            else if (expression_field_ == expression_curve) a.curve = ExpressionCurve((unsigned(a.curve) + (button ? 1 : 2)) % 3);
+            else if (expression_field_ == expression_channel) a.channel = uint8_t(std::clamp(int(a.channel) + direction, 1, 16));
+            else {
+                auto &number = expression_field_ == expression_controller ? a.controller : expression_field_ == expression_minimum ? a.minimum : a.maximum;
+                number = uint8_t(std::clamp(int(number) + direction * int(preference_step_), 0, 127));
+            }
+            expression_changed_ = true;
+        }
+    }
     unsigned navigation_mask() const {
         unsigned mask = 0;
         for (auto button : navigation_buttons_) if (button) mask |= 1u << (button - 1);
@@ -1385,6 +1512,16 @@ private:
                 if (preference_index_ == ui::navigation_preference_index) {
                     navigation_index_ = 0;
                     mode_ = Mode::navigation_shortcuts;
+                    return;
+                }
+                if (preference_index_ == ui::expression_preference_index) {
+                    Document draft;
+                    if (!docs_.edit_document(draft)) return;
+                    const unsigned mask = expression_jacks(draft);
+                    expression_jack_ = 0;
+                    while (!(mask & (1u << expression_jack_))) ++expression_jack_;
+                    expression_feedback_ = nullptr;
+                    mode_ = Mode::expression_jacks;
                     return;
                 }
                 const uint64_t bit = uint64_t(1) << field.field;
@@ -1949,6 +2086,49 @@ private:
                 .add(Role::next_section, "Other switch", ", ").text());
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render_expression)
+#endif
+    void render_expression(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
+        using Role = ControlRole;
+        const bool picking = mode_ == Mode::expression_jacks, adjusting = mode_ == Mode::expression_value;
+        const auto saved = draft.page_settings().expression[expression_jack_];
+        const auto &a = picking ? saved : expression_assignment_;
+        const auto *calibration = hardware_.expression_calibration();
+        const char *name = calibration && expression_jack_ < calibration->count() ? calibration->name(expression_jack_) : "";
+        auto &title = views[1].lines[1];
+        if (*name) std::snprintf(title.text, sizeof(title.text), "TRS %u %s", expression_jack_ + 1, name);
+        else std::snprintf(title.text, sizeof(title.text), "TRS %u", expression_jack_ + 1);
+        const auto outputs = hardware_.midi_outputs();
+        auto &value = views[2].lines[1];
+        ui::copy_caption(views[2].lines[0], picking ? "Expression MIDI" : expression_fields[expression_field_]);
+        if (picking || expression_field_ == expression_output || expression_field_ == expression_mirror) {
+            const bool mirror = !picking && expression_field_ == expression_mirror;
+            const auto *output = mirror ? outputs.route(a.mirror_route) : outputs.find(a.output);
+            ui::copy_caption(value, output ? output->label : a.channel && !mirror ? a.output : picking ? "Unassigned" : "None");
+        } else if (expression_field_ == expression_curve) ui::copy_caption(value, expression_curves[unsigned(a.curve)]);
+        else if (expression_field_ == expression_reverse) ui::copy_caption(value, a.reverse ? "On" : "Off");
+        else {
+            const unsigned number = expression_field_ == expression_channel ? a.channel : expression_field_ == expression_controller
+                ? a.controller : expression_field_ == expression_minimum ? a.minimum : a.maximum;
+            std::snprintf(value.text, sizeof(value.text), "%u", number);
+        }
+        if (expression_feedback_) ui::copy_caption(views[1].lines[2], expression_feedback_);
+        else if (!picking && expression_changed_) ui::copy_caption(views[1].lines[2], ui::i18n::text(ui::i18n::Message::changed));
+        if (picking && a.channel) std::snprintf(views[2].lines[2].text, 64, "Ch %u, CC %u", unsigned(a.channel), unsigned(a.controller));
+        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, adjusting ? "Adjust" : "Browse").text());
+        const char *confirm = adjusting ? "Accept" : picking && !a.channel ? "Assign" : "Edit";
+        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, confirm)
+            .add(Role::back, mode_ == Mode::expression_fields ? "Accept assignment" : "Back", ", ").text());
+        if (picking && a.channel)
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Remove assignment").text());
+        else if (mode_ == Mode::expression_fields)
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Cancel edits").text());
+        else if (adjusting && expression_field_ >= expression_controller && expression_field_ <= expression_maximum) {
+            char step[24]; std::snprintf(step, sizeof(step), "Step %u", unsigned(preference_step_));
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
+        }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render)
 #endif
     void render() {
@@ -1962,7 +2142,8 @@ private:
         const bool layout_entry = mode_ == Mode::preferences && preference_index_ == ui::layout_preference_index;
         const bool counter_entry = mode_ == Mode::preferences && preference_index_ == ui::counter_preference_index;
         const bool navigation_entry = mode_ == Mode::preferences && preference_index_ == ui::navigation_preference_index;
-        const bool special_entry = layout_entry || counter_entry || navigation_entry;
+        const bool expression_entry = mode_ == Mode::preferences && preference_index_ == ui::expression_preference_index;
+        const bool special_entry = layout_entry || counter_entry || navigation_entry || expression_entry;
         const bool preference_view = !special_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
         const bool layout_view = is_layout_view();
         const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
@@ -1970,7 +2151,7 @@ private:
         const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
         const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
             || instrument_view || neutral_view || movie_view || layout_view || special_entry || is_counter_view() || is_navigation_view()
-            || (setup_preferences_ && preference_view);
+            || is_expression_view() || (setup_preferences_ && preference_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
         if (mode_ == Mode::current) {
@@ -2037,6 +2218,10 @@ private:
         else if (navigation_entry) {
             title = "Navigation shortcuts";
             value = "Song patches and pages";
+        }
+        else if (expression_entry) {
+            title = "Expression MIDI";
+            value = "Expression jack assignments";
         }
         else if (preference_view) {
             const auto &field = preference();
@@ -2324,6 +2509,7 @@ private:
             if (layout_view) render_layout(views, draft.page_layout(), prompt);
             if (is_counter_view()) render_counter(views, draft, prompt);
             if (is_navigation_view()) render_navigation(views, draft, prompt);
+            if (is_expression_view()) render_expression(views, draft, prompt);
             if (special_entry)
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Group").text());
             if (mode_ == Mode::decision) {

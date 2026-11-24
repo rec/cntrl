@@ -205,6 +205,13 @@ The Settings chord is reserved. With custom navigation configured, choose
 a **Previous song patch** shortcut if you use backward stepping in a setlist.
 Clear all four assignments to restore the pedal's default navigation gestures.
 
+**Expression MIDI** lists jacks configured for expression in the setup's
+Ports group. Choose a jack to add or edit its MIDI output, optional mirror,
+channel, controller number, value range, direction, or response curve. A new
+assignment starts on channel 1, CC 11, with the full 0–127 range. Use D from
+the jack list to remove an existing assignment. Save the setup to apply the
+changes. Heel and toe calibration and jack names are under Pedal.
+
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time

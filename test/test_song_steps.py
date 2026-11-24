@@ -209,6 +209,35 @@ def test_song_step_navigation_and_boundaries(
     )
     saved_navigation = tomlkit.parse(resolved.export(edited.read_bytes()))['navigation']
     assert saved_navigation['page_forward'] == 'A+B'
+    expression_setup = tmp_path / 'expression.bin'
+    expression_setup.write_bytes(
+        compiler.compile_show(
+            {
+                **pages,
+                'trs_ports': {'configurable-2': 'expression'},
+                'page_settings': {'clock_outputs': ['din']},
+            },
+            {},
+            [],
+            target.model_copy(update={'trs_ports': {'configurable-2': ['expression']}}),
+        )
+    )
+    subprocess.run(
+        [
+            str(runner),
+            str(fixture),
+            str(expression_setup),
+            '--expression-settings',
+            str(edited),
+        ],
+        check=True,
+    )
+    expression_pages = tomlkit.parse(resolved.export(edited.read_bytes()))[
+        'page_settings'
+    ]
+    assignment = expression_pages['expression']['configurable-2']
+    assert assignment['channel'] == 2 and assignment['mirror_output'] == 'trs'
+    assert expression_pages['clock_outputs'] == ['din']
     counter_setup = tmp_path / 'counters.bin'
     counter_setup.write_bytes(
         compiler.compile_show(
