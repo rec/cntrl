@@ -272,6 +272,9 @@ private:
         while (!draft.cycle_catalogue().count(alias_)) ++alias_;
         mode_ = Mode::cycle_instrument;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_begin_startup_set)
+#endif
     void begin_startup_set(const char *initial) {
         startup_choice_ = 0;
         Setlist set;
@@ -285,6 +288,9 @@ private:
         item_ = device_editor_ == Mode::contact ? 1 : 0;
         device_editor_ = Mode::closed;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_contact_button)
+#endif
     void contact_button(unsigned button) {
         char *const position = contact_draft_ + contact_cursor_;
         const char *next = position;

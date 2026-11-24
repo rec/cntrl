@@ -327,7 +327,8 @@ def test_patch_chooser_instances_follow_encoded_page_count(count: int) -> None:
         t
         for t in layout.PAGE_TYPES
         if t
-        and t not in ('None', 'patch-chooser', 'banked', 'pong', 'language', 'time')
+        and t
+        not in ('None', 'patch-chooser', 'banked', 'pong', 'memon', 'language', 'time')
     ],
 )
 @pytest.mark.parametrize('count', [0, 1, 3])

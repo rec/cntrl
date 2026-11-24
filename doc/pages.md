@@ -122,6 +122,52 @@ Songs and setlists and choose **Patch Chooser**. Replace references to the retir
 `menu` page with the individual pages you want, then recompile the setup.
 TRS roles and expression assignments remain setup configuration.
 
+## Memon
+
+Add a page with `type = 'memon'` to a three-display setup. On layouts that
+use the default page catalogue and regions, adding `[page_settings.memon]`
+also adds Memon to the tools rotation. The
+[MC6 Pro example](../cntrl/maker/morningstar/mc/emulator/memon.toml)
+opens directly to the game.
+
+Press C to start and F to leave. D, E, A and B play tiles 1, 2, 3 and 4.
+Each correct press while repeating the sequence adds one point. The left
+display shows the score, saved high score, round, position and elapsed time
+for the current run. A new high score is saved on the pedal's SD card.
+
+```toml
+[page_settings.memon]
+device = 'din'
+channel = 1
+notes = [0, 4, 7, 10]
+note_offset = 60
+velocity = 100
+note_duration = 0.250
+gap_duration = 0.250
+error_duration = 2.0
+timeout = 5.0
+show_remaining_time = true
+repeat_requests = false
+timed = true
+cooperative = false
+
+[page_settings.memon.style]
+font = 'AtkinsonNextSemiBold'
+foreground_color = 'white'
+background_color = 'black'
+tile_colors = ['0x884DFF', '0xFF7A1A', '0x00B8A0', '0xFFF1D6']
+color_offset = 64
+```
+
+By default, the error chord plays all four configured notes together. Set
+`error_chord` to a list of up to four intervals from `note_offset` to change it.
+The response timer restarts after each correct press. Set `timeout = 0` or
+`timed = false` for an untimed game. With `repeat_requests = true`, double-tap
+any tile switch during your turn to replay the sequence after a one-second
+pause, then start again from the first tile with a fresh timer. With
+`cooperative = true`, choose the opening note, then add a new note after
+each correct replay. The computer also adds one note before the next replay.
+
 ## Pong
 
 `type = 'pong'` reserves three displays for one continuous court. Both paddles

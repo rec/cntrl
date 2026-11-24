@@ -22,6 +22,7 @@ from . import (
     layout,
     loop_reset,
     looper,
+    memon,
     midi_endpoints,
     midi_messages,
     midi_processing,
@@ -400,6 +401,7 @@ def _sections(data: bytes) -> tuple[int, int, int]:
     cursor = loop_reset.section_end(data, cursor)
     cursor = looper.section_end(data, cursor)
     cursor = arpeggiator.section_end(data, cursor)
+    cursor = memon.section_end(data, cursor)
     if data[cursor : cursor + 4] != b'CNAM':
         raise binary_format.DocumentFormatError('missing name metadata')
     cursor += 4
@@ -721,10 +723,11 @@ def _decode(data: bytes) -> dict[str, object]:
     looper_offset = loop_reset.section_end(data, looper_offset)
     if settings := looper.unpack(data, looper_offset, names):
         pages['looper'] = settings
-    if settings := arpeggiator.unpack(
-        data, looper.section_end(data, looper_offset), names
-    ):
+    arp_offset = looper.section_end(data, looper_offset)
+    if settings := arpeggiator.unpack(data, arp_offset, names):
         pages['arpeggiator'] = settings
+    if settings := memon.unpack(data, arpeggiator.section_end(data, arp_offset), names):
+        pages['memon'] = settings
     if definitions := counters.unpack(data, counter_offset):
         result['counters'] = {
             k: v.model_dump(exclude_none=True) for k, v in definitions.items()

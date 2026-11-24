@@ -328,6 +328,7 @@ def unpack(data: bytes, offset: int) -> dict[str, object]:
             'patch-chooser',
             'banked',
             'pong',
+            'memon',
             'language',
             'time',
         ):
@@ -405,6 +406,7 @@ PAGE_TYPES = (
     'songs-and-setlists',
     'switches',
     'settings',
+    'memon',
 )
 
 RETIRED_CLOCK_PAGES = (0, 7, 8)

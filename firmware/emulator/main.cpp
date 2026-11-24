@@ -470,6 +470,7 @@ public:
         movie_assets.boot();
         font_storage.ready = true;
         host.looper_files(midi_files,board); host.arpeggiator(board.midi_runtime.arpeggiator);
+        host.memon_scores(filesystem);
         board.bridge.prepare(); board.midi_runtime.prepare(board.midi_outputs());
         if (!auxiliary.prepare(board)) throw std::runtime_error("auxiliary switch memory unavailable");
         filesystem.make_directory("/cntrl"); filesystem.make_directory("/cntrl/midi"); filesystem.make_directory("/cntrl/midi/.playback-index");

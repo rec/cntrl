@@ -3,6 +3,7 @@
 #include "hardware.h"
 #include "midi_bridge.h"
 #include "midi_processing.h"
+#include "memon_settings.h"
 #include "numeric.h"
 #include "binary_format.h"
 #include "cycle_catalogue.h"
@@ -187,8 +188,9 @@ public:
         }
         for (unsigned i = 0; i < page_count; ++i) {
             const auto *p = arrangement.record(i);
-            if (!PageLayout::valid_name(p) || p[32] > PageLayout::settings || p[32] == 0 || p[32] == 2 || p[32] == 18 || (p[32] >= 5 && p[32] <= 9)
+            if (!PageLayout::valid_name(p) || p[32] > PageLayout::memon || p[32] == 0 || p[32] == 2 || p[32] == 18 || (p[32] >= 5 && p[32] <= 9)
                 || p[33] > displays || (p[32] == 10 && p[33])
+                || (p[32] == PageLayout::memon && (p[33] != 3 || displays != 3))
                 || ((p[32] == PageLayout::language || p[32] == PageLayout::time) && p[33] != 2)) return false;
             bool seen[256] = {};
             for (unsigned j = 0; j < displays; ++j) {
@@ -379,10 +381,22 @@ public:
                 || u32(bytes + meta + scrolling_offset + 8) > hardware.memory_capacity() - hardware.memory_runtime()) return false;
             arpeggiator = names; names += 50;
         }
+        const bool memon = names + 4 <= length && !std::memcmp(bytes + names, "CMEM", 4);
+        if (memon) {
+            const auto *p = bytes + names;
+            if (length - names < MemonSettings::record_size || !MemonSettings::valid(p)
+                || !(output_routes & (1u << p[5]))
+                || !output_mask_valid(1u << p[5], effective_ports, flags, hardware)) return false;
+            bool font = false;
+            for (unsigned size = 8; size <= 96 && !font; ++size) font = hardware.supports_font(p[11], size);
+            if (!font) return false;
+            names += MemonSettings::record_size;
+        }
         for (unsigned i = 0; i < page_count; ++i)
             if (arrangement.page(i)[0] == PageLayout::midi_looper && !looper) return false;
         for (unsigned i = 0; i < page_count; ++i)
-            if (arrangement.page(i)[0] == PageLayout::arpeggiator && !arpeggiator) return false;
+            if ((arrangement.page(i)[0] == PageLayout::arpeggiator && !arpeggiator)
+                || (arrangement.page(i)[0] == PageLayout::memon && !memon)) return false;
         if (names + 4 > length || std::memcmp(bytes + names, "CNAM", 4)) return false;
         unsigned end = names + 4;
         for (unsigned i = 0; i < np * 3; ++i) {
@@ -606,6 +620,11 @@ public:
         const auto *p = arpeggiator_section();
         return !std::memcmp(p,"CARP",4) ? p : nullptr;
     }
+    const uint8_t *memon_settings() const {
+        const auto *p = arpeggiator_section();
+        if (!std::memcmp(p, "CARP", 4)) p += 50;
+        return !std::memcmp(p, "CMEM", 4) ? p : nullptr;
+    }
     bool pickup(unsigned root = 65535) const {
         unsigned policy = pickup_ ? data_[pickup_ + 6] : 0;
         if (pickup_ && root < nodes() && data_[pickup_ + 9 + root]) return data_[pickup_ + 9 + root] != 1;
@@ -762,6 +781,7 @@ public:
     unsigned page_section_size() const {
         const uint8_t *end = arpeggiator_section();
         if (!std::memcmp(end,"CARP",4)) end += 50;
+        if (!std::memcmp(end, "CMEM", 4)) end += MemonSettings::record_size;
         return unsigned(end - bank(patches()));
     }
     const uint8_t *movie_section() const {

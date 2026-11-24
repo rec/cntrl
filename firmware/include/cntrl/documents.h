@@ -598,6 +598,9 @@ private:
         }
         return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_history_complete)
+#endif
     void history_complete(bool good) {
         HistoryAction action = history_action_; history_action_ = HistoryAction::none;
         if (!good) { error("history-failed"); return; }
@@ -825,6 +828,9 @@ private:
         std::snprintf(record_name_, sizeof(record_name_), "%s", header_ + 20);
         return length_ != 0;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_read_selection)
+#endif
     int read_selection() {
         storage_.choose(""); uint8_t bytes[84]; bool found = false;
         bool present = storage_.size(0) || storage_.size(1);
@@ -840,6 +846,9 @@ private:
         }
         return found ? 1 : present ? -1 : 0;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_persist_selection)
+#endif
     bool persist_selection(const char *name) {
         uint8_t bytes[84] = {}, verify[84];
         std::memcpy(bytes, "CSEL", 4); put32(bytes + 4, selection_generation_ + 1);
@@ -873,6 +882,9 @@ private:
         if (!storage_.write(header_, 96)) { storage_.finish(); error("storage-write"); return false; }
         written_ = 0; writing_ = true; return true;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_erase_batch)
+#endif
     void erase_batch() {
         if (!expected_ || staging_.data[expected_ - 1]) { error("invalid-delete-list"); return; }
         if (!allocate(scratch_, expected_)) { error("document-memory"); return; }

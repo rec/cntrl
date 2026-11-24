@@ -1,0 +1,10 @@
+fill_in_styles = false
+
+[pages.Memon]
+type = 'memon'
+
+[pages.Status]
+type = 'status'
+
+[regions.main]
+pages = ['Memon', 'Status']

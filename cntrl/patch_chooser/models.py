@@ -1059,7 +1059,63 @@ class ContactStyle(BaseModel, frozen=True):
     model_config = ConfigDict(extra='forbid')
 
 
+MemonDuration = Annotated[
+    float,
+    Field(ge=0, le=65.535),
+    units.unit_validator('second'),
+    AfterValidator(millisecond_resolution),
+]
+MemonInterval = Annotated[int, Field(strict=True, ge=-127, le=127)]
+
+
+class MemonStyle(BaseModel, frozen=True):
+    font: str = 'AtkinsonNextSemiBold'
+    foreground_color: str = 'white'
+    background_color: str = 'black'
+    tile_colors: list[str] = Field(
+        default_factory=lambda: ['0x884DFF', '0xFF7A1A', '0x00B8A0', '0xFFF1D6'],
+        min_length=4,
+        max_length=4,
+    )
+    color_offset: Annotated[int, Field(strict=True, ge=0, le=255)] = 64
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class Memon(BaseModel, frozen=True):
+    channel: Annotated[int, Field(strict=True, ge=1, le=16)] = 1
+    device: str = 'din'
+    notes: list[MemonInterval] = Field(
+        default_factory=lambda: [0, 4, 7, 10], min_length=4, max_length=4
+    )
+    note_offset: Annotated[int, Field(strict=True, ge=0, le=127)] = 60
+    velocity: Annotated[int, Field(strict=True, ge=1, le=127)] = 100
+    note_duration: MemonDuration = 0.250
+    gap_duration: MemonDuration = 0.250
+    error_duration: MemonDuration = 2.0
+    error_chord: list[MemonInterval] = Field(default_factory=list, max_length=4)
+    timeout: MemonDuration = 5.0
+    show_remaining_time: bool = True
+    repeat_requests: bool = False
+    timed: bool = True
+    cooperative: bool = False
+    style: MemonStyle = Field(default_factory=MemonStyle)
+
+    @model_validator(mode='after')
+    def playable_notes(self) -> 'Memon':
+        if not self.note_duration or not self.error_duration:
+            raise ValueError('Memon note and error durations must be positive')
+        if any(
+            not 0 <= self.note_offset + n <= 127 for n in self.notes + self.error_chord
+        ):
+            raise ValueError('Memon notes plus note_offset must be in 0..127')
+        return self
+
+    model_config = ConfigDict(extra='forbid')
+
+
 class PageSettings(BaseModel, frozen=True):
+    memon: Memon | None = None
     contact_style: ContactStyle | None = None
     arpeggiator: ArpeggiatorSettings | None = None
     looper: LooperSettings | None = None
@@ -1182,6 +1238,7 @@ class Page(BaseModel, frozen=True):
         'arpeggiator',
         'banked',
         'pong',
+        'memon',
         'doom',
         'language',
         'calibrate',
@@ -1204,7 +1261,7 @@ class Page(BaseModel, frozen=True):
             if 'min_displays' in self.model_fields_set and self.min_displays:
                 raise ValueError('None must have zero minimum displays')
             object.__setattr__(self, 'min_displays', 0)
-        elif self.type in ('banked', 'pong'):
+        elif self.type in ('banked', 'pong', 'memon'):
             object.__setattr__(self, 'min_displays', 3)
         elif self.type in ('language', 'time'):
             object.__setattr__(self, 'min_displays', 2)
@@ -1220,7 +1277,7 @@ class Page(BaseModel, frozen=True):
             if self.type == 'patch-chooser'
             else min(
                 3
-                if self.type in ('banked', 'pong')
+                if self.type in ('banked', 'pong', 'memon')
                 else 2
                 if self.type in ('language', 'time')
                 else 1,

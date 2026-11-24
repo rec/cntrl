@@ -7,7 +7,7 @@ namespace cntrl {
 // Named page records belong to the active document. Display IDs are in physical order.
 struct PageLayout {
     // The layout header stores page counts in one byte.
-    static constexpr unsigned max_pages = UINT8_MAX, max_controllers = max_pages, patch_chooser = 11, midi_monitor = 12, midi_looper = 13, arpeggiator = 14, banked = 15, pong = 16, language = 17, time = 19, calibrate = 20, doom = 21, setups = 22, songs = 23, switches = 24, settings = 25;
+    static constexpr unsigned max_pages = UINT8_MAX, max_controllers = max_pages, patch_chooser = 11, midi_monitor = 12, midi_looper = 13, arpeggiator = 14, banked = 15, pong = 16, language = 17, time = 19, calibrate = 20, doom = 21, setups = 22, songs = 23, switches = 24, settings = 25, memon = 26;
     const uint8_t *records = nullptr;
     unsigned pages() const { return records ? records[4] : 0; }
     unsigned displays() const { return records ? records[5] : 0; }
@@ -45,12 +45,12 @@ struct PageLayout {
         return regions();
     }
     static unsigned maximum_displays(unsigned type,unsigned available) {
-        return type == 10 ? 0 : type == patch_chooser ? available : type == banked || type == pong ? std::min(3u, available) : std::min(type == language || type == time ? 2u : 1u,available);
+        return type == 10 ? 0 : type == patch_chooser ? available : type == banked || type == pong || type == memon ? std::min(3u, available) : std::min(type == language || type == time ? 2u : 1u,available);
     }
     unsigned minimum_displays(unsigned index) const {
         const auto *p = page(index);
         // Preserve stored records while overriding old tool-page display claims.
-        return p[0] == 10 ? 0 : p[0] == language || p[0] == time ? 2 : p[0] == patch_chooser || p[0] == banked || p[0] == pong ? p[1] : 1;
+        return p[0] == 10 ? 0 : p[0] == memon ? 3 : p[0] == language || p[0] == time ? 2 : p[0] == patch_chooser || p[0] == banked || p[0] == pong ? p[1] : 1;
     }
     static bool valid_name(const uint8_t *name) {
         if (!name[0]) return false;

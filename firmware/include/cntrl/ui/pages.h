@@ -15,6 +15,8 @@
 #include "doom_artwork.h"
 #include "picker.h"
 #include "pong.h"
+#include "memon.h"
+#include "memon_artwork.h"
 #include "flags.h"
 #include "status_snapshot.h"
 
@@ -70,7 +72,7 @@ public:
         if (display == 0) for (unsigned i = 0; i < 4; ++i) result.circles[i] = content.circles[i];
         return result;
     }
-    enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, time = PageLayout::time, calibrate, doom, setups, songs, switches, settings };
+    enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, time = PageLayout::time, calibrate, doom, setups, songs, switches, settings, memon };
     struct ViewState {
         unsigned index = 0;
         Picker language;
@@ -283,6 +285,7 @@ public:
         if (page_ == Page::calibrate) return dirty_ || uint32_t(now - refreshed_) >= 100;
         using R = cntrl::PageSettings;
         if (page_ == Page::pong) { pong.advance(now); return dirty_ || uint32_t(now - refreshed_) >= 20; }
+        if (page_ == Page::memon) return dirty_ || uint32_t(now - refreshed_) >= 40;
         if (dirty_) return true;
         if (page_ == Page::language) return uint32_t(now - refreshed_) >= 4 && language.changed(now, refreshed_);
         if (page_ == Page::midi_monitor) return uint32_t(now - refreshed_) >= midi::Monitor::refresh_ms;
@@ -291,6 +294,67 @@ public:
         if (page_ == Page::cable || page_ == Page::panic) return uint32_t(now - refreshed_) >= 80;
         if (page_ == Page::status) return uint32_t(now - refreshed_) >= settings_[R::refresh];
         return page_ == Page::time && (uint32_t(now - refreshed_) >= 50 || (held_ || tap_.flash(now, settings_[R::flash_fraction])) != flashing_);
+    }
+
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(memon_view)
+#endif
+    Pane memon_view(const Memon &game, const MemonArtwork &art, unsigned high,
+                    unsigned display, uint32_t now) {
+        dirty_ = false; refreshed_ = now;
+        const auto &style = game.settings();
+        Pane pane;
+        pane.graphics.background = MemonArtwork::color(style.colors[5]);
+        pane.graphics.foreground = MemonArtwork::color(style.colors[4]);
+        pane.graphics.pad = 3;
+        auto row = [&](unsigned i, const char *text, bool center = false) {
+            line(pane, i, text, vertical(4 + 24 * i), vertical(22), style.font, center, nullptr, 0, 0, 21);
+        };
+        if (display == 0) {
+            char text[48];
+            std::snprintf(text, sizeof(text), "High Score %u", high);
+            row(0, text);
+            std::snprintf(text, sizeof(text), "Score %u", game.score());
+            row(1, text);
+            std::snprintf(text, sizeof(text), "Round %u / Pos %u", game.round(), game.position());
+            row(2, text);
+            const auto seconds = game.elapsed_ms() / 1000;
+            std::snprintf(text, sizeof(text), "Time %lu:%02lu", static_cast<unsigned long>(seconds / 60),
+                          static_cast<unsigned long>(seconds % 60));
+            row(3, text);
+            if (game.countdown_visible()) {
+                std::snprintf(text, sizeof(text), "%u ms left", game.remaining_ms(now));
+                row(4, text);
+            }
+        } else if (display == 1) {
+            const unsigned square = MemonArtwork::tile_size(viewport_);
+            if (!square) return pane;
+            pane.bitmap = art.bitmap(viewport_, game.lit());
+            const unsigned left = (viewport_.width - 2 * square) / 2;
+            const unsigned top = (viewport_.height - 2 * square) / 2;
+            for (unsigned i = 0; i < 4; ++i) {
+                const char number[] = {char('1' + i), 0};
+                const bool on = game.lit() & (1u << i);
+                const unsigned x = left + i % 2 * square, y = top + i / 2 * square;
+                line(pane, i, number, y + (on ? square / 40 : 0), square, style.font, true,
+                     nullptr, x, x + square, 24);
+                pane.lines[i].graphics.foreground = art.label_color(i, on);
+            }
+        } else {
+            row(0, "Memon", true);
+            using Phase = Memon::Phase;
+            using Result = Memon::Result;
+            const auto phase = game.phase();
+            if (phase == Phase::ready || phase == Phase::over) row(2, "C Start", true);
+            if (phase == Phase::add) row(2, "Add a note", true);
+            if (phase == Phase::answer) row(2, "Your turn", true);
+            if (phase == Phase::cue || phase == Phase::gap || phase == Phase::replay_wait) row(2, "Watch", true);
+            if (game.result() != Result::none)
+                row(1, game.result() == Result::timeout ? "Time out" :
+                       game.result() == Result::wrong ? "Wrong tile" : "Complete", true);
+            row(4, "F Exit", true);
+        }
+        return pane;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_view)
@@ -795,12 +859,12 @@ private:
 #endif
         auto &l = pane.lines[index];
         utf8::copy(l.text, sizeof(l.text), text);
-        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::time && page_ != Page::pong && page_ != Page::calibrate;
+        const bool ordinary = !preview && page_ != Page::cable && page_ != Page::status && page_ != Page::time && page_ != Page::pong && page_ != Page::memon && page_ != Page::calibrate;
         if (ordinary) {
             face = 17;
             maximum_size = std::min(maximum_size, index ? (page_ == Page::panic ? 24u : 12u) : 16u);
         } else if (!preview && page_ == Page::status && index) face = status_face;
-        if (!preview && i18n::translated_ui && face != status_face) face = localized_face;
+        if (!preview && i18n::translated_ui && face != status_face && page_ != Page::memon) face = localized_face;
         l.graphics = pane.graphics; l.graphics.font = uint8_t(face);
         l.graphics.asset = preview ? 0 : i18n::identity(text);
 #ifdef CNTRL_EMULATOR

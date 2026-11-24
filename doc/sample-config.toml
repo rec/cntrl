@@ -41,7 +41,7 @@ pages = ["patch-chooser"]
 
 [regions.tools]
 
-pages = ["status", "cable-test", "panic", "midi-monitor", "midi-looper", "arpeggiator", "time", "pong", "language", "setups", "songs-and-setlists", "switches", "settings", "calibration"]
+pages = ["status", "cable-test", "panic", "midi-monitor", "midi-looper", "arpeggiator", "time", "pong", "language", "setups", "songs-and-setlists", "switches", "settings", "calibration", "memon"]
 
 [layout]
 
@@ -111,6 +111,31 @@ ring_color = "black"
 background_color = "0xFFF085"
 digits = 3
 decimals = 2
+
+[page_settings.memon]
+
+channel = 1
+device = "din"
+notes = [0, 4, 7, 10]
+note_offset = 60
+velocity = 100
+note_duration = 0.25
+gap_duration = 0.25
+error_duration = 2.0
+error_chord = []
+timeout = 5.0
+show_remaining_time = true
+repeat_requests = false
+timed = true
+cooperative = false
+
+[page_settings.memon.style]
+
+font = "AtkinsonNextSemiBold"
+foreground_color = "white"
+background_color = "black"
+tile_colors = ["0x884DFF", "0xFF7A1A", "0x00B8A0", "0xFFF1D6"]
+color_offset = 64
 
 [page_settings.contact_style]
 
@@ -264,6 +289,14 @@ patch = "sample"
 type = "patch-chooser"
 ram2_bytes = 0
 min_displays = 0
+give_up_displays = []
+patch = "sample"
+
+[pages.memon]
+
+type = "memon"
+ram2_bytes = 0
+min_displays = 3
 give_up_displays = []
 patch = "sample"
 

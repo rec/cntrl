@@ -19,6 +19,7 @@ from . import (
     layout,
     loop_reset,
     looper,
+    memon,
     midi_endpoints,
     midi_processing,
     models,
@@ -133,6 +134,8 @@ def compile_show(
                     pages.pop('arpeggiator')
             if 'doom' in target.functions:
                 pages['doom'] = models.Page(type='doom')
+            if show.page_settings.memon is not None:
+                pages['memon'] = models.Page(type='memon')
             pages['None'] = models.Page(type='None')
         show = show.model_copy(
             update={
@@ -582,6 +585,7 @@ def compile_show(
         expression = page_settings.pack_expression(show, target, jacks)
         looper_settings = looper.pack(show, target)
         arpeggiator_settings = arpeggiator.pack(show, target)
+        memon_settings = memon.pack(show, target)
         page_layout = layout.pack(
             show,
             [target.compiled_display_ids.get(d.id, d.id) for d in target.displays],
@@ -754,6 +758,7 @@ def compile_show(
         + loop_reset.pack(show, target)
         + looper_settings
         + arpeggiator_settings
+        + memon_settings
         + b'CNAM'
         + b''.join(names)
         + compiler.pack(roots, switch_records)

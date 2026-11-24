@@ -67,6 +67,21 @@ button-d = 'D Up / A Down'
 button-e = 'E Exit'
 button-f = 'F Up / C Down'
 
+[settings.en]
+display-1 = 'Settings'
+button-c = 'Open Settings'
+
+[memon.en]
+display-1 = 'Memon scores, round, position and elapsed time'
+display-2 = 'Memon tiles'
+display-3 = 'Memon controls and game status'
+button-a = 'Play tile 3'
+button-b = 'Play tile 4'
+button-c = 'Start Memon'
+button-d = 'Play tile 1'
+button-e = 'Play tile 2'
+button-f = 'Leave Memon'
+
 [language.en]
 display-1 = 'Language list'
 display-2 = 'Language'

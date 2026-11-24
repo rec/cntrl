@@ -4,6 +4,7 @@
 #include "pages.h"
 #include "renderer.h"
 #include "pixel_throb.h"
+#include "memon_score.h"
 #include <cntrl/midi_files.h>
 #include <cntrl/buttons.h>
 #include <cntrl/checked_array.h>
@@ -38,6 +39,7 @@ public:
     }
     void looper_files(midi::MidiFiles &files, midi::Sink &sink) { looper_files_ = &files; looper_sink_ = &sink; pages_.looper = &files.looper; }
     void arpeggiator(midi::MidiArpeggiator &engine) { pages_.arpeggiator = &engine; }
+    void memon_scores(files::FileSystem &filesystem) { memon_score_.attach(filesystem); }
     void invalidate_language() { renderer_.invalidate_language(); }
     void language_changed() {
         refresh_looper_prompt(); pages_.revisit();
@@ -77,6 +79,22 @@ public:
     CNTRL_FLASH_ROUTINE(looper_button)
 #endif
     bool looper_button(unsigned input, bool pressed) {
+        if (pages_.page() == Pages::Page::memon) {
+            if (!pressed) return true;
+            const char *label = platform_.input_label(input);
+            if (!label || !label[0] || label[1]) return true;
+            const char key = char(label[0] >= 'a' && label[0] <= 'z' ? label[0] - 'a' + 'A' : label[0]);
+            const uint32_t now = platform_.milliseconds();
+            if (key == 'F') browse_page(false);
+            else if (key == 'C') memon_.start(now, platform_.microseconds(), platform_);
+            else {
+                constexpr char keys[] = "DEAB";
+                if (const char *tile = std::strchr(keys, key))
+                    memon_.press(unsigned(tile - keys), now, platform_);
+            }
+            pages_.revisit();
+            return true;
+        }
         if (pages_.page() == Pages::Page::doom) {
             if (input != controls_.confirm) return false;
             if (pressed && (documents_.busy() || documents_.dirty() ||
@@ -234,6 +252,10 @@ public:
         expression_bank_ = nullptr;
         keyboard_.clear(); platform_.midi_monitor().close(); monitor_unavailable_ = false;
         management_visible_ = false;
+        if (const auto *settings = document.valid() ? document.memon_settings() : nullptr) {
+            memon_.configure(MemonSettings::read(settings));
+            memon_artwork_.configure(memon_.settings());
+        }
         if (pages_.arpeggiator) pages_.arpeggiator->configure(document.valid() ? document.arpeggiator_settings() : nullptr);
         pages_.outputs(platform_.midi_outputs());
         pages_.layout(document.valid() ? document.page_layout() : cntrl::PageLayout{});
@@ -276,6 +298,10 @@ public:
             pages_.language.reset(count, selected);
         }
         if (pages_.page() == Pages::Page::pong) pages_.pong.clock(platform_.milliseconds());
+        if (pages_.page() == Pages::Page::memon) {
+            memon_save_attempted_ = 0;
+            if (!memon_score_.load()) error("Memon high score could not be loaded");
+        }
         expression_bank_ = nullptr;
         if (auto *bank = application_.focused_bank()) {
             if (!bank->activate(uint32_t(application_.held))) error(i18n::text(i18n::Message::banked_memory_unavailable));
@@ -300,6 +326,7 @@ public:
     void leave_page() {
         if (pages_.page() == Pages::Page::calibrate) platform_.expression_controls().cancel();
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
+        if (pages_.page() == Pages::Page::memon) finish_memon();
         if (pages_.page() == Pages::Page::midi_looper && looper_files_) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; }
         if (pages_.page() == Pages::Page::midi_monitor && !other_selected(Pages::Page::midi_monitor)) { platform_.midi_monitor().close(); monitor_unavailable_ = false; }
 #if CNTRL_CABLE_TEST
@@ -509,6 +536,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
+        memon_.tick(platform_.milliseconds(), platform_);
         if (application_.stopping_setup()) return;
 #if CNTRL_PANIC
         if (pages_.page() == Pages::Page::panic && platform_.panic.active() && !platform_.panic_owns_midi) start_panic();
@@ -538,6 +566,8 @@ public:
             management_visible_ = false; enter_page(); pages_.revisit(); save_view();
         }
         if (platform_.display_priority_due()) return;
+        if (!transfer_busy && !documents_.busy() && pages_.page() == Pages::Page::memon)
+            save_memon_score();
 #if CNTRL_CABLE_TEST
         transfer_busy = transfer_busy || platform_.cable_test.enabled();
 #endif
@@ -575,6 +605,10 @@ public:
                         [&](unsigned jack) { return platform_.expression_available(jack); });
                     content.focused = r == application_.allocation.focus();
                     renderer_.show(screen, content);
+                    continue;
+                }
+                if (pages_.page() == Pages::Page::memon) {
+                    renderer_.show(screen, pages_.memon_view(memon_, memon_artwork_, memon_score_.high(), i, now));
                     continue;
                 }
                 cntrl::Pane content = pages_.view(now, platform_.microseconds(), status
@@ -642,9 +676,26 @@ private:
         }
         return false;
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_save_memon_score)
+#endif
+    void save_memon_score() {
+        memon_score_.observe(memon_.score());
+        if (memon_score_.high() <= memon_save_attempted_) return;
+        memon_save_attempted_ = memon_score_.high();
+        if (!memon_score_.save()) error("Memon high score could not be saved");
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_finish_memon)
+#endif
+    void finish_memon() {
+        memon_.leave(platform_.milliseconds(), platform_);
+        if (!documents_.busy()) save_memon_score();
+    }
     void cancel_focus() {
         if (pages_.page() == Pages::Page::calibrate) platform_.expression_controls().cancel();
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
+        if (pages_.page() == Pages::Page::memon) finish_memon();
         application_.controller().cancel_gesture();
         if (looper_files_ && pages_.page() == Pages::Page::midi_looper) { looper_files_->cancel_browse(); looper_menu_ = LooperMenu::none; pages_.looper_prompt[0] = 0; }
 #if CNTRL_CABLE_TEST
@@ -656,6 +707,10 @@ private:
         auto view = pages_.save_view(); view.held = false; pages_.restore_view(view);
     }
     enum class LooperMenu { none, more, files, clear, replace };
+    Memon memon_;
+    MemonArtwork memon_artwork_;
+    MemonScore memon_score_;
+    unsigned memon_save_attempted_ = 0;
     LooperMenu looper_menu_ = LooperMenu::none;
     unsigned looper_choice_ = 0;
     char looper_load_file_[96] = {};

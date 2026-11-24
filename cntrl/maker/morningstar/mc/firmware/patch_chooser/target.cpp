@@ -1238,6 +1238,7 @@ FLASHMEM void initialize_target() {
     host_keyboard.attachPress(keyboard_press);
     if (!auxiliary.prepare(board)) board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_auxiliary_memory));
     board.page_host().looper_files(midi_files,board);
+    board.page_host().memon_scores(setup_filesystem);
     board.page_host().arpeggiator(board.arpeggiator());
     // DMAMEM is a NOLOAD section: constant initialization is not copied at boot.
     usb_session.reset();

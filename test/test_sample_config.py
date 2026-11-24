@@ -25,11 +25,13 @@ class ExamplePageSettings(models.PageSettings, frozen=True):
 
 class ExampleSetup(models.Setup, frozen=True):
     page_settings: models.PageSettings = ExamplePageSettings()
+    pages: dict[str, models.Page] = {
+        **models.Setup().pages,
+        'memon': models.Page(type='memon'),
+    }
     regions: dict[str, models.PageRegion] = {
         'performance': models.PageRegion(pages=['patch-chooser']),
-        'tools': models.PageRegion(
-            pages=[n for n in models.Setup().pages if n != 'patch-chooser']
-        ),
+        'tools': models.PageRegion(pages=[n for n in pages if n != 'patch-chooser']),
     }
     layout: models.PageLayout | None = models.PageLayout(
         order=['performance', 'tools'], focus='tools'
