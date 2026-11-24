@@ -51,6 +51,7 @@ def test_profiles_place_every_declared_component(
     assert len(hardware.displays) == len(target.displays) == count // 2
     assert target.max_switches == base.max_switches == 5
     assert target.controls.app_actions['a'] == base.controls.app_actions['A']
+    assert target.controls.settings_shortcut == (controller == 'mc6_pro')
     assert target.functions == base.functions
     assert target.button_labels == {b.lower(): b for b in 'ABCDEFGH'[:count]}
     assert target.animation is not None and base.animation is not None
@@ -552,9 +553,11 @@ def test_computer_keyboard_edits_song_and_setlist_names(tmp_path: Path) -> None:
         session.key(ord('x'))  # Typing outside Rename is ignored by the shared UI.
         session.advance(1000000)
         press('f')  # Status to Songs and setlists in the right-hand region.
+        session.advance(session.time_us + 500000)
         launcher = session.frames['lcd-3']
         press('c')  # Open the song library tools directly.
         press('f')  # Back restores the utility page.
+        session.advance(session.time_us + 500000)
         assert session.frames['lcd-3'] == launcher
         press('f')  # Page cycling remains available.
         assert session.frames['lcd-3'] != launcher

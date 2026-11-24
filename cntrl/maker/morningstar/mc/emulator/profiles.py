@@ -53,7 +53,9 @@ def adapt(base: models.Target, controller: str, mirror: bool = False) -> models.
         n.lower(): a for n, a in base.controls.app_actions.items()
     }
     if controller == 'mc8_pro':
-        controls.update(previous_page='g', next_page='h', reverse_page=None)
+        controls.update(
+            previous_page='g', next_page='h', reverse_page=None, settings_shortcut=False
+        )
     displays = [
         d.model_copy(update={'id': f'lcd-{i}', 'label': f'LCD {i}'})
         for i, d in enumerate(base.displays, 1)

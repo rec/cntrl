@@ -1488,6 +1488,7 @@ class Setup(BindingScope, frozen=True):
 
 
 class TargetControls(BaseModel, frozen=True):
+    settings_shortcut: bool = False
     previous: str | None = None
     next: str | None = None
     confirm: str | None = None
@@ -1688,11 +1689,21 @@ class Target(BaseModel, frozen=True):
             raise ValueError('compiled button IDs must refer to declared input IDs')
         compiled = [self.compiled_button_ids.get(b, b) for b in self.buttons]
         self.input_identifiers(compiled)
-        bindings = self.controls.model_dump(exclude_none=True, exclude={'app_actions'})
+        bindings = self.controls.model_dump(
+            exclude_none=True, exclude={'app_actions', 'settings_shortcut'}
+        )
         if (set(bindings.values()) | set(self.controls.app_actions)) - set(
             self.buttons
         ):
             raise ValueError('control bindings must refer to declared input IDs')
+        if self.controls.settings_shortcut and (
+            self.controls.confirm is None
+            or self.controls.back is None
+            or self.controls.confirm == self.controls.back
+        ):
+            raise ValueError(
+                'the Settings shortcut needs distinct confirm and back switches'
+            )
         return self
 
     model_config = ConfigDict(extra='forbid')

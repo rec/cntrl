@@ -20,6 +20,7 @@ struct ApplicationServices {
     virtual bool output_idle() const = 0;
     virtual bool song_transfer_busy() const = 0;
     virtual bool switch_editor_open() const = 0;
+    virtual bool switch_performance_active() const { return false; }
     virtual uint8_t scene_page_chord(unsigned) const { return 0; }
     virtual void refresh_switches() {}
     virtual void open_switch_editor(const Document &, uint64_t held) = 0;
@@ -171,20 +172,48 @@ public:
     }
     bool utility_visible() const { return !editing_tool && utility_page < layout.pages() && layout.page(utility_page)[0] != 10; }
     bool feature_open(const ApplicationServices &services) const { return !utility_visible() && (setups.open() || song_ui.open() || services.switch_editor_open()); }
+    bool settings_frontmost() const { return editing_tool == PageLayout::settings && setups.open(); }
+    bool settings_shortcut_available(const ApplicationServices &services) const {
+        return settings_frontmost() || (!editing_tool && !documents_.busy() && !documents_.dirty()
+            && documents_.document().valid() && !pending_song_step_ && !songs_.executing()
+            && (!services.switch_editor_open() || services.switch_performance_active()));
+    }
+    bool settings_chord_available(const ApplicationServices &services, uint8_t chord) const {
+        if (!chord || !settings_shortcut_available(services)) return false;
+        if (settings_frontmost()) return true;
+        if (utility_visible() || (!song_navigation_active() && !services.switch_performance_active())) {
+            const unsigned page = utility_visible() ? utility_page : allocation.selected();
+            if (page < layout.pages()) {
+                const auto type = layout.page(page)[0];
+                // These tools use press or release timing for their own controls.
+                if (type == PageLayout::time || type == PageLayout::midi_looper || type == PageLayout::arpeggiator
+                    || type == unsigned(Pages::Page::panic) || type == PageLayout::pong || type == PageLayout::memon) return false;
+            }
+        }
+        if (const auto *navigation = layout.navigation())
+            for (unsigned i = 0; i < 4; ++i) if (navigation[i] == chord) return false;
+        if (song_navigation_active() && !song_boundary())
+            for (unsigned i = 0; i < 2; ++i) if (services.scene_page_chord(i) == chord) return false;
+        return true;
+    }
+    bool settings_shortcut(ApplicationServices &services) {
+        if (settings_frontmost()) return setups.return_to_performance();
+        return open_tool(PageLayout::settings, services, true);
+    }
     bool tool_editor_open(const ApplicationServices &services) const {
         if (song_ui.patch_chooser_requested) return true;
         if (editing_tool == PageLayout::setups || editing_tool == PageLayout::settings) return setups.open();
         if (editing_tool == PageLayout::songs) return song_ui.open() && !song_ui.performing();
         return editing_tool == PageLayout::switches && services.switch_editor_open();
     }
-    bool open_tool(unsigned page, ApplicationServices &services) {
+    bool open_tool(unsigned page, ApplicationServices &services, bool shortcut_hint = false) {
         if (documents_.busy()) return false;
         if (page == PageLayout::settings) {
-            if (editing_tool || pending_song_step_ || songs_.executing() || services.switch_editor_open()) return false;
+            if (editing_tool || !settings_shortcut_available(services)) return false;
             const bool performing = song_navigation_active();
             const auto patch = !performing && layout.controllers() ? controller().selected_patch() : UINT16_MAX;
             editing_tool = page;
-            if (!setups.enter_settings(patch, songs_, performing)) { editing_tool = 0; return false; }
+            if (!setups.enter_settings(patch, songs_, performing, shortcut_hint)) { editing_tool = 0; return false; }
         } else if (page == PageLayout::setups) {
             if (documents_.dirty()) return false;
             setups.enter();

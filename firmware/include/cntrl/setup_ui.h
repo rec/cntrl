@@ -21,9 +21,10 @@ public:
         if (!name_[0]) browse(false);
         render();
     }
-    bool enter_settings(unsigned patch, const Songs &songs, bool performing) {
+    bool enter_settings(unsigned patch, const Songs &songs, bool performing, bool shortcut_hint = false) {
         if (open() || docs_.busy() || docs_.dirty() || !docs_.document().valid()) return false;
         settings_ = true;
+        shortcut_hint_ = shortcut_hint;
         const auto &doc = docs_.document();
         current_patch_ = patch < doc.patches() && u16(doc.patch(patch)) != UINT16_MAX
             && patch_edit_node(doc, doc.browser_root(patch)) >= 0 ? patch : UINT16_MAX;
@@ -31,9 +32,32 @@ public:
         std::snprintf(current_set_, sizeof(current_set_), "%s", performing ? songs.active_set() : "");
         shortcut_ = has_performance_shortcut() ? Shortcut::performance : Shortcut::setup;
         device_editor_ = Mode::closed;
+        resume_editor_ = Mode::closed;
+        return_from_shortcut_ = false;
         locked_ = true;
         mode_ = Mode::current;
         render();
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_return_to_performance)
+#endif
+    bool return_to_performance() {
+        if (!settings_ || !open() || docs_.busy() || browsing_) return false;
+        if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
+        const bool changed = device_editor_ == Mode::contact ? std::strcmp(contact_draft_, docs_.name_and_contact()) != 0
+            : device_editor_ == Mode::startup_set ? std::strcmp(startup_draft_, docs_.startup_set()) != 0
+            : docs_.dirty() && changed_fields_;
+        if (!changed) {
+            if (docs_.dirty()) docs_.edit_cancel();
+            close();
+        } else {
+            return_from_shortcut_ = true;
+            resume_editor_ = mode_;
+            mode_ = Mode::decision;
+            item_ = 2;
+            render();
+        }
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -212,7 +236,7 @@ public:
             else if (button == 2 || button == 5) mode_ = Mode::field;
         } else if (mode_ == Mode::decision && device_editor_ != Mode::closed) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
-            else if (button == 5 || (button == 2 && item_ == 2)) mode_ = device_editor_;
+            else if (button == 5 || (button == 2 && item_ == 2)) keep_editing(device_editor_);
             else if (button == 2) {
                 if (!item_ && !(device_editor_ == Mode::contact ? docs_.name_and_contact(contact_draft_)
                     : (!startup_draft_[0] || songs_->setlist(startup_draft_)) && docs_.startup_set(startup_draft_))) {
@@ -222,11 +246,11 @@ public:
             }
         } else if (mode_ == Mode::decision) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
-            else if (button == 5) mode_ = draft_return_;
+            else if (button == 5) keep_editing(draft_return_);
             else if (button == 2) {
                 if (item_ == 0) { if (docs_.edit_save(now)) mode_ = Mode::saving; else { hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed)); return; } }
                 else if (item_ == 1) { docs_.edit_cancel(); close(); return; }
-                else mode_ = draft_return_;
+                else keep_editing(draft_return_);
             }
         }
         render();
@@ -246,6 +270,9 @@ private:
     Shortcut shortcut_ = Shortcut::setup;
     const Songs *songs_ = nullptr;
     Mode device_editor_ = Mode::closed;
+    Mode resume_editor_ = Mode::closed;
+    bool return_from_shortcut_ = false;
+    bool shortcut_hint_ = false;
     unsigned startup_choice_ = 0;
     char startup_draft_[64] = {};
     char current_set_[64] = {};
@@ -284,9 +311,16 @@ private:
         mode_ = device_editor_ = Mode::startup_set;
     }
     void leave_device_editor() {
+        if (return_from_shortcut_) { close(); return; }
         mode_ = shortcut_ == Shortcut::pedal ? Mode::pedal : Mode::current;
         item_ = device_editor_ == Mode::contact ? 1 : 0;
         device_editor_ = Mode::closed;
+    }
+    void keep_editing(Mode fallback) {
+        mode_ = return_from_shortcut_ && resume_editor_ != Mode::closed && resume_editor_ != Mode::contact_action && resume_editor_ != Mode::failed
+            ? resume_editor_ : fallback;
+        return_from_shortcut_ = false;
+        resume_editor_ = Mode::closed;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_contact_button)
@@ -627,6 +661,13 @@ private:
                     ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::owner_contact));
                 else if (docs_.edit_reloads()) ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::reload_stops_playback));
             }
+        }
+        if (settings_ && shortcut_hint_) {
+            auto &line = views[0].lines[3];
+            line.graphics.line_height = line.graphics.size = 16;
+            line.wrap = true;
+            std::snprintf(line.text, sizeof(line.text), "%s+%s %s", hardware_.control_label(Role::confirm),
+                hardware_.control_label(Role::back), ui::i18n::text(ui::i18n::Message::back));
         }
         ui::present(hardware_, views, 1);
     }

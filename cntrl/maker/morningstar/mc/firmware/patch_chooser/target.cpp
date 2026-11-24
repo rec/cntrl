@@ -266,6 +266,13 @@ public:
         return false;
 #endif
     }
+    bool switch_performance_active() const override {
+#if CNTRL_SWITCHES
+        return switches.performance();
+#else
+        return false;
+#endif
+    }
     uint8_t scene_page_chord(unsigned i) const override {
 #if CNTRL_SWITCHES
         return switches.page_chord(i);

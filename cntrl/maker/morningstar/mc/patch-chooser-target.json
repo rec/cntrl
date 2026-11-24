@@ -52,6 +52,7 @@
     "F"
   ],
   "controls": {
+    "settings_shortcut": true,
     "previous": "A",
     "next": "B",
     "confirm": "C",

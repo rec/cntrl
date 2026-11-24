@@ -243,6 +243,7 @@ public:
     bool configuration_locked() const override { return switches && switches->open(); }
     bool song_transfer_busy() const override { return false; }
     bool switch_editor_open() const override { return switches && switches->open(); }
+    bool switch_performance_active() const override { return switches && switches->performance(); }
     uint8_t scene_page_chord(unsigned i) const override { return switches ? switches->page_chord(i) : 0; }
     void refresh_switches() override { if (switches && switches->open()) switches->refresh(); }
     void open_switch_editor(const Document &d,uint64_t held_inputs) override { switches->enter(d,uint32_t(held_inputs)); }
@@ -633,6 +634,7 @@ public:
         help[0] = 11;
         if (!board.firmware_exited && !board.stock_pending && !host.showing_splash()) {
             const uint8_t overlay = application.utility_visible() ? 0
+                : application.settings_frontmost() ? PageLayout::settings
                 : application.setups.open() ? PageLayout::setups
                 : application.song_ui.open() ? PageLayout::songs
                 : board.switch_editor_open() ? PageLayout::switches : 0;

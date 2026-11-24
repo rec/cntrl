@@ -34,6 +34,12 @@ public:
         if (!application_.setups.open()) application_.song_ui.poll(pressed);
         if (!pressed) application_.controls_locked = false;
         if (auto *visit = services.visit()) { visit->poll(!pressed); consumed = consumed || visit->busy(); }
+        consumed = route_settings(events, pressed, now, consumed || services.actions().midi_reserved()) || consumed;
+        // The performance switch map samples held inputs as well as edges.
+        // Keep a deferred press out of that sample until its edge is routed.
+        const uint8_t hidden = settings_swallowed_ ? controls_.settings_mask()
+            : settings_edge_ ? uint8_t(1u << settings_button_) : 0;
+        application_.held &= ~uint64_t(hidden);
         const bool performing = application_.song_navigation_active();
         uint8_t assigned_pages = 0;
         const auto *setup = application_.layout.navigation();
@@ -42,11 +48,65 @@ public:
         route_song_gestures(services.actions(), events, song_gestures && !consumed, assigned_pages);
         if (song_gestures && application_.song_boundary() && application_.binding_return_songs && !application_.utility_visible())
             for (auto &event : events) event &= release_event;
-        if (!consumed) router_.route(services.actions(), events.data(), pressed, now, application_.utility_visible(), assigned_pages, song_gestures, performing);
+        if (!consumed) router_.route(services.actions(), events.data(), pressed & ~hidden, now, application_.utility_visible(), assigned_pages, song_gestures, performing);
     }
     template<class Actions>
     void finish(Actions &actions) { router_.finish(actions, application_.pending_operation, application_.return_to_switches, application_.controls_locked); }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(input_settings_chord)
+#endif
+    bool route_settings(std::array<uint8_t, 8> &events, uint8_t pressed, uint32_t now, bool reserved) {
+        const uint8_t chord = controls_.settings_mask();
+        if (!chord) return false;
+        const uint8_t confirm = uint8_t(1u << controls_.confirm), back = uint8_t(1u << controls_.back);
+        if (settings_swallowed_) {
+            if (!(pressed & chord)) {
+                settings_swallowed_ = false;
+                for (unsigned index : {controls_.confirm, controls_.back}) {
+                    states_[index].waiting_for_second = false;
+                    states_[index].double_pressed = false;
+                }
+            }
+            return true;
+        }
+        if (settings_passthrough_) {
+            settings_passthrough_ = pressed & chord;
+            return false;
+        }
+        if (!(pressed & chord) && !settings_edge_) return false;
+        const bool available = !reserved && !application_.controls_locked && !navigation_tap_
+            && application_.settings_chord_available(application_services_, chord);
+        // Confirm and Back also act alone. Delay only their initial edge and
+        // replay it if the other switch does not join within the chord window.
+        constexpr uint32_t chord_window_ms = 45;
+        const bool within_window = !settings_edge_ || uint32_t(now - settings_started_) <= chord_window_ms;
+        const bool both_new = (events[controls_.confirm] & press_event) && (events[controls_.back] & press_event);
+        if (available && within_window && pressed == chord && (settings_edge_ || both_new)
+            && application_.settings_shortcut(application_services_)) {
+            settings_edge_ = 0;
+            settings_swallowed_ = true;
+            application_.controls_locked = true;
+            return true;
+        }
+        if (settings_edge_) {
+            const uint8_t pending = uint8_t(1u << settings_button_);
+            if (available && pressed == pending && within_window && !(events[settings_button_] & release_event)) return false;
+            if (!reserved && !application_.controls_locked) events[settings_button_] |= settings_edge_;
+            settings_edge_ = 0;
+            settings_passthrough_ = pressed & chord;
+        } else if (available && (pressed == confirm || pressed == back)) {
+            const unsigned index = pressed == confirm ? controls_.confirm : controls_.back;
+            if (events[index] & press_event) {
+                settings_button_ = index;
+                settings_started_ = now;
+                settings_edge_ = events[index];
+                events[index] = 0;
+            }
+        } else settings_passthrough_ = pressed & chord;
+        return false;
+    }
+
     template<class Actions>
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(input_navigation_gestures)
@@ -148,5 +208,9 @@ private:
     ControlRouter router_;
     bool navigation_pressed_ = false, navigation_tap_ = false, navigation_second_ = false;
     uint8_t pending_members_ = 0, chord_used_ = 0;
+    uint32_t settings_started_ = 0;
+    unsigned settings_button_ = 0;
+    uint8_t settings_edge_ = 0;
+    bool settings_swallowed_ = false, settings_passthrough_ = false;
 };
 } // namespace cntrl::ui

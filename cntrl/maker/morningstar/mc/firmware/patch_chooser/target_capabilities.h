@@ -96,5 +96,5 @@ inline constexpr ui::Controls controls{
     5,
     3,
     2,
-    control_bindings.data(), button_count, ui::Controls::absent};
+    control_bindings.data(), button_count, ui::Controls::absent, true};
 } // namespace cntrl::target

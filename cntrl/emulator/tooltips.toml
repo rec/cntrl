@@ -115,6 +115,17 @@ button-b = 'A/B browse or adjust'
 button-c = 'C OK'
 button-f = 'F back'
 
+[settings.en]
+display-1 = 'Settings controls'
+display-2 = 'Settings'
+display-3 = 'Selected setting and value'
+button-a = 'A/B browse or adjust'
+button-b = 'A/B browse or adjust'
+button-c = 'C open or confirm'
+button-d = 'D/E move the text cursor'
+button-e = 'D/E move the text cursor'
+button-f = 'F back'
+
 [songs-and-setlists.en]
 display-1 = 'Current'
 display-2 = 'Songs and setlists'

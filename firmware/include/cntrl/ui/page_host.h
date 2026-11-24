@@ -112,7 +112,7 @@ public:
             return true;
         }
         if ((pages_.page() == Pages::Page::setups || pages_.page() == Pages::Page::songs || pages_.page() == Pages::Page::switches || pages_.page() == Pages::Page::settings) && input == controls_.confirm) {
-            if (pressed) application_.open_tool(unsigned(pages_.page()), platform_);
+            if (pressed) application_.open_tool(unsigned(pages_.page()), platform_, controls_.settings_shortcut);
             return true;
         }
         if (pages_.page() == Pages::Page::language) {
@@ -216,7 +216,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_show)
 #endif
     void show(unsigned pane, const cntrl::Pane &content) {
-        if (application_.utility_visible()) return;
+        if (application_.utility_visible() || (content.scene && application_.settings_frontmost())) return;
         if (content.page < application_.layout.pages()) {
             const unsigned r = application_.layout.page_region(content.page);
             const auto &region = application_.allocation.region(r);
@@ -231,6 +231,9 @@ public:
             Pane view = content;
             unsigned region = application_.layout.page_region(application_.layout.controller_page(application_.rendering()));
             view.focused = region == application_.allocation.focus();
+            if (pane == 1 && !view.three_bands && !view.lines[0].text[0]
+                && application_.settings_chord_available(platform_, controls_.settings_mask()))
+                settings_hint(view.lines[0], view.graphics.background);
             if (application_.rendering() == application_.visible_index && unsigned(destination) == application_.allocation.region(region).first) { pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds()); }
             renderer_.show(unsigned(destination),view);
             return;
@@ -239,7 +242,12 @@ public:
             cancel_focus(); save_view(); management_visible_ = true;
             pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds());
         }
-        renderer_.show(pane, content);
+        if (pane == 0 && application_.song_boundary() && !content.lines[3].text[0]
+            && application_.settings_chord_available(platform_, controls_.settings_mask())) {
+            Pane view = content;
+            settings_hint(view.lines[3], view.graphics.background);
+            renderer_.show(pane, view);
+        } else renderer_.show(pane, content);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_host_configure_pages)
@@ -666,6 +674,16 @@ private:
 #endif
     BankedPage *expression_bank_ = nullptr;
     unsigned expression_revision_ = 0;
+    void settings_hint(TextLine &line, uint16_t background) const {
+        line.graphics.font = localized_face;
+        line.graphics.size = line.graphics.line_height = 16;
+        line.graphics.background = background;
+        line.graphics.foreground = Raster::luminance(background) < 1790 ? 0xffff : 0;
+        line.centered = true;
+        std::snprintf(line.text, sizeof(line.text), "%s+%s %s",
+            controls_.bindings[controls_.confirm].label, controls_.bindings[controls_.back].label,
+            i18n::text(i18n::Message::settings));
+    }
     void save_view() { if (pages_.index() < application_.views.size()) application_.views[pages_.index()] = pages_.save_view(); }
     void load_view(unsigned page) { if (page < application_.views.size()) pages_.restore_view(application_.views[page]); }
     bool other_selected(Pages::Page type) const {

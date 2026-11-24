@@ -157,6 +157,7 @@ def header(target: Target) -> str:
                 if target.controls.previous_page is not None
                 else 'ui::Controls::absent'
             )
+            + f', {str(target.controls.settings_shortcut).lower()}'
             + '};',
             '} // namespace cntrl::target',
             '',

@@ -69,7 +69,8 @@ def test_song_step_navigation_and_boundaries(
     fixture = tmp_path / 'songs.bin'
     fixture.write_bytes(encoded)
     setup = tmp_path / 'setup.bin'
-    setup.write_bytes(compiler.compile_show({}, {}, [], target))
+    pages = {'pages': {'Live': {'type': 'patch-chooser'}}}
+    setup.write_bytes(compiler.compile_show(pages, {}, [], target))
     runner = native_programs.build('test/test_song_steps.cpp')
     subprocess.run([str(runner), str(fixture), str(setup)], check=True)
     hooked = library.model_copy(
@@ -101,3 +102,13 @@ def test_song_step_navigation_and_boundaries(
     ] == [(11, 12), (21, 22)]
     fixture.write_bytes(encoded)
     subprocess.run([str(runner), str(fixture), str(setup), '--hooks'], check=True)
+    fixture.write_bytes(songs.encode(library, target))
+    setup.write_bytes(
+        compiler.compile_show(
+            {**pages, 'navigation': {'song_forward': 'C+F'}}, {}, [], target
+        )
+    )
+    subprocess.run(
+        [str(runner), str(fixture), str(setup), '--shortcut-conflict'],
+        check=True,
+    )

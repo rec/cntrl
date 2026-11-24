@@ -155,9 +155,11 @@ occur and repeat those tasks after changing the labels or controls.
 - Song-step edits need to resolve the library selection and save to
   either the individual occurrence or the shared patch. Fields derived from
   authoring inputs need a rebuild path for any compiled data they affect.
-- Settings opens from the configured page cycle. A direct shortcut still needs
-  a switch mapping that accounts for authored chords, timed actions, and
-  consuming both halves of a press/release gesture.
+- The MC6 Pro prototype opens Settings and returns with C+F. It consumes both
+  switches through release and preserves authored C+F navigation. The editor
+  shows the Back chord. A launch hint appears at setlist boundaries and in
+  the empty sent-patch display. Physical rehearsal checks remain open,
+  including the 45 ms window for the second switch.
 
 ## Related work
 

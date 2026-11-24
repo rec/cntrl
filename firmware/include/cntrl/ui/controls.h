@@ -19,6 +19,11 @@ struct Controls {
     const ControlBinding *bindings = nullptr;
     unsigned count = 0;
     unsigned previous_page = absent;
+    bool settings_shortcut = false;
+    uint8_t settings_mask() const {
+        return settings_shortcut && confirm < count && back < count && confirm != back
+            ? uint8_t((1u << confirm) | (1u << back)) : 0;
+    }
 };
 class ControlRouter {
 public:

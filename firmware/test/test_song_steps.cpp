@@ -23,6 +23,7 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     unsigned input_count() const override { return 6; }
     unsigned switch_capacity() const override { return 5; }
     const char *input_label(unsigned input) const override { static const char *labels[] = {"A", "B", "C", "D", "E", "F"}; return labels[input]; }
+    const char *control_label(cntrl::ControlRole role) const override { return input_label(unsigned(role)); }
     unsigned display_width() const override { return 160; }
     unsigned display_height() const override { return 128; }
     bool supports(const char *) const override { return true; }
@@ -40,6 +41,7 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     bool output_idle() const override { return true; }
     bool song_transfer_busy() const override { return false; }
     bool switch_editor_open() const override { return switches.open(); }
+    bool switch_performance_active() const override { return switches.performance(); }
     void open_switch_editor(const cntrl::Document &d, uint64_t held) override { assert(switches.enter(d, uint32_t(held))); }
     bool shift_switch_editor(bool backwards) override { return switches.shift(backwards); }
     bool state(unsigned operation, uint32_t value) override { return app->state(operation, value, *this); }
@@ -108,17 +110,27 @@ int main(int argc, char **argv) {
     std::ifstream setup_file(argv[2], std::ios::binary);
     std::vector<uint8_t> setup{std::istreambuf_iterator<char>(setup_file), {}};
     cntrl::Document configuration; assert(configuration.load(setup.data(), unsigned(setup.size()), board));
+    char upload[128];
+    std::snprintf(upload, sizeof(upload), "CNTRL SETUP PUT 4c697665 %u %08lx 0\n",
+        unsigned(setup.size()), (unsigned long)cntrl::checksum(setup.data(), unsigned(setup.size())));
+    for (char c : std::string(upload)) documents.receive(uint8_t(c), 0);
+    for (uint8_t b : setup) documents.receive(b, 0);
+    while (documents.busy()) documents.tick(0);
+    assert(documents.select("Live"));
+    while (documents.busy()) documents.tick(0);
+    assert(documents.document().valid());
     cntrl::ui::Application app(board, documents, primary, board, board, songs, board, true); board.app = &app;
     assert(app.prepare_pages(configuration)); app.finish_pages(true); app.layout = configuration.page_layout(); primary.activate(configuration, false);
     cntrl::ui::ControlBinding bindings[] = {{0, "A"}, {1, "B"}, {2, "C"}, {3, "D"}, {4, "E"}, {5, "F"}};
     cntrl::ui::Controls controls{0, 1, 2, 3, 4, 5, 5, 3, 4, bindings, 6};
+    controls.settings_shortcut = true;
     cntrl::ButtonState states[6]; cntrl::ui::InputCoordinator input(states, controls, configuration, app, board);
     Services services{{board}}; uint8_t held = 0; unsigned revision = 0;
-    auto sample = [&](uint8_t value) {
+    auto sample = [&](uint8_t value, unsigned scans = 64) {
         held = value;
-        for (unsigned i = 0; i < 64; ++i) {
+        for (unsigned i = 0; i < scans; ++i) {
             input.scan(held, board.now, services); app.tick(board.now); board.entry.tick(board.now); songs.tick();
-            board.switches.tick(board.now++, held);
+            board.switches.tick(board.now++, uint32_t(app.held));
             if (revision != board.switches.revision()) { revision = board.switches.revision(); if (board.switches.performance()) app.bindings_enter(); }
             input.finish(services.routing);
         }
@@ -130,12 +142,40 @@ int main(int argc, char **argv) {
     auto next = [&]() { click(); wait(5); };
     auto previous = [&]() { click(); click(); };
     auto hold = [&]() { press(5); wait(8); release(5); };
+    auto tap = [&](unsigned button) { press(button); release(button); };
+    auto settings = [&]() {
+        sample(1u << 2, 20);
+        sample((1u << 2) | (1u << 5));
+        release(2); release(5);
+        if (!app.setups.open() && app.editing_tool) app.finish_tool();
+    };
+    if (argc == 4 && !std::strcmp(argv[3], "--shortcut-conflict")) {
+        songs.choose("Set"); app.song_ui.perform(); sample(0);
+        settings();
+        assert(!app.setups.open() && !songs.boundary() && board.sent.back().second == 1);
+        return 0;
+    }
+    settings(); assert(app.settings_frontmost());
+    settings(); assert(!app.setups.open() && board.page_directions.empty() && board.sent.empty());
     press(5);
     assert((board.page_directions == std::vector<bool>{false}));
     wait(8); release(5);
     assert((board.page_directions == std::vector<bool>{false}));
     board.page_directions.clear();
     songs.choose("Set"); app.song_ui.perform(); sample(0);
+    settings();
+    assert(app.settings_frontmost() && songs.boundary() && board.sent.empty());
+    assert(std::strstr(board.panes[0].lines[3].text, "C+F"));
+    tap(1); tap(2); tap(2); tap(1); // Adjust loaded setup brightness.
+    assert(documents.dirty());
+    settings();
+    assert(app.settings_frontmost() && documents.dirty());
+    tap(2); // Keep editing.
+    assert(app.settings_frontmost() && documents.dirty());
+    settings();
+    tap(0); tap(2); // Discard and return.
+    app.finish_tool();
+    assert(!app.setups.open() && !documents.dirty() && songs.boundary() && board.sent.empty());
     if (argc == 3) {
         press(2); wait(8); release(2);
         assert(songs.boundary() && board.sent.empty() && app.song_ui.performing());
@@ -193,6 +233,11 @@ int main(int argc, char **argv) {
     assert(!std::strcmp(board.panes[2].lines[0].text, "Next"));
     assert(!std::strcmp(board.panes[2].lines[2].text, "Accent"));
     const std::string scene = board.panes[0].lines[1].text;
+    const auto before_settings = board.sent.size();
+    settings(); assert(app.settings_frontmost());
+    settings(); assert(!app.setups.open() && !songs.boundary());
+    assert(board.sent.size() == before_settings && songs.continuation().patch == 0);
+    board.switches.refresh();
     for (auto displays : {1u, 2u, 3u}) {
         board.displays = displays; board.switches.refresh(); sample(0);
         assert(board.panes[0].lines[1].text == scene);
@@ -206,6 +251,8 @@ int main(int argc, char **argv) {
     auto count = board.sent.size();
     press(2); wait(8); release(2);
     assert(board.sent.size() == count + 1 && board.sent.back() == std::make_pair(99u, 1u));
+    sample(1u << 2, 20); sample(0);
+    assert(board.sent.size() == count + 2 && board.sent.back() == std::make_pair(99u, 1u));
     assert(songs.continuation().patch == 0);
     next(); next(); assert(songs.continuation().patch == 2 && board.sent.back().second == 3);
     previous(); assert(songs.continuation().patch == 1 && board.sent.back().second == 2);

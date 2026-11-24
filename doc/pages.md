@@ -34,6 +34,13 @@ Shared hardware services, including the MIDI clock, remain shared across pages.
 
 ## Settings
 
+On the MC6 Pro, press C and F together to open Settings directly from the
+browser or setlist. Press them together again to return to the previous
+view. Pending edits bring up **Save**, **Discard**, and **Keep editing**.
+An authored C+F navigation chord takes priority. Include Settings in an
+explicit page list if you use C+F for navigation. Timing-sensitive utility
+pages such as Time and Panic keep their own switch timing while focused.
+
 Open Settings to edit the loaded setup's brightness, screensaver timeout,
 or USB MIDI setting. In browser mode, the current patch is also available
 when it selects a program for an instrument. Its MIDI channel edit applies
