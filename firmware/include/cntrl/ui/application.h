@@ -62,7 +62,7 @@ public:
                 Songs &songs, SongCapture &capture, bool switches)
         : setups(documents, hardware),
           song_ui(songs, hardware, capture, &documents), hardware_(hardware), documents_(documents), primary_(primary),
-          outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) {}
+          outputs_(outputs), sources_(sources), songs_(songs), has_switches_(switches) { songs_.bind_documents(documents); }
     ~Application() { destroy_banked(pending_banked_); destroy_banked(banked_); destroy_controllers(pending_controllers_); destroy_controllers(controllers_); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(application_prepare_layout)
@@ -136,6 +136,7 @@ public:
         songs_.presentation(scene, song, setlist, document, binding);
     }
     void startup() {
+        songs_.recover_startup_set();
         const char *name = documents_.startup_set();
         if (!name[0]) return;
         if (!songs_.setlist(name)) { hardware_.error("Startup set missing"); return; }

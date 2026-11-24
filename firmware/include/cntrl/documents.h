@@ -17,6 +17,7 @@ struct Replies {
 };
 
 class Documents {
+    friend class Songs;
 public:
     Documents(SetupStorage &storage, Hardware &hardware, Controller &controller, Replies &replies, GlobalSettings *globals = nullptr)
         : revisions_(storage), storage_(storage), hardware_(hardware), controller_(controller), replies_(replies), globals_(globals) {}

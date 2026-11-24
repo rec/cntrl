@@ -19,6 +19,10 @@ public:
         char startup_set[64] = {};
         char name_and_contact[128] = {};
     };
+    struct StartupRename {
+        uint32_t generation = 0, crc = 0;
+        char old_name[64] = {}, new_name[64] = {};
+    };
     explicit GlobalSettings(files::FileSystem &filesystem) : filesystem_(filesystem) {}
     const Values &values() const { return values_; }
     bool ready() const { return ready_; }
@@ -94,6 +98,7 @@ public:
 #endif
     bool boot() {
         ready_ = false; values_ = Values(); sequence_ = 0; slot_ = -1;
+        startup_rename_dirty_ = false;
         bool present = false;
         for (unsigned slot = 0; slot < 2; ++slot) {
             char path[32]; filename(slot, path);
@@ -129,7 +134,49 @@ public:
             || std::memcmp(checked.values, values.values, sizeof(values.values)) || std::strcmp(checked.language, values.language)
             || std::strcmp(checked.startup_set, values.startup_set)
             || std::strcmp(checked.name_and_contact, values.name_and_contact)) return false;
-        values_ = values; ++sequence_; slot_ = int(slot); return true;
+        values_ = values; ++sequence_; slot_ = int(slot); startup_rename_dirty_ = false; return true;
+    }
+    bool protect_startup_rename(const StartupRename &rename) {
+        if (startup_rename_dirty_ && !commit(values_)) return false;
+        if (!valid_startup_name(rename.old_name) || !valid_startup_name(rename.new_name)) return false;
+        uint8_t bytes[rename_size] = {};
+        std::memcpy(bytes, "CSR1", 4);
+        binary::write32(bytes + 4, rename.generation);
+        binary::write32(bytes + 8, rename.crc);
+        std::memcpy(bytes + 12, rename.old_name, 64);
+        std::memcpy(bytes + 76, rename.new_name, 64);
+        binary::write32(bytes + 140, binary::crc(bytes, 140));
+        const unsigned slot = rename.generation & 1;
+        char path[40]; rename_filename(slot, path);
+        auto file = filesystem_.file();
+        if (!file || !file->open(path, files::Mode::truncate)
+            || !file->write(0, bytes, sizeof(bytes)) || !file->sync()) return false;
+        file->close();
+        StartupRename checked;
+        return startup_rename(slot, checked) && checked.generation == rename.generation && checked.crc == rename.crc
+            && !std::strcmp(checked.old_name, rename.old_name) && !std::strcmp(checked.new_name, rename.new_name);
+    }
+    bool startup_rename(unsigned slot, StartupRename &rename) const {
+        char path[40]; rename_filename(slot, path);
+        if (!filesystem_.exists(path)) return false;
+        uint8_t bytes[rename_size];
+        auto file = filesystem_.file();
+        if (!file || !file->open(path, files::Mode::read) || file->size() != sizeof(bytes)
+            || !file->read(0, bytes, sizeof(bytes)) || std::memcmp(bytes, "CSR1", 4)
+            || binary::read32(bytes + 140) != binary::crc(bytes, 140)) return false;
+        rename.generation = binary::read32(bytes + 4);
+        rename.crc = binary::read32(bytes + 8);
+        std::memcpy(rename.old_name, bytes + 12, 64);
+        std::memcpy(rename.new_name, bytes + 76, 64);
+        return valid_startup_name(rename.old_name) && valid_startup_name(rename.new_name);
+    }
+    void finish_startup_rename(const char *name) {
+        auto values = values_;
+        std::snprintf(values.startup_set, sizeof(values.startup_set), "%s", name);
+        if (commit(values)) return;
+        // The rename record and visible library still identify this set after reboot.
+        values_ = values;
+        startup_rename_dirty_ = true;
     }
     static constexpr unsigned language_offset = 20 + count * 4;
     static constexpr unsigned old_record_size = language_offset + 8;
@@ -145,6 +192,17 @@ private:
     uint32_t sequence_ = 0;
     int slot_ = -1;
     bool ready_ = false;
+    bool startup_rename_dirty_ = false;
+    static constexpr unsigned rename_size = 144;
+    static void rename_filename(unsigned slot, char (&path)[40]) {
+        // The next rename must leave the preceding rename available for Undo.
+        std::snprintf(path, sizeof(path), "/cntrl/global/startup-rename-%u.bin", slot);
+    }
+    static bool valid_startup_name(const char (&name)[64]) {
+        if (!name[0] || !std::memchr(name, 0, sizeof(name))) return false;
+        for (const char *p = name; *p; ++p) if (*p < 32 || *p > 126) return false;
+        return true;
+    }
     static void filename(unsigned slot, char (&path)[32]) { std::snprintf(path, sizeof(path), "/cntrl/global/%u.bin", slot); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(global_settings_read)

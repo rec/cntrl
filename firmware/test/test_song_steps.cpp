@@ -1,4 +1,5 @@
 #include <cntrl/ui/input.h>
+#include "filesystem.h"
 #include "patch_hardware.h"
 #include "storage.h"
 #include <cassert>
@@ -98,6 +99,21 @@ struct Services {
 int main(int argc, char **argv) {
     assert(argc == 3 || argc == 4); cntrl::memory_budget = 2 * 1024 * 1024;
     Board board; TestStorage setup_storage, song_storage;
+    struct SettingsDisk : TestFileSystem {
+        using TestFileSystem::TestFileSystem;
+        bool blocked = false;
+        struct File : TestFile {
+            SettingsDisk &disk;
+            explicit File(SettingsDisk &value) : TestFile(value), disk(value) {}
+            bool open(const char *path, cntrl::files::Mode mode) override {
+                return (mode == cntrl::files::Mode::read || !disk.blocked) && TestFile::open(path, mode);
+            }
+        };
+        std::unique_ptr<cntrl::files::File> file() override {
+            return std::unique_ptr<cntrl::files::File>(new (std::nothrow) File(*this));
+        }
+    } settings_disk(std::filesystem::path(argv[1]).parent_path() / "settings-device");
+    cntrl::GlobalSettings preferences(settings_disk);
     cntrl::Controller primary(board, board, board); board.controller = &primary;
     cntrl::Documents documents(setup_storage, board, primary, board);
     cntrl::Songs songs(song_storage, board); board.songs = &songs;
@@ -264,6 +280,57 @@ int main(int argc, char **argv) {
         assert(!app.settings_frontmost());
         assert(!std::strcmp(songs.active_set(), "Set") && board.sent.size() == sent);
         assert(songs.continuation().entry == before.entry && songs.continuation().patch == before.patch);
+        assert(preferences.boot());
+        documents.bind_globals(preferences);
+        assert(documents.startup_set("Set"));
+        settings();
+        tap(0); tap(0); tap(2);
+        cntrl::Setlist first;
+        assert(songs.set_at(0, first));
+        if (std::strcmp(first.name, "Set")) tap(1);
+        tap(2); tap(3); tap(1); tap(1); tap(2); // Rename the active startup set.
+        tap(1); tap(5); // Tet, then review.
+        assert(songs.setlist("Set") && !songs.setlist("Tet"));
+        tap(1); tap(2); // Save.
+        while (songs.busy()) sample(0);
+        sample(0);
+        assert(songs.success() && !std::strcmp(songs.active_set(), "Tet") && !std::strcmp(documents.startup_set(), "Tet"));
+        settings();
+        assert(!app.settings_frontmost());
+        assert(songs.continuation().entry == before.entry && songs.continuation().patch == before.patch);
+        const auto recover = [&](const char *name) {
+            cntrl::GlobalSettings reopened(settings_disk);
+            assert(reopened.boot());
+            cntrl::Documents rebooted_documents(setup_storage, board, primary, board, &reopened);
+            cntrl::Songs rebooted_songs(song_storage, board);
+            rebooted_songs.bind_documents(rebooted_documents);
+            assert(rebooted_songs.boot());
+            rebooted_songs.recover_startup_set();
+            assert(!std::strcmp(rebooted_documents.startup_set(), name) && rebooted_songs.setlist(name));
+        };
+        assert(songs.rename_setlist("Tet", "Show"));
+        song_storage.remaining = 0;
+        while (songs.busy()) songs.tick();
+        song_storage.remaining = -1;
+        assert(!songs.success());
+        recover("Tet"); // The rename record was saved, but the library write was interrupted.
+        assert(songs.rename_setlist("Tet", "Show"));
+        settings_disk.blocked = true;
+        while (songs.busy()) songs.tick();
+        assert(songs.success() && !std::strcmp(documents.startup_set(), "Show"));
+        settings_disk.blocked = false;
+        recover("Show"); // The new library was saved, but the startup preference write failed.
+        assert(preferences.boot() && !std::strcmp(documents.startup_set(), "Show"));
+        assert(songs.rename_setlist("Show", "Other"));
+        song_storage.remaining = 0;
+        while (songs.busy()) songs.tick();
+        song_storage.remaining = -1;
+        assert(!songs.success());
+        assert(songs.undo());
+        while (songs.busy()) songs.tick();
+        assert(songs.success() && !std::strcmp(documents.startup_set(), "Tet"));
+        recover("Tet");
+        assert(board.sent.size() == sent);
         return 0;
     }
     if (argc == 4 && !std::strcmp(argv[3], "--shortcut-conflict")) {

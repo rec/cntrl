@@ -59,6 +59,8 @@ public:
                     std::strcpy(song_name_, name_);
                     std::strcpy(picker_, name_);
                 }
+                if (saved_.mode == library_decision && library_edit_ == LibraryEdit::rename_setlist)
+                    std::strcpy(managed_set_, name_);
                 if (mode_ == patches && saved_.mode == library_decision && library_edit_ == LibraryEdit::remove_patch)
                     if (const auto *song = songs_.song(song_name_)) cursor_ = std::min(cursor_, unsigned(song->count) - 1);
                 if (!feedback_[0]) ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::saved));
@@ -124,7 +126,7 @@ private:
         }
         unsigned count = mode_ == root ? 5 + bool(documents_ && documents_->document().valid() && documents_->document().page_layout().controllers()) : mode_ == sets ? songs_.counts().sets + !managing_setlists_
             : mode_ == library || mode_ == adding ? songs_.counts().songs
-            : mode_ == editing ? 9 : mode_ == set_actions ? 2 + bool(current_set() && current_set()->count)
+            : mode_ == editing ? 9 : mode_ == set_actions ? 3 + bool(current_set() && current_set()->count)
             : mode_ == song_actions ? (managing_library_ ? 2 : 4) : mode_ == patch_actions ? (managing_library_ ? 3 : 5)
             : mode_ == patches ? (songs_.song(song_name_) ? songs_.song(song_name_)->count : 0)
             : mode_ == moving || mode_ == performance || mode_ == set_entries ? (current_set() ? current_set()->count : 0) : 0;
@@ -217,7 +219,8 @@ private:
             if (cursor_ < 2) {
                 insertion_ = cursor_ == 0 ? std::min(entry_ + 1, unsigned(set->count)) : set->count;
                 mode_ = adding; picker_[0] = 0;
-            } else if (set->count) review_library_edit(LibraryEdit::remove, set_actions);
+            } else if (cursor_ == 2) begin_name(set->name, true);
+            else review_library_edit(LibraryEdit::remove, set_actions);
         } else if (mode_ == moving && button == 2) {
             if (managing_setlists_) {
                 if (cursor_ != entry_) review_move();
@@ -241,7 +244,7 @@ private:
     bool waiting_ = false;
     char feedback_[64] = {}, name_[64] = {};
     bool managing_library_ = false, managing_setlists_ = false, shortcut_hint_ = false, return_to_performance_ = false;
-    enum class LibraryEdit { move, insert, remove, rename_song, remove_patch, move_patch_earlier, move_patch_later };
+    enum class LibraryEdit { move, insert, remove, rename_song, rename_setlist, remove_patch, move_patch_earlier, move_patch_later };
     LibraryEdit library_edit_ = LibraryEdit::move;
     Mode library_resume_ = moving;
     unsigned set_index_ = 0, library_choice_ = 0;
@@ -258,10 +261,16 @@ private:
             mode_ = library_resume_; return_to_performance_ = false;
         } else if (button == 2) {
             if (!library_choice_) {
-                if (songs_.generation() != library_generation_ || !save_library_edit()) { fail(); return; }
+                if (songs_.generation() != library_generation_) { fail(); return; }
+                if (!save_library_edit()) {
+                    if (library_edit_ == LibraryEdit::rename_setlist && songs_.last_error()[0])
+                        ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error());
+                    else fail();
+                    return;
+                }
                 if (managing_setlists_) {
                     if (library_edit_ == LibraryEdit::insert) cursor_ = insertion_;
-                    else if (library_edit_ == LibraryEdit::remove) cursor_ = entry_;
+                    else if (library_edit_ == LibraryEdit::remove || library_edit_ == LibraryEdit::rename_setlist) cursor_ = entry_;
                 }
             } else if (managing_setlists_) cursor_ = entry_;
             if (managing_setlists_) mode_ = set_entries;
@@ -280,6 +289,7 @@ private:
         case LibraryEdit::insert: return songs_.insert(managed_set_, insertion_, picker_);
         case LibraryEdit::remove: return songs_.remove(managed_set_, entry_);
         case LibraryEdit::rename_song: return songs_.rename_song(song_name_, name_);
+        case LibraryEdit::rename_setlist: return songs_.rename_setlist(managed_set_, name_);
         case LibraryEdit::remove_patch: return songs_.remove_patch(song_name_, patch_cursor_);
         case LibraryEdit::move_patch_earlier: return songs_.move_patch(song_name_, patch_cursor_, true);
         case LibraryEdit::move_patch_later: return songs_.move_patch(song_name_, patch_cursor_, false);
@@ -309,7 +319,8 @@ private:
             dropped_keys_ = false;
             while (length && name_[length - 1] == ' ') name_[--length] = 0;
             if (managing_library_) {
-                if (std::strcmp(song_name_, name_)) review_library_edit(LibraryEdit::rename_song, naming);
+                if (std::strcmp(naming_set_ ? managed_set_ : song_name_, name_))
+                    review_library_edit(naming_set_ ? LibraryEdit::rename_setlist : LibraryEdit::rename_song, naming);
                 else mode_ = return_mode_;
                 return;
             }
@@ -447,7 +458,7 @@ private:
             text(1, 0, mode_ == sets ? ui::i18n::text(ui::i18n::Message::setlists) : managed_set_);
             if (mode_ == set_actions) {
                 const ui::i18n::Message actions[] = {ui::i18n::Message::add_next,
-                    ui::i18n::Message::add_to_end, ui::i18n::Message::remove_from_setlist};
+                    ui::i18n::Message::add_to_end, ui::i18n::Message::rename_setlist, ui::i18n::Message::remove_from_setlist};
                 text(1, 1, ui::i18n::text(actions[cursor_]));
                 panes[1].lines[2].text[0] = 0;
                 SongEntry entry;
@@ -456,7 +467,12 @@ private:
                     std::snprintf(panes[0].lines[2].text, 64, "%u/%u", entry_ + 1, unsigned(set->count));
                 }
             }
-            if ((mode_ == moving || mode_ == library_decision) && set) {
+            if (mode_ == library_decision && library_edit_ == LibraryEdit::rename_setlist) {
+                text(0, 0, ui::i18n::text(ui::i18n::Message::rename_setlist));
+                text(0, 1, name_);
+                if (documents_ && !std::strcmp(documents_->startup_set(), managed_set_))
+                    text(2, 0, ui::i18n::text(ui::i18n::Message::startup_set));
+            } else if ((mode_ == moving || mode_ == library_decision) && set) {
                 SongEntry entry;
                 const auto action = mode_ == moving || library_edit_ == LibraryEdit::move ? ui::i18n::Message::move
                     : library_edit_ == LibraryEdit::insert ? ui::i18n::Message::add_action : ui::i18n::Message::remove_from_setlist;

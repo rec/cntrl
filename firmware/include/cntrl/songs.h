@@ -102,6 +102,7 @@ public:
     CNTRL_NOINLINE
 #endif
     Songs(Storage &storage, SongResolver &resolver) : storage_(storage), resolver_(resolver) {}
+    void bind_documents(Documents &documents) { documents_ = &documents; }
     const SongCounts &counts() const { return counts_; }
     uint32_t generation() const { return generation_; }
     const char *last_error() const { return error_; }
@@ -276,9 +277,35 @@ public:
     }
     bool rename_setlist(const char *from, const char *name) {
         char previous[64]; std::snprintf(previous, 64, "%s", from);
+        if (!setlist(previous) || !name[0] || std::strlen(name) >= sizeof(previous)) return false;
         if (std::strcmp(previous, name) && setlist(name)) { error_ = "Setlist name exists"; return false; }
         if (!prepare(Edit::rename_set, previous)) return false;
+        if (documents_ && !std::strcmp(documents_->startup_set(), previous) && std::strcmp(previous, name)) {
+            GlobalSettings::StartupRename rename{generation_, crc_};
+            std::strcpy(rename.old_name, previous); std::strcpy(rename.new_name, name);
+            if (documents_->busy() || documents_->dirty() || !documents_->globals_->protect_startup_rename(rename)) {
+                finish_job(false);
+                error_ = "Could not protect the startup set";
+                return false;
+            }
+        }
         std::snprintf(job_.name, 64, "%s", name); return true;
+    }
+    void recover_startup_set() const {
+        if (!documents_ || !documents_->globals_ || !documents_->globals_->ready()) return;
+        const char *startup = documents_->startup_set();
+        if (!startup[0] || setlist(startup)) return;
+        GlobalSettings::StartupRename rename;
+        auto &globals = *documents_->globals_;
+        for (unsigned slot = 0; slot < 2; ++slot) {
+            if (!globals.startup_rename(slot, rename)) continue;
+            if (generation_ > rename.generation && !std::strcmp(startup, rename.old_name) && setlist(rename.new_name)) {
+                globals.finish_startup_rename(rename.new_name); return;
+            }
+            if (crc_ == rename.crc && !std::strcmp(startup, rename.new_name) && setlist(rename.old_name)) {
+                globals.finish_startup_rename(rename.old_name); return;
+            }
+        }
     }
     bool insert(const char *set, unsigned at, const char *song_name) {
         if (!prepare(Edit::insert, set)) return false;
@@ -756,6 +783,7 @@ private:
         bool read(unsigned offset, uint8_t *data, unsigned n) { return read_song_record(storage, slot, base + offset, data, n); }
     };
     SongCounts counts_;
+    Documents *documents_ = nullptr;
     mutable Song song_cache_;
     mutable unsigned song_cache_index_ = 0;
     mutable Setlist set_cache_;
@@ -1220,6 +1248,7 @@ private:
             current_song_[0] = 0; solo_ = false; patch_position_ = 0;
             std::snprintf(active_set_, 64, "%s", job_.choose); position_ = 0; removed_ = false;
         }
+        if (job_.edit == Edit::rename_set || job_.undo) recover_startup_set();
         finish_job(true);
     }
 #ifdef CNTRL_FLASH_ROUTINE
