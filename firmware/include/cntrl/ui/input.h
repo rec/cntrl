@@ -17,7 +17,7 @@ public:
     void scan(uint8_t sample, uint32_t now, Services &services, uint32_t auxiliary_held = 0) {
         std::array<uint8_t, 8> events{};
         uint8_t pressed = 0;
-        const bool fast = !configuration_.valid() || configuration_.fast_switches();
+        const bool fast = !configuration_.valid() || configuration_.fast_debounce();
         for (unsigned i = 0; i < controls_.count; ++i) {
             events[i] = states_[i].update(sample & (1u << i), now, services.debounce(i).value_or(15), fast);
             if (states_[i].pressed) pressed |= uint8_t(1u << i);

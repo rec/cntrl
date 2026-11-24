@@ -119,7 +119,7 @@ static void raw_press_reaches_midi(std::vector<uint8_t> bytes, bool fast, uint32
     cntrl::Document configuration; assert(configuration.load(bytes.data(), unsigned(bytes.size()), hardware));
     bytes[configuration.metadata() + cntrl::scrolling_offset + 5] = fast;
     cntrl::put32(bytes.data() + 20, cntrl::checksum(bytes.data() + 28, unsigned(bytes.size() - 28)));
-    assert(configuration.load(bytes.data(), unsigned(bytes.size()), hardware)); assert(configuration.fast_switches() == fast);
+    assert(configuration.load(bytes.data(), unsigned(bytes.size()), hardware)); assert(configuration.fast_debounce() == fast);
     cntrl::Controller primary(hardware, hardware, hardware); hardware.controller = &primary;
     cntrl::Documents documents(setups, hardware, primary, hardware); cntrl::Songs songs(song_storage, hardware);
     {

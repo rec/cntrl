@@ -688,7 +688,7 @@ public:
     unsigned instruments() const { return instruments_; }
     unsigned patches() const { return patches_; }
     unsigned navigation_hold_ms() const { return setting(17, u16(data_ + core_ + 6)); }
-    bool fast_switches() const { return setting(6, data_[metadata() + scrolling_offset + 5] & 1); }
+    bool fast_debounce() const { return setting(6, data_[metadata() + scrolling_offset + 5] & 1); }
     bool forward_device_to_host() const { return setting(5, !(data_[metadata() + scrolling_offset + 5] & 2)); }
     bool auxiliary_combined(unsigned port) const { return setting(23 + port, (data_[metadata() + scrolling_offset + 5] & (4u << port)) != 0); }
     const uint8_t *input_section() const {

@@ -49,9 +49,7 @@ Each press or release triggers on its first sampled edge once the
 previous transition has settled. Debounce suppresses subsequent bounce on both
 edges, including phantom press/release pairs after release. If an opposite
 state persists during settling, it is accepted after the debounce interval.
-With `fast_switches = false`, both edges wait for stable input before triggering.
-A string such as `fast_switches = 'A'` selects switches for compiler warnings
-and uses the default debounce behavior.
+With `fast_debounce = false`, both edges wait for stable input before triggering.
 
 Switch assignments with a `gestures` table use its configured `debounce`
 duration (20 ms by default); other buttons retain 15 ms. The recognizer adds

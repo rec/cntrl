@@ -113,8 +113,9 @@ down edge in each scene. A string such as `'AB'` checks both switches.
 The default is `'A'`. Song libraries, songs, and patches can override
 the list, and `''` disables the check in that scope. The compiler lists
 bindings with hold or multi-press gestures in one warning per switch.
-The check leaves the gestures and their timing as authored. Existing
-boolean values of `fast_switches` still control hardware debounce.
+The check leaves the gestures and their timing as authored. Use the
+separate boolean `fast_debounce` to configure hardware debounce. In older
+source files, rename boolean `fast_switches` assignments to `fast_debounce`.
 
 ## Binding scopes and inheritance
 

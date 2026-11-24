@@ -33,7 +33,7 @@ def test_hotplug_descriptors_and_bidirectional_midi(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize('enabled', [False, True])
 @pytest.mark.parametrize('fast', [False, True])
-def test_forwarding_and_fast_switches_are_independent(
+def test_forwarding_and_fast_debounce_are_independent(
     enabled: bool, fast: bool
 ) -> None:
     root = Path(__file__).resolve().parents[1]
@@ -43,7 +43,7 @@ def test_forwarding_and_fast_switches_are_independent(
     )
     assert isinstance(show, dict)
     assert models.Setup.model_validate(show).forward_device_to_host is True
-    show.update(forward_device_to_host=enabled, fast_switches=fast)
+    show.update(forward_device_to_host=enabled, fast_debounce=fast, fast_switches='AB')
     definitions = {
         'profiles': [
             {'instrument': 'synth', 'name': 'stock', 'banks': {'0': {'msb': 0}}}
@@ -52,5 +52,6 @@ def test_forwarding_and_fast_switches_are_independent(
     data = compiler.compile_show(show, definitions, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['forward_device_to_host'] is enabled
-    assert exported['fast_switches'] is fast
+    assert exported['fast_debounce'] is fast
+    assert exported['fast_switches'] == 'AB'
     assert compiler.compile_show(exported, {'profiles': []}, [], target) == data

@@ -20,11 +20,12 @@ def gesture_runner(native_programs: native_tests.NativePrograms) -> Path:
     return native_programs.build('test/test_switch_gestures.cpp')
 
 
-@pytest.mark.parametrize('fast_switches', [True, False])
+@pytest.mark.parametrize('fast_debounce', [True, False])
 @pytest.mark.parametrize('long_double', [True, False])
 def test_gesture_patches_round_trip_and_execute(
-    tmp_path: Path, gesture_runner: Path, fast_switches: bool, long_double: bool
+    tmp_path: Path, gesture_runner: Path, fast_debounce: bool, long_double: bool
 ) -> None:
+    assert models.Setup().fast_debounce is True
     assert models.Setup().fast_switches == 'A'
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
@@ -43,7 +44,7 @@ def test_gesture_patches_round_trip_and_execute(
         'repeat',
     ) + (('long_double_tap', 'long_double_release') if long_double else ())
     show = {
-        'fast_switches': fast_switches,
+        'fast_debounce': fast_debounce,
         'switches': {
             'test': {
                 'button': 'A',
@@ -54,7 +55,7 @@ def test_gesture_patches_round_trip_and_execute(
     }
     data = compiler.compile_show(show, {}, [], target)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['fast_switches'] is fast_switches
+    assert exported['fast_debounce'] is fast_debounce
     assert compiler.compile_show(exported, {}, [], target) == data
     fixture = tmp_path / 'gestures.bin'
     fixture.write_bytes(data)
@@ -62,7 +63,7 @@ def test_gesture_patches_round_trip_and_execute(
         [
             str(gesture_runner),
             str(fixture),
-            str(int(fast_switches)),
+            str(int(fast_debounce)),
             str(int(long_double)),
         ],
         check=True,

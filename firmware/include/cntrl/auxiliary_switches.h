@@ -63,7 +63,7 @@ public:
             } else {
                 for (unsigned contact = 0; contact < 2; ++contact) {
                     auto &button = state.buttons[contact];
-                    button.update(sample & (1u << contact), now, debounce(base + contact).value_or(20), document.fast_switches());
+                    button.update(sample & (1u << contact), now, debounce(base + contact).value_or(20), document.fast_debounce());
                     if (button.pressed) state.logical |= 1u << contact;
                     else state.logical &= ~(1u << contact);
                 }

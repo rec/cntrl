@@ -20,7 +20,7 @@ def target() -> models.Target:
 
 def setup() -> dict[str, object]:
     return {
-        'fast_switches': False,
+        'fast_debounce': False,
         'trs_ports': {'configurable-1': 'aux', 'configurable-2': 'aux'},
         'auxiliary_switches': {'configurable-1': 'combined'},
         'switches': {

@@ -280,7 +280,7 @@ labels. Undo without a restoration leaves SENT unchanged
 while history remains; emptying history blanks UNDO and SENT. A new show and
 startup both clear history and select the first candidate without sending MIDI.
 
-With `fast_switches = true` (the default), browse buttons step on the first
+With `fast_debounce = true` (the default), browse buttons step on the first
 sampled edge; debounce suppresses subsequent bounce. With it disabled, they
 step after stable electrical debounce. Holding one repeats
 after `navigation.hold_delay` (default 1.5 seconds), then every
@@ -554,7 +554,7 @@ Records have fixed widths; no C++ memory layouts or host pointers are serialized
 | Instrument, 68 bytes | alias[32], output[32], u8 channel 0..15, three zero bytes |
 | Navigation patch cycle, 68 bytes | name[64], u16 first patch, u16 count |
 | Patch, 82 bytes | u16 instrument, u16 navigation patch cycle, u8 PC, MSB, LSB, volume, pan, three zero bytes, effective display label[64], three u16 resolved page indices (next/sent/undo) |
-| Metadata header, 80 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3), u8 fast-switches boolean, u32 page RAM2 declaration, u32 sorted-name-table signature |
+| Metadata header, 80 bytes | `CMTA`, u16 bank mapping count, u16 horizontal scroll milliseconds, u16 target-pulse period milliseconds, u8 pulse minimum and maximum (0..128), u16 navigation repeat-interval milliseconds, u16 target-pulse delay milliseconds, then 23 u16 page settings, four u8 configurable jack roles, u16 vertical scroll milliseconds, and three u8 directions for send/patch/cycle (right=0, left=1, up=2, down=3), u8 flags including fast debounce in bit 0, u32 page RAM2 declaration, u32 sorted-name-table signature |
 | Identity, 64 bytes per instrument | instrument identifier[32], instrument profile identifier[32] |
 | Bank mapping, 8 bytes | u16 instrument index, u32 logical bank, u8 MSB, LSB (255 for omission) |
 | Logical bank, 4 bytes per patch | u32 logical bank, `0xffffffff` for no bank |

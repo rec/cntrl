@@ -424,7 +424,7 @@ mask: bit `i` means that declared logical input `i` is pressed. Register positio
 pin polarity and bus acquisition stay in the implementation. Call
 `InputCoordinator::scan(mask, now_ms, services)` after acquiring that sample.
 Core code selects configured debounce or its 15 ms default, applies
-`fast_switches`, retains settled state, computes held inputs and routes events.
+`fast_debounce`, retains settled state, computes held inputs and routes events.
 Do not debounce the electrical sample a second time.
 
 The input services are:

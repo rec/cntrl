@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
     assert(document.load(bytes.data(), unsigned(bytes.size()), board));
     if (argc == 3) { test_triples(board, document); return 0; }
     const bool long_double = argv[3][0] == '1';
-    assert(document.fast_switches() == (argv[2][0] == '1'));
+    assert(document.fast_debounce() == (argv[2][0] == '1'));
     cntrl::Switches switches(board, board, board);
     auto tick = [&](unsigned now) { for (unsigned i = 0; i < 10; ++i) switches.tick(now); };
     auto edge = [&](bool down, unsigned now) { switches.button(0, down, now + 20); tick(now + 20); };
@@ -163,7 +163,7 @@ int main(int argc, char **argv) {
         bad[document.metadata() + cntrl::scrolling_offset + 5] = uint8_t(flags);
         cntrl::put32(bad.data() + 20, cntrl::checksum(bad.data() + 28, unsigned(bad.size()) - 28));
         assert(rejected.load(bad.data(), unsigned(bad.size()), board));
-        assert(rejected.fast_switches() == bool(flags & 1));
+        assert(rejected.fast_debounce() == bool(flags & 1));
         assert(rejected.forward_device_to_host() == !bool(flags & 2));
     }
     bad[document.metadata() + cntrl::scrolling_offset + 5] = 4;

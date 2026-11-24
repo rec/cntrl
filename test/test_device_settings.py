@@ -35,7 +35,8 @@ def test_local_presence_is_distinct_from_inherited_and_builtin_values(
     monkeypatch.setattr(global_config, 'user_path', lambda: defaults)
     source = tmp_path / 'Live.toml'
     source.write_text(
-        'brightness=192\nframe_buffers=0\nuse_animations=false\n[navigation]\nhold_delay=0.2\n'
+        'brightness=192\nframe_buffers=0\nuse_animations=false\n'
+        'fast_debounce=false\nfast_switches="AB"\n[navigation]\nhold_delay=0.2\n'
     )
     trace = data_files.Trace()
     errors: list[str] = []
@@ -46,8 +47,8 @@ def test_local_presence_is_distinct_from_inherited_and_builtin_values(
     data = compiler.compile_show(
         raw, {}, [], target, setting_overrides=trace.setting_overrides['Live']
     )
-    assert device_settings.override_mask(data) == (1 << 0) | (1 << 7) | (1 << 8) | (
-        1 << 17
+    assert device_settings.override_mask(data) == (
+        (1 << 0) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 17)
     )
     assert tomlkit.parse(resolved.export(data))['brightness'] == 192
     assert not binary_format.has_opaque(data)

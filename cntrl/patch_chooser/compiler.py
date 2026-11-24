@@ -686,7 +686,7 @@ def compile_show(
                 show.scrolling.cycles,
             )
         ),
-        int(show.fast_switches is not False)
+        int(show.fast_debounce)
         | (int(not show.forward_device_to_host) << 1)
         | sum(
             1 << (i + 2)
@@ -835,8 +835,7 @@ def warn_fast_switches(
     song_bindings: dict[str, dict[str, object]],
 ) -> None:
     """Report gesture delays in the scene maps reached by each compiled root."""
-    configured = compiler.show.fast_switches
-    default = configured if isinstance(configured, str) else 'A'
+    default = compiler.show.fast_switches
     conflicts: dict[str, set[str]] = {}
 
     def check(button: str, action: models.SwitchBinding, path: str, fast: str) -> None:

@@ -168,7 +168,7 @@ cntrl global restore device-globals.toml --port PORT
 the whole overlay with a downloaded snapshot, including clearing omitted values.
 
 The supported preferences are brightness, screensaver timeout, MIDI interface
-and USB forwarding flags, fast switches, frame buffers, animation flags, pickup
+and USB forwarding flags, `fast_debounce`, frame buffers, animation flags, pickup
 and pairing delay, scrolling directions and durations, navigation timings, TRS
 port roles, auxiliary-switch modes, clock source and outputs, target-pulse
 settings, and the loop-stop controller-reset policy. Physical TRS port indices

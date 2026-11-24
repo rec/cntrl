@@ -199,7 +199,7 @@ SETTINGS = [
     Setting(name='usb_device_midi', kind='boolean'),
     Setting(name='usb_host_midi', kind='boolean'),
     Setting(name='forward_device_to_host', kind='boolean'),
-    Setting(name='fast_switches', kind='boolean'),
+    Setting(name='fast_debounce', kind='boolean'),
     Setting(name='frame_buffers', kind='integer', maximum=2),
     Setting(name='use_animations', kind='boolean'),
     Setting(name='animation_color_cycle', kind='boolean'),

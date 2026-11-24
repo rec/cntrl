@@ -22,7 +22,7 @@ on the number of switch assignments still apply.
 
 The default arrangement is two independent, normally open contacts from tip to
 sleeve and ring to sleeve. Closing both operates both assignments. Inputs use
-the existing switch debounce and `fast_switches` policy. The assignment's
+the existing switch debounce and `fast_debounce` policy. The assignment's
 gesture debounce applies when provided, otherwise 20 ms is used.
 
 For three switches, with the third closing both contacts together:
@@ -37,7 +37,7 @@ bindings = {'configurable-1.tip' = 'verse', 'configurable-1.ring' = 'chorus', 'c
 
 Combined mode settles the complete contact pair before deciding which switch
 changed. It waits at least 20 ms, or the largest configured gesture debounce
-on that socket. This delay applies even with `fast_switches = true`, preventing
+on that socket. This delay applies even with `fast_debounce = true`, preventing
 an intermediate tip or ring contact from generating an unintended action.
 
 Assignments run in the same active switch context as built-in assignments:

@@ -1350,9 +1350,8 @@ class Setup(BindingScope, frozen=True):
         max_length=255,
     )
     take_first_match: Annotated[bool, Field(strict=True)] = False
-    fast_switches: (
-        Annotated[str, Field(strict=True)] | Annotated[bool, Field(strict=True)]
-    ) = 'A'
+    fast_debounce: Annotated[bool, Field(strict=True)] = True
+    fast_switches: Annotated[str, Field(strict=True)] = 'A'
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     frame_buffers: Annotated[
         int,

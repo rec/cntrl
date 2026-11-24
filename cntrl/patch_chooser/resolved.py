@@ -604,7 +604,7 @@ def _decode(data: bytes) -> dict[str, object]:
         'is_midi_interface': bool(flags & 512),
         'usb_device_midi': bool(flags & 2048),
         'usb_host_midi': bool(flags & 4096),
-        'fast_switches': bool(data[meta + METADATA.size - 11] & 1),
+        'fast_debounce': bool(data[meta + METADATA.size - 11] & 1),
         'forward_device_to_host': not bool(data[meta + METADATA.size - 11] & 2),
         'screensaver_timeout': timeout // 1000,
     }

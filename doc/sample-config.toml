@@ -8,6 +8,7 @@ inline_patches = true
 background_color = "0xFFF8D8"
 foreground_brightness_limit = 0.5
 take_first_match = false
+fast_debounce = true
 fast_switches = "A"
 brightness = 192
 
@@ -40,7 +41,7 @@ pages = ["patch-chooser"]
 
 [regions.tools]
 
-pages = ["status", "cable-test", "panic", "midi-monitor", "midi-looper", "arpeggiator", "time", "pong", "language", "setups", "songs-and-setlists", "switches", "calibration"]
+pages = ["status", "cable-test", "panic", "midi-monitor", "midi-looper", "arpeggiator", "time", "pong", "language", "setups", "songs-and-setlists", "switches", "settings", "calibration"]
 
 [layout]
 
@@ -237,6 +238,14 @@ patch = "sample"
 [pages.switches]
 
 type = "switches"
+ram2_bytes = 0
+min_displays = 1
+give_up_displays = []
+patch = "sample"
+
+[pages.settings]
+
+type = "settings"
 ram2_bytes = 0
 min_displays = 1
 give_up_displays = []
