@@ -25,7 +25,7 @@ def gesture_runner(native_programs: native_tests.NativePrograms) -> Path:
 def test_gesture_patches_round_trip_and_execute(
     tmp_path: Path, gesture_runner: Path, fast_switches: bool, long_double: bool
 ) -> None:
-    assert models.Setup().fast_switches is True
+    assert models.Setup().fast_switches == 'A'
     root = Path(__file__).parents[1]
     target = models.Target.model_validate(
         compiler_inputs.read_document(root / 'firmware/test/target.json')

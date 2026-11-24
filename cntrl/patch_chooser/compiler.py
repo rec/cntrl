@@ -1,6 +1,7 @@
 """Compile a complete show, accumulating errors before producing any binary."""
 
 import struct
+import sys
 from pathlib import Path
 from zlib import crc32
 
@@ -63,6 +64,7 @@ def compile_show(
     setting_overrides: dict[str, object] | None = None,
     binding_scopes: list[tuple[int, str, dict[str, object]]] | None = None,
     scene_images: dict[int, tuple[str, models.Style, int]] | None = None,
+    song_scenes: dict[str, tuple[str, str, str | None]] | None = None,
 ) -> bytes:
     errors: list[str] = []
     generated: dict[int, bytes] = {}
@@ -201,6 +203,7 @@ def compile_show(
         if (index := compiler.parse(raw, f'patches.{key}', key)) is not None:
             named[key] = index
     scopes = list(binding_scopes or [])
+    song_bindings: dict[str, dict[str, object]] = {}
     if show.bindings:
         scopes.insert(0, (0, '', {'bindings': show.bindings}))
     for kind, name, bindings in scopes:
@@ -214,6 +217,8 @@ def compile_show(
             scope['patches'] = [{'patches': [], 'midi': midi}]
         child = compiler.parse(scope, path, name or 'Global')
         if child is not None:
+            if kind == 2:
+                song_bindings[name] = compiler.values[child].bindings or {}
             marker = len(compiler.nodes)
             compiler.nodes.append(
                 struct.pack('<BBHB64sH', 19, 0, 67, kind, name.encode(), child)
@@ -603,7 +608,7 @@ def compile_show(
                 show.scrolling.cycles,
             )
         ),
-        int(show.fast_switches)
+        int(show.fast_switches is not False)
         | (int(not show.forward_device_to_host) << 1)
         | sum(
             1 << (i + 2)
@@ -713,8 +718,103 @@ def compile_show(
             | (GESTURES_FLAG if gestures else 0)
         ),
     )
-    return (
+    result = (
         device_settings.attach(result, setting_overrides, target)
         if setting_overrides is not None
         else result
     )
+    warn_fast_switches(compiler, assignments, song_scenes or {}, song_bindings)
+    return result
+
+
+def warn_fast_switches(
+    compiler: PatchCompiler,
+    assignments: list[tuple[str, models.SwitchAssignment, int, int]],
+    song_scenes: dict[str, tuple[str, str, str | None]],
+    song_bindings: dict[str, dict[str, object]],
+) -> None:
+    """Report gesture delays in the scene maps reached by each compiled root."""
+    configured = compiler.show.fast_switches
+    default = configured if isinstance(configured, str) else 'A'
+    conflicts: dict[str, set[str]] = {}
+
+    def check(button: str, action: models.SwitchBinding, path: str, fast: str) -> None:
+        label = compiler.target.button_labels.get(button, button).upper()
+        if len(label) != 1 or label not in fast.upper():
+            return
+        for suffix, events in (
+            ('gestures', action.gestures),
+            ('shifted.gestures', action.shifted.gestures if action.shifted else None),
+        ):
+            if events is not None and any(
+                getattr(events, e) is not None for e in GESTURE_EVENTS if e != 'release'
+            ):
+                conflicts.setdefault(label, set()).add(f'{path}.{suffix}')
+
+    for path, action, _, _ in assignments:
+        check(action.button, action, path, default)
+
+    setup_bindings = compiler.show.bindings or {}
+    visited: set[int] = set()
+    binding_actions: dict[str, set[int]] = {}
+    for path, _, on, off in compiler.binding_assignments:
+        scope, _, _ = path.rpartition('.bindings.')
+        binding_actions.setdefault(scope, set()).update(
+            n for n in (on, off) if n != 65535
+        )
+
+    def visit(root: int, path: str, fast: str, enclosing: dict[str, object]) -> None:
+        pending = [(root, fast)]
+        seen: set[tuple[int, str]] = set()
+        while pending:
+            node, policy = pending.pop()
+            value = compiler.values[node]
+            if value.fast_switches is not None:
+                policy = value.fast_switches
+            if (node, policy) in seen:
+                continue
+            seen.add((node, policy))
+            visited.add(node)
+            if compiler.nodes[node][0] == 10:
+                root_path, node_path = compiler.paths[root], compiler.paths[node]
+                address = path
+                if (
+                    node_path.startswith(f'{root_path}.')
+                    and node_path != f'{root_path}.entry'
+                ):
+                    address += node_path[len(root_path) :]
+                bindings = (
+                    enclosing
+                    if value.inherits in (models.Inherits.switch, models.Inherits.both)
+                    else {}
+                ) | (value.bindings or {})
+                for key, binding in bindings.items():
+                    if isinstance(binding, models.SwitchBinding):
+                        check(key, binding, f'{address}.bindings.{key}', policy)
+            children = compiler.children.get(node) or compiler.reachable_children(node)
+            pending.extend((c, policy) for c in children)
+            if compiler.nodes[node][0] == 10:
+                pending.extend(
+                    (c, policy) for c in binding_actions.get(compiler.paths[node], ())
+                )
+
+    for node, _, path in compiler.browser:
+        address, song, fast = song_scenes.get(path, (path, '', None))
+        visit(
+            node,
+            address,
+            default if fast is None else fast,
+            setup_bindings | song_bindings.get(song, {}),
+        )
+    for _, _, on, off in assignments:
+        for node in (on, off):
+            if node != 65535:
+                visit(node, compiler.paths[node], default, setup_bindings)
+    for node in compiler.named.values():
+        if node not in visited:
+            visit(node, compiler.paths[node], default, setup_bindings)
+    for button, paths in sorted(conflicts.items()):
+        print(
+            f'WARNING: switch {button} was not fast in [{", ".join(sorted(paths))}]',
+            file=sys.stderr,
+        )

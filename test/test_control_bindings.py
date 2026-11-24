@@ -50,6 +50,44 @@ def test_song_patch_names_inherit_bindings() -> None:
     assert restored.patches['verse']['bindings']['F'] == {'operation': 'back'}
 
 
+def test_fast_switch_warnings_aggregate_effective_scene_bindings(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    library = songs.Library(
+        fast_switches='AB',
+        bindings={'A': {'on': cc(20, 1), 'gestures': {'long_press': cc(20, 2)}}},
+        patches={
+            'verse': {
+                'inherits': 'switch',
+                'bindings': {
+                    'B': {'on': cc(21, 1), 'gestures': {'triple_tap': cc(21, 2)}}
+                },
+            },
+            'chorus': {
+                'fast_switches': 'A',
+                'inherits': 'switch',
+                'bindings': {
+                    'A': {'on': cc(20, 1), 'gestures': {'release': cc(20, 0)}}
+                },
+            },
+        },
+        songs=[
+            songs.Song(name='Main', patches=['verse', 'chorus', 'verse']),
+            songs.Song(name='Quiet', fast_switches='', patches=['verse']),
+        ],
+    )
+    restored = songs.decode(songs.encode(library, binding_target()))
+    assert capsys.readouterr().err.splitlines() == [
+        f'WARNING: switch {n} was not fast in ['
+        f'songs[0].patches[0].bindings.{n}.gestures, '
+        f'songs[0].patches[2].bindings.{n}.gestures]'
+        for n in ('A', 'B')
+    ]
+    assert restored.fast_switches == 'AB'
+    assert restored.songs[1].fast_switches == ''
+    assert restored.patches['chorus']['fast_switches'] == 'A'
+
+
 def test_scoped_bindings_override_and_preserve_ordinary_actions(
     tmp_path: Path, binding_runner: Path
 ) -> None:

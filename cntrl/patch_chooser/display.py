@@ -347,6 +347,8 @@ def compile_display(
     }
     if show.pickup_pairing_ms == 2:
         source.pop('pickup_pairing_ms', None)
+    if isinstance(show.fast_switches, str) and 'fast_switches' in show.model_fields_set:
+        source['fast_switches'] = show.fast_switches
     if not show.inline_patches:
         source['inline_patches'] = False
     source['switches'] = {

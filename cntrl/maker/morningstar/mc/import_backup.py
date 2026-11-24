@@ -283,7 +283,6 @@ def convert(document: dict, bank: int) -> models.Setup:
                 }
             },
             'fill_in_styles': False,
-            'fast_switches': True,
             'counters': counters,
             'trs_ports': {
                 f'configurable-{i + 1}': 'expression'

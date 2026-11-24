@@ -52,6 +52,7 @@ class SongLibraryError(ValueError):
 
 
 class Song(models.BindingScope, frozen=True):
+    fast_switches: Annotated[str, Field(strict=True)] | None = None
     navigation: models.PageNavigation | None = None
     bindings: dict[str, object] = Field(default_factory=dict)
     midi: dict[str, object] | None = None
@@ -127,6 +128,7 @@ class Setlist(BaseModel, frozen=True):
 
 
 class Library(models.BindingScope, frozen=True):
+    fast_switches: Annotated[str, Field(strict=True)] | None = None
     bindings: dict[str, object] = Field(default_factory=dict)
     instruments: dict[str, object] = Field(default_factory=dict)
     definitions: models.Definitions | None = None
@@ -201,6 +203,7 @@ def encode(
     positions: list[list[int]] = []
     values_for_source: list[dict[str, object]] = []
     paths: list[str] = []
+    song_scenes: dict[str, tuple[str, str, str | None]] = {}
     for song_index, song in enumerate(library.songs):
         values = []
         for patch_index, position in enumerate(song.patches):
@@ -208,6 +211,11 @@ def encode(
             position = len(values_for_source)
             values_for_source.append(value)
             paths.append(f'songs[{song_index}].patches[{patch_index}]')
+            song_scenes[f'patch_cycles.Songs[{position}]'] = (
+                paths[-1],
+                song.name,
+                song.fast_switches,
+            )
             values.append(position)
         positions.append(values)
     hooks: dict[tuple[str, str], int] = {}
@@ -245,6 +253,7 @@ def encode(
                     'tag_styles',
                     'definitions',
                     'bindings',
+                    'fast_switches',
                 },
                 exclude_unset=True,
                 exclude_none=True,
@@ -321,6 +330,7 @@ def encode(
                 source_snapshots=trace.files if trace is not None else None,
                 binding_scopes=scopes,
                 scene_images=scene_images,
+                song_scenes=song_scenes,
             )
         except compiler_errors.CompilationError as error:
             messages = error.errors
@@ -471,6 +481,14 @@ def encode(
         str(i): s.seed for i, s in enumerate(library.songs) if s.seed is not None
     }:
         preferences['song_seeds'] = song_seeds
+    if library.fast_switches is not None:
+        preferences['fast_switches'] = library.fast_switches
+    if song_fast_switches := {
+        str(i): s.fast_switches
+        for i, s in enumerate(library.songs)
+        if s.fast_switches is not None
+    }:
+        preferences['song_fast_switches'] = song_fast_switches
     if scene_images:
         preferences['scene_image_sources'] = {
             str(i): s.image for i, (_, s, _) in scene_images.items()
@@ -630,6 +648,7 @@ def _decode(data: bytes) -> Library:
     authored_styles: list[dict[str, object]] = []
     setlist_styles: list[dict[str, object]] = []
     song_seeds: dict[str, int] = {}
+    song_fast_switches: dict[str, str] = {}
     artwork: list[tuple[str, str, bytes]] = []
     setlist_artwork: list[tuple[str, str, bytes]] = []
     scene_artwork: list[tuple[str, str, bytes]] = []
@@ -648,6 +667,7 @@ def _decode(data: bytes) -> Library:
                 setlist_styles = preferences.pop('setlist_styles', [])
                 scene_image_sources = preferences.pop('scene_image_sources', {})
                 song_seeds = preferences.pop('song_seeds', {})
+                song_fast_switches = preferences.pop('song_fast_switches', {})
                 context.update(preferences)
     instruments: dict[str, object] = {}
     definitions: dict[str, object] = {}
@@ -755,6 +775,7 @@ def _decode(data: bytes) -> Library:
                 {
                     'name': name,
                     'seed': song_seeds.get(str(index)),
+                    'fast_switches': song_fast_switches.get(str(index)),
                     'navigation': scope.get('navigation'),
                     'midi': scope_patches[0].get('midi') if scope_patches else None,
                     'display_name': artwork[index][0] or None

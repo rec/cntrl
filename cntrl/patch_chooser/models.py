@@ -215,6 +215,7 @@ class PageNavigation(BaseModel, frozen=True):
 
 
 class Presentation(BindingScope, frozen=True):
+    fast_switches: Annotated[str, Field(strict=True)] | None = None
     navigation: PageNavigation | None = None
     pickup: Annotated[
         Annotated[bool, Field(strict=True)] | None, BeforeValidator(parse_pickup)
@@ -1338,7 +1339,9 @@ class Setup(BindingScope, frozen=True):
         max_length=255,
     )
     take_first_match: Annotated[bool, Field(strict=True)] = False
-    fast_switches: Annotated[bool, Field(strict=True)] = True
+    fast_switches: (
+        Annotated[str, Field(strict=True)] | Annotated[bool, Field(strict=True)]
+    ) = 'A'
     brightness: Annotated[int, Field(strict=True, ge=0, le=255)] = 192
     frame_buffers: Annotated[
         int,

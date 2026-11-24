@@ -44,12 +44,14 @@ helper manually and enter the bootloader first, following the
 
 ## Switch response
 
-The setup's root `fast_switches` boolean defaults to `true` and applies to all
-six buttons. Each press or release triggers on its first sampled edge once the
+By default, the setup accepts the first sampled edge on all six buttons.
+Each press or release triggers on its first sampled edge once the
 previous transition has settled. Debounce suppresses subsequent bounce on both
 edges, including phantom press/release pairs after release. If an opposite
 state persists during settling, it is accepted after the debounce interval.
 With `fast_switches = false`, both edges wait for stable input before triggering.
+A string such as `fast_switches = 'A'` selects switches for compiler warnings
+and uses the default debounce behavior.
 
 Switch assignments with a `gestures` table use its configured `debounce`
 duration (20 ms by default); other buttons retain 15 ms. The recognizer adds

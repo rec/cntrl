@@ -108,6 +108,14 @@ If the switch belongs to an active navigation chord, a press by itself runs
 on release. Completing the chord runs its navigation action instead.
 Hold and multi-press bindings follow their own gesture timing.
 
+Set `fast_switches = 'A'` at setup level to check that A can act on its
+down edge in each scene. A string such as `'AB'` checks both switches.
+The default is `'A'`. Song libraries, songs, and patches can override
+the list, and `''` disables the check in that scope. The compiler lists
+bindings with hold or multi-press gestures in one warning per switch.
+The check leaves the gestures and their timing as authored. Existing
+boolean values of `fast_switches` still control hardware debounce.
+
 ## Binding scopes and inheritance
 
 Bindings can also live at the top level of the existing `global.toml` defaults,
