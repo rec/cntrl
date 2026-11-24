@@ -106,10 +106,10 @@ public:
                 return true;
             }
             const unsigned count = platform_.language_count();
+            if (count != pages_.language.count()) pages_.language.reset(count, pages_.language.selected());
             if (count) {
-                pages_.language = std::min(pages_.language, count - 1);
-                if (input == controls_.confirm) platform_.request_language(platform_.language_tag(pages_.language));
-                else pages_.language = (pages_.language + count + (input == controls_.next_section ? -1 : 1)) % count;
+                if (input == controls_.confirm) platform_.request_language(platform_.language_tag(pages_.language.selected()));
+                else pages_.language.move(input == controls_.next_section, platform_.milliseconds());
             }
             pages_.revisit(); return true;
         }
@@ -269,10 +269,11 @@ public:
 #endif
     void enter_page() {
         if (pages_.page() == Pages::Page::language) {
-            pages_.language = 0;
             const unsigned count = platform_.language_count();
+            unsigned selected = 0;
             for (unsigned i = 0; i < count; ++i)
-                if (!std::strcmp(platform_.current_language(), platform_.language_tag(i))) { pages_.language = i; break; }
+                if (!std::strcmp(platform_.current_language(), platform_.language_tag(i))) { selected = i; break; }
+            pages_.language.reset(count, selected);
         }
         if (pages_.page() == Pages::Page::pong) pages_.pong.clock(platform_.milliseconds());
         expression_bank_ = nullptr;

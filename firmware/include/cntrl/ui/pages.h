@@ -13,6 +13,7 @@
 #include "display.h"
 #include "controls.h"
 #include "doom_artwork.h"
+#include "picker.h"
 #include "pong.h"
 #include "flags.h"
 #include "status_snapshot.h"
@@ -71,7 +72,8 @@ public:
     }
     enum class Page { status = 1, cable = 3, panic, none = 10, patch_chooser, midi_monitor, midi_looper, arpeggiator, banked, pong, language, time = PageLayout::time, calibrate, doom, setups, songs, switches };
     struct ViewState {
-        unsigned index = 0, language = 0;
+        unsigned index = 0;
+        Picker language;
         Page page = Page::none;
         bool dirty = true, flashing = false, held = false, contact = false;
         uint32_t refreshed = 0;
@@ -100,7 +102,7 @@ public:
     Pong pong;
     midi::Monitor *monitor = nullptr;
     Hardware *languages = nullptr;
-    unsigned language = 0;
+    Picker language;
     midi::MidiLooper *looper = nullptr;
     char looper_prompt[96] = {};
     void layout(cntrl::PageLayout layout) {
@@ -278,6 +280,7 @@ public:
         using R = cntrl::PageSettings;
         if (page_ == Page::pong) { pong.advance(now); return dirty_ || uint32_t(now - refreshed_) >= 20; }
         if (dirty_) return true;
+        if (page_ == Page::language) return uint32_t(now - refreshed_) >= 4 && language.changed(now, refreshed_);
         if (page_ == Page::midi_monitor) return uint32_t(now - refreshed_) >= midi::Monitor::refresh_ms;
         if (page_ == Page::midi_looper) return uint32_t(now - refreshed_) >= 50;
         if (page_ == Page::arpeggiator) return uint32_t(now - refreshed_) >= 50;
@@ -309,7 +312,7 @@ public:
             line(pane, 1, prompt_, vertical(64), vertical(24), settings_[R::status_font], true);
             return pane;
         }
-        if (page_ == Page::language) { language_view(pane, display, direct_page_switch); return pane; }
+        if (page_ == Page::language) { language_view(pane, display, now, direct_page_switch); return pane; }
         if (page_ == Page::pong) { pong_view(pane, display); return pane; }
         if (page_ == Page::midi_monitor) { monitor_view(pane, display, count); return pane; }
         if (page_ == Page::midi_looper) { looper_view(pane,beat_position(now_us)); return pane; }
@@ -846,7 +849,7 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_language_view)
 #endif
-    void language_view(cntrl::Pane &pane, unsigned display, bool direct_page_switch) {
+    void language_view(cntrl::Pane &pane, unsigned display, uint32_t now, bool direct_page_switch) {
         if (!languages) return;
         if (display) {
             page_heading(pane, i18n::text(i18n::Message::language));
@@ -869,17 +872,15 @@ private:
             }
             return;
         }
-        const unsigned count = languages->language_count();
-        if (!count) return;
-        language = std::min(language, count - 1);
         const unsigned pad = pane.graphics.pad;
+        if (viewport_.width <= 2 * pad || viewport_.height <= 2 * pad) return;
         const unsigned row_height = std::max(16u, viewport_.height * 20 / 128);
-        const unsigned available = viewport_.height > 2 * pad ? viewport_.height - 2 * pad : 0;
-        const unsigned rows = std::min({count, max_lines, available / row_height});
-        const unsigned first = language > rows / 2 ? std::min(language - rows / 2, count - rows) : 0;
-        for (unsigned row = 0; row < rows; ++row) {
-            const unsigned item = first + row;
-            auto &text = pane.lines[row]; text.graphics = pane.graphics;
+        auto &highlight = pane.rectangles[0];
+        highlight.color = 0xfdc0;
+        const Rectangle bounds{int16_t(pad), int16_t(pad), uint16_t(viewport_.width - 2 * pad),
+                               uint16_t(viewport_.height - 2 * pad)};
+        language.paint(pane, bounds, row_height, now, highlight, 0, [&](unsigned item, TextLine &text, int y) {
+            text.graphics = pane.graphics;
             utf8::copy(text.text, sizeof(text.text), languages->language_name(item));
             text.graphics.font = 17;
             text.graphics.flag = flags::identifier(languages->language_tag(item));
@@ -887,13 +888,9 @@ private:
             unsigned size = 12;
             for (; size > 8; --size) if (fonts_.bounds(17, size, 0, text.text).width <= int(viewport_.width - pad - text.x)) break;
             text.graphics.size = uint8_t(size); text.graphics.line_height = uint16_t(row_height);
-            const auto bounds = fonts_.bounds(17, size, 0, text.text);
-            text.y = int16_t(pad + row * row_height + (int(row_height) - bounds.height) / 2 - bounds.top);
-            if (item == language) {
-                text.graphics.foreground = 0xffff; text.graphics.background = 0;
-                pane.rectangles[0] = {int16_t(pad), int16_t(pad + row * row_height), uint16_t(viewport_.width - 2 * pad), uint16_t(row_height), 0, false};
-            }
-        }
+            const auto ink = fonts_.bounds(17, size, 0, text.text);
+            text.y = int16_t(y + (int(row_height) - ink.height) / 2 - ink.top);
+        });
     }
 
 #ifdef CNTRL_FLASH_ROUTINE

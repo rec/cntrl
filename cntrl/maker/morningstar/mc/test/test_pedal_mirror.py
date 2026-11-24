@@ -101,7 +101,7 @@ def test_mirrored_native_session_keeps_selection_language_and_installed_packs(
             press(button)
         session.advance(session.time_us + 1000000)
         english = session.frames['lcd-3']
-        press('e')
+        press('b')
         press('c')
         session.advance(session.time_us + 1000000)
         french = session.frames['lcd-3']

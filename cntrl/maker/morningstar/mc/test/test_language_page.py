@@ -61,7 +61,7 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
     folder.mkdir(parents=True)
     for tag in catalogue.locales():
         (folder / f'{tag}.bin').write_bytes(languages.pack(tag))
-    image = Image.new('RGB', (480, 384))
+    image = Image.new('RGB', (480, 512))
     french = b''
     with backend.Session(layout, target, executable, storage, bundle) as session:
         now = 0
@@ -96,9 +96,22 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         colors = {first[i : i + 2] for i in range(0, len(first), 2)}
         assert {b'\xf8\0', b'\0\x18', b'\xff\xe0'} <= colors
         snapshot(0)
-        # English is selected initially. Español lies between English and Français.
-        for _ in range(2):
-            press('b')
+        # Verify a frame between English and Español, while the band stays put.
+        session.button('b', True)
+        advance(60000)
+        moving = session.frames['lcd-2']
+        session.button('b', False)
+        advance(500000)
+        settled = session.frames['lcd-2']
+        assert moving != first and moving != settled
+        for frame in (first, moving, settled):
+            column = [
+                frame[(y * 160 + 150) * 2 : (y * 160 + 151) * 2] for y in range(128)
+            ]
+            assert [i for i, p in enumerate(column) if p == b'\xfd\xc0'] == list(
+                range(54, 74)
+            )
+        press('b')
         advance(500000)
         assert session.frames['lcd-2'] != first
         assert session.frames['lcd-1'] == performance
@@ -129,12 +142,23 @@ def test_language_page_scrolls_selects_and_keeps_the_language_after_restart(
         assert french != english
         snapshot(1)
         # Moving the candidate never changes the active language until C.
-        # Walk back through Español, English, Deutsch, Dansk and Čeština.
+        # Walk back past Čeština and verify that the list clamps at both ends.
         for _ in range(6):
             press('e')
         advance(500000)
         assert session.frames['lcd-3'] == french
         snapshot(2)
+        top = session.frames['lcd-2']
+        press('e')
+        assert session.frames['lcd-2'] == top
+        for _ in range(len(catalogue.locales())):
+            press('b')
+        advance(500000)
+        bottom = session.frames['lcd-2']
+        assert bottom != top
+        press('b')
+        assert session.frames['lcd-2'] == bottom
+        snapshot(3)
         assert not [m for m in session.messages if m.kind == 'error']
     path = tmp_path / 'rendered-language-page.png'
     image.save(path)

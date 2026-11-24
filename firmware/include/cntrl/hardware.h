@@ -96,6 +96,11 @@ struct Pane {
     Circle circles[4];
     Rectangle rectangles[4];
     ToggleIcon toggle;
+    Rectangle text_clip;
+    uint8_t first_clipped_line = 0, clipped_lines = 0;
+    bool clips_text(unsigned index) const {
+        return index >= first_clipped_line && index - first_clipped_line < clipped_lines;
+    }
 };
 
 inline bool button_pair_valid(unsigned mask) {

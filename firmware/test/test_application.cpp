@@ -530,13 +530,13 @@ static void selecting_pages_preserves_state_and_background_work(const char *path
         assert(!documents.busy() && documents.select("Test"));
         keyboard_actions_survive_page_changes_and_panic_releases_keys(documents, app);
         host.configure_pages(documents.document()); host.select_page(5); host.select_page(4);
-        host.pages_.language = 7;
+        host.pages_.language.reset(8, 7);
         const unsigned tools_count = app.allocation.region(1).count;
         host.focus_region(0);
         assert(host.pages_.index() == 5 && app.allocation.region(1).selected == 4 && app.allocation.region(1).count == tools_count);
         host.display(100,false);
         assert(host.pages_.index() == 5); // Rendering a background view preserves control focus.
-        host.focus_region(1); assert(host.pages_.index() == 4 && host.pages_.language == 7);
+        host.focus_region(1); assert(host.pages_.index() == 4 && host.pages_.language.selected() == 7);
         host.focus_region(1);
         for (unsigned screen = 0; screen < 3; ++screen) {
             cntrl::Pane pane; pane.graphics.background = uint16_t(screen + 1); pane.graphics.pad = 0;

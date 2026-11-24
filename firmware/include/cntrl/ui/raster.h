@@ -33,6 +33,7 @@ public:
     }
     uint16_t *pixels() { return pixels_; }
     const uint16_t *pixels() const { return pixels_; }
+    void clip(Region region) { clip_ = region; }
     static unsigned luminance(uint16_t pixel) {
         // Linear sRGB contributions for RGB565, scaled by 10000.
         static constexpr uint16_t red[] = {

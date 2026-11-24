@@ -276,8 +276,11 @@ private:
     bool outline_painted_ = false;
     void damage(Screen &screen, const Pane &content) {
         const auto &before = screen.requested;
+        const auto &old_clip = before.text_clip, &clip = content.text_clip;
         bool full = before.three_bands != content.three_bands || before.split_middle != content.split_middle || before.scene != content.scene || before.heading_band != content.heading_band || before.focused != content.focused
             || before.switch_label_alignment != content.switch_label_alignment || before.styled_body != content.styled_body
+            || before.first_clipped_line != content.first_clipped_line || before.clipped_lines != content.clipped_lines
+            || old_clip.x != clip.x || old_clip.y != clip.y || old_clip.width != clip.width || old_clip.height != clip.height
             || before.bitmap.source != content.bitmap.source || before.bitmap.offset != content.bitmap.offset
             || before.second_bitmap.source != content.second_bitmap.source || before.second_bitmap.offset != content.second_bitmap.offset
             || before.second_bitmap.generation != content.second_bitmap.generation
@@ -285,15 +288,17 @@ private:
         // Compare values, not TextLine/Rectangle padding, when deciding damage.
         for (unsigned i = 0; i < max_lines && !full; ++i) {
             const auto &a = before.lines[i], &b = content.lines[i];
-            full = std::strcmp(a.text, b.text) || std::memcmp(&a.graphics, &b.graphics, sizeof(a.graphics))
+            bool changed = std::strcmp(a.text, b.text) || std::memcmp(&a.graphics, &b.graphics, sizeof(a.graphics))
                 || a.x != b.x || a.y != b.y || a.centered != b.centered || a.wrap != b.wrap || a.fit != b.fit || a.stippled != b.stippled
                 || a.color_mask != b.color_mask || a.alternate_color != b.alternate_color || a.outline != b.outline
                 || a.artwork_index != b.artwork_index || a.artwork_generation != b.artwork_generation;
 #ifdef CNTRL_EMULATOR
             if (!translation_regions_.empty())
-                full = full || a.translation_id != b.translation_id || a.translation_short != b.translation_short
+                changed = changed || a.translation_id != b.translation_id || a.translation_short != b.translation_short
                     || std::memcmp(a.translation_literals, b.translation_literals, sizeof(a.translation_literals));
 #endif
+            if (changed && content.clips_text(i)) screen.damage.include(clip.x, clip.y, clip.width, clip.height);
+            else full = changed;
         }
         if (full) {
             screen.damage = {0, 0, int(screen.viewport.width), int(screen.viewport.height)};
@@ -389,10 +394,12 @@ private:
         for (unsigned i = 0; i < max_lines; ++i) {
             const auto &line = painting_.lines[i];
             if (!line.graphics.flag || !line.text[0]) continue;
+            raster_.clip(text_clip(i));
             const auto bounds = fonts_.bounds(line.graphics.font, line.graphics.size, line.graphics.asset, line.text);
             raster_.flag(line.graphics.flag, int(line.x) - int(flags::width) - 4,
                 text_y(i) + bounds.top + (bounds.height - int(flags::height)) / 2);
         }
+        raster_.clip(painting_region_);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(renderer_fit_text)
@@ -493,12 +500,16 @@ private:
             raster_.artwork_contrast(line, y);
         if (line.artwork_index && paint_line_artwork(line, v, y)) return;
         const bool heavier = painting_.scene && (field_ == 0 || field_ == 2);
+        raster_.clip(text_clip(field_));
         if (!outline_painted_ && line.text[0] && line.outline != TextOutline::none) {
             if (raster_.letter(line, letter_, y, false, true)) ++letter_;
             else { outline_painted_ = true; letter_ = 0; }
+            raster_.clip(painting_region_);
             return;
         }
-        if ((letter_ || raster_.intersects(line, y, heavier)) && raster_.letter(line, letter_, y, heavier)) ++letter_;
+        const bool painted = (letter_ || raster_.intersects(line, y, heavier)) && raster_.letter(line, letter_, y, heavier);
+        raster_.clip(painting_region_);
+        if (painted) ++letter_;
         else { letter_ = 0; outline_painted_ = false; line_bitmap_loaded_ = false; if (++field_ == max_lines) {
             backgrounds(true);
             raster_.corners(painting_.focused); rendering_ = false;
@@ -597,9 +608,15 @@ private:
         }
         return (field + unsigned(end)) * height / 3;
     }
+    Region text_clip(unsigned field) const {
+        if (!painting_.clips_text(field)) return painting_region_;
+        const auto &box = painting_.text_clip;
+        return {std::max(painting_region_.left, int(box.x)), std::max(painting_region_.top, int(box.y)),
+                std::min(painting_region_.right, box.x + box.width), std::min(painting_region_.bottom, box.y + box.height)};
+    }
     int text_y(unsigned field) const {
         const auto &line = painting_.lines[field];
-        if (line.y >= 0) return line.y + line.graphics.top;
+        if (line.y >= 0 || painting_.clips_text(field)) return line.y + line.graphics.top;
         const unsigned height = screens_[unsigned(drawing_)].viewport.height;
         if (painting_.three_bands) {
             const unsigned start = band_edge(painting_, field, height, false), end = band_edge(painting_, field, height, true), used = raster_.rows(line) * line.graphics.line_height;
@@ -607,7 +624,7 @@ private:
             return int(start + (used < end - start ? (end - start - used) / 2 : 0) + line.graphics.top) + baseline_offset;
         }
         unsigned count = 0, used = 0, preceding = 0, index = 0;
-        for (unsigned i = 0; i < max_lines; ++i) if (painting_.lines[i].text[0]) {
+        for (unsigned i = 0; i < max_lines; ++i) if (painting_.lines[i].text[0] && !painting_.clips_text(i)) {
             const auto &item = painting_.lines[i]; unsigned rows = raster_.rows(item);
             if (i < field) { preceding += rows * item.graphics.line_height; index += rows; }
             count += rows; used += rows * item.graphics.line_height;
@@ -622,6 +639,7 @@ private:
         const auto v = screens_[unsigned(drawing_)].viewport;
         unsigned start = painting_.heading_band ? 0 : painting_.graphics.pad;
         for (unsigned i = 0; i < max_lines; ++i) {
+            if (painting_.clips_text(i)) continue;
             const auto &line = painting_.lines[i];
             if (!line.text[0] && !(painting_.scene && !preserve && (i == 0 || i == 2))) continue;
             if (preserve && line.y >= 0) {
@@ -634,7 +652,7 @@ private:
             }
             unsigned end = v.height > painting_.graphics.pad ? v.height - painting_.graphics.pad : 0;
             if (painting_.three_bands) { start = band_edge(painting_, i, v.height, false); end = band_edge(painting_, i, v.height, true); }
-            else for (unsigned j = i + 1; j < max_lines; ++j) if (painting_.lines[j].text[0]) {
+            else for (unsigned j = i + 1; j < max_lines; ++j) if (painting_.lines[j].text[0] && !painting_.clips_text(j)) {
                 const int bottom = text_y(i) - line.graphics.top + raster_.rows(line) * line.graphics.line_height;
                 end = unsigned(std::max(0, (bottom + text_y(j) - painting_.lines[j].graphics.top) / 2)); break;
             }

@@ -44,7 +44,7 @@ def test_native_language_status_tracks_boot_and_pedal_selection(
     files = backend_files
     target = files.target.model_copy(
         update={
-            'controls': models.TargetControls(confirm='a', next='b'),
+            'controls': models.TargetControls(confirm='a', next_section='b'),
         }
     )
     setup = tmp_path / 'language.bin'

@@ -17,9 +17,9 @@ UK flag.
 Use **E** to scroll up, **B** to scroll down and **C** to select. In Patch mode,
 press **F** for the next page. In Song and Setlist modes, the default controls
 are hold **F** for next page or click **F** and hold the second press for the
-previous page. Scrolling wraps at either end, and the
-initial highlight follows the active language. Browsing alone does not change
-the UI language.
+previous page. The highlight stays centered while the list scrolls beneath it.
+At either end, the list stops and the space beyond it stays blank. Opening the
+page centers the active language. Browsing alone does not change the UI language.
 
 The page is included in the default utility-page cycle immediately before None,
 after Pong on targets with at least three displays. A one-display target omits
