@@ -481,6 +481,17 @@ public:
         return edit_document(draft) && write_instrument(draft, index, output, channel);
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_counter)
+#endif
+    bool edit_counter(unsigned index, const Counters::Definition &values) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft) || index >= draft.counters()) return false;
+        const unsigned offset = unsigned(draft.counter(index) + 64 - draft.data());
+        if (!splice_setup(draft, offset, 0, 0)) return false;
+        std::memcpy(scratch_.data + offset, &values, sizeof(values));
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_value)
 #endif
     int64_t edit_value(unsigned patch, unsigned field) const {

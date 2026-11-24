@@ -58,11 +58,14 @@ inline constexpr Preference utility_preferences[] = {
     {page_preference + PageSettings::refresh, PreferenceKind::milliseconds, 1, 65535, "Status", "Status refresh (ms)", {}},
 };
 inline constexpr unsigned pedal_preferences = sizeof(preferences) / sizeof(preferences[0]);
-inline constexpr unsigned layout_preference_index = pedal_preferences + sizeof(utility_preferences) / sizeof(utility_preferences[0]);
+inline constexpr unsigned counter_preference_index = pedal_preferences + sizeof(utility_preferences) / sizeof(utility_preferences[0]);
+inline constexpr unsigned layout_preference_index = counter_preference_index + 1;
 inline constexpr unsigned setup_preferences = layout_preference_index + 1;
 inline constexpr Preference layout_preference{64, PreferenceKind::integer, 0, 0, "Layout", "Page layout", {}};
+inline constexpr Preference counter_preference{64, PreferenceKind::integer, 0, 0, "Counters", "Counters", {}};
 inline const Preference &preference_at(unsigned index) {
     if (index == layout_preference_index) return layout_preference;
+    if (index == counter_preference_index) return counter_preference;
     return index < pedal_preferences ? preferences[index] : utility_preferences[index - pedal_preferences];
 }
 inline bool optional_tempo_preference(unsigned field) {

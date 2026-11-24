@@ -135,6 +135,10 @@ public:
             render();
             return true;
         }
+        if ((mode_ == Mode::counter_fields || mode_ == Mode::counter_value) && !stage_counter()) {
+            render();
+            return true;
+        }
         if (setup_preferences_ && mode_ == Mode::preference_value && !stage_setup_preference()) {
             render();
             return true;
@@ -309,6 +313,8 @@ public:
             neutral_button(button);
         } else if (is_movie_view()) {
             movie_button(button);
+        } else if (is_counter_view()) {
+            counter_button(button);
         } else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
@@ -452,7 +458,8 @@ private:
                       calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value,
                       movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
                       layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
-                      layout_chooser_order, layout_chooser_order_move, layout_add_type, layout_name, layout_name_action };
+                      layout_chooser_order, layout_chooser_order_move, layout_add_type, layout_name, layout_name_action,
+                      counters, counter_fields, counter_value };
     enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, split, join, add, count };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -481,6 +488,14 @@ private:
     LayoutOption layout_option_ = LayoutOption::pages;
     bool layout_rejected_ = false, layout_left_ = false;
     unsigned chooser_minimum_ = 0;
+    enum CounterField { counter_output, counter_type, counter_channel, counter_controller,
+        counter_initial, counter_minimum, counter_maximum, counter_step, counter_boundary, counter_field_count };
+    unsigned counter_index_ = 0, counter_field_ = 0;
+    Counters::Definition counter_values_{};
+    const char *counter_feedback_ = nullptr;
+    static constexpr const char *counter_fields[] = {
+        "MIDI output", "Message type", "MIDI channel", "Controller", "Initial", "Minimum", "Maximum", "Step", "Boundary",
+    };
     static constexpr const char *layout_options[] = {"Move pages", "Move regions", "Startup focus", "Spare displays", "Patch Chooser displays",
         "Rename pages", "Rename regions", "Split region", "Join regions", "Add utility page"};
     struct UtilityPage { unsigned type, displays; const char *label; };
@@ -689,6 +704,10 @@ private:
         if (index == ui::layout_preference_index) {
             Document draft;
             return setup_preferences_ && docs_.edit_document(draft) && draft.page_layout().pages();
+        }
+        if (index == ui::counter_preference_index) {
+            Document draft;
+            return setup_preferences_ && docs_.edit_document(draft) && draft.counters();
         }
         const unsigned field = ui::preference_at(index).field;
         if (setup_preferences_ && !Documents::setup_preference_editable(field)) return false;
@@ -1117,6 +1136,96 @@ private:
             if ((!group || std::strcmp(preference().group, original_group)) && preference_supported(preference_index_)) return;
         }
     }
+    bool is_counter_view() const { return mode_ >= Mode::counters && mode_ <= Mode::counter_value; }
+    bool counter_is_program() const { return (counter_values_.status >> 4) == 12; }
+    uint8_t &counter_number() {
+        switch (counter_field_) {
+        case counter_controller: return counter_values_.controller;
+        case counter_initial: return counter_values_.initial;
+        case counter_minimum: return counter_values_.minimum;
+        default: return counter_values_.maximum;
+        }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_stage_counter)
+#endif
+    bool stage_counter() {
+        Document draft;
+        if (!docs_.edit_document(draft)) return false;
+        if (!std::memcmp(draft.counter(counter_index_) + 64, &counter_values_, sizeof(counter_values_))) return true;
+        if (counter_values_.minimum > counter_values_.initial || counter_values_.initial > counter_values_.maximum) {
+            counter_feedback_ = "Check min, initial and max";
+            return false;
+        }
+        if (!docs_.edit_counter(counter_index_, counter_values_)) {
+            counter_feedback_ = "Could not change counter";
+            return false;
+        }
+        changed_fields_ |= 1u << 13;
+        counter_feedback_ = nullptr;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_counter_button)
+#endif
+    void counter_button(unsigned button) {
+        Document draft;
+        if (!docs_.edit_document(draft)) return;
+        counter_feedback_ = nullptr;
+        if (mode_ == Mode::counters) {
+            const unsigned count = draft.counters();
+            if (button < 2) counter_index_ = (counter_index_ + (button ? 1 : count - 1)) % count;
+            else if (button == 5) mode_ = Mode::preferences;
+            else if (button == 2) {
+                std::memcpy(&counter_values_, draft.counter(counter_index_) + 64, sizeof(counter_values_));
+                counter_field_ = 0;
+                mode_ = Mode::counter_fields;
+            }
+        } else if (mode_ == Mode::counter_fields) {
+            if (button < 2) {
+                do { counter_field_ = (counter_field_ + (button ? 1 : counter_field_count - 1)) % counter_field_count; }
+                while (counter_field_ == counter_controller && counter_is_program());
+            } else if (button == 2) {
+                preference_step_ = 1;
+                mode_ = Mode::counter_value;
+            } else if (button == 3 || (button == 5 && stage_counter())) mode_ = Mode::counters;
+        } else if (button == 2 || button == 5) mode_ = Mode::counter_fields;
+        else if (button == 4 && counter_field_ >= counter_controller && counter_field_ < counter_boundary) {
+            const unsigned limit = counter_field_ == counter_step ? 10000 : 100;
+            preference_step_ = preference_step_ < limit ? preference_step_ * 10 : 1;
+        } else if (button < 2) {
+            const int direction = button ? 1 : -1;
+            const int delta = direction * int(preference_step_);
+            if (counter_field_ == counter_output) {
+                const auto outputs = hardware_.midi_outputs();
+                const auto *selected = outputs.find(counter_values_.output);
+                const unsigned start = selected ? unsigned(selected - outputs.data) : 0;
+                Document fallback = draft;
+                fallback.bind_globals(nullptr);
+                for (unsigned i = 1; i <= outputs.count; ++i) {
+                    const auto &output = outputs.data[(start + (button ? i : outputs.count - i)) % outputs.count];
+                    if (!draft.has_output(hardware_, output.name) || !fallback.has_output(hardware_, output.name)) continue;
+                    std::memset(counter_values_.output, 0, sizeof(counter_values_.output));
+                    std::snprintf(counter_values_.output, sizeof(counter_values_.output), "%s", output.name);
+                    break;
+                }
+            } else if (counter_field_ == counter_type) {
+                counter_values_.status = uint8_t((counter_values_.status & 15) | (counter_is_program() ? 0xb0 : 0xc0));
+                counter_values_.controller = 0;
+            } else if (counter_field_ == counter_channel) {
+                auto &status = counter_values_.status;
+                status = uint8_t((status & 0xf0) | std::clamp(int(status & 15) + direction, 0, 15));
+            } else if (counter_field_ == counter_step) {
+                const int old = int16_t(u16(counter_values_.step));
+                const int value = std::clamp(old + delta, -32767, 32767);
+                binary::write16(counter_values_.step, uint16_t(value ? value : direction));
+            } else if (counter_field_ == counter_boundary) counter_values_.bounce ^= 1;
+            else {
+                auto &value = counter_number();
+                value = uint8_t(std::clamp(int(value) + delta, 0, 127));
+            }
+        }
+    }
     const midi::OutputConnection *preference_output() const {
         const auto outputs = hardware_.midi_outputs();
         if (preference_route_ >= outputs.count) return nullptr;
@@ -1180,6 +1289,11 @@ private:
                     layout_option_ = LayoutOption::pages;
                     layout_rejected_ = false;
                     mode_ = Mode::layout_menu;
+                    return;
+                }
+                if (preference_index_ == ui::counter_preference_index) {
+                    counter_index_ = 0;
+                    mode_ = Mode::counters;
                     return;
                 }
                 const uint64_t bit = uint64_t(1) << field.field;
@@ -1671,6 +1785,49 @@ private:
         }
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render_counter)
+#endif
+    void render_counter(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) {
+        using Role = ControlRole;
+        const auto *record = draft.counter(counter_index_);
+        const bool picking = mode_ == Mode::counters, adjusting = mode_ == Mode::counter_value;
+        ui::copy_caption(views[1].lines[1], reinterpret_cast<const char *>(record));
+        ui::copy_caption(views[2].lines[2], "Shared by patches in this setup");
+        if (picking) {
+            ui::copy_caption(views[2].lines[0], "Counters");
+            std::snprintf(views[2].lines[1].text, 64, "%u/%u", counter_index_ + 1, draft.counters());
+        } else {
+            ui::copy_caption(views[2].lines[0], counter_fields[counter_field_]);
+            auto &value = views[2].lines[1];
+            if (counter_field_ == counter_output) {
+                const auto *name = counter_values_.output;
+                const auto *output = hardware_.midi_outputs().find(name);
+                ui::copy_caption(value, output ? output->label : name);
+            } else if (counter_field_ == counter_type) ui::copy_caption(value, counter_is_program() ? "Program Change" : "Control Change");
+            else if (counter_field_ == counter_boundary) ui::copy_caption(value, counter_values_.bounce ? "Bounce" : "Wrap");
+            else {
+                int number;
+                if (counter_field_ == counter_channel) number = (counter_values_.status & 15) + 1;
+                else if (counter_field_ == counter_step) number = int16_t(u16(counter_values_.step));
+                else number = counter_number() + unsigned(counter_is_program());
+                std::snprintf(value.text, sizeof(value.text), "%d", number);
+            }
+            if (counter_feedback_) ui::copy_caption(views[1].lines[2], counter_feedback_);
+            else if (std::memcmp(record + 64, &counter_values_, sizeof(counter_values_)))
+                ui::copy_caption(views[1].lines[2], ui::i18n::text(ui::i18n::Message::changed));
+        }
+        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
+            adjusting ? "Adjust" : "Browse").text());
+        prompt.clear().add(Role::confirm, adjusting ? "Accept" : picking ? "Open" : "Edit");
+        ui::copy_caption(views[0].lines[1], prompt.add(Role::back, mode_ == Mode::counter_fields ? "Accept counter" : "Back", ", ").text());
+        if (mode_ == Mode::counter_fields)
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Cancel counter").text());
+        else if (adjusting && counter_field_ >= counter_controller && counter_field_ < counter_boundary) {
+            char step[24]; std::snprintf(step, sizeof(step), "Step %u", unsigned(preference_step_));
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
+        }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render)
 #endif
     void render() {
@@ -1682,13 +1839,15 @@ private:
         const bool adding_cycle = mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
             || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
         const bool layout_entry = mode_ == Mode::preferences && preference_index_ == ui::layout_preference_index;
-        const bool preference_view = !layout_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
+        const bool counter_entry = mode_ == Mode::preferences && preference_index_ == ui::counter_preference_index;
+        const bool preference_view = !layout_entry && !counter_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
         const bool layout_view = is_layout_view();
         const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
         const bool movie_view = is_movie_view();
         const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
         const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
-            || instrument_view || neutral_view || movie_view || layout_view || layout_entry || (setup_preferences_ && preference_view);
+            || instrument_view || neutral_view || movie_view || layout_view || layout_entry || counter_entry || is_counter_view()
+            || (setup_preferences_ && preference_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
         if (mode_ == Mode::current) {
@@ -1747,6 +1906,10 @@ private:
         else if (layout_entry) {
             title = "Page layout";
             value = "Pages and regions";
+        }
+        else if (counter_entry) {
+            title = "Counters";
+            value = "Shared MIDI counters";
         }
         else if (preference_view) {
             const auto &field = preference();
@@ -2032,7 +2195,8 @@ private:
             if (neutral_view) render_neutral(views, draft, prompt);
             if (movie_view) render_movies(views, draft, prompt);
             if (layout_view) render_layout(views, draft.page_layout(), prompt);
-            if (layout_entry)
+            if (is_counter_view()) render_counter(views, draft, prompt);
+            if (layout_entry || counter_entry)
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Group").text());
             if (mode_ == Mode::decision) {
                 const bool pedal = device_editor_ != Mode::closed;

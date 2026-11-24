@@ -522,6 +522,36 @@ int main(int argc, char **argv) {
         assert(board.sent.empty());
         return 0;
     }
+    if (argc == 5 && !std::strcmp(argv[3], "--counter-settings")) {
+        app.allocation.configure(configuration.page_layout());
+        settings(); tap(2); tap(3); tap(3); // Setup fields, Layout, Counters.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Counters"));
+        tap(2); tap(2); // Open the configured counter.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Scenes"));
+        for (unsigned i = 0; i < 5; ++i) tap(1);
+        assert(!std::strcmp(board.panes[2].lines[0].text, "Minimum"));
+        tap(2); tap(1); tap(1); tap(2); tap(5);
+        assert(!std::strcmp(board.panes[1].lines[2].text, "Check min, initial and max"));
+        tap(0); tap(2); tap(1); tap(1); tap(5); // Initial now lies inside the new range.
+        tap(1); tap(1); tap(1); tap(2); tap(0); tap(2); // Decreasing step skips zero.
+        tap(5);
+        assert(documents.document().counter(0)[98] == 2 && board.sent.empty());
+        settings(); tap(1); tap(2); // Save and reload.
+        while (documents.busy()) sample(0);
+        const auto &document = documents.document();
+        assert(board.sent.empty());
+        const int address = document.named_patch("advance");
+        assert(address >= 0);
+        for (unsigned i = 0; i < 2; ++i) {
+            assert(board.entry.start(document, unsigned(address)));
+            while (board.entry.busy()) sample(0);
+        }
+        assert(board.sent.size() == 2 && board.sent[0].first == 7 && board.sent[0].second == 4 && board.sent[1].second == 3);
+        std::ofstream exported(argv[4], std::ios::binary);
+        exported.write(reinterpret_cast<const char *>(document.data()), document.length());
+        assert(exported);
+        return 0;
+    }
     if (argc == 5 && !std::strcmp(argv[3], "--midi-preferences")) {
         assert(documents.document().pickup() && documents.document().pickup_pairing_ms() == 9);
         assert(documents.document().loop_stop_reset_controls());

@@ -190,6 +190,13 @@ focus, the joined region gets that focus.
 page type and give it a unique name. The editor checks the layout against
 the setup's display and memory budgets before accepting the addition.
 
+**Counters** lists the MIDI counters defined in the setup. Choose a counter
+to edit its output, message type, channel, controller number for Control
+Change, initial value, range, step, or boundary behavior. Edit related
+values before accepting the counter into the draft. The minimum, initial
+value, and maximum must be in order. Saving the setup applies the definition
+to every patch that uses that counter.
+
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time

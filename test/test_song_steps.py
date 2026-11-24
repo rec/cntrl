@@ -203,6 +203,53 @@ def test_song_step_navigation_and_boundaries(
     assert saved_midi['patches']['held']['pickup'] is True
     assert saved_midi['loop_stop_reset_controls'] is False
     assert saved_midi['loop_stop_neutral_values'][0]['value'] == 12
+    counter_setup = tmp_path / 'counters.bin'
+    counter_setup.write_bytes(
+        compiler.compile_show(
+            {
+                **pages,
+                'counters': {
+                    'Scenes': {
+                        'type': 'control-change',
+                        'output': 'din',
+                        'channel': 1,
+                        'controller': 7,
+                        'minimum': 1,
+                        'initial': 2,
+                        'maximum': 10,
+                    }
+                },
+                'patches': {
+                    'advance': {'operation': 'scroll-counter', 'counter': 'Scenes'}
+                },
+            },
+            {},
+            [],
+            target,
+        )
+    )
+    subprocess.run(
+        [
+            str(runner),
+            str(fixture),
+            str(counter_setup),
+            '--counter-settings',
+            str(edited),
+        ],
+        check=True,
+    )
+    saved_counter = tomlkit.parse(resolved.export(edited.read_bytes()))['counters'][
+        'Scenes'
+    ]
+    assert (
+        saved_counter['minimum'],
+        saved_counter['initial'],
+        saved_counter['step'],
+    ) == (
+        3,
+        4,
+        -1,
+    )
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--song-settings'], check=True
     )

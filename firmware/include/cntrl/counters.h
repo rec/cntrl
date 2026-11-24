@@ -7,6 +7,11 @@ namespace cntrl {
 // Values belong to a setup's compiled identity, shared by every invocation.
 class Counters {
 public:
+    struct Definition {
+        char output[32];
+        uint8_t status, controller, initial, minimum, maximum, step[2], bounce;
+    };
+    static_assert(sizeof(Definition) == 40);
     struct State { uint32_t setup; unsigned index; uint8_t value; bool sent, reversed; unsigned users = 0; };
     struct Step { uint8_t value; bool reversed; };
     unsigned revision() const { return revision_; }
