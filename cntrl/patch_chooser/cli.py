@@ -13,6 +13,7 @@ from typing import Annotated
 import tomlkit
 import tyro
 from pydantic import BaseModel, Field, ValidationError
+from tyro import _errors, _fmtlib
 
 from .. import build, flash, importing, qualify, target_process, upload
 from ..animation.asset import AnimationFormatError
@@ -724,12 +725,23 @@ def main() -> None:
     arguments = sys.argv[1:]
     if all(a in ('--verbose', '--no-verbose') for a in arguments):
         arguments += ['setup', 'create']
-    options = tyro.cli(
-        CommandLine,
-        config=(tyro.conf.OmitSubcommandPrefixes,),
-        args=arguments,
-    )
+    verbose = False
+    for argument in arguments:
+        if not argument.startswith('-'):
+            break
+        match argument.replace('_', '-'):
+            case '--verbose':
+                verbose = True
+            case '--no-verbose':
+                verbose = False
+    with nullcontext() if verbose else _errors.on_parse_error(_show_parse_validation):
+        options = tyro.cli(
+            CommandLine,
+            config=(tyro.conf.OmitSubcommandPrefixes,),
+            args=arguments,
+        )
     command = options.command
+    token = compiler_errors.verbose_validation.set(options.verbose)
     try:
         if isinstance(command, importing.Import):
             importing.run(command)
@@ -803,10 +815,47 @@ def main() -> None:
         target_process.TargetAdapterError,
         *transport.USB_ERRORS,
         transport.UsbTransferInputError,
+        ValidationError,
         WriterLockError,
         WriterLockHeld,
     ) as error:
-        sys.exit(str(error))
+        message = str(error)
+        if not options.verbose:
+            # Domain errors can include the original diagnostics alongside a filename
+            # or other context. Keep that context when replacing the Pydantic text.
+            cause: BaseException | None = error
+            while cause is not None:
+                if isinstance(cause, ValidationError):
+                    message = message.replace(
+                        str(cause), compiler_errors.validation_message(cause)
+                    )
+                cause = cause.__cause__
+        sys.exit(message)
+    finally:
+        compiler_errors.verbose_validation.reset(token)
+
+
+def _show_parse_validation(event: _errors.ParseErrorEvent) -> None:
+    if not isinstance(event, _errors.InstantiationFailure):
+        return
+    # Tyro retains the original exception as context when wrapping a model failure.
+    cause = sys.exception()
+    while cause is not None and not isinstance(cause, ValidationError):
+        cause = cause.__cause__ or cause.__context__
+    if cause is None:
+        return
+    token = compiler_errors.verbose_validation.set(False)
+    try:
+        rows = compiler_errors.validation_errors('', cause)
+    finally:
+        compiler_errors.verbose_validation.reset(token)
+    print(
+        _fmtlib.box['red'](
+            'error', _fmtlib.rows(*rows, 'For full helptext, see cntrl --help')
+        ),
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 
 if __name__ == '__main__':

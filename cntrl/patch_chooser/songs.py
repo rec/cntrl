@@ -98,7 +98,9 @@ class Song(models.BindingScope, frozen=True):
             try:
                 patch = models.patch_adapter.validate_python(fields)
             except ValidationError as error:
-                errors.append(f'patches[{index}]: {error}')
+                errors.append(
+                    compiler_errors.validation_message(error, f'patches[{index}]')
+                )
                 continue
             fields = patch.model_dump(exclude_none=True)
             result.append(fields)

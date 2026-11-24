@@ -98,7 +98,7 @@ def load_inputs(
         try:
             target = models.Target.model_validate(target_data[0])
         except ValidationError as error:
-            errors.append(f'target: {error}')
+            errors.append(compiler_errors.validation_message(error, 'target'))
     if not documents:
         errors.append('at least one setup data-file expression is required')
     seen: set[str] = set()
