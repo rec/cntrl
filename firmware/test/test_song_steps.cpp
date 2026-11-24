@@ -205,6 +205,21 @@ int main(int argc, char **argv) {
         assert(!std::strcmp(board.panes[1].lines[2].text, "Displays unavailable"));
         tap(0); tap(2); // One display fits with the tools region.
         tap(4); tap(2); tap(0); tap(2); tap(5); // Give up the right display last.
+        tap(5); tap(1); tap(2); // Rename pages.
+        tap(3); tap(1); tap(2); // Tools, Time.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Page name"));
+        for (unsigned i = 0; i < 4; ++i) tap(4);
+        for (unsigned i = 0; i < 4; ++i) app.text_key('\b', board.now);
+        for (const char c : std::string("Language")) app.text_key(uint8_t(c), board.now);
+        app.text_key('\n', board.now);
+        assert(!std::strcmp(board.panes[1].lines[2].text, "Could not use that name"));
+        app.text_key(27, board.now);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Time"));
+        tap(2); app.text_key('S', board.now); app.text_key('\n', board.now);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "STime"));
+        tap(5); tap(1); tap(2); // Rename regions.
+        tap(1); tap(2); app.text_key('X', board.now); tap(5);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Xextra"));
         settings(); tap(1);
         assert(!std::strcmp(board.panes[2].lines[1].text, "Save and reload setup"));
         tap(2);
@@ -214,6 +229,7 @@ int main(int argc, char **argv) {
         assert(layout.region_page(2, 0) == 1 && layout.region_page(2, 1) == 0);
         assert(layout.region_page(0, 0) == 3 && layout.region_page(0, 1) == 2);
         assert(layout.initial_focus() == 1 && layout.left_wins());
+        assert(!std::strcmp(layout.region_name(layout.initial_focus()), "Xextra"));
         const unsigned chooser = layout.controller_page(0);
         assert(layout.minimum_displays(chooser) == 1 && layout.page(chooser)[2] == 1);
         app.allocation.configure(layout);

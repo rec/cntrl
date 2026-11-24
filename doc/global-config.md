@@ -174,6 +174,11 @@ Patch Chooser. Press E for **Give-up order** and move the displays into the
 order they should be released when the chooser has fewer displays available.
 With a single display, the chooser shows the sent patch on that display.
 
+**Rename pages** and **Rename regions** change the names used in the setup
+and its editable export. Choose a name, edit it with A/B and D/E or a USB
+keyboard, then use F or Enter to accept it into the draft. Names in each list
+must be unique and contain 1 to 31 printable ASCII characters.
+
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time

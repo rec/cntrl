@@ -688,7 +688,20 @@ def _decode(data: bytes) -> dict[str, object]:
             authored_pages = source.get('pages')
             actual_pages = cast(dict[str, dict[str, object]], result['pages'])
             if isinstance(authored_pages, dict):
-                for name, raw in authored_pages.items():
+                # On-pedal layout edits preserve the order of the page records.
+                # Legacy layout upgrades can also insert or remove records.
+                same_records = len(authored_pages) == len(actual_pages) and all(
+                    isinstance(a, dict) and a.get('type', 'patch-chooser') == b['type']
+                    for a, b in zip(
+                        authored_pages.values(), actual_pages.values(), strict=True
+                    )
+                )
+                page_sources = (
+                    zip(actual_pages, authored_pages.values(), strict=True)
+                    if same_records
+                    else authored_pages.items()
+                )
+                for name, raw in page_sources:
                     if (
                         name in actual_pages
                         and isinstance(raw, dict)

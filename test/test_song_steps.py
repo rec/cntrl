@@ -110,7 +110,7 @@ def test_song_step_navigation_and_boundaries(
     saved_layout = tomlkit.parse(resolved.export(edited.read_bytes()))
     assert saved_layout['regions']['tools']['pages'] == [
         'Language',
-        'Time',
+        'STime',
         'Other status',
     ]
     assert saved_layout['regions']['performance']['pages'] == [
@@ -118,17 +118,17 @@ def test_song_step_navigation_and_boundaries(
         'Empty',
         'Browser',
     ]
-    assert saved_layout['pages']['Time']['ram2_bytes'] == 16
+    assert saved_layout['pages']['STime']['ram2_bytes'] == 16
     assert saved_layout['pages']['Browser']['min_displays'] == 1
     assert saved_layout['pages']['Browser']['give_up_displays'] == [
         'center',
         'left',
         'right',
     ]
-    assert saved_layout['regions']['extra']['pages'] == ['Gap']
+    assert saved_layout['regions']['Xextra']['pages'] == ['Gap']
     assert saved_layout['layout'] == {
-        'order': ['performance', 'extra', 'tools'],
-        'focus': 'extra',
+        'order': ['performance', 'Xextra', 'tools'],
+        'focus': 'Xextra',
         'left_wins': True,
     }
     subprocess.run(

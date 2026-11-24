@@ -382,6 +382,22 @@ public:
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_rename_layout_entry)
+#endif
+    bool rename_layout_entry(bool region, unsigned index, const char *name) {
+        Document draft;
+        const auto length = std::strlen(name);
+        if (!length || length > 31 || busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        if (index >= (region ? layout.regions() : layout.pages())) return false;
+        const auto *record = region ? layout.region(index) : layout.record(index);
+        const unsigned offset = unsigned(record - draft.data());
+        if (!splice_setup(draft, offset, 0, 0)) return false;
+        std::memset(scratch_.data + offset, 0, 32);
+        std::memcpy(scratch_.data + offset, name, length);
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_instrument)
 #endif
     bool edit_instrument(unsigned index, const char *output, unsigned channel) {

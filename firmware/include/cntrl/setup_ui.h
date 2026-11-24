@@ -28,7 +28,7 @@ public:
     void resume_settings() { mode_ = Mode::current; locked_ = true; render(); }
     void refresh() { if (open()) render(); }
     bool editing_text() const {
-        return mode_ == Mode::contact || (mode_ == Mode::decision
+        return mode_ == Mode::contact || mode_ == Mode::layout_name || (mode_ == Mode::decision
             && (device_editor_ == Mode::contact || device_editor_ == Mode::calibration_name));
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -50,12 +50,19 @@ public:
 #endif
     void text_key(uint8_t key, uint32_t now) {
         if (locked_ || !editing_text()) return;
-        if (key == 27) { button(5, true, now); return; }
+        if (key == 27) {
+            if (mode_ == Mode::layout_name) { leave_layout_name(); render(); }
+            else button(5, true, now);
+            return;
+        }
         if (mode_ == Mode::decision) {
             if (key == '\n') button(2, true, now);
             return;
         }
-        if (key == '\n' && device_editor_ == Mode::calibration_name) { button(5, true, now); return; }
+        if (key == '\n' && (mode_ == Mode::layout_name || device_editor_ == Mode::calibration_name)) {
+            button(5, true, now);
+            return;
+        }
         char *position = contact_draft_ + contact_cursor_;
         if (key == '\b') {
             if (!contact_cursor_) return;
@@ -63,7 +70,7 @@ public:
             std::memmove(contact_draft_ + contact_cursor_, position, std::strlen(position) + 1);
         } else {
             if (key != '\n' && (key < 32 || key > 126)) return;
-            if (std::strlen(contact_draft_) + 1 >= sizeof(contact_draft_)) {
+            if (std::strlen(contact_draft_) + 1 >= text_capacity()) {
                 hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return;
             }
             std::memmove(position + 1, position, std::strlen(position) + 1);
@@ -109,6 +116,10 @@ public:
     bool return_to_performance() {
         if (!settings_ || !open() || docs_.busy() || browsing_ || mode_ == Mode::language_saving) return false;
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
+        if (editing_layout_name() && !stage_layout_name()) {
+            render();
+            return true;
+        }
         if (mode_ == Mode::layout_chooser_minimum && !stage_chooser_minimum()) {
             render();
             return true;
@@ -295,7 +306,7 @@ public:
             neutral_button(button);
         } else if (is_movie_view()) {
             movie_button(button);
-        } else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
+        } else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
             if (button < 2) {
@@ -438,8 +449,8 @@ private:
                       calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value,
                       movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
                       layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
-                      layout_chooser_order, layout_chooser_order_move };
-    enum class LayoutOption { pages, regions, focus, priority, chooser_displays, count };
+                      layout_chooser_order, layout_chooser_order_move, layout_name, layout_name_action };
+    enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, count };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -467,7 +478,8 @@ private:
     LayoutOption layout_option_ = LayoutOption::pages;
     bool layout_rejected_ = false, layout_left_ = false;
     unsigned chooser_minimum_ = 0;
-    static constexpr const char *layout_options[] = {"Move pages", "Move regions", "Startup focus", "Spare displays", "Patch Chooser displays"};
+    static constexpr const char *layout_options[] = {"Move pages", "Move regions", "Startup focus", "Spare displays", "Patch Chooser displays",
+        "Rename pages", "Rename regions"};
     midi::Parameter neutral_{};
     unsigned neutral_index_ = 0, neutral_output_ = 0, neutral_field_ = 0;
     bool neutral_changed_ = false, neutral_rejected_ = false;
@@ -676,6 +688,33 @@ private:
     bool is_layout_view() const {
         return mode_ >= Mode::layout_menu && mode_ <= Mode::layout_chooser_order_move;
     }
+    bool editing_layout_name() const { return mode_ == Mode::layout_name || mode_ == Mode::layout_name_action; }
+    unsigned text_capacity() const { return editing_layout_name() ? 32 : sizeof(contact_draft_); }
+    void begin_layout_name(const char *name) {
+        std::strcpy(contact_draft_, name);
+        contact_cursor_ = 0;
+        mode_ = Mode::layout_name;
+    }
+    void leave_layout_name() {
+        mode_ = layout_option_ == LayoutOption::region_names ? Mode::layout_region : Mode::layout_pages;
+        layout_rejected_ = false;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_stage_layout_name)
+#endif
+    bool stage_layout_name() {
+        Document draft;
+        if (!docs_.edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        const bool region = layout_option_ == LayoutOption::region_names;
+        const unsigned index = region ? page_region_ : layout.region_page(page_region_, page_position_);
+        const char *original = region ? layout.region_name(index) : layout.name(index);
+        if (!std::strcmp(original, contact_draft_)) return true;
+        layout_rejected_ = !docs_.rename_layout_entry(region, index, contact_draft_);
+        if (layout_rejected_) return false;
+        changed_fields_ |= 1u << 12;
+        return true;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_stage_chooser_minimum)
 #endif
@@ -746,6 +785,10 @@ private:
             return;
         }
         if (button != 2) return;
+        if (layout_option_ == LayoutOption::region_names) {
+            begin_layout_name(layout.region_name(region));
+            return;
+        }
         if (layout_option_ == LayoutOption::regions && !moving) {
             destination_region_ = page_region_;
             mode_ = Mode::layout_region_move;
@@ -772,14 +815,17 @@ private:
         layout_rejected_ = false;
         if (mode_ == Mode::layout_menu) {
             if (button < 2) {
-                const unsigned count = unsigned(LayoutOption::count) - unsigned(!layout.controllers());
-                layout_option_ = LayoutOption((unsigned(layout_option_) + (button ? 1 : count - 1)) % count);
+                constexpr unsigned count = unsigned(LayoutOption::count);
+                const unsigned step = button ? 1 : count - 1;
+                layout_option_ = LayoutOption((unsigned(layout_option_) + step) % count);
+                if (layout_option_ == LayoutOption::chooser_displays && !layout.controllers())
+                    layout_option_ = LayoutOption((unsigned(layout_option_) + step) % count);
             } else if (button == 5) mode_ = Mode::preferences;
             else if (button == 2) {
                 page_region_ = layout_option_ == LayoutOption::focus ? layout.initial_focus() : 0;
                 page_position_ = 0;
                 layout_left_ = layout.left_wins();
-                mode_ = layout_option_ == LayoutOption::pages ? Mode::layout_pages
+                mode_ = layout_option_ == LayoutOption::pages || layout_option_ == LayoutOption::page_names ? Mode::layout_pages
                     : layout_option_ == LayoutOption::chooser_displays ? Mode::layout_chooser : Mode::layout_region;
             }
             return;
@@ -803,6 +849,10 @@ private:
             else position = 0;
         } else if (button == 5) mode_ = moving ? Mode::layout_pages : Mode::layout_menu;
         else if (button == 2 && !moving) {
+            if (layout_option_ == LayoutOption::page_names) {
+                begin_layout_name(layout.name(layout.region_page(region, position)));
+                return;
+            }
             destination_region_ = region;
             destination_position_ = position;
             mode_ = Mode::layout_move;
@@ -1190,28 +1240,32 @@ private:
         ui::utf8::next(next, code);
         const unsigned length = unsigned(std::strlen(contact_draft_));
         const bool naming = device_editor_ == Mode::calibration_name;
-        if (mode_ == Mode::contact_action) {
+        const bool layout_name = editing_layout_name();
+        if (mode_ == Mode::contact_action || mode_ == Mode::layout_name_action) {
             if (button < 2) item_ = naming ? (item_ == 0 ? 2 : 0) : (item_ + (button ? 1 : 2)) % 3;
-            else if (button == 5) mode_ = Mode::contact;
+            else if (button == 5) mode_ = layout_name ? Mode::layout_name : Mode::contact;
             else if (button == 2) {
+                if (layout_name && item_ == 1) { leave_layout_name(); return; }
                 if (item_ == 2) std::memmove(position, next, std::strlen(next) + 1);
-                else if (length + 1 < sizeof(contact_draft_)) {
+                else if (length + 1 < text_capacity()) {
                     std::memmove(position + 1, position, std::strlen(position) + 1);
                     *position = item_ ? '\n' : ' ';
                 } else { hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return; }
-                mode_ = Mode::contact;
+                mode_ = layout_name ? Mode::layout_name : Mode::contact;
             }
             return;
         }
         if (button == 5) {
-            if (text_changed()) { mode_ = Mode::decision; item_ = contact_shortcut_ ? 0 : 2; }
+            if (layout_name) {
+                if (stage_layout_name()) leave_layout_name();
+            } else if (text_changed()) { mode_ = Mode::decision; item_ = contact_shortcut_ ? 0 : 2; }
             else leave_device_editor();
-        } else if (button == 2) { mode_ = Mode::contact_action; item_ = 0; }
+        } else if (button == 2) { mode_ = layout_name ? Mode::layout_name_action : Mode::contact_action; item_ = 0; }
         else if (button == 3 && contact_cursor_) {
             do { --contact_cursor_; } while ((uint8_t(contact_draft_[contact_cursor_]) & 0xc0) == 0x80);
         } else if (button == 4) contact_cursor_ = unsigned(next - contact_draft_);
         else if (button < 2) {
-            if (!code && length + 1 >= sizeof(contact_draft_)) {
+            if (!code && length + 1 >= text_capacity()) {
                 hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return;
             }
             std::memmove(position + 1, next, std::strlen(next) + 1);
@@ -1387,7 +1441,9 @@ private:
                 (moving_region ? destination_region_ : page_region_) + 1, layout.regions());
             if (layout_rejected_) ui::copy_caption(views[1].lines[2], "Could not change layout");
             ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, moving_region ? "Position" : "Browse").text());
-            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, moving_region ? "Accept move" : choosing ? "Accept" : "Move")
+            const char *confirm = moving_region ? "Accept move" : choosing ? "Accept"
+                : layout_option_ == LayoutOption::region_names ? "Rename" : "Move";
+            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, confirm)
                 .add(Role::back, moving_region ? "Cancel" : "Back", ", ").text());
             return;
         }
@@ -1403,7 +1459,8 @@ private:
         if (layout_rejected_) ui::copy_caption(views[1].lines[2], layout.region_size(page_region_) == 1
             ? "Keep one page in each region" : "Displays unavailable");
         ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, moving ? "Position" : "Browse").text());
-        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, moving ? "Accept move" : "Move")
+        const char *confirm = moving ? "Accept move" : layout_option_ == LayoutOption::page_names ? "Rename" : "Move";
+        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, confirm)
             .add(Role::back, moving ? "Cancel" : "Back", ", ").text());
         if (layout.regions() > 1)
             ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Region").text());
@@ -1605,9 +1662,10 @@ private:
             preference_text(number, sizeof(number), display, editing);
             value = number;
         }
-        else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
+        else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
             title = ui::i18n::text(ui::i18n::Message::owner_contact);
-            if (device_editor_ == Mode::calibration_name) {
+            if (editing_layout_name()) title = layout_option_ == LayoutOption::region_names ? "Region name" : "Page name";
+            else if (device_editor_ == Mode::calibration_name) {
                 std::snprintf(calibration_title, sizeof(calibration_title), "Jack %u name", calibration_choice_ + 1);
                 title = calibration_title;
             }
@@ -1625,9 +1683,9 @@ private:
             std::snprintf(number, sizeof(number), "%.*s[%.*s]%.*s", int(selected - start), start,
                 code == '\n' ? 0 : int(next - selected), selected, int(end - next), next);
             value = number;
-            if (mode_ == Mode::contact_action) {
+            if (mode_ == Mode::contact_action || mode_ == Mode::layout_name_action) {
                 const ui::i18n::Message actions[] = {ui::i18n::Message::insert_space, ui::i18n::Message::insert_line_break, ui::i18n::Message::delete_character};
-                value_label = ui::i18n::text(actions[item_]);
+                value_label = mode_ == Mode::layout_name_action && item_ == 1 ? "Cancel rename" : ui::i18n::text(actions[item_]);
             } else if (code == '\n') value_label = ui::i18n::text(ui::i18n::Message::line_break);
             else value_label = ui::i18n::text(ui::i18n::Message::value);
         }
@@ -1806,10 +1864,13 @@ private:
                 char step[24]; std::snprintf(step, sizeof(step), "Step %lu ms", (unsigned long)preference_step_);
                 ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
             }
-            if (mode_ == Mode::contact) {
+            if (mode_ == Mode::contact || mode_ == Mode::layout_name) {
                 ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
-                ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
+                ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action))
+                    .add(Role::back, mode_ == Mode::layout_name ? "Accept name" : ui::i18n::text(ui::i18n::Message::back), ", ").text());
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, ui::i18n::text(ui::i18n::Message::position_action)).text());
+                if (mode_ == Mode::layout_name && layout_rejected_)
+                    ui::copy_caption(views[1].lines[2], "Could not use that name");
             }
             if (preference_view) {
                 if (!setup_preferences_) ui::copy_caption(views[1].lines[0], preference().group);
