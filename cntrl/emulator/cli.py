@@ -39,7 +39,7 @@ class Emulate(BaseModel, frozen=True):
         description='Mirror compiled files and preferences from a connected pedal',
     )
     controller: str | None = Field(
-        default=None, description='Built-in controller profile name'
+        default=None, description='Built-in controller profile (setup default: mc6-pro)'
     )
     layout: Path | None = None
     target: Path | None = None
@@ -92,8 +92,11 @@ class Emulate(BaseModel, frozen=True):
         if self.controller is not None:
             if self.layout is not None or self.target is not None:
                 raise ValueError('use --controller or --layout and --target, not both')
-        elif self.port is None and (self.layout is None or self.target is None):
-            raise ValueError('choose --controller or supply both --layout and --target')
+        elif self.port is None:
+            if (self.layout is None) != (self.target is None):
+                raise ValueError('supply both --layout and --target')
+            if self.layout is None:
+                object.__setattr__(self, 'controller', 'mc6-pro')
         return self
 
 

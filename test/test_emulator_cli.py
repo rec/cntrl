@@ -41,15 +41,15 @@ def test_caret_period_accepts_a_duration_with_units() -> None:
 @pytest.mark.parametrize(
     'selection',
     [
-        {},
         {'layout': Path('layout.toml')},
+        {'target': Path('target.toml')},
         {'controller': 'example', 'target': Path('target.toml')},
     ],
 )
 def test_incomplete_or_conflicting_profile_choices_are_rejected(
     selection: dict[str, object],
 ) -> None:
-    with pytest.raises(ValueError, match='--controller'):
+    with pytest.raises(ValueError, match='--layout and --target'):
         Emulate.model_validate({'setup': 'setup.toml', **selection})
 
 

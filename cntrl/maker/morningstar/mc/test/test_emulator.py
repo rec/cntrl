@@ -109,11 +109,11 @@ def test_unknown_profile_is_rejected(base: models.Target) -> None:
         adapt(base, 'other')
 
 
-@pytest.mark.parametrize('controller,count', [('mc6-pro', 6), ('mc8-pro', 8)])
+@pytest.mark.parametrize('controller,count', [(None, 6), ('mc8-pro', 8)])
 def test_short_command_compiles_a_setup_and_preserves_session_data(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    controller: str,
+    controller: str | None,
     count: int,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -132,14 +132,14 @@ def test_short_command_compiles_a_setup_and_preserves_session_data(
     command = cli.Emulate(setup=source, controller=controller)
     layout, target, setup, storage = cli.prepare(command, compile_to_file)
     assert len(layout.controls) == len(target.buttons) == count
-    assert storage == Path('.cntrl-emulator') / controller
+    assert storage == Path('.cntrl-emulator') / (controller or 'mc6-pro')
     compiled = setup.read_bytes()
     assert list(setup_bundle.unpack(compiled)) == ['performance']
     exported = tomlkit.parse(
         resolved.export(setup_bundle.unpack(compiled)['performance'])
     )
     rotation = exported['regions']['tools']['pages']
-    if controller == 'mc6-pro':
+    if controller is None:
         assert command.playable_doom_host == host
         assert rotation[-2:] == ['doom', 'None']
     else:

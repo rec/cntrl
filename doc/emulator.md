@@ -46,8 +46,10 @@ compiler is required: `c++` on macOS/Linux or `cl` in a Windows developer shell.
 
 Run commands from the source checkout with the environment activated, or prefix
 them with `uv run --no-sync`. Start a built-in controller directly from a setup
-source file using `cntrl emulate SETUP --controller PROFILE`; the command exports
-the controller target, compiles the setup and starts the native runtime.
+source file using `cntrl emulate SETUP`. The built-in profile defaults to
+`mc6-pro`. Use `--controller PROFILE` to choose another built-in profile.
+The command exports the controller target, compiles the setup and starts
+the native runtime.
 See the manufacturer profile guide below for the supported profile names.
 
 To inspect the session actually stored on a connected pedal, use:
