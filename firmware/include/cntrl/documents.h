@@ -43,6 +43,9 @@ public:
     bool busy() const { return browse_phase_ != BrowsePhase::idle || history_action_ != HistoryAction::none || receiving_ || writing_ || erasing_ || download_ || listing_; }
     bool dirty() const { return dirty_; }
     void bind_globals(GlobalSettings &globals) { globals_ = &globals; document_.bind_globals(&globals.values()); }
+    const GlobalSettings::Values *global_preferences() const {
+        return globals_ && globals_->ready() ? &globals_->values() : nullptr;
+    }
     const char *startup_set() const { return globals_ ? globals_->values().startup_set : ""; }
     const char *name_and_contact() const { return globals_ ? globals_->values().name_and_contact : ""; }
     bool name_and_contact(const char *text) {

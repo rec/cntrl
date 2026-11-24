@@ -50,6 +50,13 @@ to start in the Patch Chooser.
 In setlist mode, **Use at startup** opens the same editor with the current
 setlist selected.
 
+Open **Preferences** under **Pedal** for device-wide defaults. A/B browse
+fields and D/E move between groups. In a value editor D clears the device
+value so the setup supplies it, and E changes the step size for larger
+numbers. In MIDI clock outputs, A/B choose an output and C toggles it.
+Press F to review before saving. An explicit setup value appears beside
+the device value when the setup takes precedence.
+
 Open **Setlists** from **Settings** to reorder a saved setlist. Browse to
 the setlist, press C to open it, then use A/B to choose an occurrence by
 its numbered position. Press C to start moving it and A/B to choose the

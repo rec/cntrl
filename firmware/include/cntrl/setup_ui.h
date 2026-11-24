@@ -2,6 +2,7 @@
 #include "ui/messages.h"
 #include "ui/fonts.h"
 #include "ui/presentation.h"
+#include "ui/preferences.h"
 #include "ui/prompts.h"
 #include "documents.h"
 #include "songs.h"
@@ -57,6 +58,7 @@ public:
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
         const bool changed = device_editor_ == Mode::contact ? std::strcmp(contact_draft_, docs_.name_and_contact()) != 0
             : device_editor_ == Mode::startup_set ? std::strcmp(startup_draft_, docs_.startup_set()) != 0
+            : device_editor_ == Mode::preference_value ? preference_changed()
             : docs_.dirty() && changed_fields_;
         if (!changed) {
             if (docs_.dirty()) docs_.edit_cancel();
@@ -144,14 +146,17 @@ public:
                 }
             }
         } else if (mode_ == Mode::pedal) {
-            if (button < 2) item_ = 1 - item_;
+            const unsigned count = docs_.global_preferences() ? 3 : 2;
+            if (button < 2) item_ = (item_ + count + (button ? 1 : -1)) % count;
             else if (button == 5) mode_ = Mode::current;
             else if (button == 2 && !item_) begin_startup_set(docs_.startup_set());
-            else if (button == 2) {
+            else if (button == 2 && item_ == 1) {
                 std::strcpy(contact_draft_, docs_.name_and_contact());
                 contact_cursor_ = 0;
                 mode_ = device_editor_ = Mode::contact;
-            }
+            } else if (button == 2) { preference_index_ = 0; mode_ = Mode::preferences; }
+        } else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
+            preference_button(button);
         } else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
@@ -252,10 +257,12 @@ public:
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
             else if (button == 5 || (button == 2 && item_ == 2)) keep_editing(device_editor_);
             else if (button == 2) {
-                if (!item_ && !(device_editor_ == Mode::contact ? docs_.name_and_contact(contact_draft_)
-                    : (!startup_draft_[0] || songs_->setlist(startup_draft_)) && docs_.startup_set(startup_draft_))) {
-                    hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed)); return;
+                const bool reload = device_editor_ == Mode::preference_value && preference_reloads();
+                if (!item_ && !save_device_editor()) {
+                    const char *reason = device_editor_ == Mode::preference_value ? docs_.last_error() : "";
+                    hardware_.error(*reason ? reason : ui::i18n::text(ui::i18n::Message::save_failed)); return;
                 }
+                if (!item_ && reload) { close(); return; }
                 leave_device_editor();
             }
         } else if (mode_ == Mode::decision) {
@@ -270,7 +277,7 @@ public:
         render();
     }
 private:
-    enum class Mode { closed, current, pedal, startup_set, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
+    enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -287,6 +294,9 @@ private:
     Mode resume_editor_ = Mode::closed;
     bool return_from_shortcut_ = false;
     bool shortcut_hint_ = false;
+    unsigned preference_index_ = 0, preference_route_ = 0;
+    uint32_t preference_value_ = 0, setup_preference_ = 0, preference_step_ = 1;
+    bool preference_known_ = false;
     Library library_request_ = Library::none;
     unsigned startup_choice_ = 0;
     char startup_draft_[64] = {};
@@ -327,9 +337,135 @@ private:
     }
     void leave_device_editor() {
         if (return_from_shortcut_) { close(); return; }
+        if (device_editor_ == Mode::preference_value) {
+            mode_ = Mode::preferences; device_editor_ = Mode::closed; return;
+        }
         mode_ = shortcut_ == Shortcut::pedal ? Mode::pedal : Mode::current;
         item_ = device_editor_ == Mode::contact ? 1 : 0;
         device_editor_ = Mode::closed;
+    }
+    bool save_device_editor() {
+        if (device_editor_ == Mode::contact) return docs_.name_and_contact(contact_draft_);
+        if (device_editor_ == Mode::preference_value)
+            return docs_.global_change(preference().field, preference_value_, !preference_known_, hardware_.global_settings_busy());
+        return (!startup_draft_[0] || songs_->setlist(startup_draft_)) && docs_.startup_set(startup_draft_);
+    }
+    const ui::Preference &preference() const { return ui::preferences[preference_index_]; }
+    bool preference_overridden() const {
+        return docs_.document().explicit_settings() & (uint64_t(1) << preference().field);
+    }
+    bool preference_reloads() const {
+        return GlobalSettings::reload(preference().field) && !preference_overridden();
+    }
+    bool preference_changed() const {
+        const auto *values = docs_.global_preferences();
+        if (!values) return false;
+        const unsigned field = preference().field;
+        const bool known = values->known & (uint64_t(1) << field);
+        return known != preference_known_ || (known && values->values[field] != preference_value_);
+    }
+    bool preference_supported(unsigned index) const {
+        const unsigned field = ui::preferences[index].field;
+        if (field >= 23 && field <= 26) return hardware_.supports_trs_mode(field - 23, midi::TrsMode::aux);
+        if (field >= 19 && field <= 22) {
+            for (unsigned mode = 1; mode <= unsigned(midi::TrsMode::aux); ++mode)
+                if (hardware_.supports_trs_mode(field - 19, midi::TrsMode(mode))) return true;
+            return false;
+        }
+        return true;
+    }
+    void browse_preference(bool backward, bool group) {
+        constexpr unsigned count = sizeof(ui::preferences) / sizeof(ui::preferences[0]);
+        const char *original_group = preference().group;
+        for (unsigned i = 0; i < count; ++i) {
+            preference_index_ = (preference_index_ + (backward ? count - 1 : 1)) % count;
+            if ((!group || std::strcmp(preference().group, original_group)) && preference_supported(preference_index_)) return;
+        }
+    }
+    const midi::OutputConnection *preference_output() const {
+        const auto outputs = hardware_.midi_outputs();
+        if (preference_route_ >= outputs.count) return nullptr;
+        const auto &output = outputs.data[preference_route_];
+        if (output.output || (output.port < 4 && (hardware_.supports_trs_mode(output.port, midi::TrsMode::midi_a)
+            || hardware_.supports_trs_mode(output.port, midi::TrsMode::midi_b)))) return &output;
+        return nullptr;
+    }
+    void browse_preference_output(bool backward) {
+        const unsigned count = hardware_.midi_outputs().count;
+        for (unsigned i = 0; i < count; ++i) {
+            preference_route_ = (preference_route_ + (backward ? count - 1 : 1)) % count;
+            if (preference_output()) return;
+        }
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_preference_text)
+#endif
+    void preference_text(char *text, unsigned capacity, uint32_t value, bool by_output = false) const {
+        const auto &field = preference();
+        using Kind = ui::PreferenceKind;
+        using Message = ui::i18n::Message;
+        if (field.kind == Kind::boolean) ui::utf8::copy(text, capacity, ui::i18n::text(value ? Message::on : Message::off));
+        else if (field.kind == Kind::choice && value <= field.maximum) ui::utf8::copy(text, capacity, field.choices[value]);
+        else if (field.kind == Kind::outputs) {
+            if (const auto *output = by_output ? preference_output() : nullptr) {
+                std::snprintf(text, capacity, "%s  %s", output->label, ui::i18n::text(value & (1u << output->route) ? Message::on : Message::off));
+            } else {
+                unsigned length = 0;
+                for (const auto &output : hardware_.midi_outputs()) {
+                    if (!(value & (1u << output.route))) continue;
+                    if (length && length + 2 < capacity) { text[length++] = ','; text[length++] = ' '; }
+                    ui::utf8::copy(text + length, capacity - length, output.label);
+                    length += unsigned(std::strlen(text + length));
+                }
+                if (!length) ui::utf8::copy(text, capacity, ui::i18n::text(Message::none));
+            }
+        } else std::snprintf(text, capacity, "%lu", (unsigned long)value);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_preference_button)
+#endif
+    void preference_button(unsigned button) {
+        const auto &field = preference();
+        const auto *values = docs_.global_preferences();
+        if (!values) return;
+        if (mode_ == Mode::preferences) {
+            if (button < 2 || button == 3 || button == 4) browse_preference(button == 0 || button == 3, button >= 3);
+            else if (button == 5) { mode_ = Mode::pedal; item_ = 2; }
+            else if (button == 2) {
+                preference_known_ = values->known & (uint64_t(1) << field.field);
+                setup_preference_ = ui::setup_preference(docs_.document(), field.field);
+                preference_value_ = preference_known_ ? values->values[field.field] : setup_preference_;
+                preference_step_ = 1;
+                preference_route_ = 0;
+                if (!preference_output()) browse_preference_output(false);
+                mode_ = device_editor_ = Mode::preference_value;
+            }
+        } else if (button == 3) {
+            preference_known_ = false; preference_value_ = setup_preference_;
+        } else if (field.kind == ui::PreferenceKind::outputs && button < 3) {
+            if (button < 2) browse_preference_output(button == 0);
+            else if (const auto *output = preference_output()) {
+                preference_value_ ^= uint32_t(1u << output->route); preference_known_ = true;
+            }
+        } else if (button == 2 || button == 5) {
+            if (preference_changed()) { mode_ = Mode::decision; item_ = 2; }
+            else leave_device_editor();
+        } else if (button == 4 && field.kind != ui::PreferenceKind::outputs) {
+            preference_step_ = preference_step_ * 10 <= field.maximum - field.minimum ? preference_step_ * 10 : 1;
+        } else if (button < 2) {
+            const uint32_t previous = preference_value_;
+            if (field.field >= 19 && field.field <= 22) {
+                const unsigned count = field.maximum + 1;
+                for (unsigned i = 0; i < count; ++i) {
+                    preference_value_ = (preference_value_ + (button == 0 ? count - 1 : 1)) % count;
+                    if (hardware_.supports_trs_mode(field.field - 19, midi::TrsMode(preference_value_))) break;
+                }
+            } else {
+                const int delta = (button == 0 ? -1 : 1) * int(preference_step_);
+                preference_value_ = uint32_t(std::clamp(int64_t(preference_value_) + delta, int64_t(field.minimum), int64_t(field.maximum)));
+            }
+            preference_known_ |= preference_value_ != previous;
+        }
     }
     void keep_editing(Mode fallback) {
         mode_ = return_from_shortcut_ && resume_editor_ != Mode::closed && resume_editor_ != Mode::contact_action && resume_editor_ != Mode::failed
@@ -522,7 +658,19 @@ private:
         }
         else if (mode_ == Mode::pedal) {
             title = ui::i18n::text(ui::i18n::Message::pedal);
-            value = ui::i18n::text(item_ ? ui::i18n::Message::owner_contact : ui::i18n::Message::startup_set);
+            value = item_ == 2 ? "Preferences" : ui::i18n::text(item_ ? ui::i18n::Message::owner_contact : ui::i18n::Message::startup_set);
+        }
+        else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
+            const auto &field = preference();
+            const auto *values = docs_.global_preferences();
+            title = field.label;
+            const bool editing = mode_ == Mode::preference_value;
+            const bool known = editing ? preference_known_ : values && (values->known & (uint64_t(1) << field.field));
+            value_label = known ? ui::i18n::text(ui::i18n::Message::pedal) : ui::i18n::text(ui::i18n::Message::setup);
+            const uint32_t display = editing ? preference_value_
+                : known ? values->values[field.field] : ui::setup_preference(docs_.document(), field.field);
+            preference_text(number, sizeof(number), display, editing);
+            value = number;
         }
         else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
             title = ui::i18n::text(ui::i18n::Message::owner_contact);
@@ -670,17 +818,46 @@ private:
                 ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, ui::i18n::text(ui::i18n::Message::position_action)).text());
             }
+            if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
+                ui::copy_caption(views[1].lines[0], preference().group);
+                if (preference_overridden()) {
+                    char effective[32];
+                    preference_text(effective, sizeof(effective), ui::setup_preference(docs_.document(), preference().field));
+                    std::snprintf(views[2].lines[2].text, 64, "%s  %s", docs_.selected(), effective);
+                }
+                if (mode_ == Mode::preferences) {
+                    ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Group").text());
+                } else {
+                    const auto kind = preference().kind;
+                    const bool routes = kind == ui::PreferenceKind::outputs;
+                    ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
+                        ui::i18n::text(routes ? ui::i18n::Message::browse : ui::i18n::Message::adjust)).text());
+                    ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, routes ? "Toggle output" : ui::i18n::text(ui::i18n::Message::ok))
+                        .add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
+                    prompt.clear().add(Role::previous_section, "Use setup value");
+                    if (!routes && preference().maximum - preference().minimum >= 10) {
+                        char step[24]; std::snprintf(step, sizeof(step), "Step %lu", (unsigned long)preference_step_);
+                        prompt.add(Role::next_section, step);
+                    }
+                    ui::copy_caption(views[0].lines[2], prompt.text());
+                }
+            }
             if (mode_ == Mode::decision) {
                 const bool pedal = device_editor_ != Mode::closed;
                 ui::copy_caption(views[1].lines[0], pedal ? ui::i18n::text(ui::i18n::Message::pedal) : docs_.edit_name());
-                const auto save = !pedal && docs_.edit_reloads() ? ui::i18n::Message::save_reload_setup : ui::i18n::Message::save;
+                const bool reload = device_editor_ == Mode::preference_value ? preference_reloads() : !pedal && docs_.edit_reloads();
+                const auto save = reload ? ui::i18n::Message::save_reload_setup : ui::i18n::Message::save;
                 const auto action = item_ == 0 ? save : item_ == 1 ? ui::i18n::Message::discard : ui::i18n::Message::keep_editing;
                 ui::copy_caption(views[2].lines[1], ui::i18n::text(action));
                 if (device_editor_ == Mode::startup_set)
                     ui::copy_caption(views[2].lines[2], startup_draft_[0] ? startup_draft_ : ui::i18n::text(ui::i18n::Message::none));
                 else if (device_editor_ == Mode::contact)
                     ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::owner_contact));
-                else if (docs_.edit_reloads()) ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::reload_stops_playback));
+                else if (device_editor_ == Mode::preference_value) {
+                    ui::copy_caption(views[2].lines[0], preference().label);
+                    preference_text(views[2].lines[2].text, sizeof(views[2].lines[2].text), preference_value_);
+                }
+                if (reload) ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::reload_stops_playback));
             }
         }
         if (settings_ && shortcut_hint_) {

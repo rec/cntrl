@@ -307,7 +307,11 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     struct InputHardware : Hardware {
         cntrl::ui::PageHost<PagePlatform> *presentation = nullptr;
         unsigned sent = 0, taps = 0;
+        std::string settings_text[3];
         std::vector<unsigned> operations;
+        void show(unsigned pane, const cntrl::Pane &content) override {
+            if (pane < 3) settings_text[pane] = content.lines[1].text;
+        }
         bool send(const char *, const uint8_t *, unsigned) override { ++sent; return true; }
         bool state(unsigned operation, uint32_t value) override {
             operations.push_back(operation); return TestPatchHardware::state(operation, value);
@@ -524,6 +528,42 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         button(5); button(0); button(2); // Discard.
         assert(!std::strcmp(documents.name_and_contact(), "Ané\nb\n@example.org"));
         button(5); button(5); app.finish_tool();
+        assert(!app.setups.open() && hardware.sent == before_tools);
+    }
+    {
+        const unsigned setup_brightness = documents.document().brightness();
+        const unsigned adjusted = setup_brightness == 255 ? 254 : setup_brightness + 1;
+        assert(app.open_tool(cntrl::PageLayout::settings, platform));
+        app.setups.poll(0);
+        app.controls_locked = false;
+        const auto button = [&](unsigned control) { click(control, 3520); };
+        button(0); button(2); // Pedal.
+        button(0); button(2); // Device preferences.
+        button(2); button(setup_brightness == 255 ? 0 : 1);
+        assert(!(preferences.values().known & 1));
+        button(5); button(1); button(2); // Save brightness.
+        assert((preferences.values().known & 1) && preferences.values().values[0] == adjusted);
+        cntrl::GlobalSettings rebooted(settings_disk);
+        assert(rebooted.boot() && rebooted.values().values[0] == adjusted);
+        if (documents.document().explicit_settings() & 1)
+            assert(documents.document().brightness() == setup_brightness);
+        else assert(documents.document().brightness() == adjusted);
+        button(2); button(3); // Clear the device-wide override.
+        assert(preferences.values().known & 1);
+        button(5); button(1); button(2);
+        assert(!(preferences.values().known & 1) && documents.document().brightness() == setup_brightness);
+        button(4); // MIDI group.
+        for (unsigned i = 0; i < 6; ++i) button(1); // Clock outputs.
+        assert(hardware.settings_text[1] == "MIDI clock outputs");
+        button(2);
+        const auto output = hardware.settings_text[2];
+        assert(output.find("DIN") != std::string::npos);
+        button(2); // Toggle the first named output in the draft.
+        assert(hardware.settings_text[2] != output && hardware.settings_text[2].find("DIN") != std::string::npos);
+        assert(!(preferences.values().known & (uint64_t(1) << 28)));
+        button(5); button(0); button(2); // Discard the route change.
+        assert(!(preferences.values().known & (uint64_t(1) << 28)));
+        button(5); button(5); button(5); app.finish_tool();
         assert(!app.setups.open() && hardware.sent == before_tools);
     }
     click(5, 3600);

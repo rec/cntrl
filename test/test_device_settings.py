@@ -18,6 +18,15 @@ from cntrl.patch_chooser import (
 )
 
 
+def test_firmware_preferences_match_the_device_registry() -> None:
+    fields = sorted(i for _, group in device_settings.PREFERENCE_GROUPS for i in group)
+    assert fields == [
+        i for i, s in enumerate(device_settings.SETTINGS) if s is not None
+    ]
+    header = ROOT / 'firmware/include/cntrl/ui/device_preferences.h'
+    assert header.read_text() == device_settings.firmware_preferences_header()
+
+
 @pytest.fixture
 def target() -> models.Target:
     return models.Target.model_validate(
