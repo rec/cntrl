@@ -22,6 +22,12 @@ further work.
 attached, otherwise report an error.
 
 
+# multiplatform.
+
+This project needs to be multiplatform, mac/linux/windows, all features need to be
+developed with all three systems in mind, even though we cannot test on Windows
+and Linux is only occasionally there.
+
 # Hardware catalogue invariant
 
 Code should try to be generic and write to the generic API of a MIDI controller,
