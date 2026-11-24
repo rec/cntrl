@@ -484,6 +484,9 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         app.setups.poll(0);
         const auto edit = [&](unsigned button) { app.setups.button(button, true, 3500); };
         edit(2); // Current patch
+        edit(3); // Open the instrument list at the current patch's instrument.
+        assert(hardware.settings_text[1] == "Instruments");
+        edit(5);
         edit(2); // Instrument MIDI channel
         edit(channel == 15 ? 0 : 1);
         assert(documents.edit_value(primary.selected_patch(), 2) == (channel == 15 ? 15 : channel + 2));

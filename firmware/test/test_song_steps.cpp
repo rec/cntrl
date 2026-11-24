@@ -276,6 +276,56 @@ int main(int argc, char **argv) {
     }
     if (argc == 4 && !std::strcmp(argv[3], "--named-patch-settings")) {
         upload_setup("5370617265"); // Spare, an inactive setup.
+        settings(); tap(1); tap(2); // Setups.
+        tap(1);
+        while (documents.busy()) sample(0);
+        sample(0); tap(2);
+        while (documents.busy()) sample(0);
+        sample(0); tap(1); tap(2); // Browse instruments in a setup with no browser patches.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Instruments"));
+        if (std::strcmp(board.panes[2].lines[0].text, "alternate")) tap(1);
+        assert(!std::strcmp(board.panes[2].lines[0].text, "alternate"));
+        tap(2); tap(2); tap(1); tap(5); // Channel 2 -> 3.
+        tap(1); tap(2);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "MIDI output"));
+        assert(!std::strcmp(board.panes[0].lines[2].text, "All patches using this instrument"));
+        tap(1); // DIN -> TRS.
+        assert(!std::strcmp(board.panes[2].lines[1].text, "TRS"));
+        assert(board.sent.empty());
+        settings(); tap(1);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Save"));
+        tap(2);
+        while (documents.busy()) sample(0);
+        sample(0);
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        assert(!app.settings_frontmost() && !std::strcmp(documents.selected(), "Live") && board.sent.empty());
+        assert(documents.edit_begin("Spare"));
+        while (documents.busy()) documents.tick(board.now);
+        cntrl::Document edited;
+        assert(documents.edit_document(edited));
+        struct SendProbe : Board {
+            std::string output;
+            std::vector<uint8_t> bytes;
+            bool send(const char *route, const uint8_t *message, unsigned length) override {
+                output = route;
+                bytes.assign(message, message + length);
+                return true;
+            }
+        } probe;
+        auto &executor = probe.entry;
+        const auto recall = [&](const cntrl::Document &doc, const char *key) {
+            const int node = doc.named_patch(key);
+            assert(node >= 0 && executor.start(doc, unsigned(node)));
+            for (unsigned i = 0; i < 32 && executor.busy(); ++i) executor.tick(i);
+            assert(executor.status() == cntrl::PatchExecutor::Status::completed);
+        };
+        recall(edited, "Other");
+        assert(probe.output == "trs" && (probe.bytes == std::vector<uint8_t>{0xb2, 32, 2, 0xc2, 11}));
+        recall(edited, "Lead");
+        assert(probe.output == "din" && (probe.bytes == std::vector<uint8_t>{0xb0, 20, 10}));
+        recall(documents.document(), "Other");
+        assert(probe.output == "din" && (probe.bytes == std::vector<uint8_t>{0xb1, 32, 2, 0xc1, 11}));
+        documents.edit_cancel();
         songs.choose("Set"); app.song_ui.perform(); sample(0); next();
         const auto sent = board.sent.size();
         cntrl::SongSelection selection;

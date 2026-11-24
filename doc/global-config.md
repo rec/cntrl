@@ -167,6 +167,12 @@ display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time
 page.
 
+Select **Instruments** from the current setup, from the current patch's MIDI
+channel field, or from a saved setup's field list. The instrument editor shows
+the current channel and output. Saving applies the new route to instrument
+programs that use that instrument in the owning setup. Raw MIDI actions keep the
+channel and output stored in each action.
+
 Use the USB connection to inspect, set or clear preferences:
 
 ```sh

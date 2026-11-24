@@ -85,10 +85,59 @@ def destination(
             'brightness',
             'screensaver_timeout',
             'is_midi_interface',
+            'usb_device_midi',
+            'usb_host_midi',
+            'forward_device_to_host',
+            'fast_debounce',
+            'animation_color_cycle',
             'trs_ports',
             'auxiliary_switches',
+            'scrolling',
+            'target_pulse',
         )
-        or (path[0] == 'instruments' and path[-1] == 'channel')
+        or (
+            path[0] == 'instruments'
+            and len(path) == 3
+            and path[-1] in ('channel', 'output')
+        )
+        or (
+            path[0] == 'navigation'
+            and len(path) == 2
+            and path[1] in ('hold_delay', 'repeat_interval')
+        )
+        or (
+            path[0] == 'page_settings'
+            and len(path) >= 2
+            and path[1]
+            in (
+                'refresh_interval',
+                'clock_timeout',
+                'clocks_per_quarter',
+                'clock_average_beats',
+                'clock_outputs',
+                'autoselect_clock',
+                'clock_bpms',
+                'tap_intervals',
+                'minimum_taps',
+                'minimum_interval',
+                'reset_gap',
+                'flash_fraction',
+                'flasher_diameter',
+                'annulus',
+                'title_height',
+                'tempo_height',
+                'padding',
+                'digits',
+                'decimals',
+                'title_font',
+                'tempo_font',
+                'status_font',
+                'off_color',
+                'on_color',
+                'ring_color',
+                'background_color',
+            )
+        )
         or (
             path[0] in ('patches', 'patch_cycles', 'switches')
             and (

@@ -152,7 +152,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Songs | Browse, rename, and move or remove patches with review | Song library journal, including setlist references and playback position |
 | Embedded song patch | Pick a supported MIDI action by its switch and trigger or activation order. Edit program, bank, volume, and pan for instrument programs, channel and program for direct Program Change, or channel, controller, and value for single Control Change. | Song library journal with a private source copy or an in-place replacement in the new revision |
 | Song patch from a named setup | The same MIDI actions and fields as embedded song patches, with the choice to edit one occurrence or every use of the action in the owning setup | Private copy in the song library or a setup revision, with review before reloading the active setup |
-| Current browser patch's instrument | MIDI channel, 1–16 | Shared instrument record in the setup draft |
+| Setup instruments | Browse all instruments in a setup, or start with the current browser patch's instrument. Edit its MIDI channel and choose an enabled output. | Shared instrument record in the setup draft |
 
 - Device-wide controls outside the listed coverage still need a consolidated
   Settings entry point.
@@ -172,7 +172,7 @@ occur and repeat those tasks after changing the labels or controls.
 | --- | --- | --- |
 | Pedal | Boot firmware, startup set, language, contact text, calibration endpoints, and the 33 scalar preferences | Calibration names and settling time |
 | Setup | Brightness, screensaver timeout, animation color cycling, target pulse, MIDI interface and USB modes, USB forwarding, scrolling, fast debounce, navigation timing, TRS modes, auxiliary switch mode, Time page settings including clock outputs and presets, and patch cycles | Frame buffers, animation resources, pickup, loop reset, other page-specific scalar settings, routing, controls, counter definitions, startup and idle movie selections, and page layout and appearance |
-| Setup instrument | MIDI channel 1–16, shared by every patch using that instrument in the setup | Output, profile, and instrument identity. Profile choices can affect bank mappings and SysEx. |
+| Setup instrument | MIDI channel 1–16 and enabled output, shared by the instrument programs using that instrument in the setup | Profile and instrument identity. Profile choices can affect bank mappings and SysEx. |
 | Setup patch | Instrument program 1–128, banks available in the assigned profile, optional volume 0–127, and optional pan −64–63 on supported program patches | Other MIDI action types and their parameters, names, style, nested actions, and binding definitions |
 | Song | Name and ordered patch occurrences | Display name, foreground, background, font, installed artwork, song enter and exit actions, MIDI and bindings, and editing a patch occurrence or its shared source |
 | Setlist | Name and ordered song occurrences | Existing display name and style metadata |

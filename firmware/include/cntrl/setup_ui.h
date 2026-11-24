@@ -144,7 +144,8 @@ public:
                 const unsigned count = unsigned(Shortcut::count) - first;
                 shortcut_ = Shortcut(first + (unsigned(shortcut_) - first + count + (button == 0 ? -1 : 1)) % count);
             }
-            if (button == 2) {
+            const bool instruments = button == 3 && shortcut_ == Shortcut::setup && docs_.document().instruments();
+            if (button == 2 || instruments) {
                 if (shortcut_ == Shortcut::pedal) { mode_ = Mode::pedal; item_ = 0; }
                 else if (shortcut_ == Shortcut::songs || shortcut_ == Shortcut::setlists) {
                     library_request_ = shortcut_ == Shortcut::songs ? Library::songs : Library::setlists;
@@ -164,7 +165,8 @@ public:
                     patch_ = current_field_ ? current_patch_ : 0;
                     field_ = current_field_ ? 2 : 5;
                     mode_ = draft_return_ = Mode::field;
-                    if (!current_field_) begin_setup_preferences(Mode::closed);
+                    if (instruments) begin_instruments(0, Mode::closed);
+                    else if (!current_field_) begin_setup_preferences(Mode::closed);
                 }
             }
         } else if (mode_ == Mode::pedal) {
@@ -289,6 +291,8 @@ public:
         } else if (mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
                    || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name) {
             cycle_button(button);
+        } else if (mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value) {
+            instrument_button(button);
         } else if (mode_ == Mode::patch) {
             Document draft;
             if (!docs_.edit_document(draft)) return;
@@ -306,7 +310,7 @@ public:
             if (button < 2) {
                 if (settings_ && current_field_) return;
                 const unsigned first = draft_return_ == Mode::field || !draft.patches() ? 5 : 0;
-                const unsigned end = settings_ ? 6 : 8;
+                const unsigned end = settings_ ? 6 + bool(draft.instruments()) : 8;
                 const unsigned count = end - first + (first == 0 && docs_.edit_has_original(patch_));
                 const unsigned cursor = field_ == 8 ? end : field_;
                 field_ = first + (cursor - first + count + (button == 0 ? -1 : 1)) % count;
@@ -314,7 +318,9 @@ public:
             }
             else if (button == 2 && field_ == 8) { original_ = !original_; field_ = 0; }
             else if (button == 2 && settings_ && field_ == 5) begin_setup_preferences(Mode::field);
+            else if (button == 2 && settings_ && field_ == 6) begin_instruments(0, Mode::field);
             else if (button == 2) mode_ = Mode::value;
+            else if (button == 3 && settings_ && current_field_) begin_instruments(u16(draft.patch(patch_)), Mode::field);
             else if (button == 4) begin_cycle(draft);
             else if (button == 5) {
                 if (draft_return_ == Mode::patch) mode_ = Mode::patch;
@@ -357,7 +363,7 @@ public:
     }
 private:
     enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, calibration, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
-                      cycle_instrument, cycle_tag, cycle_confirm, cycle_name };
+                      cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -394,6 +400,11 @@ private:
     unsigned item_ = 0, patch_ = 0, field_ = 0;
     Mode cycle_return_ = Mode::closed;
     Mode draft_return_ = Mode::field;
+    Mode instrument_return_ = Mode::closed;
+    unsigned instrument_ = 0;
+    unsigned instrument_changed_ = 0;
+    bool instrument_output_ = false;
+    const char *instrument_feedback_ = nullptr;
     unsigned alias_ = 0, tag_ = CycleCatalogue::all, character_ = 0;
     char cycle_name_[64] = {};
     char suggested_[64] = {};
@@ -403,6 +414,68 @@ private:
             setup_preferences_ = false;
             mode_ = shortcut_ == Shortcut::setups ? Mode::catalogue : Mode::current;
         } else { mode_ = Mode::decision; item_ = 2; }
+    }
+    void begin_instruments(unsigned index, Mode back) {
+        instrument_ = index;
+        instrument_changed_ = 0;
+        instrument_return_ = back;
+        mode_ = Mode::instruments;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_instrument_button)
+#endif
+    void instrument_button(unsigned button) {
+        Document draft;
+        if (!docs_.edit_document(draft) || instrument_ >= draft.instruments()) return;
+        instrument_feedback_ = nullptr;
+        if (mode_ == Mode::instruments) {
+            if (button < 2) {
+                const unsigned count = draft.instruments();
+                if (count > 1) instrument_changed_ = 0;
+                instrument_ = (instrument_ + (button ? 1 : count - 1)) % count;
+            } else if (button == 2) { instrument_output_ = false; mode_ = Mode::instrument; }
+            else if (button == 5) {
+                if (instrument_return_ == Mode::closed) {
+                    draft_return_ = Mode::instruments;
+                    finish_draft();
+                } else mode_ = instrument_return_;
+            }
+        } else if (mode_ == Mode::instrument) {
+            if (button < 2) instrument_output_ = !instrument_output_;
+            else if (button == 2) mode_ = Mode::instrument_value;
+            else if (button == 5) mode_ = Mode::instruments;
+        } else if (button == 2 || button == 5) mode_ = Mode::instrument;
+        else if (button < 2) {
+            const auto *selected = draft.instrument(instrument_);
+            const auto *output = reinterpret_cast<const char *>(selected + 32);
+            unsigned channel = selected[64] + 1;
+            if (instrument_output_) {
+                const auto outputs = hardware_.midi_outputs();
+                const auto *current = outputs.find(output);
+                if (!current) return;
+                const unsigned start = unsigned(current - outputs.data);
+                Document fallback = draft;
+                fallback.bind_globals(nullptr);
+                for (unsigned i = 1; i < outputs.count; ++i) {
+                    const auto &candidate = outputs.data[(start + (button ? i : outputs.count - i)) % outputs.count];
+                    if (draft.has_output(hardware_, candidate.name) && fallback.has_output(hardware_, candidate.name)) {
+                        output = candidate.name;
+                        break;
+                    }
+                }
+                if (!std::strcmp(output, reinterpret_cast<const char *>(selected + 32))) {
+                    instrument_feedback_ = "No other enabled output";
+                    return;
+                }
+            } else {
+                if ((button == 0 && channel == 1) || (button == 1 && channel == 16)) return;
+                channel += button ? 1 : -1;
+            }
+            if (docs_.edit_instrument(instrument_, output, channel)) {
+                instrument_changed_ |= 1u << unsigned(instrument_output_);
+                changed_fields_ |= 1u << 10;
+            } else instrument_feedback_ = "Could not change instrument";
+        }
     }
     void begin_cycle(const Document &draft) {
         if (!draft.cycle_catalogue().size()) return;
@@ -810,8 +883,9 @@ private:
         const bool adding_cycle = mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
             || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
         const bool preference_view = mode_ == Mode::preferences || mode_ == Mode::preference_value;
+        const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
         const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
-            || (setup_preferences_ && preference_view);
+            || instrument_view || (setup_preferences_ && preference_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
         if (mode_ == Mode::current) {
@@ -907,8 +981,25 @@ private:
         else if (mode_ == Mode::field && field_ == 8) {
             title = ui::i18n::text(original_ ? ui::i18n::Message::edit_patch_entry : ui::i18n::Message::edit_original_patch);
             value = "";
-        } else if (mode_ == Mode::field && settings_ && field_ == 5) {
-            title = "Setup fields"; value = "";
+        } else if (instrument_view) {
+            const auto *selected = draft.instrument(instrument_);
+            const auto *alias = reinterpret_cast<const char *>(selected);
+            const auto *output = reinterpret_cast<const char *>(selected + 32);
+            if (const auto *endpoint = hardware_.midi_outputs().find(output)) output = endpoint->label;
+            if (mode_ == Mode::instruments) {
+                title = "Instruments";
+                value_label = alias;
+                std::snprintf(number, sizeof(number), "%s, ch %u", output, unsigned(selected[64]) + 1);
+                value = number;
+            } else {
+                title = instrument_output_ ? "MIDI output" : ui::i18n::text(ui::i18n::Message::instrument_channel);
+                value_label = alias;
+                std::snprintf(number, sizeof(number), "%u", unsigned(selected[64]) + 1);
+                value = instrument_output_ ? output : number;
+            }
+        } else if (mode_ == Mode::field && settings_ && (field_ == 5 || field_ == 6)) {
+            title = field_ == 5 ? "Setup fields" : "Instruments";
+            value = "";
         } else if (mode_ == Mode::field || mode_ == Mode::value) {
             const char *fields[] = {ui::i18n::text(ui::i18n::Message::program), ui::i18n::text(ui::i18n::Message::bank), ui::i18n::text(ui::i18n::Message::instrument_channel), ui::i18n::text(ui::i18n::Message::volume), ui::i18n::text(ui::i18n::Message::pan), ui::i18n::text(ui::i18n::Message::brightness), ui::i18n::text(ui::i18n::Message::idle_seconds), ui::i18n::text(ui::i18n::Message::usb_midi)};
             title = fields[field_];
@@ -971,7 +1062,8 @@ private:
         }
         std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::browse)).text());
         std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::ok)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
-        if (mode_ == Mode::value) std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
+        if (mode_ == Mode::value || mode_ == Mode::instrument_value)
+            std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
         views[0].lines[2].graphics.line_height = views[0].lines[2].graphics.size = 16;
         if (mode_ == Mode::patch || mode_ == Mode::field) {
             prompt.clear();
@@ -1012,7 +1104,17 @@ private:
                 ui::copy_caption(views[2].lines[0], reinterpret_cast<const char *>(draft.instrument(u16(draft.patch(patch_)))));
                 ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::instrument_channel_scope));
             }
-            if (draft_view && !current_field_)
+            if (mode_ == Mode::current && shortcut_ == Shortcut::setup && docs_.document().instruments())
+                ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Instruments").text());
+            if (mode_ == Mode::field && current_field_)
+                ui::copy_caption(views[2].lines[2], prompt.clear().add(Role::previous_section, "Instruments").text());
+            if (instrument_view && mode_ != Mode::instruments)
+                ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::instrument_channel_scope));
+            if (instrument_view && instrument_feedback_)
+                ui::copy_caption(views[2].lines[2], instrument_feedback_);
+            else if (instrument_view && mode_ != Mode::instruments && (instrument_changed_ & (1u << unsigned(instrument_output_))))
+                ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::changed));
+            if (draft_view && (!current_field_ || instrument_view))
                 ui::copy_caption(views[1].lines[0], docs_.edit_name());
             if ((mode_ == Mode::field || mode_ == Mode::value) && shortcut_ != Shortcut::setups && (changed_fields_ & (1u << field_)))
                 ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::changed));

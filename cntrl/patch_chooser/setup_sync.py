@@ -84,6 +84,11 @@ def canonical(data: bytes) -> dict[str, object]:
     # saved into the compiled graph. Profiles still carry actual bank mappings.
     if isinstance(definitions := result.get('definitions'), dict):
         definitions.pop('programs', None)
+    if isinstance(pages := result.get('page_settings'), dict):
+        # The clock block is omitted when all three settings have default values.
+        defaults = models.PageSettings()
+        for field in ('clock_outputs', 'autoselect_clock', 'clock_bpms'):
+            pages.setdefault(field, getattr(defaults, field))
     return result
 
 

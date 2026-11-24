@@ -241,6 +241,13 @@ public:
         return edit_document(draft) && write_setup_preference(draft, field, value, inherit);
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_instrument)
+#endif
+    bool edit_instrument(unsigned index, const char *output, unsigned channel) {
+        Document draft;
+        return edit_document(draft) && write_instrument(draft, index, output, channel);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_value)
 #endif
     int64_t edit_value(unsigned patch, unsigned field) const {
@@ -281,6 +288,9 @@ public:
         int64_t old = edit_value(d, patch, field), value = old + delta;
         if (field >= 5)
             return value >= 0 && value <= UINT32_MAX && write_setup_preference(d, field - 5, uint32_t(value), false);
+        if (field == 2)
+            return value >= 1 && value <= 16 && write_instrument(d, u16(selection),
+                reinterpret_cast<const char *>(d.instrument(u16(selection)) + 32), unsigned(value));
         if (field == 0 && value >= 1 && value <= 128) selection[2] = uint8_t(value - 1);
         else if (field == 1) {
             uint32_t bank = 0xffffffffu; const uint8_t *mapping = nullptr;
@@ -296,8 +306,8 @@ public:
             put32(selection + 7, bank);
         } else if (field == 3 && value >= -1 && value <= 127) selection[5] = value < 0 ? 255 : uint8_t(value);
         else if (field == 4 && value >= -65 && value <= 63) selection[6] = value == -65 ? 255 : uint8_t(value + 64);
-        else if (!(field == 2 && value >= 1 && value <= 16)) return false;
-        if (field <= 4 && field != 2 && ((reference && !original) || d.cycle_catalogue().contains_node(unsigned(node)))) {
+        else return false;
+        if ((reference && !original) || d.cycle_catalogue().contains_node(unsigned(node))) {
             if (!detach_patch(d, patch, scratch_) || !d.load(scratch_.data, scratch_.size, hardware_, global_values())) {
                 hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed));
                 return false;
@@ -310,14 +320,11 @@ public:
         }
         auto *bytes = scratch_.data;
         auto address = [&](const uint8_t *p) { return bytes + (p - d.data()); };
-        if (field == 2) address(d.instrument(u16(selection)))[64] = uint8_t(value - 1);
-        else if (field <= 4) {
-            std::memcpy(address(d.node(unsigned(node))) + 4, selection, sizeof(selection));
-            for (unsigned i = 0; i < d.patches(); ++i) {
-                if (patch_edit_node(d, d.browser_root(i)) != node) continue;
-                std::memcpy(address(d.patch(i)) + 4, selection + 2, 5);
-                std::memcpy(address(d.bank(i)), selection + 7, 4);
-            }
+        std::memcpy(address(d.node(unsigned(node))) + 4, selection, sizeof(selection));
+        for (unsigned i = 0; i < d.patches(); ++i) {
+            if (patch_edit_node(d, d.browser_root(i)) != node) continue;
+            std::memcpy(address(d.patch(i)) + 4, selection + 2, 5);
+            std::memcpy(address(d.bank(i)), selection + 7, 4);
         }
         binary::seal_setup(bytes, scratch_.size);
         Document candidate;
@@ -430,6 +437,31 @@ public:
     bool history_compare(const char *name, uint64_t number) { return begin_history(HistoryAction::compare, name, number); }
     bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_write_instrument)
+#endif
+    bool write_instrument(const Document &draft, unsigned index, const char *output, unsigned channel) {
+        if (busy() || hardware_.configuration_locked() || index >= draft.instruments() || channel < 1
+            || channel > 16 || std::strlen(output) >= 32) return false;
+        const auto *previous = draft.instrument(index);
+        if (std::strcmp(output, reinterpret_cast<const char *>(previous + 32))) {
+            Document fallback = draft;
+            fallback.bind_globals(nullptr);
+            if (!draft.has_output(hardware_, output) || !fallback.has_output(hardware_, output)) return false;
+        }
+        if (!allocate(scratch_, draft.length())) return false;
+        auto *bytes = scratch_.data;
+        std::memcpy(bytes, draft.data(), draft.length());
+        auto *instrument = bytes + (previous - draft.data());
+        std::memset(instrument + 32, 0, 32);
+        std::strcpy(reinterpret_cast<char *>(instrument + 32), output);
+        instrument[64] = uint8_t(channel - 1);
+        binary::seal_setup(bytes, scratch_.size);
+        Document candidate;
+        if (!candidate.load(bytes, scratch_.size, hardware_, global_values())) return false;
+        staging_.swap(scratch_);
+        return true;
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_write_setup_preference)
 #endif

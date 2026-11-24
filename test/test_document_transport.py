@@ -788,7 +788,20 @@ def test_song_authoring_recovers_its_global_rig_and_original_sources(
 
 
 @pytest.mark.parametrize(
-    'field', ['program', 'bank', 'volume', 'pan', 'timeout', 'midi', 'trs']
+    'field',
+    [
+        'program',
+        'bank',
+        'volume',
+        'pan',
+        'timeout',
+        'midi',
+        'trs',
+        'output',
+        'scroll',
+        'clock_timeout',
+        'clock_outputs',
+    ],
 )
 def test_source_sync_retains_pedal_editable_fields(
     bundle_peer: Path, tmp_path: Path, field: str
@@ -839,6 +852,21 @@ def test_source_sync_retains_pedal_editable_fields(
                 struct.pack_into('<I', edited, 24, 45000)
             elif field == 'midi':
                 edited[19] ^= 2
+            elif field == 'output':
+                edited[76 + 32 : 76 + 64] = b'trs'.ljust(32, b'\0')
+            elif field == 'scroll':
+                struct.pack_into('<H', edited, meta + 6, 250)
+            elif field == 'clock_timeout':
+                struct.pack_into('<H', edited, meta + 18, 375)
+            elif field == 'clock_outputs':
+                with_clock = compile_inputs(
+                    inputs,
+                    overrides={
+                        source: source.read_bytes()
+                        + b'\n[page_settings]\nclock_outputs = ["din"]\n'
+                    },
+                )
+                edited = bytearray(binary_format.core(with_clock.setups['Show']))
             else:
                 edited[meta + compiler_wire.METADATA.size - 20] = 1
             struct.pack_into('<I', edited, 20, crc32(edited[28:]))
@@ -847,6 +875,10 @@ def test_source_sync_retains_pedal_editable_fields(
             report = setup_sync.preview(inputs, client)
         review = tomlkit.parse(report.read_text())
         assert review['changes']
+        if field == 'clock_outputs':
+            assert [c['path'] for c in review['changes']] == [
+                ['page_settings', 'clock_outputs']
+            ]
         for change in review['changes']:
             assert 'destination' in change
             change['choice'] = 'pedal'

@@ -711,8 +711,21 @@ public:
     bool forward_device_to_host() const { return setting(5, !(data_[metadata() + scrolling_offset + 5] & 2)); }
     bool auxiliary_combined(unsigned port) const { return setting(23 + port, (data_[metadata() + scrolling_offset + 5] & (4u << port)) != 0); }
     const uint8_t *input_section() const {
-        const uint8_t *endpoints = movie_section() + 8 + 4 * (movies(false) + movies(true));
+        const auto *endpoints = endpoint_section();
         return endpoints + 6 + 68 * u16(endpoints + 4);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(document_has_output)
+#endif
+    bool has_output(const Hardware &hardware, const char *name) const {
+        const auto *endpoints = endpoint_section();
+        unsigned allowed = 0;
+        for (unsigned i = 0; i < u16(endpoints + 4); ++i) {
+            const auto *endpoint = endpoints + 6 + 68 * i;
+            if (endpoint[2] & 2) allowed |= 1u << endpoint[0];
+        }
+        const uint8_t flags = (usb_device_midi() ? 8 : 0) | (usb_host_midi() ? 16 : 0);
+        return output_valid(trs_modes(), reinterpret_cast<const uint8_t *>(name), hardware, allowed, flags);
     }
     unsigned inputs() const { return u16(input_section() + 4); }
     const char *input_label(unsigned index) const { return reinterpret_cast<const char *>(input_section() + 6 + 32 * index); }
@@ -936,6 +949,9 @@ public:
     const uint8_t *mapping(unsigned i) const { return data_ + metadata() + metadata_header_size + instruments_ * 64 + i * 8; }
     const uint8_t *bank(unsigned i) const { return mapping(mappings()) + i * 4; }
 private:
+    const uint8_t *endpoint_section() const {
+        return movie_section() + 8 + 4 * (movies(false) + movies(true));
+    }
     static bool gestures_valid(const uint8_t *p, unsigned count, bool assigned) {
         unsigned debounce = u16(p + gesture_debounce_offset);
         if (debounce && (!assigned || debounce > 1000 || u16(p + gesture_debounce_offset + 2) < debounce
