@@ -24,6 +24,7 @@ struct PatchOutputs {
     virtual midi::Bridge::Delivery patch_delivery(unsigned owner) const = 0;
     virtual void cancel_patch(unsigned owner) = 0;
     virtual const midi::MidiState *midi_state() const { return nullptr; }
+    virtual unsigned display_tempo() const { return 0; }
     virtual bool state(unsigned operation, uint32_t value) = 0;
     virtual bool banked(const Document &, unsigned) { return false; }
     virtual bool play_midi_file(unsigned, const midi::PlayMidiFilePatch &) { return false; }

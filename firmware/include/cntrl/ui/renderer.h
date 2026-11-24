@@ -483,10 +483,12 @@ private:
         const unsigned field = second_bitmap_ ? 3 : 1;
         const unsigned start = band_edge(painting_, field, v.height, false);
         const unsigned height = band_edge(painting_, field, v.height, true) - start;
-        if (painting_.three_bands && bitmap.source && bitmap.width == v.width && bitmap.height <= height && bitmap_row_ < bitmap.height) {
-            const unsigned top = start + (height - bitmap.height) / 2;
+        const unsigned bitmap_height = std::min(height, unsigned(bitmap.height));
+        if (painting_.three_bands && bitmap.source && bitmap.width == v.width && bitmap_row_ < bitmap_height) {
+            const unsigned top = start + (height - bitmap_height) / 2;
             const unsigned row = bitmap_row_++;
-            bitmap.source->read_bitmap(bitmap.generation, bitmap.offset + row * bitmap.width * 2,
+            const unsigned source_row = row * bitmap.height / bitmap_height;
+            bitmap.source->read_bitmap(bitmap.generation, bitmap.offset + source_row * bitmap.width * 2,
                                        raster_.pixels() + (top + row) * v.width, bitmap.width);
             return;
         }

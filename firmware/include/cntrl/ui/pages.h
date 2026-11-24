@@ -190,14 +190,14 @@ public:
         dirty_ = true;
     }
     void tap(uint32_t now) {
-        if (page_ == Page::time) {
-            if (tap_.tap(now)) {
-                generator.set_tempo(tap_.period() * 1000);
-                if (!generator.running() && !generator.stopping()) generator.start(now * 1000, 0, false);
-                select_clock(0);
-            }
+        if (page_ == Page::time) tap_clock(now);
+    }
+    void tap_clock(uint32_t now) {
+        if (tap_.tap(now)) {
+            generator.set_tempo(tap_.period() * 1000);
+            if (!generator.running() && !generator.stopping()) generator.start(now * 1000, 0, false);
+            select_clock(0);
         }
-        else return;
         dirty_ = true;
     }
     void clock(unsigned source, uint32_t now_us) { clock_message(source, 0xf8, now_us); }
@@ -210,6 +210,10 @@ public:
     }
     bool clock_ready() const { return !selected_clock_ || clocks_[selected_clock_ - 1].measured(); }
     unsigned clock_period() const { return selected_clock_ ? unsigned(clocks_[selected_clock_ - 1].period_us()) : generator.period_us(); }
+    unsigned display_tempo() const {
+        const unsigned period = clock_ready() ? clock_period() : 0;
+        return period ? (60000000u + period / 2) / period : 0;
+    }
     cntrl::midi::BeatPosition beat_position(uint32_t now_us) {
         if (selected_clock_) clocks_[selected_clock_ - 1].poll(now_us);
         auto position = selected_clock_ ? clocks_[selected_clock_ - 1].beat_position(now_us) : generator.beat_position(now_us);

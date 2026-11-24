@@ -1242,7 +1242,7 @@ def _patch(
         original = cast(dict[str, dict[str, object]], properties.get('bindings', {}))
         for slot in range(data[cursor + 66]):
             record = cursor + 220 + slot * BINDING_RECORD_SIZE
-            button, mode, on, off, _, _ = SWITCH.unpack_from(data, record)
+            button, mode, on, off, _, compiled_label = SWITCH.unpack_from(data, record)
             key = labels[button]
 
             def patch(node: int) -> dict[str, object]:
@@ -1264,7 +1264,7 @@ def _patch(
                 {
                     k: v
                     for k, v in authored.items()
-                    if k in ('name', 'display_name', 'style')
+                    if k in ('name', 'switch_label', 'display_name', 'style')
                 }
                 if isinstance(authored, dict)
                 else {}
@@ -1277,7 +1277,11 @@ def _patch(
                 or selected.get('patch')
                 or key
             )
-            if 'name' not in action and _text(data, record + 6, 64) != label:
+            if (
+                compiled_label == 65535
+                and 'name' not in action
+                and _text(data, record + 6, 64) != label
+            ):
                 action['name'] = _text(data, record + 6, 64)
             if mode:
                 action.update(

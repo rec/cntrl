@@ -11,7 +11,72 @@ from pytest_regressions.file_regression import FileRegressionFixture
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_chooser import compiler, setup_bundle, songs
+from cntrl.patch_chooser import compiler, device_globals, setup_bundle, songs
+from cntrl.patch_chooser.global_overlay import Overlay
+
+
+def test_scene_reads_tapped_tempo_in_switch_label_and_status(tmp_path: Path) -> None:
+    target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
+    source = {
+        'pages': {'empty': {'type': 'None'}},
+        'use_animations': False,
+    }
+    raw = compiler.compile_show(source, {}, [], target)
+    bundle = tmp_path / 'setup.bin'
+    bundle.write_bytes(
+        setup_bundle.build({'show': raw}, {'show': source}, target.memory).pack()
+    )
+    library = songs.Library.model_validate(
+        {
+            'patches': {
+                'tap': {'operation': 'tap-tempo', 'name': 'Tap'},
+                'verse': {
+                    'patches': [],
+                    'bindings': {'a': 'tap'},
+                    'scene_status': '{a.name}: {tempo} BPM',
+                },
+            },
+            'songs': [{'name': 'First', 'patches': ['verse']}],
+            'setlists': [{'name': 'Tonight', 'songs': ['First']}],
+        }
+    )
+    data = songs.encode(library, target)
+    header = struct.pack('<4sIIII', b'CSG8', 1, len(data), crc32(data), 0)
+    storage = tmp_path / 'session'
+    folder = storage / 'cntrl/songs'
+    folder.mkdir(parents=True)
+    (folder / '0.bin').write_bytes(
+        header + struct.pack('<I', crc32(header)) + data + b'DONE'
+    )
+    folder = storage / 'cntrl/global'
+    folder.mkdir()
+    (folder / '0.bin').write_bytes(
+        device_globals.journal(Overlay(startup_set='Tonight'))
+    )
+
+    executable = backend.build(target, tmp_path / 'native', BASE.parents[3])
+    layout = EmulatorLayout.load(BASE / 'emulator/mc6-pro.toml')
+    with backend.Session(layout, target, executable, storage, bundle) as session:
+
+        def press(button: str, interval: int) -> None:
+            session.button(button, True)
+            session.advance(session.time_us + 60_000)
+            session.button(button, False)
+            session.advance(session.time_us + interval - 60_000)
+
+        session.advance(1_000_000)
+        press('f', 750_000)
+        first = dict(session.frames)
+        press('a', 750_000)
+        assert session.frames == first
+        press('a', 750_000)
+        after = session.frames
+        for start, end in [(64, 96), (96, 128)]:
+            span = slice(start * 320, end * 320)
+            assert after['lcd-1'][span] != first['lcd-1'][span]
+        assert after['lcd-2'] == first['lcd-2']
+        assert after['lcd-3'] == first['lcd-3']
+        assert not [m for m in session.messages if m.kind in ('midi', 'error')]
 
 
 def test_song_styles_supply_patch_defaults_and_preserve_overrides(

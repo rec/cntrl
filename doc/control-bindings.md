@@ -246,6 +246,30 @@ map until released. Background MIDI, clocks, playback and recording continue.
 
 ## Performance display
 
+Patches can supply a default `switch_label`. A binding can choose its own
+`switch_label`, including a template that reads the bound patch's `{name}`
+or `{display_name}`. An existing binding `name` also overrides the patch
+default. `{tempo}` reads the shared clock, rounded to whole BPM, and shows
+`--` when the selected source has no tempo.
+
+```toml
+[patches.tap]
+name = 'Tap'
+operation = 'tap-tempo'
+# The default switch_label for tap-tempo is 'Tempo {tempo}'.
+
+[patches.verse]
+patches = []
+bindings = {a = 'tap'}
+scene_status = '{a.name}: {tempo} BPM'
+```
+
+`scene_status` appears in the scene's middle band in setlist mode. It can
+read the scene's own names or the names of its bindings, using the authored
+input ID as in `{a.name}`. On a single display it shares the scene title line.
+The switch and scene texts read the current values independently. Use
+`{{tempo}}` to display the literal text `{tempo}`.
+
 A patch with bindings can also specify a `binding_view` for a three-display
 performance view. It places the first three switches along the bottom and the
 next three along the top, with a bank title, last pressed control's detail and

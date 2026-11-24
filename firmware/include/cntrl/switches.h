@@ -149,6 +149,8 @@ private:
         resolved_ = std::move(candidate.resolved_);
         scope_source_ = std::move(candidate.scope_source_);
         scope_song_ = candidate.context_song_;
+        live_tempo_ = candidate.live_tempo_;
+        tempo_ = candidate.tempo_;
         for (unsigned i = 0; i < count_; ++i) {
             if (states_[i].document == &candidate.document_) states_[i].document = &document_;
             if (resolved_ && resolved_->switches[i].document == &candidate.document_) resolved_->switches[i].document = &document_;
@@ -189,6 +191,8 @@ private:
         count_ = count;
         unpin(); sources_.begin(); pinned_ = true;
         document_ = document; bindings_ = bindings; ++revision_;
+        live_tempo_ = false;
+        if (const char *status = bindings_.scene_status()) live_tempo_ = std::strstr(status, "\xef\x80\x80") != nullptr;
         count_ = count; held_ = disarmed_ = held;
         open_ = dirty_ = true; closing_ = abandoned_ = false;
         shifted_ = false;
@@ -199,6 +203,8 @@ private:
             s.document = bindings_ ? resolved_->switches[i].document : &document_;
             s.visual = bindings_ ? resolved_->switches[i].visual : nullptr;
             s.record = bindings_ ? resolved_->switches[i].record : document_.switch_assignment(i);
+            if (bindings_ && u16(s.record + 70) == 65534)
+                live_tempo_ = live_tempo_ || std::strstr(reinterpret_cast<const char *>(s.record + 6), "\xef\x80\x80");
             s.actions = s.record + 2; s.shifted = bindings_ ? (u16(s.record + binding_shifted_offset) != 65535 ? s.record + binding_shifted_offset : nullptr) : document_.switch_shifted(s.record[0]);
             s.layer = s.input_layer = false;
             s.settings = gestures(s.record[0]);
@@ -248,6 +254,7 @@ private:
             s.baseline_resources = s.resource_count;
             synchronize(s);
         }
+        if (live_tempo_) tempo_ = outputs_.display_tempo();
     }
 public:
 #ifdef CNTRL_FLASH_ROUTINE
@@ -426,6 +433,10 @@ public:
             if (bindings_) { bindings_ = {}; ++revision_; }
             install_pending(); return;
         }
+        if (live_tempo_) {
+            const unsigned tempo = outputs_.display_tempo();
+            if (tempo_ != tempo) { tempo_ = tempo; dirty_ = true; }
+        }
         if (dirty_) render();
         install_pending();
     }
@@ -487,6 +498,8 @@ private:
     unsigned count_ = 0, held_ = 0, disarmed_ = 0;
     bool open_ = false, closing_ = false, dirty_ = false, abandoned_ = false, pinned_ = false;
     bool shifted_ = false;
+    bool live_tempo_ = false;
+    unsigned tempo_ = 0;
     bool boundary_ = false;
     bool song_styled_ = false;
     uint16_t song_foreground_ = 0, song_background_ = 0xffff;
@@ -704,7 +717,7 @@ private:
                     line.x = 4;
                     line.centered = view[32] & 1;
                     char label[64];
-                    s.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
+                    switch_text(s, label, sizeof(label), reinterpret_cast<const char *>(s.record + 6));
                     const char *caption = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : s.document->input_label(s.record[0]);
                     if (view[32] & 2) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", caption, label);
                     else std::snprintf(line.text, sizeof(line.text), "%s", label);
@@ -712,7 +725,7 @@ private:
                         auto &detail = panes[0].lines[1];
                         style_line(detail, visual ? *s.document : document_, visual ? visual + 16 : view);
                         detail.centered = true;
-                        s.document->counter_text(detail.text, sizeof(detail.text), visual ? reinterpret_cast<const char *>(visual + 32) : label, hardware_.counters);
+                        switch_text(s, detail.text, sizeof(detail.text), visual ? reinterpret_cast<const char *>(visual + 32) : label);
                     }
                 }
                 present(panes); dirty_ = false; return;
@@ -731,7 +744,7 @@ private:
                 const unsigned row = 2 + i / 3;
                 const char *state = s.unknown ? ui::i18n::text(ui::i18n::Message::unknown_title) : s.executor.busy() || s.queued ? ui::i18n::text(ui::i18n::Message::pending) : s.record[1] ? (s.active ? ui::i18n::text(ui::i18n::Message::on) : ui::i18n::text(ui::i18n::Message::off)) : "";
                 char label[64];
-                s.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(s.record + 6), hardware_.counters);
+                switch_text(s, label, sizeof(label), reinterpret_cast<const char *>(s.record + 6));
                 const char *input = s.record[0] < hardware_.input_count() ? hardware_.input_label(s.record[0]) : s.document->input_label(s.record[0]);
                 std::snprintf(pane.lines[row].text, 64, "%s: %.40s%s%s", input, label, state[0] ? " | " : "", state);
                 if (ui::i18n::translated_ui) pane.lines[row].graphics.font = 253;
@@ -777,6 +790,9 @@ private:
         ScenePanel scene, song, setlist;
         std::snprintf(scene.title.text, sizeof(scene.title.text), "%s", bindings_.title());
         outputs_.scene_panels(scene, song, setlist, document_, bindings_.data - 4);
+        char status[64] = {};
+        if (const char *text = bindings_.scene_status())
+            document_.counter_text(status, sizeof(status), text, hardware_.counters, -1, -1, int(tempo_));
         const auto *navigation = hardware_.setup_navigation();
         const unsigned columns = (hardware_.input_count() + 1) / 2;
         for (unsigned w = 0; w < displays; ++w) {
@@ -793,6 +809,18 @@ private:
                 middle = scene.title; pane.bitmap = scene.bitmap;
                 if (displays == 1) {
                     pane.split_middle = true; pane.second_bitmap = song.bitmap; pane.lines[3] = song.title;
+                    if (*status) {
+                        char title[sizeof(middle.text)];
+                        ui::utf8::copy(title, 29, middle.text);
+                        ui::utf8::copy(middle.text, sizeof(middle.text), title);
+                        const unsigned end = unsigned(std::strlen(middle.text));
+                        if (end) middle.text[end] = ' ';
+                        ui::utf8::copy(middle.text + end + bool(end), sizeof(middle.text) - end - bool(end), status);
+                    }
+                } else if (*status) {
+                    pane.split_middle = true;
+                    auto &caption = pane.lines[3];
+                    std::snprintf(caption.text, sizeof(caption.text), "%s", status);
                 }
             } else if (w == 1) { middle = song.title; pane.bitmap = song.bitmap; }
             else if (w == displays - 1) { middle = setlist.title; pane.bitmap = setlist.bitmap; }
@@ -802,6 +830,11 @@ private:
                 if (line.artwork_foreground) line.graphics.foreground = graphics.foreground;
                 if (line.artwork_background) line.graphics.background = graphics.background;
             }
+            if (!w && displays > 1 && *status) {
+                auto &caption = pane.lines[3];
+                caption.graphics.font = ui::localized_face;
+                caption.graphics.size = caption.graphics.line_height = 20;
+            }
             for (unsigned i = 0; i < count_; ++i) {
                 const auto &state = states_[i];
                 const unsigned input = state.record[0];
@@ -809,7 +842,7 @@ private:
                 auto &line = pane.lines[input < columns ? 2 : 0];
                 if (state.visual) style_line(line, *state.document, state.visual);
                 char label[64];
-                state.document->counter_text(label, sizeof(label), reinterpret_cast<const char *>(state.record + 6), hardware_.counters);
+                switch_text(state, label, sizeof(label), reinterpret_cast<const char *>(state.record + 6));
                 if (view && (view[32] & 2)) std::snprintf(line.text, sizeof(line.text), "%s: %.56s", hardware_.input_label(input), label);
                 else std::snprintf(line.text, sizeof(line.text), "%s", label);
             }
@@ -845,6 +878,10 @@ private:
             }
             hardware_.show(w, pane);
         }
+    }
+    void switch_text(const State &state, char *text, unsigned size, const char *source) const {
+        const int tempo = u16(state.record + 70) == 65534 ? int(tempo_) : -1;
+        state.document->counter_text(text, size, source, hardware_.counters, -1, -1, tempo);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(switches_present)

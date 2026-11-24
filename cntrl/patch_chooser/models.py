@@ -222,6 +222,8 @@ class Presentation(BindingScope, frozen=True):
     ] = None
     name: str | None = None
     display_name: str | None = None
+    switch_label: str | None = None
+    scene_status: str | None = None
     style: Style | None = None
     seed: Annotated[int, Field(strict=True)] | None = None
     tags: Annotated[list[str], BeforeValidator(parse_tags)] = Field(
@@ -514,6 +516,11 @@ class PlayMidiFile(Presentation, frozen=True):
         return value
 
 
+class TapTempo(Presentation, frozen=True):
+    operation: Literal['tap-tempo']
+    switch_label: str | None = 'Tempo {tempo}'
+
+
 class MidiLooperAction(Presentation, frozen=True):
     operation: Literal['midi-looper']
     action: Literal[
@@ -628,6 +635,7 @@ ConcretePatch = (
         | StockFirmware
         | PlayMidiFile
         | RecordMidiFile
+        | TapTempo
         | MidiLooperAction
         | MidiStream
         | Relay
@@ -833,6 +841,7 @@ class ShiftedActions(BaseModel, frozen=True):
 
 class SwitchBinding(BaseModel, frozen=True):
     name: str | None = None
+    switch_label: str | None = None
     display_name: str | None = None
     style: Style | None = None
     mode: Literal['press', 'momentary', 'latched'] = 'press'

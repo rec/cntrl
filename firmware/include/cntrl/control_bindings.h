@@ -14,6 +14,11 @@ struct ControlBindings {
     const uint8_t *view() const { return (data[67] & 3) == 1 ? record(count()) : nullptr; }
     const uint8_t *style() const { return (data[67] & 3) ? record(count()) : nullptr; }
     uint8_t page_chord(unsigned direction) const { return data && (data[67] & 4) ? data[u16(data - 2) - 2 + direction] : 0; }
+    const char *scene_status() const {
+        return data && (data[67] & 8)
+            ? reinterpret_cast<const char *>(data + u16(data - 2) - ((data[67] & 4) ? 66 : 64))
+            : nullptr;
+    }
     const uint8_t *find(unsigned input) const {
         for (unsigned i = 0; i < count(); ++i) if (record(i)[0] == input) return record(i);
         return nullptr;

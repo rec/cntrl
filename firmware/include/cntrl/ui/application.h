@@ -15,6 +15,7 @@ namespace cntrl::ui {
 struct ApplicationServices {
     virtual ~ApplicationServices() = default;
     virtual uint32_t application_time() const = 0;
+    virtual bool tap_clock() { return false; }
     virtual void blank_performance() = 0;
     virtual bool output_idle() const = 0;
     virtual bool song_transfer_busy() const = 0;
@@ -279,6 +280,7 @@ public:
         }
         if (operation == 10) { pending_operation = operation; return true; }
         if (operation == 13 || operation == 18) return request_song_step(operation == 18);
+        if (operation == 19) return services.tap_clock();
         return operation_ui(Operation(operation), services);
     }
 #ifdef CNTRL_FLASH_ROUTINE

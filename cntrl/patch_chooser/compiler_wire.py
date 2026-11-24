@@ -94,6 +94,7 @@ STATE_OPERATIONS = {
             'next-bank-page',
             'previous-bank-page',
             'previous-song-step',
+            'tap-tempo',
         )
     )
     if n

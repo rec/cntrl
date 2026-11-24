@@ -52,6 +52,28 @@ def normalize_patch(value: object) -> models.Patch:
     return models.patch_adapter.validate_python(value)
 
 
+def display_template(text: str, properties: dict[str, str], path: str) -> str:
+    if '\uf000' in text or any('\uf000' in v for v in properties.values()):
+        raise CompilationError([f'{path}: reserved display character'])
+
+    def expand(match: re.Match[str]) -> str:
+        token = match[0]
+        if token in ('{{', '}}'):
+            return token[0]
+        field = token[1:-1]
+        if field == 'tempo':
+            return '\uf000'
+        if field.startswith('counters.'):
+            return token
+        if field in properties:
+            return properties[field]
+        raise CompilationError(
+            [f'{path}: unknown or malformed template field {token!r}']
+        )
+
+    return re.sub(r'{{|}}|\{[^{}]+\}|\{', expand, text)
+
+
 def resolve_midi_routing(
     value: models.Patch, instruments: Mapping[str, object], path: str
 ) -> models.Patch:
@@ -277,6 +299,7 @@ class PatchCompiler:
                 models.Relay,
                 models.Keyboard,
                 models.ScrollCounter,
+                models.TapTempo,
             ),
         ):
             default_label = value.operation
@@ -290,12 +313,21 @@ class PatchCompiler:
             self.nodes[index] = struct.pack('<BBHH', 12, 0, 2, child)
             self.children[index] = [child]
             return index
+        if value.scene_status is not None and value.bindings is None:
+            raise CompilationError(
+                [f'{path}.scene_status: declare bindings for the scene']
+            )
         if value.bindings is not None or value.navigation is not None:
             if not self.target.max_switches:
                 self.errors.append(f'{path}.bindings: target has no switch engine')
             child = self.add(
                 value.model_copy(
-                    update={'bindings': None, 'binding_view': None, 'navigation': None}
+                    update={
+                        'bindings': None,
+                        'binding_view': None,
+                        'navigation': None,
+                        'scene_status': None,
+                    }
                 ),
                 path + '.entry',
                 name,
@@ -556,6 +588,7 @@ class PatchCompiler:
                 models.UsbMidiInterface,
                 models.Navigation,
                 models.Shift,
+                models.TapTempo,
             ),
         ):
             if isinstance(value, models.Shift) and not self.target.max_switches:
@@ -618,6 +651,10 @@ class PatchCompiler:
     ) -> bytes:
         records: list[bytes] = []
         visuals: list[bytes] = []
+        scene_properties = {
+            'name': value.name or self.labels[child],
+            'display_name': self.labels[child],
+        }
         expressions: dict[str, models.ExpressionAssignment] = {}
         binding_view = value.binding_view
         if binding_view is None and any(
@@ -689,12 +726,38 @@ class PatchCompiler:
             )
             self.binding_assignments.append((context, assignment, on, off))
 
-            label = (
+            subject = self.values[on]
+            if isinstance(subject, models.Reference) and not subject.document:
+                if definition := self.show.patches.get(subject.patch):
+                    subject = resolve_derivation(
+                        normalize_patch(definition), self.show.patches, context
+                    )
+            properties = {
+                'name': getattr(action.on, 'name', None)
+                or subject.name
+                or getattr(action.on, 'patch', key),
+                'display_name': getattr(action.on, 'display_name', None)
+                or subject.display_name
+                or subject.name
+                or getattr(action.on, 'patch', key),
+            }
+            scene_properties.update({f'{key}.{k}': v for k, v in properties.items()})
+            authored_label = action.switch_label
+            if authored_label is None and action.name is None:
+                authored_label = (
+                    getattr(action.on, 'switch_label', None) or subject.switch_label
+                )
+            legacy_label = (
                 action.name
                 or getattr(action.on, 'display_name', None)
                 or getattr(action.on, 'name', None)
                 or getattr(action.on, 'patch', None)
                 or key
+            )
+            label = (
+                display_template(authored_label, properties, context + '.switch_label')
+                if authored_label is not None
+                else legacy_label
             )
             records.append(
                 SWITCH.pack(
@@ -710,7 +773,7 @@ class PatchCompiler:
                         self.errors,
                         unicode=True,
                     ),
-                    65535,
+                    65534 if label != legacy_label else 65535,
                 )
                 + gestures(action.gestures, '.gestures', context, assignment)
                 + SWITCH_HOOKS.pack(
@@ -773,6 +836,20 @@ class PatchCompiler:
             midi_endpoints.ports(self.target.midi_endpoints),
         )
         visual = b''
+        status = (
+            fixed_text(
+                display_template(
+                    value.scene_status, scene_properties, path + '.scene_status'
+                ),
+                64,
+                self.target,
+                path + '.scene_status',
+                self.errors,
+                unicode=True,
+            ).ljust(64, b'\0')
+            if value.scene_status is not None
+            else b''
+        )
         if view := binding_view:
             if len(records) > 6:
                 raise ValueError(
@@ -813,6 +890,7 @@ class PatchCompiler:
                 ),
                 len(records),
                 (4 if navigation else 0)
+                | (8 if status else 0)
                 | (
                     1
                     if binding_view is not None
@@ -830,6 +908,7 @@ class PatchCompiler:
                 if value.style is not None
                 else b''
             )
+            + status
             + navigation
         )
 
@@ -872,7 +951,9 @@ class PatchCompiler:
             re.sub(
                 r'\{counters\.([^}]+)\}',
                 lambda m, d=d: d * len(str(self.counters[m[1]].maximum)),
-                text.replace('{bank:03d}', '999').replace('{page}', '4'),
+                text.replace('{bank:03d}', '999')
+                .replace('{page}', '4')
+                .replace('\uf000', d * 3),
             )
             for d in '0123456789'
         ]

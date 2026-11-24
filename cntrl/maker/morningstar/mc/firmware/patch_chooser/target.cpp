@@ -256,6 +256,8 @@ public:
     unsigned memory_capacity() const override { return cntrl::target::memory_capacity; }
     unsigned memory_runtime() const override { return cntrl::target::memory_runtime; }
     uint32_t application_time() const override { return millis(); }
+    bool tap_clock() override { ui_.pages_.tap_clock(millis()); return true; }
+    unsigned display_tempo() const override { return ui_.pages_.display_tempo(); }
     bool song_transfer_busy() const override { return songs_transfer.busy(); }
     bool switch_editor_open() const override {
 #if CNTRL_SWITCHES

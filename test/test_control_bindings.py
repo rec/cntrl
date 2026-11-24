@@ -9,6 +9,7 @@ import tomlkit
 from cntrl.patch_chooser import (
     binary_format,
     compiler,
+    compiler_errors,
     compiler_inputs,
     models,
     resolved,
@@ -48,6 +49,43 @@ def test_song_patch_names_inherit_bindings() -> None:
     restored = songs.decode(songs.encode(library, target))
     assert restored.songs == library.songs
     assert restored.patches['verse']['bindings']['F'] == {'operation': 'back'}
+
+
+def test_scene_templates_preserve_authored_values_on_export() -> None:
+    target = binding_target()
+    source = {
+        'patches': {
+            'tap': {'operation': 'tap-tempo', 'name': 'Tap'},
+            'verse': {
+                'patches': [],
+                'bindings': {
+                    'A': 'tap',
+                    'B': {'on': 'tap', 'switch_label': '{{Tap}} {name}: {tempo}'},
+                },
+                'scene_status': '{A.name}: {tempo} BPM',
+            },
+        },
+    }
+    data = compiler.compile_show(source, {}, [], target)
+    exported = tomlkit.parse(resolved.export(data)).unwrap()
+    assert exported['patches']['verse']['scene_status'] == '{A.name}: {tempo} BPM'
+    assert (
+        exported['patches']['verse']['bindings']['B']['switch_label']
+        == '{{Tap}} {name}: {tempo}'
+    )
+    assert compiler.compile_show(exported, {}, [], target) == data
+
+
+def test_invalid_scene_template_reports_the_authored_field() -> None:
+    source = {
+        'patches': {
+            'verse': {'patches': [], 'bindings': {}, 'scene_status': '{unknown}'}
+        }
+    }
+    with pytest.raises(
+        compiler_errors.CompilationError, match=r'verse\.scene_status.*unknown'
+    ):
+        compiler.compile_show(source, {}, [], binding_target())
 
 
 def test_fast_switch_warnings_aggregate_effective_scene_bindings(

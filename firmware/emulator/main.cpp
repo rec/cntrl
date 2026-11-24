@@ -163,6 +163,8 @@ public:
     uint32_t microseconds() const { return uint32_t(time); }
     uint32_t milliseconds() const { return uint32_t(time / 1000); }
     uint32_t application_time() const override { return milliseconds(); }
+    bool tap_clock() override { host->pages_.tap_clock(milliseconds()); return true; }
+    unsigned display_tempo() const override { return host->pages_.display_tempo(); }
     unsigned input_count() const override { return target::button_count; }
     const char *input_label(unsigned i) const override { return i < target::button_count ? target::button_labels[i] : ""; }
     const char *input_id(unsigned i) const override { return i < target::button_count ? target::button_ids[i] : ""; }

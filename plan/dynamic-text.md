@@ -1,5 +1,9 @@
 # Dynamic text
 
+The first implementation covers `switch_label` and `scene_status` with
+patch names and shared tempo. General templates in `display_name` remain
+planned. See [performance display](../doc/control-bindings.md#performance-display).
+
 Allow authored display text to include values that change during performance.
 Start with `display_name` on patches, scenes, songs, and setlists, plus
 user-authored switch labels. The same syntax applies in browser and setlist

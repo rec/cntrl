@@ -840,9 +840,16 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(document_counter_text)
 #endif
-    void counter_text(char *text, unsigned size, const char *source, const Counters &values, int bank = -1, int page = -1) const {
+    void counter_text(char *text, unsigned size, const char *source, const Counters &values, int bank = -1, int page = -1, int tempo = -1) const {
         unsigned used = 0;
         while (*source && used + 1 < size) {
+            if (tempo >= 0 && !std::strncmp(source, "\xef\x80\x80", 3)) {
+                char number[12] = "--";
+                if (tempo) std::snprintf(number, sizeof(number), "%d", tempo);
+                for (const char *p = number; *p && used + 1 < size; ++p) text[used++] = *p;
+                source += 3;
+                continue;
+            }
             bool substituted = false;
             if ((bank >= 0 && !std::strncmp(source, "{bank:03d}", 10)) || (page >= 0 && !std::strncmp(source, "{page}", 6))) {
                 const bool is_bank = source[1] == 'b';
@@ -995,8 +1002,8 @@ private:
                 }
                 break;
             case 3:
-                if (n[1] || length != 5 || p[0] < 1 || p[0] > 18 || p[0] == 9
-                    || (p[0] >= 11 && !hardware.switch_capacity())
+                if (n[1] || length != 5 || p[0] < 1 || p[0] > 19 || p[0] == 9
+                    || (p[0] >= 11 && p[0] != 19 && !hardware.switch_capacity())
                     || (p[0] == 1 && u32(p + 1) > 255) || (p[0] == 2 && u32(p + 1) > 1)
                     || (p[0] > 2 && u32(p + 1))) return false;
                 break;
@@ -1031,8 +1038,9 @@ private:
             case 10: {
                 const unsigned style = length >= 220 ? p[67] & 3 : 0;
                 if (!hardware.switch_capacity() || n[1] > 3 || length < 220 || u16(p) >= count || !label_valid(p + 2, 64)
-                    || p[66] > 8 || p[66] > input_count || p[67] > 6 || style > 2
-                    || length != 220u + binding_record_size * p[66] + (style == 1 ? binding_view_header_size + binding_view_record_size * p[66] : style == 2 ? 16 : 0) + ((p[67] & 4) ? 2 : 0)) return false;
+                    || p[66] > 8 || p[66] > input_count || p[67] > 14 || style > 2
+                    || length != 220u + binding_record_size * p[66] + (style == 1 ? binding_view_header_size + binding_view_record_size * p[66] : style == 2 ? 16 : 0) + ((p[67] & 4) ? 2 : 0) + ((p[67] & 8) ? 64 : 0)) return false;
+                if ((p[67] & 8) && !label_valid(p + length - ((p[67] & 4) ? 66 : 64), 64)) return false;
                 if (style == 2 && !graphics_valid(p + 220 + binding_record_size * p[66], hardware, true)) return false;
                 if (style == 1) {
                     const uint8_t *v = p + 220 + binding_record_size * p[66];
@@ -1056,7 +1064,7 @@ private:
                     const uint8_t *s = p + 220 + j * binding_record_size;
                     if (s[0] >= input_count || (assigned & (1u << s[0])) || s[1] > 2
                         || !label_valid(s + 6, 64) || u16(s + 2) >= count
-                        || (s[1] ? u16(s + 4) >= count : u16(s + 4) != 65535) || u16(s + 70) != 65535) return false;
+                        || (s[1] ? u16(s + 4) >= count : u16(s + 4) != 65535) || u16(s + 70) < 65534) return false;
                     assigned |= 1u << s[0];
                     if (!gestures_valid(s + 72, count, !s[1]) || s[binding_hooks_offset + 4] > 1 || (s[binding_hooks_offset + 4] && u16(s + binding_hooks_offset) == 65535)) return false;
                     for (unsigned k = 0; k < 2; ++k) if (u16(s + binding_hooks_offset + k * 2) != 65535 && u16(s + binding_hooks_offset + k * 2) >= count) return false;

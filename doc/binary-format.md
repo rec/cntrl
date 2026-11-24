@@ -185,8 +185,13 @@ remains unchanged.
 
 Control-map nodes (kind 10) use their flag byte as an inheritance mask: bit zero
 includes switches and bit one includes expression assignments. The default is
-2. Payload byte 67 selects no display metadata (0), the three-band binding view
-(1), or a single 16-byte default style after the switch records (2). In binding
+2. The low two bits of payload byte 67 select no display metadata (0), the
+three-band binding view (1), or a single 16-byte default style after the switch
+records (2). Bit 3 adds a 64-byte scene status after the display metadata and
+before optional navigation. A switch record value of 65534 at offset 70
+identifies an expanded switch label. Compiled labels and scene status represent
+the live tempo with U+F000. State operation 19 registers a tap on the shared clock.
+In binding
 graphics, byte 3 has bit 3 set when authored-property information is present;
 bits 0, 1 and 2 mark explicit foreground, background and font. Older zero bytes
 retain fixed graphics values. This byte is not a runtime flag icon.
