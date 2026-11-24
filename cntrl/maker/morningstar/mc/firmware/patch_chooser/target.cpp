@@ -335,6 +335,7 @@ public:
     bool looper_storage_ready() const { return midi_storage_idle(); }
     FLASHMEM bool state(unsigned operation, uint32_t value) override { return application.state(operation, value, *this); }
     bool song_navigation_active() const override { return application.song_navigation_active(); }
+    bool show_switch_performance() const override { return !application.settings_frontmost(); }
     void scene_panels(cntrl::ScenePanel &scene, cntrl::ScenePanel &song, cntrl::ScenePanel &setlist, const cntrl::Document &document, const uint8_t *binding) const override { application.scene_panels(scene, song, setlist, document, binding); }
     const cntrl::Document *artwork_document(uint32_t generation) const override {
 #if CNTRL_SWITCHES

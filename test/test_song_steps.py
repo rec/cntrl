@@ -73,6 +73,18 @@ def test_song_step_navigation_and_boundaries(
     setup.write_bytes(compiler.compile_show(pages, {}, [], target))
     runner = native_programs.build('test/test_song_steps.cpp')
     subprocess.run([str(runner), str(fixture), str(setup)], check=True)
+    with_spare = library.model_copy(
+        update={
+            'setlists': [
+                *library.setlists,
+                songs.Setlist(name='Friday', songs=['One', 'Two', 'One']),
+            ]
+        }
+    )
+    fixture.write_bytes(songs.encode(with_spare, target))
+    subprocess.run(
+        [str(runner), str(fixture), str(setup), '--setlist-settings'], check=True
+    )
     hooked = library.model_copy(
         update={
             'songs': [

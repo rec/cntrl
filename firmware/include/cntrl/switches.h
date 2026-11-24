@@ -686,7 +686,7 @@ private:
 #endif
     void render() {
         if (!rendering_) return;
-        if (outputs_.song_boundary()) { dirty_ = false; return; }
+        if (outputs_.song_boundary() || (bindings_ && !outputs_.show_switch_performance())) { dirty_ = false; return; }
         if (bindings_) {
             if (outputs_.song_navigation_active()) { render_scene(); dirty_ = false; return; }
             Pane panes[3];

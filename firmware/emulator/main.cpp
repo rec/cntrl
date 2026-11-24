@@ -260,6 +260,7 @@ public:
     ExpressionPedals &expression_controls() { return *expression; }
     bool expression_available(unsigned port) const override { return port < 4 && port_mode(port) == midi::TrsMode::expression; }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
+    bool show_switch_performance() const override { return !app || !app->settings_frontmost(); }
     void scene_panels(ScenePanel &scene, ScenePanel &song, ScenePanel &setlist, const Document &document, const uint8_t *binding) const override { app->scene_panels(scene, song, setlist, document, binding); }
     const Document *artwork_document(uint32_t generation) const override { return switches ? switches->artwork_document(generation) : nullptr; }
     const uint8_t *setup_navigation() const override { return app->layout.navigation(); }

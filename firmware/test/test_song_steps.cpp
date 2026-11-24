@@ -46,6 +46,7 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     bool shift_switch_editor(bool backwards) override { return switches.shift(backwards); }
     bool state(unsigned operation, uint32_t value) override { return app->state(operation, value, *this); }
     bool song_navigation_active() const override { return app && app->song_navigation_active(); }
+    bool show_switch_performance() const override { return !app || !app->settings_frontmost(); }
     void scene_panels(cntrl::ScenePanel &scene, cntrl::ScenePanel &song, cntrl::ScenePanel &setlist, const cntrl::Document &document, const uint8_t *binding) const override { app->scene_panels(scene, song, setlist, document, binding); }
     bool song_boundary() const override { return app && app->song_boundary(); }
     cntrl::midi::Bridge::Delivery prepare_leave(cntrl::PatchExecutor &invocation) override { return switches.prepare_leave(invocation); }
@@ -147,8 +148,77 @@ int main(int argc, char **argv) {
         sample(1u << 2, 20);
         sample((1u << 2) | (1u << 5));
         release(2); release(5);
-        if (!app.setups.open() && app.editing_tool) app.finish_tool();
+        if (app.editing_tool && !app.tool_editor_open(board)) app.finish_tool();
     };
+    if (argc == 4 && !std::strcmp(argv[3], "--setlist-settings")) {
+        songs.choose("Set"); app.song_ui.perform(); sample(0);
+        next();
+        assert(!songs.boundary() && !std::strcmp(songs.current_name(), "One"));
+        const auto before = songs.continuation();
+        const auto sent = board.sent.size();
+        const auto open_list = [&] {
+            settings();
+            tap(0); tap(0); tap(2);
+            assert(app.settings_frontmost() && !app.setups.open() && app.song_ui.open());
+            cntrl::Setlist first;
+            assert(songs.set_at(0, first));
+            if (std::strcmp(first.name, "Friday")) tap(1);
+            tap(2);
+        };
+        const auto begin_move = [&] {
+            open_list();
+            tap(0); // Last entry, the second occurrence of One.
+            assert(!std::strcmp(board.panes[1].lines[2].text, "3/3"));
+            tap(2); tap(1); // Move from position three to position one.
+            assert(!std::strcmp(board.panes[0].lines[2].text, "3/3"));
+            assert(!std::strcmp(board.panes[2].lines[2].text, "1/3"));
+        };
+        begin_move();
+        settings(); // Review before returning to performance.
+        tap(0); tap(2); // Discard.
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        cntrl::SongEntry entry;
+        assert(songs.entry("Friday", 1, entry) && !std::strcmp(entry.song, "Two"));
+        begin_move();
+        settings();
+        tap(2); // Keep editing.
+        settings();
+        tap(1); // Save and return.
+        song_storage.remaining = 0;
+        tap(2);
+        while (songs.busy()) sample(0);
+        sample(0);
+        assert(app.settings_frontmost() && !songs.success());
+        assert(songs.entry("Friday", 1, entry) && !std::strcmp(entry.song, "Two"));
+        assert(!std::strcmp(board.panes[2].lines[2].text, "1/3"));
+        song_storage.remaining = -1;
+        tap(2); // Retry the same draft.
+        while (songs.busy()) sample(0);
+        sample(0);
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        assert(songs.success() && !app.settings_frontmost());
+        assert(songs.entry("Friday", 1, entry) && !std::strcmp(entry.song, "One"));
+        assert(songs.entry("Friday", 2, entry) && !std::strcmp(entry.song, "Two"));
+        open_list();
+        tap(3); tap(1); tap(2); // Add to end.
+        tap(2); // Pick the first song and review.
+        assert(!songs.entry("Friday", 3, entry));
+        tap(1); tap(2);
+        while (songs.busy()) sample(0);
+        sample(0);
+        assert(songs.entry("Friday", 3, entry) && !std::strcmp(entry.song, "One"));
+        tap(3); tap(0); tap(2); // Remove the just-added occurrence.
+        assert(songs.entry("Friday", 3, entry));
+        tap(1); tap(2);
+        while (songs.busy()) sample(0);
+        sample(0);
+        assert(!songs.entry("Friday", 3, entry));
+        settings();
+        assert(!app.settings_frontmost());
+        assert(!std::strcmp(songs.active_set(), "Set") && board.sent.size() == sent);
+        assert(songs.continuation().entry == before.entry && songs.continuation().patch == before.patch);
+        return 0;
+    }
     if (argc == 4 && !std::strcmp(argv[3], "--shortcut-conflict")) {
         songs.choose("Set"); app.song_ui.perform(); sample(0);
         settings();

@@ -50,6 +50,14 @@ to start in the Patch Chooser.
 In setlist mode, **Use at startup** opens the same editor with the current
 setlist selected.
 
+Open **Setlists** from **Settings** to reorder a saved setlist. Browse to
+the setlist, press C to open it, then use A/B to choose an occurrence by
+its numbered position. Press C to start moving it and A/B to choose the
+destination. The review shows both positions before you save. C+F also
+opens the review if you try to return to playing with a move pending.
+Press D at an entry to add a song after it, add one at the end, or remove
+that occurrence. Each change has a review and save prompt.
+
 Under **Pedal → Contact**, use A/B to change the character in brackets and
 D/E to move the cursor. C opens the actions for inserting a space, inserting
 a line break, or deleting a character. F opens the save prompt when the text

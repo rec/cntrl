@@ -216,7 +216,7 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_show)
 #endif
     void show(unsigned pane, const cntrl::Pane &content) {
-        if (application_.utility_visible() || (content.scene && application_.settings_frontmost())) return;
+        if (application_.utility_visible()) return;
         if (content.page < application_.layout.pages()) {
             const unsigned r = application_.layout.page_region(content.page);
             const auto &region = application_.allocation.region(r);
@@ -242,10 +242,10 @@ public:
             cancel_focus(); save_view(); management_visible_ = true;
             pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds());
         }
-        if (pane == 0 && application_.song_boundary() && !content.lines[3].text[0]
+        if (pane == 0 && application_.song_boundary() && !content.lines[4].text[0]
             && application_.settings_chord_available(platform_, controls_.settings_mask())) {
             Pane view = content;
-            settings_hint(view.lines[3], view.graphics.background);
+            settings_hint(view.lines[4], view.graphics.background);
             renderer_.show(pane, view);
         } else renderer_.show(pane, content);
     }
