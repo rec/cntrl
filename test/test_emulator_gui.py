@@ -289,6 +289,50 @@ def test_keyboard_repeat_does_not_retrigger_or_release_a_held_switch(
     canvas.close()
 
 
+def test_memon_number_keys_route_to_the_physical_switches(
+    application: QtWidgets.QApplication,
+) -> None:
+    session = CapturedSession()
+    session.controller = Controller(
+        name='Test controller',
+        controls=[Button(id=f'switch-{b.lower()}', name=b) for b in 'DEAB'],
+    )
+    canvas = ControllerCanvas(session, lambda operation: operation())
+
+    def digit(number: int, pressed: bool = True) -> None:
+        application.sendEvent(
+            canvas,
+            QtGui.QKeyEvent(
+                QtCore.QEvent.Type.KeyPress
+                if pressed
+                else QtCore.QEvent.Type.KeyRelease,
+                QtCore.Qt.Key.Key_0 + number,
+                QtCore.Qt.KeyboardModifier.NoModifier,
+                str(number),
+            ),
+        )
+
+    digit(1)
+    assert not session.inputs
+    session.tooltip_context = ('memon', (('memon', 2),))
+    canvas.update_tooltip_context()
+    for number in range(1, 5):
+        digit(number)
+        digit(number, False)
+    assert session.inputs == [
+        (f'switch-{b}', pressed) for b in 'deab' for pressed in (True, False)
+    ]
+    digit(1)
+    session.tooltip_context = ('status', ())
+    canvas.update_tooltip_context()
+    digit(1, False)
+    assert session.inputs[-2:] == [('switch-d', True), ('switch-d', False)]
+    canvas.editing_name = True
+    digit(1)
+    assert session.keys == [ord('1')]
+    canvas.close()
+
+
 def test_keyboard_chord_tracks_keys_without_character_text(
     application: QtWidgets.QApplication,
 ) -> None:

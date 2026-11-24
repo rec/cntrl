@@ -282,6 +282,7 @@ def save(session: Session, directory: Path) -> None:
             value=e.value,
         )
         for e in session.messages
+        if e.kind != 'memon-note'
     ]
     trace = tomlkit.dumps({'events': records})
     with emulator_files():

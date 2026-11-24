@@ -22,7 +22,11 @@ dependencies = [
 cntrl = "cntrl.entrypoint:main"
 
 [project.optional-dependencies]
-emulator = ["pyside6-essentials>=6.10", "middy>=0.2.0"]
+emulator = [
+    "pyside6-essentials>=6.10",
+    "middy>=0.2.0",
+    "pyside6-addons>=6.10",
+]
 
 [dependency-groups]
 dev = [

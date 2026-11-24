@@ -127,6 +127,11 @@ struct Hardware : RelayDriver {
     virtual midi::Outputs midi_outputs() const { return {}; }
     // Accept the complete message sequence, or accept none of it.
     virtual bool send(const char *output, const uint8_t *bytes, unsigned length) = 0;
+#ifdef CNTRL_EMULATOR
+    virtual bool send_memon(const char *output, const uint8_t *bytes, unsigned length, bool) {
+        return send(output, bytes, length);
+    }
+#endif
     virtual bool supports_function(unsigned) const { return false; }
     virtual bool stock_firmware(uint8_t, const SongContinuation * = nullptr) { return false; }
     virtual BootFirmware boot_firmware() const { return BootFirmware::unavailable; }

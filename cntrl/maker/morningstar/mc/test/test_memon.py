@@ -58,6 +58,8 @@ def test_memon_uses_three_displays_and_recovers_high_score(tmp_path: Path) -> No
         cue, breath = packets()[-2:]
         assert cue[0] == 0x92 and cue[1] in (60, 64, 67, 70)
         assert breath == b'\xb2\x02\x64'
+        note = next(m for m in session.messages if m.kind == 'memon-note')
+        assert note.data == cue and note.value == 0
         assert session.frames['lcd-2'] != idle['lcd-2']
         session.advance(1_350_000)
         assert packets()[-2:] == [bytes((0x82, cue[1], 0)), b'\xb2\x02\x00']
@@ -70,6 +72,9 @@ def test_memon_uses_three_displays_and_recovers_high_score(tmp_path: Path) -> No
         assert packets()[-2:] == [b'\x92\x3c\x64', b'\xb2\x02\x64']
         session.advance(4_300_000)
         assert packets()[-1] == b'\x92\x40\x64'
+        assert [
+            m.data for m in session.messages if m.kind == 'memon-note' and m.value
+        ] == [b'\x92\x3c\x64', b'\x92\x40\x64']
         tap('f')
         assert packets()[-3:] == [b'\x82\x3c\x00', b'\x82\x40\x00', b'\xb2\x02\x00']
         assert not [m.message for m in session.messages if m.kind == 'error']

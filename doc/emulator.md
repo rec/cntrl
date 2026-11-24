@@ -144,6 +144,10 @@ not generate repeated presses. Shift-click or right-click latches a switch so
 chords and holds can be operated with one mouse. Leaving the window releases
 held controls through the normal input path.
 
+On Memon, keys **1**, **2**, **3**, and **4** press **D**, **E**, **A**, and
+**B** respectively. Memon's notes also play through the computer's default
+audio output as synthesized tones.
+
 While the song or setlist Rename editor is open, the computer keyboard types
 into the shared name editor instead of pressing pedal switches. Enter saves,
 Escape cancels, and Backspace deletes the preceding character. Printable ASCII

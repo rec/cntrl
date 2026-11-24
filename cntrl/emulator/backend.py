@@ -48,7 +48,7 @@ class RequestRejected(EmulatorError):
 
 
 class OutputEvent(BaseModel, frozen=True):
-    kind: Literal['midi', 'error', 'relay', 'keyboard', 'firmware']
+    kind: Literal['midi', 'error', 'relay', 'keyboard', 'firmware', 'memon-note']
     endpoint: str = ''
     data: bytes = b''
     time_us: int = 0
@@ -570,6 +570,15 @@ class Session:
                 )
             elif payload[0] == 14:
                 requested_language = payload[1:].decode()
+            elif payload[0] == 17 and len(payload) == 13 and payload[1] <= 1:
+                self.messages.append(
+                    OutputEvent(
+                        kind='memon-note',
+                        data=payload[2:5],
+                        value=payload[1],
+                        time_us=struct.unpack_from('<Q', payload, 5)[0],
+                    )
+                )
             else:
                 raise EmulatorError('unknown native emulator response')
 

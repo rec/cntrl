@@ -20,6 +20,7 @@ from .corrections import Correction, CorrectionBatch, TranslationRegion, issue_b
 from .host_midi import MIDI_ERRORS, HostMidi
 from .layout import Canvas, Placement
 from .localization import dialog_messages, messages, tooltip_messages
+from .memon_audio import MemonAudio
 
 
 def display_rectangle(
@@ -183,6 +184,7 @@ class ControllerCanvas(QtWidgets.QWidget):
         self.tooltip_context = session.tooltip_context, session.language
         self.pointer: set[str] = set()
         self.keyboard: set[str] = set()
+        self.memon_keys: dict[int, str] = {}
         self.latched: set[str] = set()
         self.active: set[str] = set()
         self.widgets: dict[str, QtWidgets.QWidget] = {}
@@ -238,6 +240,9 @@ class ControllerCanvas(QtWidgets.QWidget):
         if context != self.tooltip_context:
             self.tooltip_context = context
             QtWidgets.QToolTip.hideText()
+            if self.memon_keys and context[0][0] != 'memon':
+                self.memon_keys.clear()
+                self.synchronize()
 
     def event(self, event: QtCore.QEvent) -> bool:
         if event.type() == QtCore.QEvent.Type.DevicePixelRatioChange:
@@ -400,7 +405,9 @@ class ControllerCanvas(QtWidgets.QWidget):
         painter.end()
 
     def synchronize(self) -> None:
-        active = self.pointer | self.keyboard | self.latched
+        active = (
+            self.pointer | self.keyboard | self.latched | set(self.memon_keys.values())
+        )
         for n in sorted(self.active ^ active):
             if self.doom_controls:
                 self.doom_button.emit(n, n in active)
@@ -475,6 +482,20 @@ class ControllerCanvas(QtWidgets.QWidget):
             self.update()
             event.accept()
             return
+        index = event.key() - QtCore.Qt.Key.Key_1
+        if (
+            0 <= index < 4
+            and self.tooltip_context[0][0] == 'memon'
+            and not self.doom_controls
+            and not event.modifiers() & ~QtCore.Qt.KeyboardModifier.KeypadModifier
+        ):
+            label = 'DEAB'[index]
+            for control in self.session.controller.controls:
+                if isinstance(control, models.Button) and control.name.upper() == label:
+                    self.memon_keys[event.key()] = control.id
+                    self.synchronize()
+                    event.accept()
+                    return
         identity = QtGui.QKeySequence(event.key()).toString().lower()
         if any(
             c.id == identity and isinstance(c, models.Button)
@@ -487,12 +508,14 @@ class ControllerCanvas(QtWidgets.QWidget):
 
     def keyReleaseEvent(self, event: QtGui.QKeyEvent) -> None:
         if not event.isAutoRepeat():
+            self.memon_keys.pop(event.key(), None)
             self.keyboard.discard(QtGui.QKeySequence(event.key()).toString().lower())
             self.synchronize()
 
     def release(self) -> None:
         self.pointer.clear()
         self.keyboard.clear()
+        self.memon_keys.clear()
         self.latched.clear()
         self.synchronize()
 
@@ -595,6 +618,10 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         QtWidgets.QApplication.installTranslator(self.dialog_translator)
         self.captions: list[tuple[Callable[[str], None], str, dict[str, object]]] = []
         self.log = QtWidgets.QPlainTextEdit()
+        self.memon_audio = MemonAudio(self)
+        self.memon_audio.unavailable.connect(
+            lambda: self.log.appendPlainText('Memon audio output is unavailable.')
+        )
         self.log.setReadOnly(True)
         self.log.document().setMaximumBlockCount(2000)
         self.canvas = ControllerCanvas(session, self.submit)
@@ -1324,6 +1351,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
 
     def runtime_failed(self, error: Exception) -> None:
         self.stopped = True
+        self.memon_audio.clear()
         self.requests.clear()
         self.timer.stop()
         self.running.setChecked(False)
@@ -1376,8 +1404,14 @@ class EmulatorWindow(QtWidgets.QMainWindow):
         )
         updates = self.session.messages[:]
         del self.session.messages[: len(updates)]
+        memon_focused = self.session.tooltip_context[0] == 'memon'
+        if not memon_focused or self.session.firmware_exited:
+            self.memon_audio.clear()
         for e in updates:
-            if e.kind == 'midi':
+            if e.kind == 'memon-note':
+                if memon_focused and not self.session.firmware_exited:
+                    self.memon_audio.note(e.data, bool(e.value))
+            elif e.kind == 'midi':
                 self.log.appendPlainText(
                     f'{e.time_us / 1000:.3f} ms {e.endpoint}: {e.data.hex(" ")}'
                 )
@@ -1578,6 +1612,7 @@ class EmulatorWindow(QtWidgets.QMainWindow):
                 return
             self.leave_corrections()
         self.timer.stop()
+        self.memon_audio.clear()
         self.stop_doom()
         self.release_inputs()
         self.closing = True

@@ -300,6 +300,12 @@ public:
     unsigned midi_file_clock_outputs() const { return files->player.clock_outputs(); }
     ui::PerformanceStatus status() const { ui::PerformanceStatus value; value.ram_used[1] = memory_used; value.ram_free[1] = memory_budget > memory_used ? memory_budget - memory_used : 0; return value; }
     bool send(const char *name,const uint8_t *bytes,unsigned count) override { auto *endpoint = midi_outputs().find(name); return endpoint && bridge.pedal(endpoint->route,bytes,count); }
+    bool send_memon(const char *name, const uint8_t *bytes, unsigned count, bool legato) override {
+        if (!send(name, bytes, count)) return false;
+        std::vector<uint8_t> local_note{17, uint8_t(legato), bytes[0], bytes[1], bytes[2]};
+        integer(local_note, time, 8); frame(local_note);
+        return true;
+    }
     bool send_patch(unsigned owner,const char *name,const uint8_t *bytes,unsigned count) override { auto *endpoint = midi_outputs().find(name); return endpoint && bridge.owned_stream(owner,endpoint->route,bytes,count); }
     bool prepare_invocation(PatchExecutor &invocation) override {
         if (!bridge.retain_owner(invocation.owner())) return false;

@@ -135,10 +135,14 @@ private:
     CNTRL_FLASH_ROUTINE(memon_send_note)
 #endif
     static bool send_note(Hardware &hardware, const char *output, unsigned channel,
-                          uint8_t note, uint8_t velocity, bool breath) {
+                          uint8_t note, uint8_t velocity, bool breath, [[maybe_unused]] bool legato) {
         const uint8_t message[] = {uint8_t((velocity ? 0x90 : 0x80) | channel), note, velocity,
                                    uint8_t(0xb0 | channel), 2, uint8_t(velocity ? 100 : 0)};
+#ifdef CNTRL_EMULATOR
+        return hardware.send_memon(output, message, breath ? 6 : 3, legato);
+#else
         return hardware.send(output, message, breath ? 6 : 3);
+#endif
     }
 
 #ifdef CNTRL_FLASH_ROUTINE
@@ -148,7 +152,7 @@ private:
         sound_deadline_ = now;
         while (released_ < sound_count_) {
             const bool breath = !sound_legato_ || released_ + 1 == sound_count_;
-            if (!send_note(hardware, sound_output_, sound_channel_, sound_notes_[released_], 0, breath)) return;
+            if (!send_note(hardware, sound_output_, sound_channel_, sound_notes_[released_], 0, breath, sound_legato_)) return;
             ++released_;
         }
         sound_count_ = released_ = 0;
@@ -182,7 +186,7 @@ private:
                 (queued_deadline_ - queued_start_) * next_note_ / queued_count_)) return;
             const uint8_t note = queued_notes_[next_note_];
             if (!send_note(hardware, queued_output_, channel, note, settings_.velocity,
-                           !queued_legato_ || !next_note_)) return;
+                           !queued_legato_ || !next_note_, queued_legato_)) return;
             sound_notes_[sound_count_++] = note; ++next_note_;
             sound_output_ = queued_output_; sound_channel_ = uint8_t(channel);
             sound_legato_ = queued_legato_; sound_deadline_ = queued_deadline_;
