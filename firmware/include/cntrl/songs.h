@@ -188,13 +188,15 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_patch_value)
 #endif
-    bool patch_values(const char *name, unsigned at, Hardware &hardware, PatchValues &values) const {
+    bool patch_values(const char *name, unsigned at, Hardware &hardware, PatchValues &values,
+                      CheckedArray<uint32_t> *banks = nullptr) const {
         SongSelection selection;
         MemoryBuffer bytes;
         Document document;
-        return patch_at(name, at, selection) && !selection.document[0]
-            && read_patch_document(selection, hardware, bytes, document)
-            && editable_patch_values(document, selection.node, values);
+        if (!patch_at(name, at, selection) || selection.document[0]
+            || !read_patch_document(selection, hardware, bytes, document)) return false;
+        const auto *node = editable_patch_values(document, selection.node, values);
+        return node && (!banks || read_patch_banks(document, node, *banks));
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_save_patch_value)

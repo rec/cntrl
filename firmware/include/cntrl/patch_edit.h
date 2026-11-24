@@ -1,5 +1,6 @@
 #pragma once
 #include "document.h"
+#include "checked_array.h"
 
 namespace cntrl {
 // Walk the same path the setup editor can edit. References are kept out of
@@ -29,8 +30,9 @@ inline constexpr PatchField patch_fields[][3] = {
 struct PatchValues {
     PatchKind kind = PatchKind::instrument_program;
     int values[3] = {};
+    uint32_t bank = UINT32_MAX;
     bool differs(const PatchValues &other) const {
-        return kind != other.kind || !std::equal(values, values + 3, other.values);
+        return kind != other.kind || bank != other.bank || !std::equal(values, values + 3, other.values);
     }
 };
 
@@ -45,7 +47,7 @@ inline const uint8_t *editable_patch_values(const Document &document, unsigned r
             root = unsigned(document.named_patch(reinterpret_cast<const char *>(node + 6)));
         else if (node[0] == 1) {
             values = {PatchKind::instrument_program, {int(node[6]) + 1,
-                node[9] == 255 ? -1 : int(node[9]), node[10] == 255 ? -65 : int(node[10]) - 64}};
+                node[9] == 255 ? -1 : int(node[9]), node[10] == 255 ? -65 : int(node[10]) - 64}, u32(node + 11)};
             return node;
         } else if (node[0] == 2 && u16(node + 2) == 34 && (node[36] & 0xf0) == 0xc0) {
             values = {PatchKind::channel_program, {int(node[37]) + 1, (node[36] & 15) + 1, 0}};
@@ -59,24 +61,73 @@ inline const uint8_t *editable_patch_values(const Document &document, unsigned r
 }
 
 #ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(read_patch_banks)
+#endif
+inline bool read_patch_banks(const Document &document, const uint8_t *node, CheckedArray<uint32_t> &banks) {
+    if (node[0] != 1) { banks.release(); return true; }
+    const unsigned instrument = u16(node + 4);
+    unsigned count = 0;
+    for (unsigned i = 0; i < document.mappings(); ++i)
+        if (u16(document.mapping(i)) == instrument && u32(document.mapping(i) + 2) != UINT32_MAX) ++count;
+    if (!banks.resize(count)) return false;
+    unsigned at = 0;
+    for (unsigned i = 0; i < document.mappings(); ++i) {
+        const auto *mapping = document.mapping(i);
+        if (u16(mapping) == instrument && u32(mapping + 2) != UINT32_MAX) banks[at++] = u32(mapping + 2);
+    }
+    return true;
+}
+
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(adjacent_patch_bank)
+#endif
+inline uint32_t adjacent_patch_bank(const CheckedArray<uint32_t> &banks, uint32_t current, bool forward) {
+    uint32_t candidate = UINT32_MAX;
+    for (uint32_t bank : banks) {
+        if (forward) {
+            if ((current == UINT32_MAX || bank > current) && bank < candidate) candidate = bank;
+        } else if (bank < current && current != UINT32_MAX && (candidate == UINT32_MAX || bank > candidate)) {
+            candidate = bank;
+        }
+    }
+    return forward && candidate == UINT32_MAX ? current : candidate;
+}
+
+#ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(write_patch_value)
 #endif
 inline bool write_patch_values(const Document &document, unsigned root, const PatchValues &draft, uint8_t *bytes) {
     PatchValues previous;
     const auto *node = editable_patch_values(document, root, previous);
-    if (!node || previous.kind != draft.kind || !previous.differs(draft)) return false;
+    if (!node || previous.kind != draft.kind || !previous.differs(draft)
+        || (draft.kind != PatchKind::instrument_program && draft.bank != previous.bank)) return false;
     const auto &fields = patch_fields[unsigned(draft.kind)];
     for (unsigned i = 0; i < 3; ++i)
         if (draft.values[i] < fields[i].minimum || draft.values[i] > fields[i].maximum) return false;
     auto *edited = bytes + (node - document.data());
     if (draft.kind == PatchKind::instrument_program) {
+        if (draft.bank != previous.bank) {
+            const uint8_t *bank = nullptr;
+            if (draft.bank != UINT32_MAX) {
+                for (unsigned i = 0; i < document.mappings(); ++i) {
+                    const auto *mapping = document.mapping(i);
+                    if (u16(mapping) == u16(node + 4) && u32(mapping + 2) == draft.bank) { bank = mapping; break; }
+                }
+                if (!bank) return false;
+            }
+            edited[7] = bank ? bank[6] : 255;
+            edited[8] = bank ? bank[7] : 255;
+            put32(edited + 11, draft.bank);
+        }
         edited[6] = uint8_t(draft.values[0] - 1);
         edited[9] = draft.values[1] == -1 ? 255 : uint8_t(draft.values[1]);
         edited[10] = draft.values[2] == -65 ? 255 : uint8_t(draft.values[2] + 64);
         for (unsigned i = 0; i < document.patches(); ++i) {
             const int program = patch_edit_node(document, document.browser_root(i));
-            if (program >= 0 && document.node(unsigned(program)) == node)
+            if (program >= 0 && document.node(unsigned(program)) == node) {
                 std::memcpy(bytes + (document.patch(i) - document.data()) + 4, edited + 6, 5);
+                put32(bytes + (document.bank(i) - document.data()), draft.bank);
+            }
         }
     } else if (draft.kind == PatchKind::channel_program) {
         edited[36] = uint8_t(0xc0 | (draft.values[1] - 1));

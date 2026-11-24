@@ -132,7 +132,26 @@ def test_song_step_navigation_and_boundaries(
             {
                 **pages,
                 'instruments': {
-                    'synth': {'instrument': 'synth', 'output': 'din', 'channel': 1}
+                    'synth': {'instrument': 'synth', 'output': 'din', 'channel': 1},
+                    'alternate': {
+                        'instrument': 'alternate',
+                        'output': 'din',
+                        'channel': 2,
+                    },
+                },
+                'definitions': {
+                    'profiles': [
+                        {
+                            'instrument': 'synth',
+                            'name': 'default',
+                            'banks': {1: {'lsb': 7}, 3: {'msb': 4, 'lsb': 9}},
+                        },
+                        {
+                            'instrument': 'alternate',
+                            'name': 'default',
+                            'banks': {2: {'lsb': 2}},
+                        },
+                    ],
                 },
                 'patches': {
                     'Lead': {
@@ -142,7 +161,8 @@ def test_song_step_navigation_and_boundaries(
                         'controller': 20,
                         'value': 10,
                     },
-                    'Voice': {'instrument': 'synth', 'program': 12},
+                    'Voice': {'instrument': 'synth', 'program': 12, 'bank': 1},
+                    'Other': {'instrument': 'alternate', 'program': 12, 'bank': 2},
                     'Direct': {
                         'type': 'program-change',
                         'output': 'din',

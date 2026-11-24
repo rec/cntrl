@@ -150,7 +150,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Saved setups | Browse and edit the existing setup fields and patch cycles | Named setup draft and revision, with reload for the loaded setup |
 | Setlists | Rename and browse, move, add, and remove numbered occurrences, with save, discard, and keep editing | Song library journal, with playback position tracking and startup-name recovery |
 | Songs | Browse, rename, and move or remove patches with review | Song library journal, including setlist references and playback position |
-| Embedded song patch | Edit program, volume, and pan for instrument programs. Edit channel and program for direct Program Change, or channel, controller, and value for single Control Change. | Song library journal with a private source copy or an in-place replacement in the new revision |
+| Embedded song patch | Edit program, bank, volume, and pan for instrument programs. Edit channel and program for direct Program Change, or channel, controller, and value for single Control Change. | Song library journal with a private source copy or an in-place replacement in the new revision |
 | Song patch from a named setup | The same MIDI fields as embedded song patches, with the choice to edit one occurrence or every use of the named patch | Private copy in the song library or a setup revision, with review before reloading the active setup |
 | Current browser patch's instrument | MIDI channel, 1–16 | Shared instrument record in the setup draft |
 

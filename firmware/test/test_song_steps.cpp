@@ -260,9 +260,15 @@ int main(int argc, char **argv) {
         open_patch(1); tap(2);
         tap(4); tap(1); // Add an optional volume at zero.
         tap(4); tap(1); // Add optional pan at -64.
+        tap(4); tap(1); // Select bank 3. Bank 2 belongs to another instrument.
         save_and_return();
         assert(songs.patch_values("One", 1, board, copy) && copy.kind == cntrl::PatchKind::instrument_program);
         assert(copy.values[0] == 12 && copy.values[1] == 0 && copy.values[2] == -64);
+        assert(copy.bank == 3);
+        open_patch(1); tap(1); tap(2); // Edit the embedded source in place.
+        tap(3); tap(0); tap(0); // From bank 3 past bank 1 to None.
+        save_and_return();
+        assert(songs.patch_values("One", 1, board, copy) && copy.bank == UINT32_MAX);
         std::strcpy(selection.key, "Direct");
         assert(songs.replace_patch("One", 1, selection));
         while (songs.busy()) songs.tick();
