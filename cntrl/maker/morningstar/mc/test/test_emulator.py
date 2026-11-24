@@ -235,7 +235,14 @@ def test_real_setup_patch_chooser_remains_operable_beside_tools(
 
         session.advance(1000000)
         session.messages.clear()
+        empty_sent = session.frames['lcd-2']
+        # Skip the display edges, where the renderer masks the rounded corners.
+        center = [
+            empty_sent[(y * 160 + 8) * 2 : (y * 160 + 152) * 2] for y in range(8, 120)
+        ]
+        assert all(row == center[0][:2] * 144 for row in center)
         press('a')
+        assert session.frames['lcd-2'] != empty_sent
         press('b')
         press('a')
         press('e')

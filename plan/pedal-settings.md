@@ -162,8 +162,8 @@ occur and repeat those tasks after changing the labels or controls.
   owner resolution.
 - The MC6 Pro prototype opens Settings and returns with C+F. It consumes both
   switches through release and preserves authored C+F navigation. The editor
-  shows the Back chord. A launch hint appears at setlist boundaries and in
-  the empty sent-patch display. Physical rehearsal checks remain open,
+  shows the Back chord. A launch hint appears at setlist boundaries.
+  Physical rehearsal checks remain open,
   including the 45 ms window for the second switch.
 
 ### Field inventory by owner

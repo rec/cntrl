@@ -232,9 +232,6 @@ public:
             Pane view = content;
             unsigned region = application_.layout.page_region(application_.layout.controller_page(application_.rendering()));
             view.focused = region == application_.allocation.focus();
-            if (pane == 1 && !view.three_bands && !view.lines[0].text[0]
-                && application_.settings_chord_available(platform_, controls_.settings_mask()))
-                settings_hint(view.lines[0], view.graphics.background);
             if (application_.rendering() == application_.visible_index && unsigned(destination) == application_.allocation.region(region).first) { pending_patch_ = content.pending_patch; apply_brightness(platform_.milliseconds()); }
             renderer_.show(unsigned(destination),view);
             return;
