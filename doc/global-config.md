@@ -261,6 +261,13 @@ upload. The pedal needs firmware that supports the field.
 
 The pedal saves the text in its SD-card settings journal. On the MC6 Pro, open
 Status and press C to switch between the diagnostics and the contact view.
+With a USB keyboard attached to the host port, Contact shows **C x2 Edit**.
+Press C twice from Contact to edit the existing text. The cursor starts at the
+end. Enter adds a line break,
+Backspace deletes the preceding character, and the pedal's D and E switches
+move the cursor. Press Escape or F to review changes, then confirm **Save** with
+Enter or C. The edit is saved on the pedal. A later sync from a computer with
+its own saved contact value can replace it.
 Use `cntrl global list name_and_contact --from-pedal` to read the full text over USB.
 To clear both copies, run `cntrl global clear name_and_contact` with the pedal connected.
 Clearing it offline saves an empty value to apply on the next sync.

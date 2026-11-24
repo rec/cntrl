@@ -28,6 +28,7 @@ class Event(BaseModel, frozen=True):
     kind: Literal[
         'button',
         'key',
+        'keyboard_connection',
         'midi',
         'block',
         'connection',
@@ -49,6 +50,7 @@ class Event(BaseModel, frozen=True):
             'button',
             'block',
             'connection',
+            'keyboard_connection',
             'text',
         ) and self.value not in (0, 1):
             raise EmulatorError(f'{self.kind} event value must be 0 or 1')
@@ -123,6 +125,8 @@ class Scenario(BaseModel, frozen=True):
                 session.button(event.target, bool(event.value))
             elif event.kind == 'key':
                 session.key(event.value)
+            elif event.kind == 'keyboard_connection':
+                session.external_keyboard(bool(event.value))
             elif event.kind == 'midi':
                 session.midi(event.target, bytes(event.data))
             elif event.kind == 'block':

@@ -709,6 +709,10 @@ class Session:
         self.request(b'\x0f' + bytes([key]))
         self._record_event('key', value=key)
 
+    def external_keyboard(self, connected: bool) -> None:
+        self.request(b'\x14' + bytes([connected]))
+        self._record_event('keyboard_connection', value=int(connected))
+
     def button(self, control_id: str, pressed: bool) -> None:
         if control_id not in self.target.buttons:
             raise EmulatorError(f'unknown button: {control_id}')

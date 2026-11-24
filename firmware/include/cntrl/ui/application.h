@@ -175,6 +175,14 @@ public:
     bool utility_visible() const { return !editing_tool && utility_page < layout.pages() && layout.page(utility_page)[0] != 10; }
     bool feature_open(const ApplicationServices &services) const { return !utility_visible() && (setups.open() || song_ui.open() || services.switch_editor_open()); }
     bool settings_frontmost() const { return editing_tool == PageLayout::settings && (setups.open() || settings_library_); }
+    bool editing_text() const { return setups.editing_contact() || song_ui.editing_name(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(application_text_key)
+#endif
+    void text_key(uint8_t key, uint32_t now) {
+        if (setups.open()) setups.contact_key(key, now);
+        else song_ui.key(key);
+    }
     bool settings_shortcut_available(const ApplicationServices &services) const {
         return settings_frontmost() || (!editing_tool && !documents_.busy() && !documents_.dirty()
             && documents_.document().valid() && !pending_song_step_ && !songs_.executing()

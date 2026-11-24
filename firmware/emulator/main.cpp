@@ -643,7 +643,7 @@ public:
     }
     void command(const std::vector<uint8_t> &bytes);
     void input_state() const {
-        frame({8, uint8_t(!board.firmware_exited && !board.stock_pending && application.song_ui.editing_name())});
+        frame({8, uint8_t(!board.firmware_exited && !board.stock_pending && application.editing_text())});
         const char *language = board.current_language();
         std::vector<uint8_t> state{9};
         state.insert(state.end(), language, language + std::strlen(language));
@@ -857,7 +857,12 @@ void Session::command(const std::vector<uint8_t> &bytes) {
         for (auto &view : application.views) view.dirty = true;
         renderer.invalidate(); settle();
     }
-    else if (p[0] == 15 && length == 2) { application.song_ui.key(p[1]); settle(); }
+    else if (p[0] == 15 && length == 2) {
+        if (!application.setups.editing_contact() || host.external_keyboard_connected())
+            application.text_key(p[1], board.milliseconds());
+        settle();
+    }
+    else if (p[0] == 20 && length == 2 && p[1] <= 1) { host.external_keyboard(p[1]); settle(); }
     else if (p[0] == 18 && length == 2 && p[1] <= 1) {
         board.capture_corrections = p[1];
         renderer.capture_translations(p[1]);

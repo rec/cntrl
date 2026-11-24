@@ -395,6 +395,77 @@ def test_status_switch_c_toggles_the_saved_owner_contact(
         assert session.frames != multiline
 
 
+def test_contact_opens_keyboard_editor_on_double_c_and_saves(tmp_path: Path) -> None:
+    target = cli.load_target(export(None, 'mc6_pro', tmp_path / 'profile'))
+    layout = EmulatorLayout.load(Path(__file__).parents[1] / 'emulator/mc6-pro.toml')
+    source = {'pages': {'status': {'type': 'status'}}, 'use_animations': False}
+    setup = tmp_path / 'status.bin'
+    raw = compiler.compile_show(source, {}, [], target)
+    setup.write_bytes(
+        setup_bundle.build({'status': raw}, {'status': source}, target.memory).pack()
+    )
+    storage = tmp_path / 'storage'
+    journal = storage / 'cntrl/global/0.bin'
+    journal.parent.mkdir(parents=True)
+    journal.write_bytes(device_globals.journal(Overlay(name_and_contact='É')))
+    executable = backend.build(target, tmp_path / 'native', Path(__file__).parents[5])
+
+    with backend.Session(layout, target, executable, storage, setup) as session:
+
+        def press(button: str = 'c') -> None:
+            session.button(button, True)
+            session.advance(session.time_us + 60_000)
+            session.button(button, False)
+            session.advance(session.time_us + 80_000)
+
+        press()
+        without_keyboard = dict(session.frames)
+        session.external_keyboard(True)
+        assert session.frames != without_keyboard
+        session.external_keyboard(False)
+        assert session.frames == without_keyboard
+        session.external_keyboard(True)
+        press()
+        assert not session.editing_name
+        session.advance(session.time_us + 350_000)
+        press()  # Back to Contact.
+        press()
+        press()
+        assert session.editing_name
+        session.external_keyboard(False)
+        session.key(ord('!'))
+        session.external_keyboard(True)
+        for key in b'\bAlicx\be\nalice@example.org':
+            session.key(key)
+        session.key(27)  # Open the save decision.
+        session.key(10)  # Confirm Save.
+        assert not session.editing_name
+        assert session.frames != without_keyboard
+        assert not [m for m in session.messages if m.kind in ('midi', 'error')]
+        saved = dict(session.frames)
+        press()
+        press()
+        assert session.editing_name
+        session.key(ord('!'))
+        session.key(27)
+        press('b')  # Select Discard.
+        session.key(10)
+        assert not session.editing_name
+        assert session.frames == saved
+
+    assert any(
+        b'Alice\nalice@example.org\0' in p.read_bytes()
+        for p in (storage / 'cntrl/global').glob('*.bin')
+    )
+    with backend.Session(layout, target, executable, storage, setup) as session:
+        session.external_keyboard(True)
+        session.button('c', True)
+        session.advance(session.time_us + 60_000)
+        session.button('c', False)
+        session.advance(session.time_us + 80_000)
+        assert session.frames == saved
+
+
 def test_starter_status_labels_remain_editable_with_the_real_time_clock(
     tmp_path: Path,
 ) -> None:

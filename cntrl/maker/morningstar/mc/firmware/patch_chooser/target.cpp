@@ -1376,11 +1376,15 @@ public:
     void complete_display() { CNTRL_RUNTIME_TRACE(display); poll_display_dma(); }
     FLASHMEM void keyboard() {
         CNTRL_RUNTIME_TRACE(keyboard); board.poll_keyboard();
+        const bool connected = host_keyboard;
+        board.page_host().external_keyboard(connected);
         uint8_t key;
         for (unsigned i = 0; i < cntrl::KeyboardInput::capacity && keyboard_input.read(key); ++i)
-            if (host_keyboard && deployment.ready() && !deployment.pending()) application.song_ui.key(key);
-        if (keyboard_input.take_overflow() && deployment.ready() && !deployment.pending())
-            application.song_ui.keyboard_overflow();
+            if (connected && deployment.ready() && !deployment.pending()) application.text_key(key, millis());
+        if (keyboard_input.take_overflow() && deployment.ready() && !deployment.pending()) {
+            if (application.setups.editing_contact()) board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::keyboard_input_dropped));
+            else application.song_ui.keyboard_overflow();
+        }
     }
     bool scan_available() const { return !display_spi_busy(); }
     void scan(uint32_t now, uint32_t gap) {

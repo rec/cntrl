@@ -26,6 +26,49 @@ public:
     }
     void resume_settings() { mode_ = Mode::current; locked_ = true; render(); }
     void refresh() { if (open()) render(); }
+    bool editing_contact() const {
+        return mode_ == Mode::contact || (mode_ == Mode::decision && device_editor_ == Mode::contact);
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_enter_contact)
+#endif
+    bool enter_contact() {
+        if (open() || docs_.busy() || docs_.dirty() || !docs_.global_preferences()) return false;
+        settings_ = true;
+        contact_shortcut_ = true;
+        shortcut_hint_ = return_from_shortcut_ = false;
+        locked_ = true;
+        begin_contact();
+        contact_cursor_ = unsigned(std::strlen(contact_draft_));
+        render();
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_contact_key)
+#endif
+    void contact_key(uint8_t key, uint32_t now) {
+        if (locked_ || !editing_contact()) return;
+        if (key == 27) { button(5, true, now); return; }
+        if (mode_ == Mode::decision) {
+            if (key == '\n') button(2, true, now);
+            return;
+        }
+        char *position = contact_draft_ + contact_cursor_;
+        if (key == '\b') {
+            if (!contact_cursor_) return;
+            do { --contact_cursor_; } while ((uint8_t(contact_draft_[contact_cursor_]) & 0xc0) == 0x80);
+            std::memmove(contact_draft_ + contact_cursor_, position, std::strlen(position) + 1);
+        } else {
+            if (key != '\n' && (key < 32 || key > 126)) return;
+            if (std::strlen(contact_draft_) + 1 >= sizeof(contact_draft_)) {
+                hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return;
+            }
+            std::memmove(position + 1, position, std::strlen(position) + 1);
+            *position = char(key);
+            ++contact_cursor_;
+        }
+        render();
+    }
     void enter() {
         if (docs_.busy() || docs_.dirty()) return;
         settings_ = false;
@@ -182,11 +225,8 @@ public:
             }
             else if (button == 5) mode_ = Mode::current;
             else if (button == 2 && !item_) begin_startup_set(docs_.startup_set());
-            else if (button == 2 && item_ == 1) {
-                std::strcpy(contact_draft_, docs_.name_and_contact());
-                contact_cursor_ = 0;
-                mode_ = device_editor_ = Mode::contact;
-            } else if (button == 2 && item_ == 2) { preference_index_ = 0; mode_ = Mode::preferences; }
+            else if (button == 2 && item_ == 1) begin_contact();
+            else if (button == 2 && item_ == 2) { preference_index_ = 0; mode_ = Mode::preferences; }
             else if (button == 2 && item_ == 3) {
                 boot_draft_ = hardware_.boot_firmware();
                 mode_ = device_editor_ = Mode::boot_firmware;
@@ -395,6 +435,7 @@ private:
     char current_set_[64] = {};
     char contact_draft_[sizeof(GlobalSettings::Values::name_and_contact)] = {};
     unsigned contact_cursor_ = 0;
+    bool contact_shortcut_ = false;
     bool has_performance_shortcut() const { return current_patch_ != UINT16_MAX || current_set_[0]; }
     char name_[64] = {};
     unsigned item_ = 0, patch_ = 0, field_ = 0;
@@ -497,7 +538,7 @@ private:
     }
     void leave_device_editor() {
         if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->cancel();
-        if (return_from_shortcut_) { close(); return; }
+        if (return_from_shortcut_ || contact_shortcut_) { close(); return; }
         if (device_editor_ == Mode::preference_value) {
             mode_ = Mode::preferences; device_editor_ = Mode::closed; return;
         }
@@ -748,7 +789,7 @@ private:
             return;
         }
         if (button == 5) {
-            if (std::strcmp(contact_draft_, docs_.name_and_contact())) { mode_ = Mode::decision; item_ = 2; }
+            if (std::strcmp(contact_draft_, docs_.name_and_contact())) { mode_ = Mode::decision; item_ = contact_shortcut_ ? 0 : 2; }
             else leave_device_editor();
         } else if (button == 2) { mode_ = Mode::contact_action; item_ = 0; }
         else if (button == 3 && contact_cursor_) {
@@ -845,7 +886,12 @@ private:
             }
         }
     }
-    void close() { mode_ = Mode::closed; docs_.redraw(); }
+    void begin_contact() {
+        std::strcpy(contact_draft_, docs_.name_and_contact());
+        contact_cursor_ = 0;
+        mode_ = device_editor_ = Mode::contact;
+    }
+    void close() { contact_shortcut_ = false; mode_ = Mode::closed; docs_.redraw(); }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_begin_edit)
 #endif

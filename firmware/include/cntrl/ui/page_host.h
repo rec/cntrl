@@ -209,6 +209,17 @@ public:
     void poll_keyboard() {
         keyboard_.poll(platform_.keyboard_connected(), platform_);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(page_host_external_keyboard)
+#endif
+    void external_keyboard(bool connected) {
+        if (external_keyboard_ == connected) return;
+        external_keyboard_ = connected;
+        if (pages_.page() == Pages::Page::status) pages_.revisit();
+        for (auto &view : application_.views)
+            if (view.page == Pages::Page::status) view.dirty = true;
+    }
+    bool external_keyboard_connected() const { return external_keyboard_; }
     bool release_keyboard() {
         keyboard_.clear(); poll_keyboard();
         return keyboard_.released();
@@ -465,7 +476,25 @@ public:
 #endif
     bool time_button(unsigned input, uint8_t events, uint32_t now) {
         if (pages_.page() == Pages::Page::status && input == controls_.confirm) {
-            if (events & press_event) pages_.toggle_contact();
+            if (!pages_.showing_contact() || !external_keyboard_ || !documents_.global_preferences()) {
+                if (events & press_event) { contact_tap_ = false; pages_.toggle_contact(); }
+            } else if (events & press_event) {
+                // A press that opened Contact belongs to Status, even if the
+                // next press is within the switch's global double-press window.
+                const bool edit = contact_tap_ && contact_released_
+                    && uint32_t(now - contact_released_at_) <= ButtonState::double_press_ms;
+                contact_tap_ = !edit;
+                contact_released_ = false;
+                if (edit) {
+                    application_.editing_tool = PageLayout::setups;
+                    if (application_.setups.enter_contact()) application_.controls_locked = true;
+                    else { application_.editing_tool = 0; error(i18n::text(i18n::Message::working)); }
+                }
+            }
+            if (contact_tap_ && (events & release_event)) {
+                contact_released_ = true;
+                contact_released_at_ = now;
+            }
             return true;
         }
         if (pages_.page() != Pages::Page::time) return false;
@@ -542,6 +571,10 @@ public:
     CNTRL_FLASH_ROUTINE(page_host_display)
 #endif
     void display(uint32_t now, bool transfer_busy) {
+        if (contact_tap_ && contact_released_ && uint32_t(now - contact_released_at_) > ButtonState::double_press_ms) {
+            contact_tap_ = false;
+            if (pages_.showing_contact()) pages_.toggle_contact();
+        }
         memon_.tick(platform_.milliseconds(), platform_);
         if (application_.stopping_setup()) return;
 #if CNTRL_PANIC
@@ -641,7 +674,8 @@ public:
 #endif
                 , i, region.count, documents_.name_and_contact(),
                 !application_.song_navigation_active() || application_.layout.navigation(),
-                documents_.document().contact_style(), documents_.document().contact_artwork(&application_)
+                documents_.document().contact_style(), documents_.document().contact_artwork(&application_),
+                external_keyboard_ && documents_.global_preferences()
             );
                 if (pages_.page() != Pages::Page::midi_monitor && pages_.page() != Pages::Page::pong && pages_.page() != Pages::Page::language && pages_.page() != Pages::Page::time) content = Pages::display_view(content,i,region.count);
                 content.focused = r == application_.allocation.focus() && pages_.page() != Pages::Page::pong; renderer_.show(screen,content);
@@ -723,6 +757,7 @@ private:
         if (!documents_.busy()) save_memon_score();
     }
     void cancel_focus() {
+        contact_tap_ = false;
         if (pages_.page() == Pages::Page::calibrate) platform_.expression_controls().cancel();
         if (pages_.page() == Pages::Page::pong) pages_.pong.leave();
         if (pages_.page() == Pages::Page::memon) finish_memon();
@@ -743,6 +778,8 @@ private:
     unsigned memon_save_attempted_ = 0;
     LooperMenu looper_menu_ = LooperMenu::none;
     unsigned looper_choice_ = 0;
+    uint32_t contact_released_at_ = 0;
+    bool external_keyboard_ = false, contact_tap_ = false, contact_released_ = false;
     char looper_load_file_[96] = {};
     midi::MidiFiles *looper_files_ = nullptr;
     midi::Sink *looper_sink_ = nullptr;

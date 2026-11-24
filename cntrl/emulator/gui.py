@@ -1720,6 +1720,7 @@ def run_window(
 
     sys.excepthook = unhandled
     try:
+        session.external_keyboard(True)
         window = EmulatorWindow(
             session, caret_blink_interval=caret_blink_interval, doom_host=doom_host
         )

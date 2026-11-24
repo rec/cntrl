@@ -11,6 +11,7 @@ enum ButtonEvent : uint8_t {
 };
 
 struct ButtonState {
+    static constexpr uint32_t double_press_ms = 300;
     bool candidate = false;
     bool pressed = false;
     uint32_t since = 0;
@@ -26,7 +27,7 @@ struct ButtonState {
         // After an early edge, rearm only when the accepted state has settled.
         if (!fast_debounce || (candidate == pressed && uint32_t(now - since) >= debounce_ms))
             debouncing = false;
-        if (waiting_for_second && uint32_t(now - released_at) > 300) {
+        if (waiting_for_second && uint32_t(now - released_at) > double_press_ms) {
             waiting_for_second = false;
         }
         if (sample != candidate) {

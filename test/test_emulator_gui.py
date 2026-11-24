@@ -73,6 +73,7 @@ class CapturedSession(Session):
         self.preview_words: list[str] = []
         self.tooltip_context = ('', ())
         self.keys: list[int] = []
+        self.external_keyboard_connected = False
         self.mode = 'setup preview'
 
     @property
@@ -88,6 +89,9 @@ class CapturedSession(Session):
 
     def key(self, key: int) -> None:
         self.keys.append(key)
+
+    def external_keyboard(self, connected: bool) -> None:
+        self.external_keyboard_connected = connected
 
     def capture_corrections(self, enabled: bool) -> None:
         pass
@@ -197,9 +201,11 @@ def test_unhandled_callback_reports_once_and_exits(
 
     monkeypatch.setattr(sys, 'excepthook', report)
     QtCore.QTimer.singleShot(0, fail)
+    session = CapturedSession()
     with pytest.raises(SystemExit) as stopped:
-        gui.run_window(CapturedSession())
+        gui.run_window(session)
     assert stopped.value.code == 1
+    assert session.external_keyboard_connected
     assert len(reported) == 1
     assert str(reported[0]) == 'unexpected callback failure'
     assert sys.excepthook is report

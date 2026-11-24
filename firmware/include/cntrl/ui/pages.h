@@ -188,6 +188,7 @@ public:
     }
     Page page() const { return page_; }
     void toggle_contact() { contact_ = !contact_; revisit(); }
+    bool showing_contact() const { return page_ == Page::status && contact_; }
     void revisit() {
         dirty_ = true;
     }
@@ -367,14 +368,14 @@ public:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(page_view)
 #endif
-    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned display = 0, unsigned count = 1, const char *contact = "", bool direct_page_switch = true, const uint8_t *contact_style = nullptr, Bitmap contact_artwork = {}) {
+    cntrl::Pane view(uint32_t now, uint32_t now_us, const PerformanceStatus &live_status, const cntrl::CableTest::Status &cable = {}, cntrl::Panic::Status panic = cntrl::Panic::Status::ready, unsigned display = 0, unsigned count = 1, const char *contact = "", bool direct_page_switch = true, const uint8_t *contact_style = nullptr, Bitmap contact_artwork = {}, bool contact_edit = false) {
         using R = cntrl::PageSettings;
         const auto &status = status_snapshot ? status_snapshot->performance : live_status;
         dirty_ = false; refreshed_ = now;
         cntrl::Pane pane;
         pane.graphics.background = settings_[R::background];
         pane.graphics.foreground = 0; pane.graphics.pad = uint8_t(settings_[R::padding]);
-        if (page_ == Page::status && contact_) { contact_view(pane, contact, contact_style, contact_artwork); return pane; }
+        if (showing_contact()) { contact_view(pane, contact, contact_style, contact_artwork, contact_edit); return pane; }
         if (page_ == Page::time && display == 0) { time_view(pane); return pane; }
         if (page_ == Page::doom) {
             pane.bitmap = {&doom_artwork, 0, 0, DoomArtwork::width, DoomArtwork::height};
@@ -417,14 +418,14 @@ public:
         const unsigned heading_height = heading_text_height + 4;
         const char *heading = page_ == Page::time ? i18n::text(i18n::Message::tap_tempo) : page_ == Page::status ? i18n::text(i18n::Message::status) : page_ == Page::cable ? i18n::text(i18n::Message::midi_cable_test) : "";
         char status_heading[64];
-        if (page_ == Page::status && *contact) {
+        if (page_ == Page::status && (*contact || contact_edit)) {
             std::snprintf(status_heading, sizeof(status_heading), "%s / %s %s", heading, label(controls_.confirm), i18n::text(i18n::Message::owner_contact));
             heading = status_heading;
         }
 #ifdef CNTRL_EMULATOR
         if (page_ == Page::status && preview_size_) heading = preview_label_;
 #endif
-        page_heading(pane, heading, page_ == Page::status && *contact);
+        page_heading(pane, heading, page_ == Page::status && (*contact || contact_edit));
         if (page_ == Page::cable) {
             const bool active = cable.enabled;
             const unsigned font = 16; // Preserve Cable Test's Atkinson font.
@@ -577,13 +578,19 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(status_contact_view)
 #endif
-    void contact_view(Pane &pane, const char *contact, const uint8_t *style, Bitmap artwork) {
+    void contact_view(Pane &pane, const char *contact, const uint8_t *style, Bitmap artwork, bool contact_edit) {
         const unsigned font = style ? style[0] : localized_face;
         if (style) {
             pane.graphics.foreground = u16(style + 4);
             pane.graphics.background = u16(style + 6);
         }
-        page_heading(pane, i18n::text(i18n::Message::owner_contact), true);
+        const char *title = i18n::text(i18n::Message::owner_contact);
+        char heading[64];
+        if (contact_edit) {
+            std::snprintf(heading, sizeof(heading), "%s / %s x2 %s", title, label(controls_.confirm), i18n::text(i18n::Message::edit));
+            title = heading;
+        }
+        page_heading(pane, title, true);
         pane.bitmap = artwork;
         pane.styled_body = style != nullptr;
         if (!*contact) contact = i18n::text(i18n::Message::empty);
