@@ -116,7 +116,7 @@ forward_suffix = { text = ' Eteenpäin' }
 direction_change_pending = { text = 'Suunnanvaihto odottaa' }
 record_play_undo_prompt = { text = '{record:s} Ään {play:s} Toista {undo:s} Kumoa' }
 clear_more_prompt = { text = '{clear:s} Tyhjennä {more:s} Lisää' }
-combined = { text = 'Yhdistetty' }
+midi_monitor = { text = 'MIDI-monitori' }
 incoming = { text = 'Saapuva' }
 outgoing = { text = 'Lähtevä' }
 unavailable_memory = { text = 'Ei käytettävissä: muisti' }

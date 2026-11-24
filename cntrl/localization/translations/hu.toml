@@ -116,7 +116,7 @@ forward_suffix = { text = ' Előre' }
 direction_change_pending = { text = 'Irányváltás függőben' }
 record_play_undo_prompt = { text = '{record:s} Felv. {play:s} Lej. {undo:s} Vissza' }
 clear_more_prompt = { text = '{clear:s} Törlés {more:s} További' }
-combined = { text = 'Egyesített' }
+midi_monitor = { text = 'MIDI-monitor' }
 incoming = { text = 'Bejövő' }
 outgoing = { text = 'Kimenő' }
 unavailable_memory = { text = 'Nem elérhető: memória' }

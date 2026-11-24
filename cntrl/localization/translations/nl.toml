@@ -116,7 +116,7 @@ forward_suffix = { text = ' Vooruit' }
 direction_change_pending = { text = 'Richtingswijziging wacht' }
 record_play_undo_prompt = { text = '{record:s} Opn {play:s} Speel {undo:s} Herstel' }
 clear_more_prompt = { text = '{clear:s} Wis {more:s} Meer' }
-combined = { text = 'Gecombineerd' }
+midi_monitor = { text = 'MIDI-monitor' }
 incoming = { text = 'Inkomend' }
 outgoing = { text = 'Uitgaand' }
 unavailable_memory = { text = 'Niet beschikbaar: geheugen' }

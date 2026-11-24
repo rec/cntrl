@@ -349,8 +349,8 @@ text = '{record:s} Enr {play:s} Lire {undo:s} Annuler'
 [messages.clear_more_prompt]
 text = '{clear:s} Effacer {more:s} Plus'
 
-[messages.combined]
-text = 'Combiné'
+[messages.midi_monitor]
+text = 'Moniteur MIDI'
 
 [messages.incoming]
 text = 'Entrant'

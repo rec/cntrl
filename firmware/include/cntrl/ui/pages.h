@@ -694,12 +694,15 @@ private:
         using Direction = midi::Monitor::Direction;
         using R = cntrl::PageSettings;
         const Direction direction = count == 1 || (count == 3 && display == 1) ? Direction::both : display == 0 ? Direction::incoming : Direction::outgoing;
-        const char *heading = direction == Direction::both ? i18n::text(i18n::Message::combined) : direction == Direction::incoming ? i18n::text(i18n::Message::incoming) : i18n::text(i18n::Message::outgoing);
+        const char *heading = direction == Direction::both ? i18n::text(i18n::Message::midi_monitor) : direction == Direction::incoming ? i18n::text(i18n::Message::incoming) : i18n::text(i18n::Message::outgoing);
         const unsigned pad = pane.graphics.pad;
         const unsigned title = std::min(unsigned(settings_[R::title_height]) + 4, viewport_.height / 4);
         line(pane, 0, heading, pad, title, settings_[R::title_font], true);
-        pane.heading_band = true; pane.lines[0].graphics.foreground = 0xffff; pane.lines[0].graphics.background = 0;
-        pane.lines[0].graphics.line_height = uint16_t(title + 2 * pad); pane.lines[0].y = 0;
+        pane.heading_band = true;
+        auto &header = pane.lines[0];
+        header.graphics.foreground = 0xffff; header.graphics.background = 0;
+        header.graphics.line_height = uint16_t(title + 2 * pad);
+        header.graphics.top = header.y; header.y = 0;
         const unsigned row_height = 10, body_top = title + 2 * pad + row_height;
         const unsigned bottom = viewport_.height > pad + row_height ? viewport_.height - pad - row_height : 0;
         const unsigned rows = std::min(4u, bottom > body_top ? (bottom - body_top) / (3 * row_height) : 0u);

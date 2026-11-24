@@ -170,7 +170,10 @@ void test_display_layouts_history_and_bounded_refresh() {
     Monitor monitor; assert(monitor.open(0)); receive(monitor, {0xc0,127});
     monitor.packet(Direction::outgoing, 0, 0, {11,{0xb0,7,80}}, 1234567, true);
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160,128,0,0});
-    cntrl::PageSettings settings; settings.words[cntrl::PageSettings::title_height] = 8; pages.configure(settings);
+    cntrl::PageSettings settings;
+    settings.words[cntrl::PageSettings::title_height] = 8;
+    settings.words[cntrl::PageSettings::padding] = 3;
+    pages.configure(settings);
     pages.outputs({endpoints, 1}); pages.monitor = &monitor;
     for (unsigned count = 1; count <= 3; ++count) {
         uint8_t layout[12 + 3 * 32 + 37] = {'C','P','A','G',1,3,2,0};
@@ -179,7 +182,11 @@ void test_display_layouts_history_and_bounded_refresh() {
         for (unsigned display = 0; display < count; ++display) {
             auto pane = pages.view(100, 100000, {}, {}, cntrl::Panic::Status::ready, display, count);
             const bool combined = count == 1 || (count == 3 && display == 1);
-            assert(!std::strcmp(pane.lines[0].text, combined ? "Combined" : display == 0 ? "Incoming" : "Outgoing"));
+            const auto &title = pane.lines[0];
+            assert(!std::strcmp(title.text, combined ? "MIDI Monitor" : display == 0 ? "Incoming" : "Outgoing"));
+            const auto bounds = fonts.bounds(title.graphics.font, title.graphics.size, 0, title.text);
+            const int first = title.y + title.graphics.top + bounds.top;
+            assert(pane.heading_band && first >= 3 && first + bounds.height <= title.graphics.line_height - 3);
             std::string text;
             for (const auto &line : pane.lines) { text += line.text; text += '\n'; }
             assert((text.find("Program 128") != std::string::npos) == (combined || display == 0));

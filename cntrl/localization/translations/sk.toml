@@ -116,7 +116,7 @@ forward_suffix = { text = ' Vpred' }
 direction_change_pending = { text = 'Čaká zmena smeru' }
 record_play_undo_prompt = { text = '{record:s} Záz. {play:s} Hrať {undo:s} Späť' }
 clear_more_prompt = { text = '{clear:s} Zmazať {more:s} Viac' }
-combined = { text = 'Zlúčené' }
+midi_monitor = { text = 'MIDI monitor' }
 incoming = { text = 'Prichádzajúce' }
 outgoing = { text = 'Odchádzajúce' }
 unavailable_memory = { text = 'Nedostupné: pamäť' }

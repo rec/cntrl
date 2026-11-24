@@ -113,7 +113,7 @@ enum class Message : uint16_t {
     direction_change_pending,
     record_play_undo_prompt,
     clear_more_prompt,
-    combined,
+    midi_monitor,
     incoming,
     outgoing,
     unavailable_memory,
@@ -369,7 +369,7 @@ enum class Message : uint16_t {
     owner_contact,
 };
 inline constexpr unsigned message_count = 364;
-inline constexpr uint32_t catalogue_schema = 0x3fd310a2u;
+inline constexpr uint32_t catalogue_schema = 0xa023baf6u;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -765,8 +765,8 @@ inline const Field clear_more_prompt_fields[] CNTRL_I18N_STORAGE = {
     {clear_more_prompt_clear_name, clear_more_prompt_clear_spec},
     {clear_more_prompt_more_name, clear_more_prompt_more_spec},
 };
-inline const char combined_text[] CNTRL_I18N_STORAGE = "Combined";
-inline const char combined_short[] CNTRL_I18N_STORAGE = "";
+inline const char midi_monitor_text[] CNTRL_I18N_STORAGE = "MIDI Monitor";
+inline const char midi_monitor_short[] CNTRL_I18N_STORAGE = "";
 inline const char incoming_text[] CNTRL_I18N_STORAGE = "Incoming";
 inline const char incoming_short[] CNTRL_I18N_STORAGE = "";
 inline const char outgoing_text[] CNTRL_I18N_STORAGE = "Outgoing";
@@ -1638,7 +1638,7 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {direction_change_pending_text, direction_change_pending_short, nullptr, 0},
     {record_play_undo_prompt_text, record_play_undo_prompt_short, record_play_undo_prompt_fields, 3},
     {clear_more_prompt_text, clear_more_prompt_short, clear_more_prompt_fields, 2},
-    {combined_text, combined_short, nullptr, 0},
+    {midi_monitor_text, midi_monitor_short, nullptr, 0},
     {incoming_text, incoming_short, nullptr, 0},
     {outgoing_text, outgoing_short, nullptr, 0},
     {unavailable_memory_text, unavailable_memory_short, nullptr, 0},

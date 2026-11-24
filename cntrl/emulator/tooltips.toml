@@ -31,7 +31,7 @@ button-e = 'Next group'
 button-f = 'Previous group on MC8 Pro. Next page on MC6 Pro.'
 
 [midi-monitor.en]
-display-1 = 'Combined'
+display-1 = 'MIDI Monitor'
 button-a = 'A/B History (when frozen)'
 button-b = 'A/B History (when frozen)'
 button-c = 'C Freeze / C Live'

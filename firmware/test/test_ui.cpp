@@ -280,6 +280,10 @@ static void setups_page_shows_its_physical_confirm_label() {
 }
 static void pong_motion_only_changes_intersecting_displays() {
     Fonts fonts; cntrl::ui::Pages pages(fonts, {160, 128, 0, 0});
+    cntrl::PageSettings settings;
+    constexpr uint16_t utility_background = 0xff90;
+    settings.words[cntrl::PageSettings::background] = utility_background;
+    pages.configure(settings);
     uint8_t layout[12 + 3 * 32 + 37] = {'C', 'P', 'A', 'G', 1, 3, 2, 0};
     layout[12 + 3 * 32 + 32] = unsigned(cntrl::ui::Pages::Page::pong);
     pages.layout(cntrl::PageLayout{layout});
@@ -288,6 +292,7 @@ static void pong_motion_only_changes_intersecting_displays() {
     pages.pong.x += 5;
     for (unsigned i = 0; i < 3; ++i) {
         const auto after = pages.view(0, 0, {}, {}, {}, i, 3);
+        assert(after.graphics.background == 0);
         const auto &a = before[i].rectangles[3], &b = after.rectangles[3];
         assert((a.x != b.x || a.y != b.y || a.width != b.width || a.height != b.height) == (i == 1));
     }

@@ -438,9 +438,9 @@ context = 'Looper controls'
 en = '{clear:s} Clear {more:s} More'
 context = 'Looper controls'
 
-[messages.combined]
-en = 'Combined'
-context = 'Monitor traffic direction'
+[messages.midi_monitor]
+en = 'MIDI Monitor'
+context = 'MIDI monitor page heading'
 
 [messages.incoming]
 en = 'Incoming'

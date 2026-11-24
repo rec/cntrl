@@ -116,7 +116,7 @@ forward_suffix = { text = ' Înainte' }
 direction_change_pending = { text = 'Schimbare sens în așteptare' }
 record_play_undo_prompt = { text = '{record:s} Înreg. {play:s} Redă {undo:s} Anulează' }
 clear_more_prompt = { text = '{clear:s} Șterge {more:s} Mai mult' }
-combined = { text = 'Combinat' }
+midi_monitor = { text = 'Monitor MIDI' }
 incoming = { text = 'Recepționat' }
 outgoing = { text = 'Trimis' }
 unavailable_memory = { text = 'Indisponibil: memorie' }

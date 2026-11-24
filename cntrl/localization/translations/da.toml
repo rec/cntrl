@@ -116,7 +116,7 @@ forward_suffix = { text = ' Fremad' }
 direction_change_pending = { text = 'Retningsskift afventer' }
 record_play_undo_prompt = { text = '{record:s} Opt {play:s} Spil {undo:s} Fortryd' }
 clear_more_prompt = { text = '{clear:s} Slet {more:s} Mere' }
-combined = { text = 'Kombineret' }
+midi_monitor = { text = 'MIDI-monitor' }
 incoming = { text = 'Indgående' }
 outgoing = { text = 'Udgående' }
 unavailable_memory = { text = 'Utilgængelig: hukommelse' }

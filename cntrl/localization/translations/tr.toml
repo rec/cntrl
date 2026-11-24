@@ -116,7 +116,7 @@ forward_suffix = { text = ' İleri' }
 direction_change_pending = { text = 'Yön değişikliği bekliyor' }
 record_play_undo_prompt = { text = '{record:s} Kayıt {play:s} Çal {undo:s} Geri al' }
 clear_more_prompt = { text = '{clear:s} Sil {more:s} Diğer' }
-combined = { text = 'Birleşik' }
+midi_monitor = { text = 'MIDI İzleyici' }
 incoming = { text = 'Gelen' }
 outgoing = { text = 'Giden' }
 unavailable_memory = { text = 'Kullanılamıyor: bellek' }
