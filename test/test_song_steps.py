@@ -203,6 +203,12 @@ def test_song_step_navigation_and_boundaries(
     assert saved_midi['patches']['held']['pickup'] is True
     assert saved_midi['loop_stop_reset_controls'] is False
     assert saved_midi['loop_stop_neutral_values'][0]['value'] == 12
+    subprocess.run(
+        [str(runner), str(fixture), str(setup), '--navigation-settings', str(edited)],
+        check=True,
+    )
+    saved_navigation = tomlkit.parse(resolved.export(edited.read_bytes()))['navigation']
+    assert saved_navigation['page_forward'] == 'A+B'
     counter_setup = tmp_path / 'counters.bin'
     counter_setup.write_bytes(
         compiler.compile_show(

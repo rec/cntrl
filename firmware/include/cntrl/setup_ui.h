@@ -15,6 +15,7 @@ namespace cntrl {
 class SetupUi {
 public:
     SetupUi(Documents &documents, Hardware &hardware) : docs_(documents), hardware_(hardware) {}
+    void set_shortcut_mask(uint8_t mask) { shortcut_mask_ = mask; }
     bool open() const { return mode_ != Mode::closed; }
     ExpressionPedals *calibration() const { return mode_ == Mode::calibration ? hardware_.expression_calibration() : nullptr; }
     enum class Library { none, songs, setlists };
@@ -136,6 +137,10 @@ public:
             return true;
         }
         if ((mode_ == Mode::counter_fields || mode_ == Mode::counter_value) && !stage_counter()) {
+            render();
+            return true;
+        }
+        if (mode_ == Mode::navigation_value && !stage_navigation()) {
             render();
             return true;
         }
@@ -315,6 +320,8 @@ public:
             movie_button(button);
         } else if (is_counter_view()) {
             counter_button(button);
+        } else if (is_navigation_view()) {
+            navigation_button(button);
         } else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
@@ -459,7 +466,7 @@ private:
                       movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
                       layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
                       layout_chooser_order, layout_chooser_order_move, layout_add_type, layout_name, layout_name_action,
-                      counters, counter_fields, counter_value };
+                      counters, counter_fields, counter_value, navigation_shortcuts, navigation_value };
     enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, split, join, add, count };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
@@ -488,6 +495,10 @@ private:
     LayoutOption layout_option_ = LayoutOption::pages;
     bool layout_rejected_ = false, layout_left_ = false;
     unsigned chooser_minimum_ = 0;
+    uint8_t shortcut_mask_ = 0;
+    unsigned navigation_index_ = 0, navigation_slot_ = 0, navigation_buttons_[2] = {};
+    const char *navigation_feedback_ = nullptr;
+    static constexpr const char *navigation_names[] = {"Next song patch", "Previous song patch", "Next page", "Previous page"};
     enum CounterField { counter_output, counter_type, counter_channel, counter_controller,
         counter_initial, counter_minimum, counter_maximum, counter_step, counter_boundary, counter_field_count };
     unsigned counter_index_ = 0, counter_field_ = 0;
@@ -708,6 +719,10 @@ private:
         if (index == ui::counter_preference_index) {
             Document draft;
             return setup_preferences_ && docs_.edit_document(draft) && draft.counters();
+        }
+        if (index == ui::navigation_preference_index) {
+            Document draft;
+            return setup_preferences_ && hardware_.input_count() && docs_.edit_document(draft) && draft.page_layout().pages();
         }
         const unsigned field = ui::preference_at(index).field;
         if (setup_preferences_ && !Documents::setup_preference_editable(field)) return false;
@@ -1137,6 +1152,77 @@ private:
         }
     }
     bool is_counter_view() const { return mode_ >= Mode::counters && mode_ <= Mode::counter_value; }
+    bool is_navigation_view() const { return mode_ == Mode::navigation_shortcuts || mode_ == Mode::navigation_value; }
+    unsigned navigation_mask() const {
+        unsigned mask = 0;
+        for (auto button : navigation_buttons_) if (button) mask |= 1u << (button - 1);
+        return mask;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_stage_navigation)
+#endif
+    bool stage_navigation() {
+        Document draft;
+        if (!docs_.edit_document(draft)) return false;
+        const auto *current = draft.page_layout().navigation();
+        uint8_t shortcuts[4] = {};
+        if (current) std::copy_n(current, 4, shortcuts);
+        const unsigned mask = navigation_mask();
+        if (shortcuts[navigation_index_] == mask) return true;
+        if (mask && mask == shortcut_mask_) {
+            navigation_feedback_ = "Reserved for Settings";
+            return false;
+        }
+        const unsigned back = hardware_.control_input(ControlRole::back);
+        if (navigation_index_ >= 2 && back < 8 && (mask & (1u << back))) {
+            navigation_feedback_ = "Page shortcut uses Back";
+            return false;
+        }
+        for (unsigned i = 0; i < 4; ++i) {
+            if (mask && i != navigation_index_ && shortcuts[i] == mask) {
+                navigation_feedback_ = "Shortcut is already assigned";
+                return false;
+            }
+        }
+        shortcuts[navigation_index_] = uint8_t(mask);
+        if (!docs_.edit_navigation(shortcuts)) {
+            navigation_feedback_ = "Could not change shortcut";
+            return false;
+        }
+        changed_fields_ |= 1u << 14;
+        navigation_feedback_ = nullptr;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_navigation_button)
+#endif
+    void navigation_button(unsigned button) {
+        navigation_feedback_ = nullptr;
+        if (mode_ == Mode::navigation_shortcuts) {
+            if (button < 2) navigation_index_ = (navigation_index_ + (button ? 1 : 3)) % 4;
+            else if (button == 5) mode_ = Mode::preferences;
+            else if (button == 2) {
+                Document draft;
+                if (!docs_.edit_document(draft)) return;
+                const auto *shortcuts = draft.page_layout().navigation();
+                navigation_buttons_[0] = navigation_buttons_[1] = navigation_slot_ = 0;
+                if (shortcuts) {
+                    for (unsigned i = 0; i < 8; ++i) if (shortcuts[navigation_index_] & (1u << i))
+                        navigation_buttons_[navigation_buttons_[0] ? 1 : 0] = i + 1;
+                }
+                mode_ = Mode::navigation_value;
+            }
+        } else if (button == 2 || button == 5) {
+            if (stage_navigation()) mode_ = Mode::navigation_shortcuts;
+        } else if (button == 3) navigation_buttons_[0] = navigation_buttons_[1] = 0;
+        else if (button == 4) navigation_slot_ ^= 1;
+        else if (button < 2) {
+            const unsigned count = std::min(hardware_.input_count(), 8u) + 1;
+            auto &selected = navigation_buttons_[navigation_slot_];
+            const unsigned other = navigation_buttons_[navigation_slot_ ^ 1];
+            do { selected = (selected + (button ? 1 : count - 1)) % count; } while (selected && selected == other);
+        }
+    }
     bool counter_is_program() const { return (counter_values_.status >> 4) == 12; }
     uint8_t &counter_number() {
         switch (counter_field_) {
@@ -1294,6 +1380,11 @@ private:
                 if (preference_index_ == ui::counter_preference_index) {
                     counter_index_ = 0;
                     mode_ = Mode::counters;
+                    return;
+                }
+                if (preference_index_ == ui::navigation_preference_index) {
+                    navigation_index_ = 0;
+                    mode_ = Mode::navigation_shortcuts;
                     return;
                 }
                 const uint64_t bit = uint64_t(1) << field.field;
@@ -1828,6 +1919,36 @@ private:
         }
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render_navigation)
+#endif
+    void render_navigation(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
+        using Role = ControlRole;
+        const auto *shortcuts = draft.page_layout().navigation();
+        const bool adjusting = mode_ == Mode::navigation_value;
+        const unsigned mask = adjusting ? navigation_mask() : shortcuts ? shortcuts[navigation_index_] : 0;
+        const char *labels[2] = {};
+        for (unsigned i = 0, used = 0; i < std::min(hardware_.input_count(), 8u) && used < 2; ++i)
+            if (mask & (1u << i)) labels[used++] = hardware_.input_label(i);
+        ui::copy_caption(views[1].lines[1], navigation_names[navigation_index_]);
+        ui::copy_caption(views[2].lines[0], "Switch combination");
+        auto &value = views[2].lines[1];
+        if (labels[1]) std::snprintf(value.text, sizeof(value.text), "%s+%s", labels[0], labels[1]);
+        else ui::copy_caption(value, labels[0] ? labels[0] : "Default");
+        if (navigation_feedback_) ui::copy_caption(views[1].lines[2], navigation_feedback_);
+        else if (adjusting) {
+            const unsigned selected = navigation_buttons_[navigation_slot_];
+            std::snprintf(views[2].lines[2].text, 64, "Switch %u %s", navigation_slot_ + 1,
+                selected ? hardware_.input_label(selected - 1) : "None");
+        } else ui::copy_caption(views[2].lines[2], "Applies to this setup");
+        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
+            adjusting ? "Choose switch" : "Browse").text());
+        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, adjusting ? "Accept" : "Edit")
+            .add(Role::back, "Back", ", ").text());
+        if (adjusting)
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Default")
+                .add(Role::next_section, "Other switch", ", ").text());
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render)
 #endif
     void render() {
@@ -1840,13 +1961,15 @@ private:
             || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
         const bool layout_entry = mode_ == Mode::preferences && preference_index_ == ui::layout_preference_index;
         const bool counter_entry = mode_ == Mode::preferences && preference_index_ == ui::counter_preference_index;
-        const bool preference_view = !layout_entry && !counter_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
+        const bool navigation_entry = mode_ == Mode::preferences && preference_index_ == ui::navigation_preference_index;
+        const bool special_entry = layout_entry || counter_entry || navigation_entry;
+        const bool preference_view = !special_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
         const bool layout_view = is_layout_view();
         const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
         const bool movie_view = is_movie_view();
         const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
         const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
-            || instrument_view || neutral_view || movie_view || layout_view || layout_entry || counter_entry || is_counter_view()
+            || instrument_view || neutral_view || movie_view || layout_view || special_entry || is_counter_view() || is_navigation_view()
             || (setup_preferences_ && preference_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
@@ -1910,6 +2033,10 @@ private:
         else if (counter_entry) {
             title = "Counters";
             value = "Shared MIDI counters";
+        }
+        else if (navigation_entry) {
+            title = "Navigation shortcuts";
+            value = "Song patches and pages";
         }
         else if (preference_view) {
             const auto &field = preference();
@@ -2196,7 +2323,8 @@ private:
             if (movie_view) render_movies(views, draft, prompt);
             if (layout_view) render_layout(views, draft.page_layout(), prompt);
             if (is_counter_view()) render_counter(views, draft, prompt);
-            if (layout_entry || counter_entry)
+            if (is_navigation_view()) render_navigation(views, draft, prompt);
+            if (special_entry)
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Group").text());
             if (mode_ == Mode::decision) {
                 const bool pedal = device_editor_ != Mode::closed;

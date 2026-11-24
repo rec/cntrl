@@ -197,6 +197,14 @@ values before accepting the counter into the draft. The minimum, initial
 value, and maximum must be in order. Saving the setup applies the definition
 to every patch that uses that counter.
 
+**Navigation shortcuts** edits the setup's next and previous song-patch
+and page controls. Choose an action, then choose one or two switches by
+their physical labels. Use E to edit the other switch, D to restore the
+default for that action, and C to accept the combination into the draft.
+The Settings chord is reserved. With custom navigation configured, choose
+a **Previous song patch** shortcut if you use backward stepping in a setlist.
+Clear all four assignments to restore the pedal's default navigation gestures.
+
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time

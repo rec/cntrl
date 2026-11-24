@@ -21,6 +21,7 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     uint32_t now = 0;
     unsigned displays = 3;
     unsigned available_memory = TestPatchHardware::memory_capacity();
+    bool follow_setup_pages = false;
     unsigned memory_capacity() const override { return available_memory; }
     unsigned display_count() const override { return displays; }
     unsigned display_pixels() const override { return displays * 160 * 128; }
@@ -36,6 +37,9 @@ struct Board : TestPatchHardware, cntrl::Replies, cntrl::ui::ApplicationServices
     void show(unsigned pane, const cntrl::Pane &content) override { panes[pane] = content; }
     void set_brightness(uint8_t, bool = false) override {}
     void set_splash(bool, uint32_t) override {}
+    void configure_pages(const cntrl::Document &setup) override {
+        if (follow_setup_pages) app->layout = setup.page_layout();
+    }
     void error(const char *message) override { last_error = message; }
     bool send(const char *, const uint8_t *bytes, unsigned length) override { assert(length == 3); sent.emplace_back(bytes[1], bytes[2]); return true; }
     void reply(const char *) override {}
@@ -520,6 +524,43 @@ int main(int argc, char **argv) {
         exported.write(reinterpret_cast<const char *>(document.data()), document.length());
         assert(exported);
         assert(board.sent.empty());
+        return 0;
+    }
+    if (argc == 5 && !std::strcmp(argv[3], "--navigation-settings")) {
+        board.follow_setup_pages = true;
+        app.allocation.configure(configuration.page_layout());
+        const auto open_page_shortcut = [&] {
+            settings(); tap(2); tap(3); tap(3); // Setup fields, Layout, Navigation shortcuts.
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Navigation shortcuts"));
+            tap(2); tap(1); tap(1); tap(2);
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Next page"));
+        };
+        const auto save = [&] {
+            settings(); tap(1); tap(2);
+            while (documents.busy()) sample(0);
+            sample(0);
+            if (!app.tool_editor_open(board)) app.finish_tool();
+        };
+        open_page_shortcut();
+        tap(1); tap(1); tap(1); tap(4); tap(0); tap(2); // C+F belongs to Settings.
+        assert(!std::strcmp(board.panes[1].lines[2].text, "Reserved for Settings"));
+        tap(3); tap(1); tap(4); tap(1); // Clear, then choose A and B.
+        assert(!std::strcmp(board.panes[2].lines[1].text, "A+B"));
+        tap(2);
+        assert(!documents.document().page_layout().navigation() && board.sent.empty());
+        save();
+        const auto &document = documents.document();
+        std::ofstream exported(argv[4], std::ios::binary);
+        exported.write(reinterpret_cast<const char *>(document.data()), document.length());
+        assert(exported);
+        board.page_directions.clear();
+        press(0); press(1); release(0); release(1);
+        assert(board.page_directions.size() == 1 && !board.page_directions[0]);
+        open_page_shortcut();
+        tap(3); tap(2); // Restore the default.
+        save();
+        assert(!documents.document().page_layout().navigation());
+        assert(documents.document().length() == configuration.length() && board.sent.empty());
         return 0;
     }
     if (argc == 5 && !std::strcmp(argv[3], "--counter-settings")) {

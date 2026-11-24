@@ -12,7 +12,9 @@ public:
     InputCoordinator(ButtonState *states, Controls controls, const Document &configuration,
                      Application &application, ApplicationServices &application_services)
         : states_(states), controls_(controls), configuration_(configuration), application_(application),
-          application_services_(application_services), router_(controls) {}
+          application_services_(application_services), router_(controls) {
+        application_.setups.set_shortcut_mask(controls.settings_mask());
+    }
     template<class Services>
     void scan(uint8_t sample, uint32_t now, Services &services, uint32_t auxiliary_held = 0) {
         std::array<uint8_t, 8> events{};

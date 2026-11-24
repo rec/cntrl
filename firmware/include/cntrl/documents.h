@@ -306,6 +306,29 @@ public:
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_navigation)
+#endif
+    bool edit_navigation(const uint8_t (&shortcuts)[4]) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        const unsigned inputs = std::min(hardware_.input_count(), 8u);
+        for (unsigned i = 0; i < 4; ++i) {
+            const unsigned mask = shortcuts[i];
+            if (!mask) continue;
+            if ((mask >> inputs) || ((mask & (mask - 1)) && !button_pair_valid(mask))) return false;
+            for (unsigned j = 0; j < i; ++j) if (shortcuts[j] == mask) return false;
+        }
+        const unsigned previous = layout.navigation() ? 4 : 0;
+        const unsigned next = std::any_of(shortcuts, shortcuts + 4, [](uint8_t mask) { return mask != 0; }) ? 4 : 0;
+        const unsigned offset = unsigned(layout.records - draft.data());
+        const unsigned position = offset + layout.length() - previous;
+        if (!splice_setup(draft, position, previous, next)) return false;
+        scratch_.data[offset + 10] = uint8_t(next);
+        if (next) std::memcpy(scratch_.data + position, shortcuts, next);
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_split_region)
 #endif
     bool split_region(unsigned index, unsigned position, const char *name) {
