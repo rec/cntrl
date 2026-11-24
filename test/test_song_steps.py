@@ -88,10 +88,12 @@ def test_song_step_navigation_and_boundaries(
                     'Empty': {'type': 'None'},
                     'Status': {'type': 'status'},
                     'Gap': {'type': 'None'},
+                    'Browser': {'type': 'patch-chooser', 'min_displays': 0},
+                    'Other status': {'type': 'status'},
                 },
                 'regions': {
-                    'tools': {'pages': ['Time', 'Language', 'Empty']},
-                    'performance': {'pages': ['Status']},
+                    'tools': {'pages': ['Time', 'Language', 'Empty', 'Other status']},
+                    'performance': {'pages': ['Status', 'Browser']},
                     'extra': {'pages': ['Gap']},
                 },
                 'layout': {'focus': 'performance'},
@@ -106,9 +108,23 @@ def test_song_step_navigation_and_boundaries(
         check=True,
     )
     saved_layout = tomlkit.parse(resolved.export(edited.read_bytes()))
-    assert saved_layout['regions']['tools']['pages'] == ['Language', 'Time']
-    assert saved_layout['regions']['performance']['pages'] == ['Status', 'Empty']
+    assert saved_layout['regions']['tools']['pages'] == [
+        'Language',
+        'Time',
+        'Other status',
+    ]
+    assert saved_layout['regions']['performance']['pages'] == [
+        'Status',
+        'Empty',
+        'Browser',
+    ]
     assert saved_layout['pages']['Time']['ram2_bytes'] == 16
+    assert saved_layout['pages']['Browser']['min_displays'] == 1
+    assert saved_layout['pages']['Browser']['give_up_displays'] == [
+        'center',
+        'left',
+        'right',
+    ]
     assert saved_layout['regions']['extra']['pages'] == ['Gap']
     assert saved_layout['layout'] == {
         'order': ['performance', 'extra', 'tools'],

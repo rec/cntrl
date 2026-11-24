@@ -169,6 +169,11 @@ the region that gets focus when the setup loads. **Spare displays** chooses
 which side gets first claim on any displays left after each region gets its
 required minimum. Accept each change into the draft and save the setup to apply it.
 
+**Patch Chooser displays** edits the minimum number of displays for each
+Patch Chooser. Press E for **Give-up order** and move the displays into the
+order they should be released when the chooser has fewer displays available.
+With a single display, the chooser shows the sent patch on that display.
+
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time

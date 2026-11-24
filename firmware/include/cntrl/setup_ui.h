@@ -109,6 +109,10 @@ public:
     bool return_to_performance() {
         if (!settings_ || !open() || docs_.busy() || browsing_ || mode_ == Mode::language_saving) return false;
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
+        if (mode_ == Mode::layout_chooser_minimum && !stage_chooser_minimum()) {
+            render();
+            return true;
+        }
         if (mode_ == Mode::movie_scan) {
             hardware_.movie_library()->close();
             mode_ = Mode::movie_entries;
@@ -433,8 +437,9 @@ private:
                       cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value,
                       calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value,
                       movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
-                      layout_move, layout_region, layout_region_move };
-    enum class LayoutOption { pages, regions, focus, priority, count };
+                      layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
+                      layout_chooser_order, layout_chooser_order_move };
+    enum class LayoutOption { pages, regions, focus, priority, chooser_displays, count };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
@@ -461,7 +466,8 @@ private:
     unsigned page_region_ = 0, page_position_ = 0, destination_region_ = 0, destination_position_ = 0;
     LayoutOption layout_option_ = LayoutOption::pages;
     bool layout_rejected_ = false, layout_left_ = false;
-    static constexpr const char *layout_options[] = {"Move pages", "Move regions", "Startup focus", "Spare displays"};
+    unsigned chooser_minimum_ = 0;
+    static constexpr const char *layout_options[] = {"Move pages", "Move regions", "Startup focus", "Spare displays", "Patch Chooser displays"};
     midi::Parameter neutral_{};
     unsigned neutral_index_ = 0, neutral_output_ = 0, neutral_field_ = 0;
     bool neutral_changed_ = false, neutral_rejected_ = false;
@@ -668,7 +674,63 @@ private:
         mode_ = Mode::preferences;
     }
     bool is_layout_view() const {
-        return mode_ >= Mode::layout_menu && mode_ <= Mode::layout_region_move;
+        return mode_ >= Mode::layout_menu && mode_ <= Mode::layout_chooser_order_move;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_stage_chooser_minimum)
+#endif
+    bool stage_chooser_minimum() {
+        Document draft;
+        if (!docs_.edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        const unsigned page = layout.controller_page(page_position_);
+        if (chooser_minimum_ == layout.minimum_displays(page)) return true;
+        layout_rejected_ = !docs_.edit_chooser_displays(page, chooser_minimum_, 0, 0);
+        if (layout_rejected_) return false;
+        changed_fields_ |= 1u << 12;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_chooser_displays_button)
+#endif
+    void chooser_displays_button(unsigned button, PageLayout layout) {
+        const unsigned page = layout.controller_page(page_position_);
+        if (mode_ == Mode::layout_chooser) {
+            if (button < 2) {
+                const unsigned count = layout.controllers();
+                page_position_ = (page_position_ + (button ? 1 : count - 1)) % count;
+            } else if (button == 2) {
+                chooser_minimum_ = layout.minimum_displays(page);
+                mode_ = Mode::layout_chooser_minimum;
+            } else if (button == 4) {
+                page_region_ = 0;
+                mode_ = Mode::layout_chooser_order;
+            } else if (button == 5) mode_ = Mode::layout_menu;
+        } else if (mode_ == Mode::layout_chooser_minimum) {
+            if (button < 2)
+                chooser_minimum_ = unsigned(std::clamp(int(chooser_minimum_) + (button ? 1 : -1), 0, int(layout.displays())));
+            else if (button == 5 || (button == 2 && stage_chooser_minimum())) mode_ = Mode::layout_chooser;
+        } else {
+            const bool moving = mode_ == Mode::layout_chooser_order_move;
+            auto &position = moving ? destination_position_ : page_region_;
+            const unsigned count = layout.displays();
+            if (button < 2) position = (position + (button ? 1 : count - 1)) % count;
+            else if (button == 5) mode_ = moving ? Mode::layout_chooser_order : Mode::layout_chooser;
+            else if (button == 2 && !moving) {
+                destination_position_ = position;
+                mode_ = Mode::layout_chooser_order_move;
+            } else if (button == 2) {
+                if (position != page_region_) {
+                    if (!docs_.edit_chooser_displays(page, layout.minimum_displays(page), page_region_, position)) {
+                        layout_rejected_ = true;
+                        return;
+                    }
+                    changed_fields_ |= 1u << 12;
+                }
+                page_region_ = position;
+                mode_ = Mode::layout_chooser_order;
+            }
+        }
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_region_button)
@@ -710,15 +772,20 @@ private:
         layout_rejected_ = false;
         if (mode_ == Mode::layout_menu) {
             if (button < 2) {
-                constexpr unsigned count = unsigned(LayoutOption::count);
+                const unsigned count = unsigned(LayoutOption::count) - unsigned(!layout.controllers());
                 layout_option_ = LayoutOption((unsigned(layout_option_) + (button ? 1 : count - 1)) % count);
             } else if (button == 5) mode_ = Mode::preferences;
             else if (button == 2) {
                 page_region_ = layout_option_ == LayoutOption::focus ? layout.initial_focus() : 0;
                 page_position_ = 0;
                 layout_left_ = layout.left_wins();
-                mode_ = layout_option_ == LayoutOption::pages ? Mode::layout_pages : Mode::layout_region;
+                mode_ = layout_option_ == LayoutOption::pages ? Mode::layout_pages
+                    : layout_option_ == LayoutOption::chooser_displays ? Mode::layout_chooser : Mode::layout_region;
             }
+            return;
+        }
+        if (mode_ >= Mode::layout_chooser) {
+            chooser_displays_button(button, layout);
             return;
         }
         if (mode_ == Mode::layout_region || mode_ == Mode::layout_region_move) {
@@ -1266,6 +1333,34 @@ private:
         if (docs_.browse(name_, backward)) browsing_ = true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setup_ui_render_chooser_displays)
+#endif
+    void render_chooser_displays(Pane (&views)[3], PageLayout layout, ui::Prompt &prompt) const {
+        using Role = ControlRole;
+        const unsigned page = layout.controller_page(page_position_);
+        const bool minimum = mode_ == Mode::layout_chooser_minimum;
+        const bool order = mode_ == Mode::layout_chooser_order || mode_ == Mode::layout_chooser_order_move;
+        const bool moving = mode_ == Mode::layout_chooser_order_move;
+        ui::copy_caption(views[1].lines[1], layout.name(page));
+        if (order) {
+            ui::copy_caption(views[2].lines[0], moving ? "Move to" : "Give-up order");
+            ui::copy_caption(views[2].lines[1], layout.display_name(layout.page(page)[2 + page_region_]));
+            std::snprintf(views[2].lines[2].text, 64, "Position %u/%u",
+                (moving ? destination_position_ : page_region_) + 1, layout.displays());
+        } else {
+            ui::copy_caption(views[2].lines[0], "Minimum displays");
+            std::snprintf(views[2].lines[1].text, 64, "%u", minimum ? chooser_minimum_ : layout.minimum_displays(page));
+        }
+        if (layout_rejected_) ui::copy_caption(views[1].lines[2], minimum ? "Displays unavailable" : "Could not move display");
+        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
+            minimum ? "Adjust" : moving ? "Position" : "Browse").text());
+        const char *confirm = minimum || moving ? "Accept" : order ? "Move" : "Edit minimum";
+        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, confirm)
+            .add(Role::back, minimum || moving ? "Cancel" : "Back", ", ").text());
+        if (mode_ == Mode::layout_chooser)
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, "Give-up order").text());
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render_layout)
 #endif
     void render_layout(Pane (&views)[3], PageLayout layout, ui::Prompt &prompt) const {
@@ -1273,6 +1368,10 @@ private:
         if (mode_ == Mode::layout_menu) {
             ui::copy_caption(views[1].lines[1], "Page layout");
             ui::copy_caption(views[2].lines[1], layout_options[unsigned(layout_option_)]);
+            return;
+        }
+        if (mode_ >= Mode::layout_chooser) {
+            render_chooser_displays(views, layout, prompt);
             return;
         }
         if (mode_ == Mode::layout_region || mode_ == Mode::layout_region_move) {

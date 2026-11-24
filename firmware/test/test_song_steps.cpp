@@ -187,8 +187,8 @@ int main(int argc, char **argv) {
         tap(1);
         assert(!std::strcmp(board.panes[1].lines[1].text, "Empty"));
         tap(2); tap(4); tap(1); tap(2); // Move Empty after Status.
-        assert(!std::strcmp(board.panes[2].lines[2].text, "Position 2/2"));
-        assert(documents.document().page_layout().region_size(1) == 1);
+        assert(!std::strcmp(board.panes[2].lines[2].text, "Position 2/3"));
+        assert(documents.document().page_layout().region_size(1) == 2);
         tap(5); tap(1); tap(2); // Move regions.
         tap(2); tap(0); tap(2); // Move tools from the leftmost to the rightmost position.
         cntrl::Document draft;
@@ -199,6 +199,12 @@ int main(int argc, char **argv) {
         tap(1); tap(2); // Set the focus to extra.
         tap(1); tap(2); // Spare displays.
         tap(1); tap(2); // Left first.
+        tap(1); tap(2); // Patch Chooser displays.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Browser"));
+        tap(2); tap(1); tap(1); tap(2);
+        assert(!std::strcmp(board.panes[1].lines[2].text, "Displays unavailable"));
+        tap(0); tap(2); // One display fits with the tools region.
+        tap(4); tap(2); tap(0); tap(2); tap(5); // Give up the right display last.
         settings(); tap(1);
         assert(!std::strcmp(board.panes[2].lines[1].text, "Save and reload setup"));
         tap(2);
@@ -208,6 +214,14 @@ int main(int argc, char **argv) {
         assert(layout.region_page(2, 0) == 1 && layout.region_page(2, 1) == 0);
         assert(layout.region_page(0, 0) == 3 && layout.region_page(0, 1) == 2);
         assert(layout.initial_focus() == 1 && layout.left_wins());
+        const unsigned chooser = layout.controller_page(0);
+        assert(layout.minimum_displays(chooser) == 1 && layout.page(chooser)[2] == 1);
+        app.allocation.configure(layout);
+        app.allocation.select(6); // One-display tool.
+        app.allocation.select(chooser);
+        assert(app.allocation.controller_display(0, 0) == 0);
+        assert(app.allocation.controller_display(0, 1) == -1);
+        assert(app.allocation.controller_display(0, 2) == 1);
         assert(document.length() == configuration.length() && board.sent.empty());
         std::ofstream exported(argv[4], std::ios::binary);
         exported.write(reinterpret_cast<const char *>(document.data()), document.length());

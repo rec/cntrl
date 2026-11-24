@@ -362,6 +362,26 @@ public:
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_chooser_displays)
+#endif
+    bool edit_chooser_displays(unsigned page, unsigned minimum, unsigned from, unsigned to) {
+        Document draft;
+        if (busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        if (page >= layout.pages() || layout.page(page)[0] != PageLayout::patch_chooser
+            || minimum > layout.displays() || from >= layout.displays() || to >= layout.displays()) return false;
+        const unsigned offset = unsigned(layout.page(page) - draft.data());
+        if (!splice_setup(draft, offset, 0, 0)) return false;
+        auto *record = scratch_.data + offset;
+        record[1] = uint8_t(minimum);
+        auto *order = record + 2;
+        const uint8_t display = order[from];
+        if (from < to) std::memmove(order + from, order + from + 1, to - from);
+        else if (from > to) std::memmove(order + to + 1, order + to, from - to);
+        order[to] = display;
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_instrument)
 #endif
     bool edit_instrument(unsigned index, const char *output, unsigned channel) {
@@ -477,6 +497,9 @@ public:
         edit_cancel(); return false;
     }
     void edit_cancel() { dirty_ = false; staging_.clear(); scratch_.clear(); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_save)
+#endif
     bool edit_save(uint32_t now) {
         if (!dirty_ || busy() || hardware_.configuration_locked()) return false;
         if (!allocate(scratch_, staging_.size)) return false;
@@ -743,6 +766,9 @@ private:
     } browse_;
     BrowsePhase browse_phase_ = BrowsePhase::idle;
     void browse_fail() { browse_phase_ = BrowsePhase::idle; error("catalogue-failed"); }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_browse_next_slot)
+#endif
     void browse_next_slot() {
         if (browse_.final) { browse_fail(); return; }
         if (++browse_.slot < 2) { browse_phase_ = BrowsePhase::header; return; }
@@ -1095,6 +1121,9 @@ private:
         char response[128]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s", message);
         if (quiet_) { hardware_.error(message); quiet_ = false; } else replies_.reply(response);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_empty)
+#endif
     void empty() {
         document_ = Document(); controller_.deactivate();
         if (!hardware_.relays.reset()) hardware_.error(ui::i18n::text(ui::i18n::Message::relay_reset_failed));
@@ -1273,6 +1302,9 @@ private:
         hardware_.finish_fonts(false);
         start_write(now);
     }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_listing)
+#endif
     void listing() {
         char name[64], hex[127], response[224];
         length_ = 0;
