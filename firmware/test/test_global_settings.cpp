@@ -109,6 +109,30 @@ void inherited_settings_remain_separate_from_authored_setups(const char *bundle,
     board.globals = &commands; board.values = &settings.values();
     assert(!std::strcmp(documents.selected(), "a") && documents.document().brightness() == 192);
     {
+        const auto *active = documents.document().data();
+        const unsigned prepared = board.prepared_pages;
+        const auto open_spare = [&] {
+            assert(documents.edit_begin("b"));
+            for (unsigned i = 0; i < 10000 && documents.busy(); ++i) documents.tick(i);
+            assert(!documents.busy() && documents.dirty() && !documents.last_error()[0]);
+        };
+        open_spare();
+        assert(!documents.edit_reloads());
+        assert(!std::strcmp(documents.edit_name(), "b") && documents.edit_value(0, 2) == 1);
+        assert(documents.edit_adjust(0, 2, 1));
+        documents.edit_cancel();
+        open_spare();
+        assert(documents.edit_value(0, 2) == 1);
+        assert(documents.edit_adjust(0, 2, 1) && documents.edit_save(0));
+        for (unsigned i = 0; i < 10000 && documents.busy(); ++i) documents.tick(i);
+        assert(!documents.busy() && !documents.dirty() && !documents.last_error()[0]);
+        assert(!std::strcmp(documents.selected(), "a") && documents.document().data() == active);
+        assert(board.prepared_pages == prepared && documents.document().brightness() == 192);
+        open_spare();
+        assert(documents.edit_value(0, 2) == 2);
+        documents.edit_cancel();
+    }
+    {
         assert(commands.command("CNTRL GLOBAL SET name_and_contact 416ec3a90a61406578616d706c652e6f7267"));
         assert(board.last_reply == "CNTRL OK" && std::string(settings.values().name_and_contact) == "Ané\na@example.org");
         assert(commands.command("CNTRL GLOBAL PUT") && board.last_reply == "CNTRL OK");

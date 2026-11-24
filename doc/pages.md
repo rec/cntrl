@@ -51,7 +51,12 @@ Contact screen in Status.
 
 Adjustments are drafts. Back from a value returns to its field. Back from
 the field list offers to save and reload the setup, discard the draft, or
-keep editing. Saving a setup edit stops current playback during reload.
+keep editing. Saving the loaded setup stops current playback during reload.
+
+Open **Setups** from **Settings** to browse the saved setups. Choose one to edit
+its patches or setup settings. Saving edits to an inactive setup stores a
+revision and keeps the loaded setup playing. Saving the loaded setup uses
+**Save and reload setup**.
 
 ## Changing setups
 

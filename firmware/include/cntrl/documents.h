@@ -156,10 +156,29 @@ public:
     const char *browse_result() const { return browse_.result; }
     bool rotate(bool backward) { return browse(selected_, backward, true); }
     void redraw() { if (document_.valid()) { if (!hardware_.refresh_pages()) controller_.refresh(); } else empty(); }
-    bool edit_begin() {
-        if (busy() || hardware_.configuration_locked() || !document_.valid()) return false;
-        if (!allocate(staging_, document_.length())) return false;
-        std::memcpy(staging_.data, active_.data, document_.length()); dirty_ = true; return true;
+    bool edit_begin(const char *name = nullptr) {
+        if (busy() || dirty_ || hardware_.configuration_locked()) return false;
+        if (name && name_compare(name, selected_)) {
+            if (!setup_name(name) || !storage_.available()) return false;
+            browse_ = Browse();
+            std::strcpy(browse_.candidate, name);
+            browse_.loading = browse_.edit = true;
+            last_error_[0] = 0;
+            quiet_ = true;
+            storage_.choose(name);
+            browse_phase_ = BrowsePhase::header;
+            return true;
+        }
+        if (!document_.valid() || !allocate(staging_, document_.length())) return false;
+        std::memcpy(staging_.data, active_.data, document_.length());
+        std::strcpy(edit_name_, selected_);
+        dirty_ = true;
+        return true;
+    }
+    const char *edit_name() const { return edit_name_; }
+    bool edit_reloads() const { return !name_compare(edit_name_, selected_); }
+    bool edit_document(Document &draft) const {
+        return dirty_ && draft.load(staging_.data, staging_.size, hardware_, global_values());
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_add_cycle)
@@ -189,7 +208,11 @@ public:
     CNTRL_FLASH_ROUTINE(documents_edit_value)
 #endif
     int64_t edit_value(unsigned patch, unsigned field) const {
-        Document d; if (!dirty_ || !d.load(staging_.data, staging_.size, hardware_, global_values()) || (field <= 4 && patch >= d.patches())) return 0;
+        Document draft;
+        return edit_document(draft) ? edit_value(draft, patch, field) : 0;
+    }
+    static int64_t edit_value(const Document &d, unsigned patch, unsigned field) {
+        if (field <= 4 && patch >= d.patches()) return 0;
         const uint8_t *p = patch < d.patches() ? d.patch(patch) : nullptr;
         if (p && u16(p) == 65535 && field <= 4) return -1;
         switch (field) {
@@ -216,7 +239,7 @@ public:
         if ((field <= 4 && node < 0) || (original && !reference)) return false;
         uint8_t selection[11];
         if (field <= 4) std::memcpy(selection, d.node(unsigned(node)) + 4, sizeof(selection));
-        int64_t old = edit_value(patch, field), value = old + delta;
+        int64_t old = edit_value(d, patch, field), value = old + delta;
         if (field == 0 && value >= 1 && value <= 128) selection[2] = uint8_t(value - 1);
         else if (field == 1) {
             uint32_t bank = 0xffffffffu; const uint8_t *mapping = nullptr;
@@ -297,7 +320,7 @@ public:
     bool edit_save(uint32_t now) {
         if (!dirty_ || busy() || hardware_.configuration_locked()) return false;
         if (!allocate(scratch_, staging_.size)) return false;
-        std::snprintf(record_name_, sizeof(record_name_), "%s", selected_);
+        std::strcpy(record_name_, edit_name_);
         expected_ = staging_.size; expected_crc_ = checksum(staging_.data, expected_); quiet_ = true;
         if (!start_write(now)) return false;
         return true;
@@ -381,7 +404,7 @@ private:
         char first[64] = {}, last[64] = {}, before[64] = {}, after[64] = {};
         unsigned slot = 0, best_slot = 0, length = 0, position = 0, best_length = 0, count = 0;
         uint32_t generation = 0, best_generation = 0, crc = 0xffffffff, expected_crc = 0, progress = 0;
-        bool valid = false, backward = false, select = false, loading = false, final = false;
+        bool valid = false, backward = false, select = false, loading = false, final = false, edit = false;
     } browse_;
     BrowsePhase browse_phase_ = BrowsePhase::idle;
     void browse_fail() { browse_phase_ = BrowsePhase::idle; error("catalogue-failed"); }
@@ -455,8 +478,14 @@ private:
                 browse_next_slot(); return;
             }
             if (browse_.final) {
-                staging_.swap(scratch_); length_ = browse_.length;
-                generation_ = browse_.generation; slot_ = 1 - browse_.slot;
+                staging_.swap(scratch_);
+                if (browse_.edit) {
+                    std::strcpy(edit_name_, reinterpret_cast<const char *>(header_ + 20));
+                    dirty_ = true; quiet_ = false;
+                    browse_phase_ = BrowsePhase::idle;
+                    return;
+                }
+                length_ = browse_.length; generation_ = browse_.generation; slot_ = 1 - browse_.slot;
                 std::snprintf(record_name_, 64, "%s", header_ + 20);
                 browse_phase_ = BrowsePhase::activate; return;
             }
@@ -500,7 +529,7 @@ private:
     uint8_t header_[96] = {};
     Document document_;
     GlobalSettings *globals_ = nullptr;
-    char selected_[64] = {}, record_name_[64] = {}, cursor_[64] = {}, line_[256] = {}, last_error_[64] = {}, boot_error_[64] = {};
+    char selected_[64] = {}, record_name_[64] = {}, edit_name_[64] = {}, cursor_[64] = {}, line_[256] = {}, last_error_[64] = {}, boot_error_[64] = {};
     unsigned used_ = 0, received_ = 0, expected_ = 0, written_ = 0, slot_ = 0, length_ = 0, download_ = 0;
     unsigned delete_length_ = 0, delete_offset_ = 0;
     uint32_t expected_crc_ = 0, generation_ = 0, modified_ = 0, last_byte_ = 0, epoch_ = 0, clock_ = 0;

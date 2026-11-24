@@ -330,12 +330,20 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     cntrl::ui::Application app(hardware, documents, primary, hardware, hardware, songs, hardware, false);
     cntrl::Document checked; assert(checked.load(bytes.data(), unsigned(bytes.size()), hardware));
     assert(app.prepare_pages(checked)); app.finish_pages(true);
-    char put[128]; std::snprintf(put, sizeof(put), "CNTRL SETUP PUT 4c6567616379 %u %08lx 0\n",
-        unsigned(bytes.size()), (unsigned long)cntrl::checksum(bytes.data(), unsigned(bytes.size())));
-    for (char c : std::string(put)) documents.receive(uint8_t(c), 0);
-    for (uint8_t b : bytes) documents.receive(b, 0);
-    for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(0);
-    assert(!documents.busy() && documents.select("Legacy"));
+    const auto settle_documents = [&] {
+        for (unsigned i = 0; documents.busy() && i < 10000; ++i) documents.tick(i);
+        assert(!documents.busy() && !documents.last_error()[0]);
+    };
+    const auto upload = [&](const char *name) {
+        char put[128]; std::snprintf(put, sizeof(put), "CNTRL SETUP PUT %s %u %08lx 0\n",
+            name, unsigned(bytes.size()), (unsigned long)cntrl::checksum(bytes.data(), unsigned(bytes.size())));
+        for (char c : std::string(put)) documents.receive(uint8_t(c), 0);
+        for (uint8_t b : bytes) documents.receive(b, 0);
+        settle_documents();
+    };
+    upload("4c6567616379"); // Legacy
+    upload("5370617265"); // Spare
+    assert(documents.select("Legacy"));
     PagePlatform platform; PageFonts fonts; PageDisplay display; display.displays = 3;
     uint16_t work[4096] = {};
     cntrl::ui::Renderer renderer(display, fonts, work, 4096);
@@ -462,6 +470,32 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         const auto navigation = primary.navigation();
         assert(navigation.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes);
         assert(hardware.sent == before_tools && doc.instrument(instrument)[64] == channel);
+    }
+    {
+        const auto *active = documents.document().data();
+        assert(app.open_tool(cntrl::PageLayout::settings, platform));
+        app.setups.poll(0);
+        app.controls_locked = false;
+        const auto button = [&](unsigned control) { click(control, 3505); };
+        button(1); button(1); button(2); // Setups.
+        button(1); settle_documents(); app.setups.poll(0); // Spare.
+        button(2); settle_documents(); app.setups.poll(0);
+        assert(!std::strcmp(documents.edit_name(), "Spare") && !documents.edit_reloads());
+        const int64_t program = documents.edit_value(0, 0);
+        const unsigned adjust = program == 128 ? 0 : 1;
+        button(2); button(2); button(adjust); // Edit the first patch's program.
+        button(5); button(5); button(5); // Review changes.
+        button(1); button(2); // Save.
+        settle_documents(); app.setups.poll(0); app.finish_tool();
+        assert(!app.setups.open() && !documents.dirty());
+        assert(!std::strcmp(documents.selected(), "Legacy") && documents.document().data() == active);
+        assert(hardware.sent == before_tools && !storage.revisions.at("Spare").empty());
+        const auto navigation = primary.navigation();
+        assert(navigation.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes);
+        assert(documents.edit_begin("Spare"));
+        settle_documents();
+        assert(documents.edit_value(0, 0) == program + (adjust ? 1 : -1));
+        documents.edit_cancel();
     }
     {
         assert(documents.name_and_contact("Ané\na@example.org"));
