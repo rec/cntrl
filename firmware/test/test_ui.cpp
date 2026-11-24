@@ -739,7 +739,56 @@ void test_calibration_table_shows_raw_percentages_and_capture_status() {
     assert(pane.lines[3].graphics.foreground == 0x03e0 && pane.lines[4].graphics.foreground == 0xf800);
 }
 
+void picker_moves_the_highlight_over_a_fixed_list_and_scrolls_at_the_edges() {
+    cntrl::ui::Picker picker;
+    const cntrl::Rectangle bounds{7, 12, 100, 30};
+    auto frame = [&](uint32_t now, std::optional<bool> fixed = std::nullopt, unsigned first_line = 0) {
+        cntrl::Pane pane;
+        picker.paint(pane, bounds, 10, now, pane.rectangles[0], first_line,
+            [](unsigned index, cntrl::TextLine &line, int top) {
+                line.text[0] = char('A' + index);
+                line.y = int16_t(top);
+            }, fixed);
+        return pane;
+    };
+
+    picker.reset(3);
+    auto pane = frame(0);
+    assert(pane.lines[0].y == 12 && pane.lines[2].y == 32);
+    assert(pane.rectangles[0].x == 7 && pane.rectangles[0].width == 100);
+    assert(pane.rectangles[0].y == 12 && pane.rectangles[0].height == 10);
+    assert(picker.move(false, 100));
+    pane = frame(170);
+    assert(pane.lines[0].y == 12 && pane.rectangles[0].y == 17);
+    assert(frame(240).rectangles[0].y == 22);
+    pane = frame(170, false);
+    assert(pane.lines[0].y == 17 && pane.rectangles[0].y == 22);
+
+    picker.reset(6, 2);
+    pane = frame(0);
+    assert(pane.lines[0].text[0] == 'B' && pane.lines[0].y == 12);
+    assert(pane.rectangles[0].y == 22);
+    pane = frame(0, true);
+    assert(pane.lines[0].text[0] == 'A' && pane.lines[0].y == 12);
+    assert(pane.rectangles[0].y == 32);
+    assert(picker.move(false, 100));
+    pane = frame(170, true);
+    assert(pane.lines[0].y == 7 && pane.rectangles[0].y == 32);
+    pane = frame(240, true);
+    assert(pane.lines[0].text[0] == 'B' && pane.lines[0].y == 12);
+    assert(picker.move(true, 300));
+    pane = frame(370, true);
+    assert(pane.lines[0].text[0] == 'B' && pane.lines[0].y == 12);
+    assert(pane.rectangles[0].y == 27);
+
+    picker.reset(3, 2);
+    pane = frame(0, true, cntrl::max_lines - 1);
+    assert(pane.lines[cntrl::max_lines - 1].text[0] == 'C');
+    assert(pane.rectangles[0].y == 12);
+}
+
 int main() {
+    picker_moves_the_highlight_over_a_fixed_list_and_scrolls_at_the_edges();
     test_calibration_table_shows_raw_percentages_and_capture_status();
     test_time_sources_and_clock_output();
     cable_test_preserves_its_original_font_and_indicators();
