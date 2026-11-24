@@ -31,7 +31,7 @@ def firmware_preferences_header() -> str:
         '#include <cstdint>',
         'namespace cntrl::ui {',
         'enum class PreferenceKind {',
-        '    integer, boolean, milliseconds, choice, outputs',
+        '    integer, boolean, milliseconds, choice, outputs, font, color',
         '};',
         'struct Preference {',
         '    unsigned field;',

@@ -146,7 +146,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Pedal language | Installed languages | Device preference journal and deferred language loader |
 | Expression calibration | Heel and toe capture for enabled expression jacks, with review before Save | Device calibration file |
 | Device preferences | 33 scalar registry fields, including choices and a named clock-output picker. Port fields depend on hardware support. | Device preference journal with inherited values, setup overrides, and reload validation |
-| Loaded setup | Grouped Display, MIDI, Navigation, and Ports settings with value origin and a way to inherit an existing pedal preference | Setup draft, revision, and reload |
+| Loaded setup | Grouped Display, MIDI, Navigation, Ports, and Time settings with value origin and a way to inherit an existing pedal preference | Setup draft, revision, and reload |
 | Saved setups | The same grouped settings and the existing patch-cycle editor | Named setup draft and revision, with reload for the loaded setup |
 | Setlists | Rename and browse, move, add, and remove numbered occurrences, with save, discard, and keep editing | Song library journal, with playback position tracking and startup-name recovery |
 | Songs | Browse, rename, and move or remove patches with review | Song library journal, including setlist references and playback position |
@@ -171,7 +171,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Owner | Fields with an on-pedal save path | Fields still requiring an editor or save path |
 | --- | --- | --- |
 | Pedal | Boot firmware, startup set, language, contact text, calibration endpoints, and the 33 scalar preferences | Calibration names and settling time |
-| Setup | Brightness, screensaver timeout, animation color cycling, target pulse, MIDI interface and USB modes, USB forwarding, scrolling, fast debounce, navigation timing, TRS modes, auxiliary switch mode, and patch cycles | Frame buffers, animation resources, pickup, clock outputs, loop reset, page-specific scalar settings, routing, controls, counter definitions, startup and idle movie selections, and page layout and appearance |
+| Setup | Brightness, screensaver timeout, animation color cycling, target pulse, MIDI interface and USB modes, USB forwarding, scrolling, fast debounce, navigation timing, TRS modes, auxiliary switch mode, Time page settings including clock outputs and presets, and patch cycles | Frame buffers, animation resources, pickup, loop reset, other page-specific scalar settings, routing, controls, counter definitions, startup and idle movie selections, and page layout and appearance |
 | Setup instrument | MIDI channel 1–16, shared by every patch using that instrument in the setup | Output, profile, and instrument identity. Profile choices can affect bank mappings and SysEx. |
 | Setup patch | Instrument program 1–128, banks available in the assigned profile, optional volume 0–127, and optional pan −64–63 on supported program patches | Other MIDI action types and their parameters, names, style, nested actions, and binding definitions |
 | Song | Name and ordered patch occurrences | Display name, foreground, background, font, installed artwork, song enter and exit actions, MIDI and bindings, and editing a patch occurrence or its shared source |

@@ -228,8 +228,10 @@ public:
     static bool setup_preference_editable(unsigned field) {
         // These fields can affect memory estimates or optional wire records.
         constexpr uint64_t unavailable = (uint64_t(1) << 7) | (uint64_t(1) << 8)
-            | (uint64_t(1) << 10) | (uint64_t(1) << 11) | (uint64_t(1) << 28) | (uint64_t(1) << 33);
-        return field < GlobalSettings::count && ((GlobalSettings::fields & ~unavailable) & (uint64_t(1) << field));
+            | (uint64_t(1) << 10) | (uint64_t(1) << 11) | (uint64_t(1) << 33);
+        if (field >= GlobalSettings::count)
+            return field < GlobalSettings::count + PageSettings::count && field != GlobalSettings::count + PageSettings::clock_outputs;
+        return (GlobalSettings::fields & ~unavailable) & (uint64_t(1) << field);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_setup_preference)
@@ -432,14 +434,43 @@ private:
     CNTRL_FLASH_ROUTINE(documents_write_setup_preference)
 #endif
     bool write_setup_preference(const Document &draft, unsigned field, uint32_t value, bool inherit) {
+        const bool page_field = field >= GlobalSettings::count;
         if (busy() || hardware_.configuration_locked() || !setup_preference_editable(field)
-            || !GlobalSettings::valid(field, value)) return false;
+            || (page_field ? (inherit || value > UINT16_MAX) : !GlobalSettings::valid(field, value))) return false;
         const uint64_t bit = uint64_t(1) << field;
         const auto *pedal = global_preferences();
         if (inherit && (!draft.global_mask_offset() || !pedal || !(pedal->known & bit))) return false;
-        if (!allocate(scratch_, draft.length())) return false;
+        const unsigned page_word = field == 28 ? unsigned(PageSettings::clock_outputs)
+            : page_field ? field - GlobalSettings::count : unsigned(PageSettings::count);
+        const bool clock_word = page_word >= PageSettings::clock_outputs && page_word < PageSettings::count;
+        const unsigned flags = draft.data()[draft.core_offset() + 19];
+        const unsigned clock_at = unsigned(draft.bank(draft.patches()) - draft.data())
+            + ((flags & 0x80) ? expression_section_size : 0);
+        const unsigned growth = clock_word && !inherit && !(flags & 0x20) ? clock_section_size : 0;
+        if ((growth && draft.has_opaque_metadata()) || !allocate(scratch_, draft.length() + growth)) return false;
         auto *bytes = scratch_.data;
-        std::memcpy(bytes, draft.data(), draft.length());
+        if (growth) {
+            std::memcpy(bytes, draft.data(), clock_at);
+            std::memcpy(bytes + clock_at + growth, draft.data() + clock_at, draft.length() - clock_at);
+            std::memset(bytes + clock_at, 0, growth);
+            binary::write16(bytes + clock_at + 2 * (PageSettings::slot1 - PageSettings::clock_outputs), 120);
+            auto *core = bytes + draft.core_offset();
+            const unsigned length = draft.core_length() + growth;
+            core[19] |= 0x20;
+            put32(core + 8, length);
+            if (draft.core_offset()) {
+                put32(core - 4, length);
+                put32(bytes + 12, scratch_.size - binary::header_size);
+            }
+            const auto layout = draft.page_layout();
+            const unsigned extra = ((scratch_.size + 7) & ~7u) - ((draft.length() + 7) & ~7u);
+            unsigned budget = draft.page_ram2();
+            for (unsigned i = 0; i < layout.pages(); ++i)
+                if (layout.page(i)[0] == PageLayout::banked) budget += extra;
+            if (budget > hardware_.memory_capacity() || hardware_.memory_runtime() > hardware_.memory_capacity() - budget)
+                return false;
+            put32(bytes + draft.metadata() + scrolling_offset + 8, budget);
+        } else std::memcpy(bytes, draft.data(), draft.length());
         if (!inherit) {
             auto *core = bytes + draft.core_offset();
             auto *metadata = bytes + draft.metadata();
@@ -448,7 +479,13 @@ private:
             const auto flag = [](uint8_t &byte, unsigned mask, bool enabled) {
                 byte = uint8_t(enabled ? byte | mask : byte & ~mask);
             };
-            switch (field) {
+            if (clock_word) {
+                if (page_word == PageSettings::clock_options && value > 1) return false;
+                binary::write16(bytes + clock_at + 2 * (page_word - PageSettings::clock_outputs),
+                    uint16_t(page_word == PageSettings::clock_options ? (value ? 0 : 2) : value));
+            }
+            else if (page_field) word(metadata + pages_offset + 2 * page_word);
+            else switch (field) {
             case 0: core[18] = uint8_t(value); break;
             case 1: put32(core + 24, value * 1000); break;
             case 2: case 3: case 4: flag(core[19], 1u << (field == 2 ? 1 : field), value); break;
@@ -468,7 +505,8 @@ private:
             default: return false;
             }
         }
-        if (const unsigned offset = draft.global_mask_offset()) {
+        if (!page_field && draft.global_mask_offset()) {
+            const unsigned offset = draft.global_mask_offset() + growth;
             const uint64_t mask = inherit ? draft.explicit_settings() & ~bit : draft.explicit_settings() | bit;
             for (unsigned i = 0; i < 8; ++i) bytes[offset + i] = uint8_t(mask >> (8 * i));
         }

@@ -155,11 +155,17 @@ recompiled and uploaded before they can inherit live device-global preferences.
 
 On the pedal, open **Settings** and choose the current setup, or choose **Setups**
 and open a saved setup. **Setup fields** groups the compiled preferences by
-Display, MIDI, Navigation, and Ports. The value display says whether it comes
-from the setup, the pedal, or the compiled fallback. Adjusting a value makes a
-setup override. **Use pedal value** clears the override when a pedal value is
+task, including MIDI, Navigation, Ports, Time, and Tempo presets. The display
+says whether the value comes from the setup, the pedal, or the compiled fallback.
+Adjusting a value makes a setup override. **Use pedal value** clears the
+override when a pedal value is
 available. Save commits the draft as a setup revision. Saving the loaded setup
 reloads it.
+
+The utility groups cover clock following, tap detection, saved tempo presets,
+display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
+the MIDI group. The live clock's send switch and active source stay on the Time
+page.
 
 Use the USB connection to inspect, set or clear preferences:
 

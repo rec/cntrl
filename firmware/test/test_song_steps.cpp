@@ -97,7 +97,7 @@ struct Services {
 };
 
 int main(int argc, char **argv) {
-    assert(argc == 3 || argc == 4); cntrl::memory_budget = 2 * 1024 * 1024;
+    assert(argc >= 3 && argc <= 5); cntrl::memory_budget = 2 * 1024 * 1024;
     Board board; TestStorage setup_storage, song_storage;
     struct SettingsDisk : TestFileSystem {
         using TestFileSystem::TestFileSystem;
@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
         release(2); release(5);
         if (app.editing_tool && !app.tool_editor_open(board)) app.finish_tool();
     };
-    if (argc == 4 && !std::strcmp(argv[3], "--setup-preferences")) {
+    if (argc == 5 && !std::strcmp(argv[3], "--setup-preferences")) {
         assert(preferences.boot());
         documents.bind_globals(preferences);
         assert(documents.global_change(0, 100, false, false));
@@ -234,6 +234,43 @@ int main(int argc, char **argv) {
         assert(documents.edit_document(draft));
         assert(draft.scroll_ms() == original + 1 && (draft.explicit_settings() & (1u << 12)));
         documents.edit_cancel();
+
+        const unsigned before_clock = documents.document().length();
+        open_setup_preferences();
+        tap(4); // MIDI.
+        for (unsigned i = 0; i < 4; ++i) tap(1);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "MIDI clock outputs"));
+        tap(2);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "DIN  Off"));
+        tap(2); tap(5); // Enable DIN in the draft.
+        assert(!documents.document().page_settings()[cntrl::PageSettings::clock_outputs]);
+        tap(4); tap(4); tap(4); // Time, clock timeout.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Clock timeout (ms)"));
+        tap(2); tap(4); tap(1); tap(2); // 250 -> 260 ms.
+        tap(1); tap(1); tap(1); // Auto-select clock.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Auto-select clock"));
+        tap(2); tap(0); tap(2);
+        tap(4); tap(1); // Tempo presets, Tempo 2.
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Off"));
+        tap(2); tap(1); tap(2);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "20"));
+        tap(4); tap(4); // Page fonts, Title font.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Title font"));
+        tap(2); tap(1); tap(2);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "CourierPrime"));
+        tap(4); tap(1); tap(1); // Time colors, Flasher ring color.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Flasher ring color"));
+        tap(2); tap(1); tap(3); tap(1);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "#080400"));
+        assert(board.panes[2].graphics.background == 0x820);
+        tap(2);
+        save("Save and reload setup");
+        const auto &document = documents.document();
+        assert(document.length() == before_clock + cntrl::clock_section_size);
+        assert(document.explicit_settings() & (1u << 28));
+        std::ofstream exported(argv[4], std::ios::binary);
+        exported.write(reinterpret_cast<const char *>(document.data()), document.length());
+        assert(exported);
         assert(board.sent.empty());
         return 0;
     }

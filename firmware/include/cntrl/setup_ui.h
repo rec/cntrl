@@ -4,6 +4,7 @@
 #include "ui/presentation.h"
 #include "ui/preferences.h"
 #include "ui/prompts.h"
+#include "ui/raster.h"
 #include "documents.h"
 #include "expression_pedals.h"
 #include "songs.h"
@@ -372,7 +373,7 @@ private:
     Mode resume_editor_ = Mode::closed;
     bool return_from_shortcut_ = false;
     bool shortcut_hint_ = false;
-    unsigned preference_index_ = 0, preference_route_ = 0;
+    unsigned preference_index_ = 0, preference_route_ = 0, preference_component_ = 0;
     uint32_t preference_value_ = 0, setup_preference_ = 0, preference_step_ = 1;
     bool preference_known_ = false;
     Mode setup_preference_return_ = Mode::closed;
@@ -462,7 +463,7 @@ private:
             return docs_.global_change(preference().field, preference_value_, !preference_known_, hardware_.global_settings_busy());
         return (!startup_draft_[0] || songs_->setlist(startup_draft_)) && docs_.startup_set(startup_draft_);
     }
-    const ui::Preference &preference() const { return ui::preferences[preference_index_]; }
+    const ui::Preference &preference() const { return ui::preference_at(preference_index_); }
     bool preference_overridden() const {
         return docs_.document().explicit_settings() & (uint64_t(1) << preference().field);
     }
@@ -477,7 +478,7 @@ private:
         return known != preference_known_ || (known && values->values[field] != preference_value_);
     }
     bool preference_supported(unsigned index) const {
-        const unsigned field = ui::preferences[index].field;
+        const unsigned field = ui::preference_at(index).field;
         if (setup_preferences_ && !Documents::setup_preference_editable(field)) return false;
         if (field >= 23 && field <= 26) return hardware_.supports_trs_mode(field - 23, midi::TrsMode::aux);
         if (field >= 19 && field <= 22) {
@@ -504,7 +505,7 @@ private:
         return true;
     }
     void browse_preference(bool backward, bool group) {
-        constexpr unsigned count = sizeof(ui::preferences) / sizeof(ui::preferences[0]);
+        const unsigned count = setup_preferences_ ? ui::setup_preferences : ui::pedal_preferences;
         const char *original_group = preference().group;
         for (unsigned i = 0; i < count; ++i) {
             preference_index_ = (preference_index_ + (backward ? count - 1 : 1)) % count;
@@ -533,8 +534,14 @@ private:
         const auto &field = preference();
         using Kind = ui::PreferenceKind;
         using Message = ui::i18n::Message;
-        if (field.kind == Kind::boolean) ui::utf8::copy(text, capacity, ui::i18n::text(value ? Message::on : Message::off));
+        if (field.kind == Kind::boolean || (!value && ui::optional_tempo_preference(field.field)))
+            ui::utf8::copy(text, capacity, ui::i18n::text(value ? Message::on : Message::off));
         else if (field.kind == Kind::choice && value <= field.maximum) ui::utf8::copy(text, capacity, field.choices[value]);
+        else if (field.kind == Kind::font)
+            ui::utf8::copy(text, capacity, ui::preference_face_names[ui::preference_face_index(value)]);
+        else if (field.kind == Kind::color)
+            std::snprintf(text, capacity, "#%02X%02X%02X", unsigned((value >> 11) * 255 / 31),
+                unsigned(((value >> 5) & 63) * 255 / 63), unsigned((value & 31) * 255 / 31));
         else if (field.kind == Kind::outputs) {
             if (const auto *output = by_output ? preference_output() : nullptr) {
                 std::snprintf(text, capacity, "%s  %s", output->label, ui::i18n::text(value & (1u << output->route) ? Message::on : Message::off));
@@ -566,12 +573,13 @@ private:
             }
             else if (button == 2) {
                 const uint64_t bit = uint64_t(1) << field.field;
-                const bool pedal_known = values && (values->known & bit);
+                const bool page_field = field.field >= ui::page_preference;
+                const bool pedal_known = !page_field && values && (values->known & bit);
                 Document draft;
                 if (setup_preferences_) {
                     if (!docs_.edit_document(draft)) return;
                     const uint32_t fallback = ui::setup_preference(draft, field.field);
-                    preference_initial_known_ = preference_known_ = draft.explicit_settings() & bit;
+                    preference_initial_known_ = preference_known_ = page_field || (draft.explicit_settings() & bit);
                     preference_can_inherit_ = draft.global_mask_offset() && pedal_known;
                     setup_preference_ = pedal_known ? values->values[field.field] : fallback;
                     preference_initial_ = preference_value_ = preference_known_ ? fallback : setup_preference_;
@@ -584,11 +592,13 @@ private:
                 }
                 preference_step_ = 1;
                 preference_route_ = 0;
+                preference_component_ = 0;
                 if (!preference_output()) browse_preference_output(false);
                 mode_ = Mode::preference_value;
             }
         } else if (button == 3) {
-            if (!setup_preferences_ || preference_can_inherit_) {
+            if (field.kind == ui::PreferenceKind::color) preference_component_ = (preference_component_ + 1) % 3;
+            else if (!setup_preferences_ || preference_can_inherit_) {
                 preference_known_ = false; preference_value_ = setup_preference_;
                 preference_rejected_ = false;
             }
@@ -604,7 +614,9 @@ private:
             } else if (preference_changed()) { mode_ = Mode::decision; item_ = 2; }
             else leave_device_editor();
         } else if (button == 4 && field.kind != ui::PreferenceKind::outputs) {
-            preference_step_ = preference_step_ * 10 <= field.maximum - field.minimum ? preference_step_ * 10 : 1;
+            const unsigned span = field.kind == ui::PreferenceKind::color
+                ? ui::preference_color_max[preference_component_] : field.maximum - field.minimum;
+            preference_step_ = preference_step_ * 10 <= span ? preference_step_ * 10 : 1;
         } else if (button < 2) {
             const uint32_t previous = preference_value_;
             if (field.field >= 19 && field.field <= 22) {
@@ -615,7 +627,19 @@ private:
                 }
             } else {
                 const int delta = (button == 0 ? -1 : 1) * int(preference_step_);
-                preference_value_ = uint32_t(std::clamp(int64_t(preference_value_) + delta, int64_t(field.minimum), int64_t(field.maximum)));
+                if (field.kind == ui::PreferenceKind::font) {
+                    const int index = int(ui::preference_face_index(previous)) + delta;
+                    preference_value_ = ui::preference_faces[std::clamp(index, int(field.minimum), int(field.maximum))];
+                } else if (field.kind == ui::PreferenceKind::color) {
+                    const unsigned shift = ui::preference_color_shift[preference_component_];
+                    const unsigned maximum = ui::preference_color_max[preference_component_];
+                    const int component = int((previous >> shift) & maximum) + delta;
+                    preference_value_ = (previous & ~(maximum << shift)) | (unsigned(std::clamp(component, 0, int(maximum))) << shift);
+                } else preference_value_ = uint32_t(std::clamp(int64_t(preference_value_) + delta, int64_t(field.minimum), int64_t(field.maximum)));
+                if (ui::optional_tempo_preference(field.field)) {
+                    if (!previous && button == 1) preference_value_ = 20;
+                    else if (preference_value_ < 20) preference_value_ = 0;
+                }
             }
             preference_known_ |= preference_value_ != previous;
             preference_rejected_ = false;
@@ -834,9 +858,10 @@ private:
             const uint64_t bit = uint64_t(1) << field.field;
             title = field.label;
             const bool editing = mode_ == Mode::preference_value;
-            const bool pedal_known = values && (values->known & bit);
+            const bool page_field = field.field >= ui::page_preference;
+            const bool pedal_known = !page_field && values && (values->known & bit);
             const bool known = editing ? preference_known_
-                : setup_preferences_ ? draft.explicit_settings() & bit : pedal_known;
+                : setup_preferences_ ? page_field || (draft.explicit_settings() & bit) : pedal_known;
             const auto &owner = setup_preferences_ ? draft : docs_.document();
             const bool use_pedal = setup_preferences_ ? !known && pedal_known : known;
             value_label = use_pedal ? ui::i18n::text(ui::i18n::Message::pedal)
@@ -1039,7 +1064,15 @@ private:
                         .add(Role::back, setup_preferences_ && preference_rejected_ ? "Cancel value"
                             : ui::i18n::text(ui::i18n::Message::back), ", ").text());
                     prompt.clear();
-                    if (!setup_preferences_ || preference_can_inherit_)
+                    if (kind == ui::PreferenceKind::color) {
+                        prompt.add(Role::previous_section, ui::preference_color_channel[preference_component_]);
+                        if (hardware_.display_count() >= 3) {
+                            const auto color = uint16_t(preference_value_);
+                            const uint16_t ink = ui::Raster::luminance(color) < 1790 ? 0xffff : 0;
+                            views[2].graphics.background = color;
+                            for (auto &line : views[2].lines) line.graphics.foreground = ink;
+                        }
+                    } else if (!setup_preferences_ || preference_can_inherit_)
                         prompt.add(Role::previous_section, setup_preferences_ ? "Use pedal value" : "Use setup value");
                     if (!routes && preference().maximum - preference().minimum >= 10) {
                         char step[24]; std::snprintf(step, sizeof(step), "Step %lu", (unsigned long)preference_step_);

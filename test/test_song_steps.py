@@ -3,8 +3,10 @@
 import subprocess
 from pathlib import Path
 
+import tomlkit
+
 from cntrl.fonts import ui
-from cntrl.patch_chooser import compiler, compiler_inputs, models, songs
+from cntrl.patch_chooser import compiler, compiler_inputs, models, resolved, songs
 from scripts.native_tests import NativePrograms
 
 
@@ -75,9 +77,18 @@ def test_song_step_navigation_and_boundaries(
     )
     runner = native_programs.build('test/test_song_steps.cpp')
     subprocess.run([str(runner), str(fixture), str(setup)], check=True)
+    edited = tmp_path / 'edited.bin'
     subprocess.run(
-        [str(runner), str(fixture), str(setup), '--setup-preferences'], check=True
+        [str(runner), str(fixture), str(setup), '--setup-preferences', str(edited)],
+        check=True,
     )
+    saved_time = tomlkit.parse(resolved.export(edited.read_bytes()))['page_settings']
+    assert saved_time['clock_outputs'] == ['din']
+    assert saved_time['clock_timeout'] == 0.26
+    assert saved_time['autoselect_clock'] is False
+    assert saved_time['clock_bpms'] == [120, 20]
+    assert saved_time['title_font'] == 'CourierPrime'
+    assert saved_time['ring_color'] == '0x080400'
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--song-settings'], check=True
     )
