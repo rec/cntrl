@@ -139,6 +139,14 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             # Management screens, browsing and saved-return decoding are cold.
             # Leave the MIDI preparation/queue iteration paths in ITCM.
             '*(.text._ZN5cntrl7SongsUi*)',
+            '*(.text._ZN5cntrl7SetupUi*)',
+            '*(.text._ZNK5cntrl7SetupUi*)',
+            '*(.text._ZN5cntrl5Songs3JobC[12]E*)',
+            '*(.text._ZN5cntrl5Songs6resumeE*)',
+            '*(.text._ZN5cntrl5Songs14rename_setlistE*)',
+            '*(.text._ZNK5cntrl5Songs19recover_startup_setE*)',
+            '*(.text._ZN5cntrl14GlobalSettings*startup_renameE*)',
+            '*(.text._ZNK5cntrl14GlobalSettings14startup_renameE*)',
             # Host keyboard decoding is UI input, outside the MIDI hot path.
             '*(.text._ZN18KeyboardController*)',
             '*(.text._ZThn*_N18KeyboardController*)',
