@@ -7,6 +7,11 @@ Upload, sync, download and verify a 1,000,000-byte scratch file. Report upload, 
  options                                                                        
  ------------------------------------------------------------------------------ 
   -h, --help          show this help message and exit                           
+                                                                                
+ command options                                                                
+ ------------------------------------------------------------------------------ 
+  Show device status or measure USB disk throughput.                            
+  ------------------------------------------------------------------------------
   --port {None}|PATH  Select automatically unless a serial endpoint is          
                       explicitly supplied. (default: None)                      
   --reset-starts, --no-reset-starts                                             

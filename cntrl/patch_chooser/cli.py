@@ -174,6 +174,27 @@ class Status(BaseModel, frozen=True):
     ] = None
 
 
+class CommandLine(BaseModel, frozen=True):
+    verbose: bool = False
+    """Request verbose output."""
+
+    command: (
+        Annotated[Compile, tyro.conf.subcommand(name='compile')]
+        | Annotated[SetupCLI, tyro.conf.subcommand(name='setup')]
+        | Annotated[Status, tyro.conf.subcommand(name='status')]
+        | Annotated[device_globals.GlobalCLI, tyro.conf.subcommand(name='global')]
+        | Annotated[languages.LanguageCLI, tyro.conf.subcommand(name='language')]
+        | Annotated[Songs, tyro.conf.subcommand(name='songs')]
+        | Annotated[build.Build, tyro.conf.subcommand(name='build')]
+        | Annotated[font_coverage.Report, tyro.conf.subcommand(name='font-coverage')]
+        | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
+        | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
+        | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')]
+        | Annotated[Emulate, tyro.conf.subcommand(name='emulate')]
+        | Annotated[importing.Import, tyro.conf.subcommand(name='import')]
+    )
+
+
 def run_setup(
     command: SetupCopy
     | SetupAddDoom
@@ -681,23 +702,15 @@ def compile_to_file(
 
 
 def main() -> None:
-    command = tyro.cli(
-        Annotated[Compile, tyro.conf.subcommand(name='compile')]
-        | Annotated[SetupCLI, tyro.conf.subcommand(name='setup')]
-        | Annotated[Status, tyro.conf.subcommand(name='status')]
-        | Annotated[device_globals.GlobalCLI, tyro.conf.subcommand(name='global')]
-        | Annotated[languages.LanguageCLI, tyro.conf.subcommand(name='language')]
-        | Annotated[Songs, tyro.conf.subcommand(name='songs')]
-        | Annotated[build.Build, tyro.conf.subcommand(name='build')]
-        | Annotated[font_coverage.Report, tyro.conf.subcommand(name='font-coverage')]
-        | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
-        | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
-        | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')]
-        | Annotated[Emulate, tyro.conf.subcommand(name='emulate')]
-        | Annotated[importing.Import, tyro.conf.subcommand(name='import')],
+    arguments = sys.argv[1:]
+    if all(a in ('--verbose', '--no-verbose') for a in arguments):
+        arguments += ['setup', 'create']
+    options = tyro.cli(
+        CommandLine,
         config=(tyro.conf.OmitSubcommandPrefixes,),
-        args=sys.argv[1:] or ['setup', 'create'],
+        args=arguments,
     )
+    command = options.command
     try:
         if isinstance(command, importing.Import):
             importing.run(command)

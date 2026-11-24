@@ -6,7 +6,8 @@ from .crashes import install
 
 
 def main() -> None:
-    install('emulator' if sys.argv[1:2] == ['emulate'] else 'cntrl')
+    command = next((a for a in sys.argv[1:] if not a.startswith('-')), '')
+    install('emulator' if command == 'emulate' else 'cntrl')
     from .patch_chooser.cli import main
 
     main()

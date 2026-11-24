@@ -168,7 +168,11 @@ def test_reporting_failure_preserves_original_traceback(
 
 @pytest.mark.parametrize(
     'arguments,binary',
-    [(['cntrl', 'status'], 'cntrl'), (['cntrl', 'emulate', 'setup.toml'], 'emulator')],
+    [
+        (['cntrl', 'status'], 'cntrl'),
+        (['cntrl', 'emulate', 'setup.toml'], 'emulator'),
+        (['cntrl', '--verbose', 'emulate', 'setup.toml'], 'emulator'),
+    ],
 )
 def test_entrypoint_installs_handler_before_running_command(
     monkeypatch: pytest.MonkeyPatch, arguments: list[str], binary: str

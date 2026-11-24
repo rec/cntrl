@@ -28,11 +28,15 @@ def answer(monkeypatch: pytest.MonkeyPatch, values: list[str]) -> list[str]:
     return prompts
 
 
+@pytest.mark.parametrize('arguments', [[], ['--verbose']])
 def test_bare_cli_creates_compilable_commented_project(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    arguments: list[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr('sys.argv', ['cntrl'])
+    monkeypatch.setattr('sys.argv', ['cntrl', *arguments])
     prompts = answer(monkeypatch, ['', '', '', '', '', '', ''])
     cli.main()
     assert prompts[0] == 'Target directory [.]: '
@@ -164,7 +168,9 @@ def test_explicit_setup_create_and_help(
     with pytest.raises(SystemExit) as error:
         cli.main()
     assert error.value.code == 0
-    assert 'Create a cntrl setup' not in capsys.readouterr().out
+    help_text = capsys.readouterr().out
+    assert 'Create a cntrl setup' not in help_text
+    assert '--verbose' in help_text
 
 
 def test_interrupted_input_writes_nothing(
