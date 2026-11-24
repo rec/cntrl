@@ -186,6 +186,10 @@ shows two neighbors. It appends the right region's pages to the left region
 in order and keeps the left region's name. If the right region had startup
 focus, the joined region gets that focus.
 
+**Add utility page** appends a page to the chosen region. Choose an available
+page type and give it a unique name. The editor checks the layout against
+the setup's display and memory budgets before accepting the addition.
+
 The utility groups cover clock following, tap detection, saved tempo presets,
 display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
 the MIDI group. The live clock's send switch and active source stay on the Time

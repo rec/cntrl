@@ -231,12 +231,22 @@ int main(int argc, char **argv) {
         tap(2);
         assert(documents.edit_document(draft));
         assert(draft.page_layout().regions() == 2 && draft.page_layout().initial_focus() == 0);
+        assert(draft.page_ram2() + 16 == configuration.page_ram2());
         tap(0); tap(2); tap(0); tap(2); // Split before Gap.
         assert(!std::strcmp(board.panes[1].lines[1].text, "New region name"));
         for (const char c : std::string("Omitted")) app.text_key(uint8_t(c), board.now);
         settings(); tap(2); // Keep editing after accepting the pending split.
         assert(!std::strcmp(board.panes[1].lines[1].text, "Gap"));
         assert(!std::strcmp(board.panes[2].lines[1].text, "Omitted"));
+        assert(documents.edit_document(draft));
+        assert(draft.page_ram2() == configuration.page_ram2());
+        tap(5); tap(1); tap(1); tap(2); // Add utility page.
+        tap(2); tap(2); // Append a Status page to performance.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "New page name"));
+        app.text_key('\n', board.now); // The default name already exists.
+        assert(!std::strcmp(board.panes[1].lines[2].text, "Check name and layout limits"));
+        app.text_key('X', board.now); app.text_key('\n', board.now);
+        assert(!std::strcmp(board.panes[2].lines[1].text, "Status"));
         settings(); tap(1);
         assert(!std::strcmp(board.panes[2].lines[1].text, "Save and reload setup"));
         tap(2);
@@ -255,7 +265,10 @@ int main(int argc, char **argv) {
         assert(app.allocation.controller_display(0, 0) == 0);
         assert(app.allocation.controller_display(0, 1) == -1);
         assert(app.allocation.controller_display(0, 2) == 1);
-        assert(document.length() == configuration.length() && board.sent.empty());
+        assert(layout.region_page(0, 3) == 7 && !std::strcmp(layout.name(7), "XStatus"));
+        assert(document.length() == configuration.length() + 35 + layout.displays()
+            && document.page_ram2() == configuration.page_ram2() + 320
+            && board.sent.empty());
         std::ofstream exported(argv[4], std::ios::binary);
         exported.write(reinterpret_cast<const char *>(document.data()), document.length());
         assert(exported);

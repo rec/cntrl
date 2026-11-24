@@ -117,7 +117,9 @@ def test_song_step_navigation_and_boundaries(
         'Status',
         'Empty',
         'Browser',
+        'XStatus',
     ]
+    assert saved_layout['pages']['XStatus']['type'] == 'status'
     assert saved_layout['pages']['STime']['ram2_bytes'] == 16
     assert saved_layout['pages']['Browser']['min_displays'] == 1
     assert saved_layout['pages']['Browser']['give_up_displays'] == [

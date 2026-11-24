@@ -315,7 +315,7 @@ public:
         const auto layout = draft.page_layout();
         if (index >= layout.regions() || !position || position >= layout.region_size(index)) return false;
         const unsigned offset = unsigned(layout.region(index + 1) - draft.data());
-        if (!splice_setup(draft, offset, 0, 34)) return false;
+        if (!splice_setup(draft, offset, 0, 34, region_memory(layout.regions() + 1) - region_memory(layout.regions()))) return false;
         auto *header = scratch_.data + (layout.records - draft.data());
         ++header[7];
         header[9] += layout.initial_focus() > index;
@@ -336,11 +336,49 @@ public:
         const auto layout = draft.page_layout();
         if (left >= layout.regions() || left + 1 >= layout.regions()) return false;
         const unsigned offset = unsigned(layout.region(left + 1) - draft.data());
-        if (!splice_setup(draft, offset, 34, 0)) return false;
+        if (!splice_setup(draft, offset, 34, 0, region_memory(layout.regions() - 1) - region_memory(layout.regions()))) return false;
         auto *header = scratch_.data + (layout.records - draft.data());
         --header[7];
         header[9] -= layout.initial_focus() > left;
         scratch_.data[offset - 1] = uint8_t(layout.region_size(left) + layout.region_size(left + 1));
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_add_utility_page)
+#endif
+    bool add_utility_page(unsigned region, unsigned type, unsigned minimum, const char *name) {
+        Document draft;
+        const auto length = std::strlen(name);
+        if (!length || length > 31 || busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const auto layout = draft.page_layout();
+        if (region >= layout.regions() || layout.pages() == PageLayout::max_pages || minimum > layout.displays()
+            || type > PageLayout::memon || type == PageLayout::patch_chooser || type == PageLayout::banked) return false;
+        const unsigned offset = unsigned(layout.records - draft.data());
+        const unsigned record_size = 34 + layout.displays();
+        const unsigned growth = record_size + 1;
+        // The compiler budgets 320 bytes per page for runtime state.
+        if (!splice_setup(draft, offset, layout.length(), layout.length() + growth, 320)) return false;
+        auto *header = scratch_.data + offset;
+        const unsigned prefix = unsigned(layout.region(0) - layout.records);
+        std::memcpy(header, layout.records, prefix);
+        ++header[4];
+        auto *page = header + prefix;
+        std::memcpy(page, name, length);
+        page[32] = uint8_t(type);
+        page[33] = uint8_t(minimum);
+        for (unsigned i = 0; i < layout.displays(); ++i) page[34 + i] = uint8_t(layout.displays() - i - 1);
+        auto *regions = page + record_size;
+        std::memcpy(regions, layout.region(0), layout.regions() * 34);
+        ++regions[region * 34 + 33];
+        for (unsigned r = region + 1; r < layout.regions(); ++r) ++regions[r * 34 + 32];
+        const auto *old_cycles = layout.region(layout.regions());
+        auto *cycles = regions + layout.regions() * 34;
+        const unsigned position = layout.region(region)[32] + layout.region_size(region);
+        std::memcpy(cycles, old_cycles, position);
+        cycles[position] = uint8_t(layout.pages());
+        std::memcpy(cycles + position + 1, old_cycles + position, layout.pages() - position);
+        if (const auto *navigation = layout.navigation())
+            std::memcpy(cycles + layout.pages() + 1, navigation, 4);
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -635,10 +673,14 @@ public:
     bool history_compare(const char *name, uint64_t number) { return begin_history(HistoryAction::compare, name, number); }
     bool history_delete(const char *name, uint64_t number) { return begin_history(HistoryAction::erase, name, number); }
 private:
+    static int region_memory(unsigned count) {
+        // Cortex-M7 PageAllocation::Region array, rounded up by the heap.
+        return int((12 * count + 7) & ~7u);
+    }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_splice_setup)
 #endif
-    bool splice_setup(const Document &draft, unsigned position, unsigned removed, unsigned inserted) {
+    bool splice_setup(const Document &draft, unsigned position, unsigned removed, unsigned inserted, int runtime_delta = 0) {
         const bool resize = removed != inserted;
         const unsigned size = draft.length() - removed + inserted;
         if ((resize && draft.has_opaque_metadata()) || !allocate(scratch_, size)) return false;
@@ -655,7 +697,7 @@ private:
             put32(bytes + 12, size - binary::header_size);
         }
         const int64_t extra = int64_t((size + 7) & ~7u) - ((draft.length() + 7) & ~7u);
-        int64_t budget = draft.page_ram2();
+        int64_t budget = int64_t(draft.page_ram2()) + runtime_delta;
         const auto layout = draft.page_layout();
         for (unsigned i = 0; i < layout.pages(); ++i)
             if (layout.page(i)[0] == PageLayout::banked) budget += extra;
