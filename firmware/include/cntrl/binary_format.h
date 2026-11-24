@@ -12,6 +12,7 @@ constexpr uint16_t patch_edit_origins = 6;
 constexpr uint16_t cycle_recipe = 12;
 constexpr uint16_t cycle_catalogue = 13;
 constexpr uint16_t song_appearance = 14;
+constexpr uint16_t setlist_appearance = 15;
 constexpr unsigned song_appearance_size = 74;
 inline uint16_t read16(const uint8_t *p) { return uint16_t(p[0]) | uint16_t(p[1]) << 8; }
 inline void write16(uint8_t *p, uint16_t n) { p[0] = uint8_t(n); p[1] = uint8_t(n >> 8); }
@@ -100,7 +101,7 @@ public:
             for (unsigned i = 0; i < rows; ++i) {
                 const auto *row = bytes + i * song_appearance_size;
                 const unsigned index = read32(row);
-                if (index >= songs_ || index < next_song_ || (row[4] & ~15u)
+                if (index >= appearance_count_ || index < next_song_ || (row[4] & ~appearance_mask_)
                     || ((row[4] & 8) && row[5] == 255) || !std::memchr(row + 10, 0, 64)) return false;
                 next_song_ = index + 1;
             }
@@ -144,10 +145,15 @@ public:
                 } else if (!n || n % (tag == 9 ? 6 : 10)) return false;
                 if (!view_.auxiliary_record_offset) view_.auxiliary_record_offset = position_ - record_size;
                 extended_artwork_seen_ |= bit;
-            } else if (tag == song_appearance && kind_ == Kind::songs) {
-                if (appearance_end_ || !n || n % song_appearance_size || view_.length < 8
-                    || !reader.read(view_.offset, bytes, 4)) return false;
-                songs_ = read32(bytes);
+            } else if ((tag == song_appearance || tag == setlist_appearance) && kind_ == Kind::songs) {
+                const bool for_setlist = tag == setlist_appearance;
+                const unsigned bit = 1u << (4 + unsigned(for_setlist));
+                if ((extended_artwork_seen_ & bit) || !n || n % song_appearance_size || view_.length < 8
+                    || !reader.read(view_.offset + (for_setlist ? 4 : 0), bytes, 4)) return false;
+                extended_artwork_seen_ |= bit;
+                appearance_count_ = read32(bytes);
+                appearance_mask_ = for_setlist ? 7 : 15;
+                next_song_ = 0;
                 if (!view_.auxiliary_record_offset) view_.auxiliary_record_offset = position_ - record_size;
                 appearance_end_ = position_ + n;
                 phase_ = Phase::song_style;
@@ -165,13 +171,13 @@ public:
     }
 private:
     bool song_formatting_ = false;
-    uint8_t extended_artwork_seen_ = 0;
+    uint8_t extended_artwork_seen_ = 0, appearance_mask_ = 0;
     enum class Phase { header, hash, records, song_style, done };
     Phase phase_ = Phase::header;
     unsigned length_, position_ = 0, records_ = 0;
     Kind kind_;
     View view_;
-    unsigned songs_ = 0, next_song_ = 0, appearance_end_ = 0;
+    unsigned appearance_count_ = 0, next_song_ = 0, appearance_end_ = 0;
     uint32_t wire_crc_ = 0xffffffffu, envelope_crc_ = 0xffffffffu, expected_ = 0;
     bool envelope_ = false, wire_ = false, source_ = false, catalogue_ = false;
     static void update(uint32_t &crc, uint8_t byte) {

@@ -657,6 +657,7 @@ def _decode(data: bytes) -> Library:
     scene_artwork: list[tuple[str, str, bytes]] = []
     scene_image_sources: dict[str, str] = {}
     appearances: dict[int, tuple[int, int, int, int, str]] = {}
+    setlist_appearances: dict[int, tuple[int, int, int, int, str]] = {}
     if data.startswith(binary_format.MAGIC):
         for record in binary_format.unpack(data, binary_format.Kind.songs).records:
             if record.tag == binary_format.SONG_ARTWORK:
@@ -665,7 +666,14 @@ def _decode(data: bytes) -> Library:
                 setlist_artwork = song_artwork.unpack(record.data)
             if record.tag == binary_format.SCENE_ARTWORK:
                 scene_artwork = song_artwork.unpack(record.data)
-            if record.tag == binary_format.SONG_APPEARANCE:
+            if record.tag in (
+                binary_format.SONG_APPEARANCE,
+                binary_format.SETLIST_APPEARANCE,
+            ):
+                for_setlist = record.tag == binary_format.SETLIST_APPEARANCE
+                appearances_for_kind = (
+                    setlist_appearances if for_setlist else appearances
+                )
                 previous = -1
                 for (
                     index,
@@ -676,12 +684,13 @@ def _decode(data: bytes) -> Library:
                     title,
                 ) in APPEARANCE.iter_unpack(record.data):
                     if (
-                        not previous < index < len(song_headers)
-                        or fields & ~15
+                        index <= previous
+                        or index >= (len(sets) if for_setlist else len(song_headers))
+                        or fields & ~(7 if for_setlist else 15)
                         or b'\0' not in title
                     ):
                         raise SongLibraryError('invalid saved song appearance')
-                    appearances[index] = (
+                    appearances_for_kind[index] = (
                         fields,
                         font,
                         foreground,
@@ -800,26 +809,7 @@ def _decode(data: bytes) -> Library:
             style['image'] = artwork[index][1]
         caption = artwork[index][0] if index < len(artwork) else ''
         if index in appearances:
-            fields, font, foreground, background, title = appearances[index]
-            if fields & 1:
-                caption = title
-            for flag, key, color in (
-                (2, 'foreground_color', foreground),
-                (4, 'background_color', background),
-            ):
-                if fields & flag:
-                    style[key] = '0x{:02X}{:02X}{:02X}'.format(
-                        (color >> 11) * 255 // 31,
-                        ((color >> 5) & 63) * 255 // 63,
-                        (color & 31) * 255 // 31,
-                    )
-            if fields & 8:
-                name_for_font = next(
-                    (n for n, f in UI_FONTS.items() if f == font), None
-                )
-                if name_for_font is None:
-                    raise SongLibraryError('invalid saved song font')
-                style['font_name'] = name_for_font
+            caption = _apply_appearance(appearances[index], style, caption)
         songs.append(
             Song.model_validate(
                 {
@@ -852,6 +842,8 @@ def _decode(data: bytes) -> Library:
         )
         if image:
             style['image'] = image
+        if index in setlist_appearances:
+            caption = _apply_appearance(setlist_appearances[index], style, caption)
         sets[index] = Setlist.model_validate(
             item.model_dump()
             | {'display_name': caption or None, 'style': style or None}
@@ -1034,6 +1026,30 @@ def _parse(
     if not sources and any(r != 0xFFFFFFFF for _, *v in song_headers for r in v):
         raise SongLibraryError('missing binding-map source')
     return prefix, song_headers, positions, sets, sources
+
+
+def _apply_appearance(
+    appearance: tuple[int, int, int, int, str],
+    style: dict[str, object],
+    caption: str,
+) -> str:
+    fields, font, foreground, background, title = appearance
+    for flag, key, color in (
+        (2, 'foreground_color', foreground),
+        (4, 'background_color', background),
+    ):
+        if fields & flag:
+            style[key] = '0x{:02X}{:02X}{:02X}'.format(
+                (color >> 11) * 255 // 31,
+                ((color >> 5) & 63) * 255 // 63,
+                (color & 31) * 255 // 31,
+            )
+    if fields & 8:
+        name = next((n for n, f in UI_FONTS.items() if f == font), None)
+        if name is None:
+            raise SongLibraryError('invalid saved song font')
+        style['font_name'] = name
+    return title if fields & 1 else caption
 
 
 def _string(value: bytes) -> str:

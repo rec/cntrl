@@ -46,6 +46,11 @@ keeps the picker open; A/B browse and D/E jump between initial letters. F return
 to the ordered performance view. Song names are unique; a setlist can contain
 the same name more than once.
 
+To edit a setlist's display name, text color, or background color, open
+**Settings**, choose **Setlists**, open the setlist, and choose **Appearance**.
+The controls and save review work the same way as for songs. The setlist keeps
+its startup identity and song order.
+
 In the performance view, click F for the next song step and double-click F
 for the previous step.
 These controls also work within a step's full-display patch interface, regardless

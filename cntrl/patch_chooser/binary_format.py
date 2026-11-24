@@ -114,13 +114,14 @@ def unpack(data: bytes, kind: Kind) -> Document:
                 SCENE_ARTWORK,
                 SCENE_TITLE_STYLE,
                 SONG_APPEARANCE,
+                SETLIST_APPEARANCE,
             )
             and kind == Kind.songs
         ):
             if flags or any(r.tag == tag for r in records):
                 raise DocumentFormatError('invalid song presentation record')
-            if tag == SONG_APPEARANCE and (not size or size % 74):
-                raise DocumentFormatError('invalid song appearance size')
+            if tag in (SONG_APPEARANCE, SETLIST_APPEARANCE) and (not size or size % 74):
+                raise DocumentFormatError('invalid saved appearance size')
             if (
                 tag in (SONG_TITLE_CONTRAST, SETLIST_TITLE_CONTRAST, SCENE_TITLE_STYLE)
                 and not size
@@ -200,6 +201,7 @@ def has_opaque(data: bytes, kind: Kind = Kind.setup) -> bool:
                 SCENE_ARTWORK,
                 SCENE_TITLE_STYLE,
                 SONG_APPEARANCE,
+                SETLIST_APPEARANCE,
             )
         )
         for r in unpack(data, kind).records[1:]
@@ -242,6 +244,7 @@ SCENE_TITLE_STYLE = 11
 CYCLE_RECIPE = 12
 CYCLE_CATALOGUE = 13
 SONG_APPEARANCE = 14
+SETLIST_APPEARANCE = 15
 REQUIRED = 1
 MAX_PAYLOAD = 16 * 1024 * 1024
 MAX_RECORDS = 4096

@@ -148,7 +148,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Device preferences | 33 scalar registry fields, including choices and a named clock-output picker. Port fields depend on hardware support. | Device preference journal with inherited values, setup overrides, and reload validation |
 | Loaded setup | Grouped Display, MIDI, Navigation, Ports, and Time settings with value origin and a way to inherit an existing pedal preference | Setup draft, revision, and reload |
 | Saved setups | The same grouped settings and the existing patch-cycle editor | Named setup draft and revision, with reload for the loaded setup |
-| Setlists | Rename and browse, move, add, and remove numbered occurrences, with save, discard, and keep editing | Song library journal, with playback position tracking and startup-name recovery |
+| Setlists | Rename and browse, move, add, and remove numbered occurrences. Edit display name, text color, and background color with review. | Song library journal, with playback position tracking, startup-name recovery, and editable appearance export |
 | Songs | Browse, rename, move or remove patches, and edit display name, text color, background color, and font with review | Song library journal, including setlist references and playback position, plus editable appearance export |
 | Embedded song patch | Pick a supported MIDI action by its switch and trigger or activation order. Edit program, bank, volume, and pan for instrument programs, channel and program for direct Program Change, or channel, controller, and value for single Control Change. | Song library journal with a private source copy or an in-place replacement in the new revision |
 | Song patch from a named setup | The same MIDI actions and fields as embedded song patches, with the choice to edit one occurrence or every use of the action in the owning setup | Private copy in the song library or a setup revision, with review before reloading the active setup |
@@ -175,7 +175,7 @@ occur and repeat those tasks after changing the labels or controls.
 | Setup instrument | MIDI channel 1–16 and enabled output, shared by the instrument programs using that instrument in the setup | Profile and instrument identity. Profile choices can affect bank mappings and SysEx. |
 | Setup patch | Instrument program 1–128, banks available in the assigned profile, optional volume 0–127, and optional pan −64–63 on supported program patches | Other MIDI action types and their parameters, names, style, nested actions, and binding definitions |
 | Song | Name, ordered patch occurrences, display name, foreground, background, and embedded UI fonts | Installed artwork, song enter and exit actions, MIDI and bindings, and the remaining patch fields |
-| Setlist | Name and ordered song occurrences | Existing display name and style metadata |
+| Setlist | Name, ordered song occurrences, display name, foreground, and background | Installed artwork and remaining authored style metadata |
 
 The [device preference registry](../firmware/include/cntrl/ui/device_preferences.h)
 defines scalar types, bounds, and choices. Explicit setup values take priority

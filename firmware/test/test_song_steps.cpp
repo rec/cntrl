@@ -220,13 +220,29 @@ int main(int argc, char **argv) {
         tap(2); app.song_ui.key('!'); tap(2); // Replace an existing override row.
         settings(); tap(1); tap(2); finish();
         assert(songs.success() && !app.settings_frontmost() && board.sent.size() == sent);
+        assert(preferences.boot());
+        documents.bind_globals(preferences);
+        assert(documents.startup_set("Set"));
+        settings(); tap(0); tap(0); tap(2); // Setlists.
+        tap(2); tap(3); tap(0); tap(0); tap(2); // Choose Set, edit, Appearance.
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Display name"));
+        tap(2); app.song_ui.key('L'); tap(2);
+        tap(1); tap(1); tap(2); tap(1); tap(2); // Background color.
+        settings(); tap(1); tap(2); finish();
+        assert(songs.success() && !app.settings_frontmost());
+        assert(!std::strcmp(documents.startup_set(), "Set") && !std::strcmp(songs.active_set(), "Set"));
+        assert(songs.continuation().entry == 0 && songs.continuation().patch == 0 && board.sent.size() == sent);
         cntrl::ScenePanel scene, song, set;
         songs.presentation(scene, song, set, board.document, nullptr);
         assert(!std::strcmp(song.title.text, "!SÉcho"));
+        assert(!std::strcmp(set.title.text, "LFriday"));
+        assert(set.title.artwork_background && set.title.graphics.background == 0x800);
         cntrl::Songs restored(song_storage, board);
         cntrl::SongAppearance appearance;
         assert(restored.boot() && restored.song_appearance("One", appearance));
         assert(!std::strcmp(appearance.title, "!SÉcho") && appearance.font == 16);
+        assert(restored.setlist_appearance("Set", appearance) && !std::strcmp(appearance.title, "LFriday"));
+        assert(appearance.background == 0x800 && appearance.foreground == 0xffff);
         std::vector<uint8_t> bytes(restored.length());
         assert(restored.read_payload(0, bytes.data(), unsigned(bytes.size())));
         std::ofstream exported(argv[4], std::ios::binary);

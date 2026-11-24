@@ -303,19 +303,55 @@ public:
         appearance.foreground = item->foreground;
         appearance.background = item->background;
         appearance.font = item->font;
-        if (!(appearance.fields & SongAppearance::caption)) read_compiled_title(appearance.title);
+        const auto &view = slots_[active_].view;
+        if (!(appearance.fields & SongAppearance::caption))
+            read_compiled_title(view.artwork_offset, song_cache_index_, appearance.title);
         return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setlist_appearance_read)
+#endif
+    bool setlist_appearance(const char *name, SongAppearance &appearance, bool compiled = false) const {
+        if (!setlist(name)) return false;
+        const unsigned index = set_cache_index_;
+        const auto artwork = extended_artwork(slots_[active_].view.auxiliary_record_offset);
+        appearance = SongAppearance{};
+        if (!compiled && !read_setlist_appearance(artwork.set_appearance, index, appearance)) return false;
+        if (!(appearance.fields & SongAppearance::caption))
+            read_compiled_title(artwork.set.offset, index, appearance.title);
+        uint8_t style[6];
+        if (index < artwork.set_style.length / sizeof(style)
+            && read_payload(artwork.set_style.offset + index * sizeof(style), style, sizeof(style))) {
+            if ((style[1] & 1) && !(appearance.fields & SongAppearance::text_color)) appearance.foreground = u16(style + 2);
+            if ((style[1] & 2) && !(appearance.fields & SongAppearance::background_color)) appearance.background = u16(style + 4);
+        }
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setlist_title_read)
+#endif
+    void setlist_title(const char *name, char (&title)[64]) const {
+        const auto section = extended_artwork(slots_[active_].view.auxiliary_record_offset).set_appearance;
+        if (section.offset && setlist(name)) {
+            unsigned offset; bool found;
+            uint8_t fields = 0;
+            if (appearance_position(section, set_cache_index_, offset, found)
+                && found && read_payload(offset + 4, &fields, 1) && (fields & SongAppearance::caption)
+                && read_caption(offset, title) && title[0]) return;
+        }
+        ui::utf8::copy(title, sizeof(title), name);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(song_appearance_save)
 #endif
-    bool save_appearance(const char *name, const SongAppearance &appearance) {
-        if ((appearance.fields & ~15u)
+    bool save_appearance(const char *name, const SongAppearance &appearance, bool for_setlist = false) {
+        if ((appearance.fields & ~(for_setlist ? 7u : 15u))
             || ((appearance.fields & SongAppearance::font_choice) && !ui_font_valid(appearance.font))
             || (appearance.title[0] && !label_valid(reinterpret_cast<const uint8_t *>(appearance.title), 64))
-            || !song(name)) return false;
-        const unsigned index = song_cache_index_;
-        const auto section = extended_artwork(slots_[active_].view.auxiliary_record_offset).appearance;
+            || (for_setlist ? !setlist(name) : !song(name))) return false;
+        const unsigned index = for_setlist ? set_cache_index_ : song_cache_index_;
+        const auto artwork = extended_artwork(slots_[active_].view.auxiliary_record_offset);
+        const auto section = for_setlist ? artwork.set_appearance : artwork.appearance;
         unsigned offset; bool found;
         if (!appearance_position(section, index, offset, found) || (!found && !appearance.fields)
             || !prepare(Edit::appearance, name)) return false;
@@ -328,7 +364,7 @@ public:
         if (!section.offset) {
             offset = source.length;
             header = binary::record_size;
-            binary::write16(edit.bytes, binary::song_appearance);
+            binary::write16(edit.bytes, for_setlist ? binary::setlist_appearance : binary::song_appearance);
             put32(edit.bytes + 4, binary::song_appearance_size);
         } else if (!found) {
             edit.size_at = section.offset - start - 4;
@@ -641,13 +677,27 @@ public:
                 title_contrast(song.title, mode, current->foreground);
         }
         const auto artwork = extended_artwork(view.auxiliary_record_offset);
-        if (artwork.set.offset && setlist(active_set())) {
-            presentation_record(set, artwork.set.offset, artwork.set.length, set_cache_index_);
+        if ((artwork.set.offset || artwork.set_appearance.offset) && setlist(active_set())) {
+            if (artwork.set.offset) presentation_record(set, artwork.set.offset, artwork.set.length, set_cache_index_);
+            SongAppearance appearance;
+            read_setlist_appearance(artwork.set_appearance, set_cache_index_, appearance);
             uint8_t fields[6];
             if (set_cache_index_ < artwork.set_style.length / sizeof(fields)
                 && read_payload(artwork.set_style.offset + set_cache_index_ * sizeof(fields), fields, sizeof(fields))) {
+                if (appearance.fields) fields[0] = 0; // Recompute contrast for the edited caption and colors.
                 artwork_style(set, fields);
             }
+            if (appearance.fields & SongAppearance::caption)
+                std::strcpy(set.title.text, appearance.title[0] || set.bitmap.source ? appearance.title : active_set());
+            if (appearance.fields & SongAppearance::text_color) {
+                set.title.artwork_foreground = true;
+                set.title.graphics.foreground = appearance.foreground;
+            }
+            if (appearance.fields & SongAppearance::background_color) {
+                set.title.artwork_background = true;
+                set.title.graphics.background = appearance.background;
+            }
+            if (appearance.fields && set.bitmap.source) set.title.auto_contrast = true;
         }
         if (artwork.scene.offset && artwork.scene_style.offset) {
             unsigned index = 0;
@@ -664,7 +714,7 @@ public:
 private:
     struct ArtworkRecords {
         struct Record { unsigned offset = 0, length = 0; };
-        Record set, set_style, scene, scene_style, appearance;
+        Record set, set_style, scene, scene_style, appearance, set_appearance;
     };
     struct AppearanceEdit {
         uint8_t bytes[binary::song_appearance_size + binary::record_size] = {};
@@ -673,12 +723,11 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(song_compiled_title)
 #endif
-    void read_compiled_title(char (&title)[64]) const {
-        const auto &view = slots_[active_].view;
+    void read_compiled_title(unsigned directory, unsigned index, char (&title)[64]) const {
         uint8_t count[4];
-        if (view.artwork_offset && read_payload(view.artwork_offset, count, sizeof(count))
-            && song_cache_index_ < u32(count)
-            && read_payload(view.artwork_offset + 4 + 72 * song_cache_index_, reinterpret_cast<uint8_t *>(title), sizeof(title))
+        if (directory && read_payload(directory, count, sizeof(count))
+            && index < u32(count)
+            && read_payload(directory + 4 + 72 * index, reinterpret_cast<uint8_t *>(title), sizeof(title))
             && label_valid(reinterpret_cast<const uint8_t *>(title), sizeof(title))) return;
         std::memset(title, 0, sizeof(title));
     }
@@ -741,6 +790,14 @@ private:
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(setlist_read_appearance)
+#endif
+    bool read_setlist_appearance(ArtworkRecords::Record section, unsigned index, SongAppearance &appearance) const {
+        unsigned offset; bool found;
+        return appearance_position(section, index, offset, found)
+            && (!found || read_appearance(offset, appearance));
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(song_extended_artwork)
 #endif
     ArtworkRecords extended_artwork(unsigned position) const {
@@ -756,6 +813,7 @@ private:
             case 10: result.scene = {position, size}; break;
             case 11: result.scene_style = {position, size}; break;
             case binary::song_appearance: result.appearance = {position, size}; break;
+            case binary::setlist_appearance: result.set_appearance = {position, size}; break;
             }
             position += size;
         }

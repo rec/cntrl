@@ -108,7 +108,17 @@ def test_song_step_navigation_and_boundaries(
                 library.songs[1].model_copy(
                     update={'style': models.Style(foreground_color='black')}
                 ),
-            ]
+            ],
+            'setlists': [
+                library.setlists[0].model_copy(
+                    update={
+                        'display_name': 'Friday',
+                        'style': models.Style(
+                            foreground_color='white', background_color='black'
+                        ),
+                    }
+                )
+            ],
         }
     )
     fixture.write_bytes(songs.encode(styled, target))
@@ -116,7 +126,8 @@ def test_song_step_navigation_and_boundaries(
         [str(runner), str(fixture), str(setup), '--song-appearance', str(edited)],
         check=True,
     )
-    first, second = songs.decode(edited.read_bytes()).songs
+    restored_style = songs.decode(edited.read_bytes())
+    first, second = restored_style.songs
     assert first.name == 'One' and first.display_name == '!SÉcho'
     assert first.style == models.Style(
         foreground_color='blue',
@@ -124,6 +135,12 @@ def test_song_step_navigation_and_boundaries(
         font_name='AtkinsonNextSemiBold',
     )
     assert second.style == models.Style(foreground_color='0x080000')
+    (setlist,) = restored_style.setlists
+    assert setlist.name == 'Set' and setlist.display_name == 'LFriday'
+    assert setlist.songs == ['One', 'Two', 'One']
+    assert setlist.style == models.Style(
+        foreground_color='white', background_color='0x080000'
+    )
     with_spare = library.model_copy(
         update={
             'setlists': [
