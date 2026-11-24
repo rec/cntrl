@@ -19,6 +19,46 @@ inline int patch_edit_node(const Document &document, unsigned root, bool *refere
     return -1;
 }
 
+struct PatchValue { unsigned value = 0; bool program = false; };
+
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(editable_patch_value)
+#endif
+inline const uint8_t *editable_patch_value(const Document &document, unsigned root, PatchValue &value) {
+    for (unsigned i = 0; i < document.nodes() && root < document.nodes(); ++i) {
+        const auto *node = document.node(root);
+        if (node[0] == 10) root = u16(node + 4);
+        else if (node[0] == 6 && u16(node + 4) == 65535)
+            root = unsigned(document.named_patch(reinterpret_cast<const char *>(node + 6)));
+        else if (node[0] == 1) { value = {unsigned(node[6]) + 1, true}; return node + 6; }
+        else if (node[0] == 2 && u16(node + 2) == 34 && (node[36] & 0xf0) == 0xc0) {
+            value = {unsigned(node[37]) + 1, true}; return node + 37;
+        } else if (node[0] == 2 && node[1] == 0 && u16(node + 2) == 35 && (node[36] & 0xf0) == 0xb0) {
+            value = {node[38], false}; return node + 38;
+        } else break;
+    }
+    return nullptr;
+}
+
+#ifdef CNTRL_FLASH_ROUTINE
+CNTRL_FLASH_ROUTINE(write_patch_value)
+#endif
+inline bool write_patch_value(const Document &document, unsigned root, unsigned value, uint8_t *bytes) {
+    PatchValue previous;
+    const auto *parameter = editable_patch_value(document, root, previous);
+    const unsigned minimum = previous.program ? 1 : 0;
+    if (!parameter || value < minimum || value > minimum + 127 || value == previous.value) return false;
+    bytes[parameter - document.data()] = uint8_t(value - minimum);
+    if (previous.program) {
+        for (unsigned i = 0; i < document.patches(); ++i) {
+            const int program = patch_edit_node(document, document.browser_root(i));
+            if (program >= 0 && document.node(unsigned(program)) + 6 == parameter)
+                bytes[document.patch(i) - document.data() + 4] = uint8_t(value - 1);
+        }
+    }
+    return binary::seal_setup(bytes, document.length());
+}
+
 #ifdef CNTRL_FLASH_ROUTINE
 CNTRL_FLASH_ROUTINE(patch_edit_detach)
 #endif

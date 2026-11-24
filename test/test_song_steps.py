@@ -127,3 +127,26 @@ def test_song_step_navigation_and_boundaries(
         [str(runner), str(fixture), str(setup), '--shortcut-conflict'],
         check=True,
     )
+    setup.write_bytes(
+        compiler.compile_show(
+            {
+                **pages,
+                'patches': {
+                    'Lead': {
+                        'type': 'control-change',
+                        'output': 'din',
+                        'channel': 1,
+                        'controller': 20,
+                        'value': 10,
+                    }
+                },
+            },
+            {},
+            [],
+            target,
+        )
+    )
+    subprocess.run(
+        [str(runner), str(fixture), str(setup), '--named-patch-settings'],
+        check=True,
+    )

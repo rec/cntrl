@@ -21,7 +21,10 @@ public:
     bool editing_name() const { return mode_ == naming; }
     bool patch_chooser_requested = false;
     void refresh() { if (open()) { feedback_[0] = 0; render(); } }
-    void leave() { mode_ = closed; waiting_ = managing_library_ = managing_setlists_ = false; }
+    void leave() {
+        mode_ = closed; waiting_ = managing_library_ = managing_setlists_ = false;
+        named_work_ = NamedWork::none;
+    }
     void perform() { managing_library_ = managing_setlists_ = false; mode_ = performance; cursor_ = 0; locked_ = true; ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error()); render(); }
     void enter() { managing_library_ = managing_setlists_ = false; mode_ = root; cursor_ = 0; locked_ = true; patch_chooser_requested = false; render(); }
     void edit_library(bool setlists, bool shortcut_hint) {
@@ -32,7 +35,7 @@ public:
         render();
     }
     bool return_from_library() {
-        if (!managing_library_ || songs_.busy() || waiting_) return false;
+        if (!managing_library_ || songs_.busy() || waiting_ || named_work_ != NamedWork::none) return false;
         return_to_performance_ = true;
         if (mode_ == moving && cursor_ != entry_) review_move();
         else if (mode_ == patch_value && patch_draft_ != patch_value_.value)
@@ -45,8 +48,9 @@ public:
         return true;
     }
     bool library_returning_to_performance() const { return return_to_performance_; }
-    void poll(uint8_t held) {
+    void poll(uint8_t held, uint32_t now = 0) {
         if (!held) locked_ = false;
+        if (named_work_ != NamedWork::none && !documents_->busy()) poll_named_patch(now);
         if (mode_ == performance && !songs_.busy() && std::strcmp(feedback_, songs_.last_error())) {
             ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error()); render();
         }
@@ -71,7 +75,7 @@ public:
         }
     }
     void button(unsigned button, bool down) {
-        if (songs_.busy() || waiting_) return;
+        if (songs_.busy() || waiting_ || named_work_ != NamedWork::none) return;
         saved_ = {mode_, cursor_, insertion_, added_, {}, {}};
         std::snprintf(saved_.picker, 64, "%s", picker_);
         std::snprintf(saved_.song, 64, "%s", song_name_);
@@ -193,7 +197,12 @@ private:
         } else if (mode_ == patch_actions && button == 2) {
             if (managing_library_) {
                 if (cursor_ == 2) {
-                    if (songs_.patch_value(song_name_, patch_cursor_, hardware_, patch_value_)) {
+                    SongSelection selection;
+                    if (songs_.patch_at(song_name_, patch_cursor_, selection) && selection.document[0]) {
+                        if (!begin_named_patch(NamedWork::inspect, selection))
+                            ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot read the owning setup");
+                    } else if (songs_.patch_value(song_name_, patch_cursor_, hardware_, patch_value_)) {
+                        named_patch_ = false;
                         patch_draft_ = patch_value_.value;
                         shared_patch_ = false;
                         mode_ = patch_scope;
@@ -274,9 +283,12 @@ private:
     unsigned set_index_ = 0, library_choice_ = 0;
     uint32_t library_generation_ = 0;
     char managed_set_[64] = {};
-    Songs::PatchValue patch_value_;
+    PatchValue patch_value_;
     unsigned patch_draft_ = 0;
-    bool shared_patch_ = false;
+    bool shared_patch_ = false, named_patch_ = false, patch_reloads_ = false;
+    uint32_t named_patch_crc_ = 0;
+    enum class NamedWork { none, inspect, load_for_save, saving };
+    NamedWork named_work_ = NamedWork::none;
     const Setlist *current_set() const { return songs_.setlist(managing_setlists_ ? managed_set_ : songs_.active_set()); }
     void review_move() { review_library_edit(LibraryEdit::move, moving); }
     void review_library_edit(LibraryEdit edit, Mode resume) {
@@ -289,6 +301,12 @@ private:
         } else if (button == 2) {
             if (!library_choice_) {
                 if (songs_.generation() != library_generation_) { fail(); return; }
+                if (library_edit_ == LibraryEdit::change_patch_value && named_patch_) {
+                    SongSelection selection;
+                    if (!songs_.patch_at(song_name_, patch_cursor_, selection)
+                        || !begin_named_patch(NamedWork::load_for_save, selection)) fail();
+                    return;
+                }
                 if (!save_library_edit()) {
                     if (library_edit_ == LibraryEdit::rename_setlist && songs_.last_error()[0])
                         ui::utf8::copy(feedback_, sizeof(feedback_), songs_.last_error());
@@ -300,15 +318,68 @@ private:
                     else if (library_edit_ == LibraryEdit::remove || library_edit_ == LibraryEdit::rename_setlist) cursor_ = entry_;
                 }
             } else if (managing_setlists_) cursor_ = entry_;
-            if (managing_setlists_) mode_ = set_entries;
-            else if (library_edit_ == LibraryEdit::rename_song) { mode_ = song_actions; cursor_ = 0; }
-            else {
-                mode_ = patches; cursor_ = patch_cursor_;
-                if (!library_choice_ && library_edit_ == LibraryEdit::move_patch_earlier) --cursor_;
-                if (!library_choice_ && library_edit_ == LibraryEdit::move_patch_later) ++cursor_;
-            }
-            if (return_to_performance_) mode_ = closed;
+            finish_library_edit();
         }
+    }
+    void finish_library_edit() {
+        if (managing_setlists_) mode_ = set_entries;
+        else if (library_edit_ == LibraryEdit::rename_song) { mode_ = song_actions; cursor_ = 0; }
+        else {
+            mode_ = patches; cursor_ = patch_cursor_;
+            if (!library_choice_ && library_edit_ == LibraryEdit::move_patch_earlier) --cursor_;
+            if (!library_choice_ && library_edit_ == LibraryEdit::move_patch_later) ++cursor_;
+        }
+        if (return_to_performance_) mode_ = closed;
+    }
+    bool begin_named_patch(NamedWork work, const SongSelection &selection) {
+        if (!documents_ || !selection.document[0] || !documents_->edit_begin(selection.document)) return false;
+        named_work_ = work;
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(songs_ui_poll_named_patch)
+#endif
+    void poll_named_patch(uint32_t now) {
+        const auto work = named_work_;
+        named_work_ = NamedWork::none;
+        if (work == NamedWork::saving) {
+            if (documents_->dirty() || documents_->last_error()[0]) {
+                documents_->edit_cancel(); fail();
+            } else {
+                finish_library_edit();
+                ui::utf8::copy(feedback_, sizeof(feedback_), ui::i18n::text(ui::i18n::Message::saved));
+            }
+        } else {
+            SongSelection selection;
+            Document source;
+            const bool loaded = songs_.generation() == library_generation_ && songs_.patch_at(song_name_, patch_cursor_, selection)
+                && !name_compare(documents_->edit_name(), selection.document) && documents_->edit_document(source);
+            const int root = loaded ? source.named_patch(selection.key) : -1;
+            if (work == NamedWork::inspect) {
+                if (root >= 0 && editable_patch_value(source, unsigned(root), patch_value_)) {
+                    named_patch_crc_ = checksum(source.data(), source.length());
+                    patch_reloads_ = documents_->edit_reloads();
+                    named_patch_ = true; shared_patch_ = false;
+                    patch_draft_ = patch_value_.value;
+                    mode_ = patch_scope;
+                } else ui::utf8::copy(feedback_, sizeof(feedback_), "Cannot edit this patch value");
+                documents_->edit_cancel();
+            } else if (root < 0 || checksum(source.data(), source.length()) != named_patch_crc_
+                || (shared_patch_ && documents_->edit_reloads() != patch_reloads_)) {
+                documents_->edit_cancel();
+                ui::utf8::copy(feedback_, sizeof(feedback_), "Setup changed. Reopen this patch to edit it.");
+            } else if (shared_patch_) {
+                if (documents_->edit_named_patch_value(selection.key, patch_draft_) && documents_->edit_save(now))
+                    named_work_ = NamedWork::saving;
+                else { documents_->edit_cancel(); fail(); }
+            } else {
+                const bool saved = songs_.save_patch_value(song_name_, patch_cursor_, hardware_, patch_draft_, false, &source);
+                documents_->edit_cancel();
+                if (saved) { finish_library_edit(); waiting_ = true; }
+                else fail();
+            }
+        }
+        if (open()) render();
     }
     bool save_library_edit() {
         switch (library_edit_) {
@@ -529,6 +600,16 @@ private:
                 std::snprintf(panes[0].lines[0].text, 64, "Patch %u", patch_cursor_ + 1);
                 text(0, 1, shared_patch_ ? "Every use of this patch" : "Only this song step");
                 if (!shared_patch_) text(0, 2, "A copy stops following shared edits");
+                else if (named_patch_) {
+                    SongSelection selection;
+                    if (songs_.patch_at(song_name_, patch_cursor_, selection)) {
+                        auto &title = panes[0].lines[0].text;
+                        const unsigned used = unsigned(std::snprintf(title, sizeof(title), "Patch %u ", patch_cursor_ + 1));
+                        ui::utf8::copy(title + used, sizeof(title) - used, selection.key);
+                        text(0, 2, selection.document);
+                    }
+                    if (patch_reloads_) text(2, 2, ui::i18n::text(ui::i18n::Message::reload_stops_playback));
+                }
                 text(2, 0, patch_value_.program ? "Program" : "Control Change value");
                 std::snprintf(panes[2].lines[1].text, 64, "%u", patch_draft_);
                 text(1, 1, mode_ == patch_scope ? "Edit scope" : "Edit patch value");
@@ -554,11 +635,15 @@ private:
             }
         }
         if (mode_ == library_decision) {
-            const auto action = library_choice_ == 0 ? ui::i18n::Message::save
+            const auto save = library_edit_ == LibraryEdit::change_patch_value && named_patch_ && shared_patch_ && patch_reloads_
+                ? ui::i18n::Message::save_reload_setup : ui::i18n::Message::save;
+            const auto action = library_choice_ == 0 ? save
                 : library_choice_ == 1 ? ui::i18n::Message::discard : ui::i18n::Message::keep_editing;
             text(1, 1, ui::i18n::text(action));
             text(1, 2, ui::i18n::text(ui::i18n::Message::unsaved_edits));
         }
+        if (named_work_ != NamedWork::none)
+            text(1, 1, named_work_ == NamedWork::saving ? "Saving setup" : "Loading setup");
         const char *feedback = mode_ == naming && dropped_keys_
             ? ui::i18n::text(ui::i18n::Message::keyboard_input_dropped) : feedback_;
         if (*feedback) { text(0, 2, feedback); panes[0].lines[2].graphics.font = ui::localized_face; }

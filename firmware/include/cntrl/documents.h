@@ -188,6 +188,20 @@ public:
         return dirty_ && draft.load(staging_.data, staging_.size, hardware_, global_values());
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_edit_named_patch_value)
+#endif
+    bool edit_named_patch_value(const char *key, unsigned value) {
+        Document current, candidate;
+        if (busy() || hardware_.configuration_locked() || !edit_document(current)) return false;
+        const int node = current.named_patch(key);
+        if (node < 0 || !allocate(scratch_, staging_.size)) return false;
+        std::memcpy(scratch_.data, staging_.data, staging_.size);
+        if (!write_patch_value(current, unsigned(node), value, scratch_.data)
+            || !candidate.load(scratch_.data, scratch_.size, hardware_, global_values())) return false;
+        staging_.swap(scratch_);
+        return true;
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_add_cycle)
 #endif
     bool edit_add_cycle(const char *name, unsigned instrument, unsigned tag) {

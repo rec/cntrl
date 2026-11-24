@@ -31,7 +31,7 @@ public:
         consumed = services.diagnostic_controls(events.data(), pressed, now) || consumed;
         if (consumed) application_.controller().cancel_gesture();
         application_.setups.poll(pressed);
-        if (!application_.setups.open()) application_.song_ui.poll(pressed);
+        if (!application_.setups.open()) application_.song_ui.poll(pressed, now);
         if (!pressed) application_.controls_locked = false;
         if (auto *visit = services.visit()) { visit->poll(!pressed); consumed = consumed || visit->busy(); }
         consumed = route_settings(events, pressed, now, consumed || services.actions().midi_reserved()) || consumed;

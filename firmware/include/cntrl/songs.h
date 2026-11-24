@@ -185,7 +185,6 @@ public:
         if (!prepare(Edit::replace_patch, name)) return false;
         job_.at = at; job_.selection = selection; return prepare_source(job_.selection);
     }
-    struct PatchValue { unsigned value = 0; bool program = false; };
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_patch_value)
 #endif
@@ -193,30 +192,34 @@ public:
         SongSelection selection;
         MemoryBuffer bytes;
         Document document;
-        const auto *parameter = load_patch_value(name, at, hardware, selection, bytes, document, value);
-        return parameter != nullptr;
+        return patch_at(name, at, selection) && !selection.document[0]
+            && read_patch_document(selection, hardware, bytes, document)
+            && editable_patch_value(document, selection.node, value);
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(songs_save_patch_value)
 #endif
-    bool save_patch_value(const char *name, unsigned at, Hardware &hardware, unsigned value, bool shared) {
+    bool save_patch_value(const char *name, unsigned at, Hardware &hardware, unsigned value, bool shared,
+                          const Document *named_source = nullptr) {
         if (busy() || executing()) return false;
         SongSelection selection;
         MemoryBuffer bytes;
         Document document;
-        PatchValue previous;
-        const auto *parameter = load_patch_value(name, at, hardware, selection, bytes, document, previous);
-        const unsigned minimum = previous.program ? 1 : 0;
-        if (!parameter || value < minimum || value > minimum + 127 || value == previous.value) return false;
-        bytes.data[parameter - document.data()] = uint8_t(value - minimum);
-        if (previous.program) {
-            for (unsigned i = 0; i < document.patches(); ++i) {
-                const int program = patch_edit_node(document, document.browser_root(i));
-                if (program >= 0 && document.node(unsigned(program)) + 6 == parameter)
-                    bytes.data[document.patch(i) - document.data() + 4] = uint8_t(value - 1);
-            }
+        if (!patch_at(name, at, selection) || bool(selection.document[0]) != bool(named_source)) return false;
+        if (named_source) {
+            const int root = named_source->named_patch(selection.key);
+            if (shared || root < 0 || !bytes.resize(named_source->length())) return false;
+            std::memcpy(bytes.data, named_source->data(), bytes.size);
+            document = *named_source;
+            selection.node = unsigned(root);
+            if (!selection.label[0]) std::strcpy(selection.label, selection.key);
+            std::memset(selection.document, 0, sizeof(selection.document));
+            std::memset(selection.key, 0, sizeof(selection.key));
+        } else if (!read_patch_document(selection, hardware, bytes, document)) {
+            return false;
         }
-        if (!binary::seal_setup(bytes.data, bytes.size) || !document.load(bytes.data, bytes.size, hardware)) return false;
+        if (!write_patch_value(document, selection.node, value, bytes.data)
+            || !document.load(bytes.data, bytes.size, hardware)) return false;
         unsigned offset = 0, length = 0;
         if (shared && (!source_offset(selection.source, offset, length) || length != document.length())) return false;
         if (!shared && document.length() > 0xffffffffu - 24 - length_) return false;
@@ -982,28 +985,12 @@ private:
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(songs_load_patch_value)
+    CNTRL_FLASH_ROUTINE(songs_read_patch_document)
 #endif
-    const uint8_t *load_patch_value(const char *name, unsigned at, Hardware &hardware, SongSelection &selection,
-                                    MemoryBuffer &bytes, Document &document, PatchValue &value) const {
-        if (!patch_at(name, at, selection) || selection.document[0]) return nullptr;
+    bool read_patch_document(const SongSelection &selection, Hardware &hardware, MemoryBuffer &bytes, Document &document) const {
         const unsigned size = source_size(selection.source);
-        if (!size || !bytes.resize(size) || !read_source(selection.source, 0, bytes.data, size)
-            || !document.load(bytes.data, size, hardware)) return nullptr;
-        unsigned root = selection.node;
-        for (unsigned i = 0; i < document.nodes() && root < document.nodes(); ++i) {
-            const auto *node = document.node(root);
-            if (node[0] == 10) root = u16(node + 4);
-            else if (node[0] == 6 && u16(node + 4) == 65535)
-                root = unsigned(document.named_patch(reinterpret_cast<const char *>(node + 6)));
-            else if (node[0] == 1) { value = {unsigned(node[6]) + 1, true}; return node + 6; }
-            else if (node[0] == 2 && u16(node + 2) == 34 && (node[36] & 0xf0) == 0xc0) {
-                value = {unsigned(node[37]) + 1, true}; return node + 37;
-            } else if (node[0] == 2 && node[1] == 0 && u16(node + 2) == 35 && (node[36] & 0xf0) == 0xb0) {
-                value = {node[38], false}; return node + 38;
-            } else break;
-        }
-        return nullptr;
+        return size && bytes.resize(size) && read_source(selection.source, 0, bytes.data, size)
+            && document.load(bytes.data, size, hardware);
     }
     bool find_song(const char *name, Song &s, unsigned &index) const {
         for (index = 0; index < counts_.songs; ++index)

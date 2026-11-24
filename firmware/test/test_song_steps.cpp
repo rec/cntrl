@@ -127,12 +127,16 @@ int main(int argc, char **argv) {
     std::ifstream setup_file(argv[2], std::ios::binary);
     std::vector<uint8_t> setup{std::istreambuf_iterator<char>(setup_file), {}};
     cntrl::Document configuration; assert(configuration.load(setup.data(), unsigned(setup.size()), board));
-    char upload[128];
-    std::snprintf(upload, sizeof(upload), "CNTRL SETUP PUT 4c697665 %u %08lx 0\n",
-        unsigned(setup.size()), (unsigned long)cntrl::checksum(setup.data(), unsigned(setup.size())));
-    for (char c : std::string(upload)) documents.receive(uint8_t(c), 0);
-    for (uint8_t b : setup) documents.receive(b, 0);
-    while (documents.busy()) documents.tick(0);
+    const auto upload_setup = [&](const char *name) {
+        char upload[128];
+        std::snprintf(upload, sizeof(upload), "CNTRL SETUP PUT %s %u %08lx 0\n",
+            name, unsigned(setup.size()), (unsigned long)cntrl::checksum(setup.data(), unsigned(setup.size())));
+        for (char c : std::string(upload)) documents.receive(uint8_t(c), 0);
+        for (uint8_t b : setup) documents.receive(b, 0);
+        while (documents.busy()) documents.tick(0);
+        assert(!documents.last_error()[0]);
+    };
+    upload_setup("4c697665");
     assert(documents.select("Live"));
     while (documents.busy()) documents.tick(0);
     assert(documents.document().valid());
@@ -146,6 +150,7 @@ int main(int argc, char **argv) {
     auto sample = [&](uint8_t value, unsigned scans = 64) {
         held = value;
         for (unsigned i = 0; i < scans; ++i) {
+            documents.tick(board.now);
             input.scan(held, board.now, services); app.tick(board.now); board.entry.tick(board.now); songs.tick();
             board.switches.tick(board.now++, uint32_t(app.held));
             if (revision != board.switches.revision()) { revision = board.switches.revision(); if (board.switches.performance()) app.bindings_enter(); }
@@ -166,6 +171,86 @@ int main(int argc, char **argv) {
         release(2); release(5);
         if (app.editing_tool && !app.tool_editor_open(board)) app.finish_tool();
     };
+    if (argc == 4 && !std::strcmp(argv[3], "--named-patch-settings")) {
+        upload_setup("5370617265"); // Spare, an inactive setup.
+        songs.choose("Set"); app.song_ui.perform(); sample(0); next();
+        const auto sent = board.sent.size();
+        cntrl::SongSelection selection;
+        std::strcpy(selection.document, "Spare"); std::strcpy(selection.key, "Lead");
+        for (unsigned index : {0u, 1u}) {
+            assert(songs.replace_patch("One", index, selection));
+            while (songs.busy()) songs.tick();
+            assert(songs.success());
+        }
+        const auto open_patch = [&](unsigned index) {
+            settings();
+            tap(0); tap(0); tap(0); tap(2);
+            tap(2); tap(1); tap(2); // One, Edit patches.
+            if (index) tap(1);
+            tap(2); tap(1); tap(1); tap(2); // Edit patch value.
+            while (documents.busy()) sample(0);
+            sample(0);
+            assert(!documents.dirty());
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Edit scope"));
+        };
+        const auto saved_setup_value = [&](const char *name) {
+            assert(documents.edit_begin(name));
+            while (documents.busy()) documents.tick(board.now);
+            cntrl::Document draft;
+            cntrl::PatchValue value;
+            assert(documents.edit_document(draft));
+            const int root = draft.named_patch("Lead");
+            assert(root >= 0 && cntrl::editable_patch_value(draft, unsigned(root), value));
+            documents.edit_cancel();
+            return value.value;
+        };
+        const auto save_and_return = [&] {
+            settings(); tap(1); tap(2);
+            while (documents.busy() || songs.busy()) sample(0);
+            sample(0);
+            if (!app.tool_editor_open(board)) app.finish_tool();
+            assert(!app.settings_frontmost());
+        };
+        open_patch(0);
+        tap(1); tap(2); tap(1); // Shared, then raise the value.
+        settings(); tap(1);
+        setup_storage.remaining = 0;
+        tap(2);
+        while (documents.busy()) sample(0);
+        sample(0);
+        assert(app.settings_frontmost() && !documents.dirty());
+        setup_storage.remaining = -1;
+        assert(saved_setup_value("Spare") == 10);
+        tap(2); // Retry the same shared edit.
+        while (documents.busy()) sample(0);
+        sample(0);
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        assert(!app.settings_frontmost());
+        assert(saved_setup_value("Spare") == 11 && saved_setup_value("Live") == 10);
+        assert(!setup_storage.revisions.at("Spare").empty());
+        for (unsigned index : {0u, 1u}) {
+            cntrl::SongSelection unchanged;
+            assert(songs.patch_at("One", index, unchanged) && !std::strcmp(unchanged.document, "Spare"));
+        }
+        open_patch(0);
+        tap(2); tap(1); // Local, then raise the value.
+        save_and_return();
+        cntrl::PatchValue copy;
+        assert(songs.patch_value("One", 0, board, copy) && copy.value == 12);
+        assert(songs.patch_at("One", 1, selection) && !std::strcmp(selection.document, "Spare"));
+        assert(saved_setup_value("Spare") == 11);
+        assert(songs.continuation().patch == 0 && board.sent.size() == sent);
+        std::strcpy(selection.document, "Live");
+        assert(songs.replace_patch("One", 1, selection));
+        while (songs.busy()) songs.tick();
+        open_patch(1);
+        tap(1); tap(2); tap(1); settings(); tap(1);
+        assert(std::strstr(board.panes[1].lines[1].text, "Save and reload"));
+        tap(1); tap(2); // Discard the active-setup change.
+        if (!app.tool_editor_open(board)) app.finish_tool();
+        assert(!app.settings_frontmost() && saved_setup_value("Live") == 10 && board.sent.size() == sent);
+        return 0;
+    }
     if (argc == 4 && !std::strcmp(argv[3], "--song-settings")) {
         songs.choose("Set"); app.song_ui.perform(); sample(0); next();
         const auto sent = board.sent.size();
@@ -220,7 +305,7 @@ int main(int argc, char **argv) {
             tap(2); tap(1); tap(1); tap(2); // Edit the first patch value.
         };
         const auto expect_values = [&](unsigned first_value, unsigned second_value) {
-            cntrl::Songs::PatchValue value;
+            cntrl::PatchValue value;
             assert(songs.patch_value("Pne", 0, board, value) && !value.program && value.value == first_value);
             assert(songs.patch_value("Pne", 1, board, value) && value.value == second_value);
         };
@@ -257,7 +342,7 @@ int main(int argc, char **argv) {
         expect_values(3, 2);
         assert(songs.continuation().patch == 0 && board.sent.size() == sent);
         cntrl::Songs restored(song_storage, board);
-        cntrl::Songs::PatchValue value;
+        cntrl::PatchValue value;
         assert(restored.boot());
         assert(restored.patch_value("Pne", 0, board, value) && value.value == 3);
         assert(restored.patch_value("Pne", 1, board, value) && value.value == 2);

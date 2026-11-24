@@ -151,13 +151,14 @@ occur and repeat those tasks after changing the labels or controls.
 | Setlists | Rename and browse, move, add, and remove numbered occurrences, with save, discard, and keep editing | Song library journal, with playback position tracking and startup-name recovery |
 | Songs | Browse, rename, and move or remove patches with review | Song library journal, including setlist references and playback position |
 | Embedded song patch | Edit a program number or single Control Change value for one song occurrence or every use of its source node | Song library journal with a private source copy or an in-place replacement in the new revision |
+| Song patch from a named setup | Edit a program number or single Control Change value for one occurrence or every use of the named patch | Private copy in the song library or a setup revision, with review before reloading the active setup |
 | Current browser patch's instrument | MIDI channel, 1–16 | Shared instrument record in the setup draft |
 
 - Device-wide controls outside the listed coverage still need a consolidated
   Settings entry point.
-- Song-step edits for references to named setups still need a save path, as
-  do other patch fields. Fields derived from authoring inputs need a rebuild
-  path for any compiled data they affect.
+- Song-step editing still needs support for the other patch fields. Fields
+  derived from authoring inputs need a rebuild path for any compiled data
+  they affect.
 - The MC6 Pro prototype opens Settings and returns with C+F. It consumes both
   switches through release and preserves authored C+F navigation. The editor
   shows the Back chord. A launch hint appears at setlist boundaries and in
