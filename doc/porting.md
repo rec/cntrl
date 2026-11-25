@@ -30,13 +30,6 @@ validates and composes without opening a device. Maintainers can supply
 the same path. `--legacy-usb` explicitly selects the earlier cntrl transport.
 The common manifest/cache implementation is `cntrl/firmware/distribution.py`.
 
-For independent helper operations, supply `upload_helper_entry.py`.
-`cntrl upload-helper --controller CONTROLLER` executes that entry with
-`serve --serial SERIAL`, `bootloader --serial SERIAL`, `provision`, or
-`upload --image PATH --sha256 DIGEST --serial SERIAL` arguments.
-The target owns the helper and device access. The common command passes through
-its output and exit status. See [Firmware upload helper](upload_helper.md).
-
 Targets with hardware qualification supply `qualify_entry.py`.
 `cntrl qualify --target-dir path/to/implementation -- ARGUMENTS` runs that entry
 with the current interpreter, forwarding the arguments after `--` unchanged.

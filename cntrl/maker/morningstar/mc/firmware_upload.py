@@ -1,4 +1,4 @@
-"""A manually launched, single-pedal upload service over authenticated local IPC."""
+"""Validate and upload an MC6 Pro firmware image using the pinned updater."""
 
 import hashlib
 import os
@@ -8,22 +8,17 @@ import struct
 import subprocess
 import sys
 from datetime import UTC, datetime
-from multiprocessing.connection import Client, Listener
-from multiprocessing.context import AuthenticationError
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Literal
 from uuid import UUID, uuid4
 
-import tyro
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter
 from serial import Serial
 from serial.tools.list_ports import comports
 
 from ....firmware.distribution import cache_directory
 from ....firmware.intel_hex import FirmwareImage, read_hex
 from ....patch_chooser.devices import connected
-from ....upload import Bootloader, Provision, Serve, Upload
 from . import updater_provision
 
 
@@ -38,7 +33,6 @@ class UploadResult(BaseModel, frozen=True):
     uploader: str = ''
     uploader_sha256: str = ''
     attempt: FlashAttempt | None = None
-    managed_recovery: bool = False
 
 
 class Board(BaseModel, frozen=True):
@@ -49,14 +43,10 @@ class Board(BaseModel, frozen=True):
     capabilities: list[str]
 
 
-class Check(BaseModel, frozen=True):
-    serial: str
-    check: Literal[True] = True
-
-    model_config = {'extra': 'forbid'}
-
-
-class ManagedUpload(Upload, frozen=True):
+class Upload(BaseModel, frozen=True):
+    image: Path
+    sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    serial: str = Field(min_length=1)
     first_install: bool
 
 
@@ -169,11 +159,11 @@ def updater_path(*, provision_missing: bool = False) -> Path:
 
 
 def flash_record_path() -> Path:
-    """Use the checkout's record when the helper runs inside that checkout."""
+    """Use the checkout's record when flashing from that checkout."""
     cwd = Path.cwd()
     for directory in (cwd, *cwd.parents):
         record = directory / 'doc' / 'flash-record.md'
-        if record.is_file() and (directory / 'cntrl' / 'upload.py').is_file():
+        if record.is_file() and (directory / 'cntrl' / 'flash.py').is_file():
             return record
     return Path.home() / '.cntrl' / 'doc' / 'flash-record.md'
 
@@ -198,6 +188,13 @@ def record_reconnect(result: UploadResult, expected: str, outcome: str) -> None:
 
 def upload_image(request: Upload) -> UploadResult:
     """Snapshot an owned image, validate it, then upload to the selected target."""
+    try:
+        return _upload_image(request)
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        return UploadResult(returncode=1, output=f'Firmware upload: {error}\n')
+
+
+def _upload_image(request: Upload) -> UploadResult:
     from .boot_switch import STOCK_SHA256
 
     if not request.image.is_absolute():
@@ -217,8 +214,7 @@ def upload_image(request: Upload) -> UploadResult:
         image = read_hex(snapshot)
         if image.sha256 != request.sha256:
             raise ValueError('firmware SHA-256 changed; no upload was attempted')
-        managed = isinstance(request, ManagedUpload)
-        if not (managed and request.first_install and image.sha256 == STOCK_SHA256):
+        if not (request.first_install and image.sha256 == STOCK_SHA256):
             validate_firmware(image)
         updater = str(updater_path())
         listing = subprocess.run(
@@ -245,8 +241,6 @@ def upload_image(request: Upload) -> UploadResult:
                 'the expected pedal is not uniquely present in HalfKay mode'
             )
         board = matches[0]
-        if not managed:
-            print(f'Uploading SHA-256 {image.sha256} to {board.tag}', flush=True)
         attempt = FlashAttempt(id=uuid4(), record=flash_record_path())
         record = attempt.record
         started = datetime.now(UTC).isoformat(timespec='seconds')
@@ -282,8 +276,6 @@ def upload_image(request: Upload) -> UploadResult:
             )
         else:
             _record_outcome(record, '- Succeeded (uploader exit 0)\n')
-        if not managed:
-            print(output, end='', flush=True)
         return UploadResult(
             returncode=result.returncode,
             output=output,
@@ -313,127 +305,5 @@ def _record_outcome(path: Path, entry: str) -> None:
         )
 
 
-def perform_request(request: Upload | Check) -> UploadResult:
-    """Run the same upload checks for the local installer and the helper."""
-    try:
-        if isinstance(request, Check):
-            updater = updater_path()
-            return UploadResult(
-                returncode=0,
-                output='Upload helper ready',
-                uploader=str(updater),
-                uploader_sha256=hashlib.sha256(updater.read_bytes()).hexdigest(),
-                managed_recovery=True,
-            )
-        return upload_image(request)
-    except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        return UploadResult(returncode=1, output=f'Upload helper: {error}\n')
-
-
-def process_request(line: bytes, serial: str) -> UploadResult:
-    """Accept one bounded JSON object for the unit selected by the helper."""
-    try:
-        if len(line) > REQUEST_LIMIT or not line.endswith(b'\n'):
-            raise ValueError(
-                f'expected a newline-terminated request (maximum {REQUEST_LIMIT} bytes)'
-            )
-        request = TypeAdapter(Upload | ManagedUpload | Check).validate_json(line)
-        if request.serial != serial:
-            raise ValueError(
-                'request serial differs from the unit selected when starting the helper'
-            )
-    except ValueError as error:
-        return UploadResult(returncode=1, output=f'Upload helper: {error}\n')
-    return perform_request(request)
-
-
-def serve(serial: str) -> None:
-    """Handle one upload at a time; never replace an existing socket."""
-    updater_path()
-    if os.name != 'nt':
-        os.umask(0o077)
-    with Listener(
-        str(SOCKET_PATH), family=IPC_FAMILY, authkey=authentication_key()
-    ) as listener:
-        try:
-            print(f'Upload-only helper listening on {SOCKET_PATH}', flush=True)
-            print(f'Flash record: {flash_record_path()}', flush=True)
-            print(
-                f'Selected unit: {serial}. Enter HalfKay before uploading. '
-                'Ctrl-C stops the helper.'
-            )
-            while True:
-                try:
-                    with listener.accept() as connection:
-                        if connection.poll(5):
-                            result = process_request(
-                                connection.recv_bytes(REQUEST_LIMIT), serial
-                            )
-                            connection.send_bytes(result.model_dump_json().encode())
-                except (OSError, EOFError, AuthenticationError) as error:
-                    # A disconnected client must not cancel an upload in progress.
-                    print(f'Upload client disconnected: {error}', file=sys.stderr)
-        finally:
-            print('Upload helper stopped.', flush=True)
-
-
-def request_upload(request: Upload | Check) -> UploadResult:
-    with Client(
-        str(SOCKET_PATH),
-        family=IPC_FAMILY,
-        authkey=(CACHE_DIRECTORY / 'authentication.key').read_bytes(),
-    ) as connection:
-        connection.send_bytes(request.model_dump_json().encode() + b'\n')
-        if not connection.poll(300):
-            raise TimeoutError('upload helper did not respond within 300 seconds')
-        return UploadResult.model_validate_json(connection.recv_bytes(1024 * 1024))
-
-
-def authentication_key() -> bytes:
-    CACHE_DIRECTORY.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path = CACHE_DIRECTORY / 'authentication.key'
-    try:
-        with path.open('xb') as stream:
-            stream.write(os.urandom(32))
-        if os.name != 'nt':
-            path.chmod(0o600)
-    except FileExistsError:
-        pass
-    return path.read_bytes()
-
-
-def run(options: Serve | Upload | Bootloader | Provision) -> None:
-    try:
-        if isinstance(options, Provision):
-            updater_provision.provision(CACHE_DIRECTORY / 'tytools-0.9.9')
-        elif isinstance(options, Serve):
-            serve(options.serial)
-        elif isinstance(options, Bootloader):
-            request_bootloader(options.serial)
-        else:
-            result = request_upload(options)
-            print(result.output, end='')
-            sys.exit(result.returncode)
-    except KeyboardInterrupt:
-        sys.exit(130)
-    except (
-        OSError,
-        EOFError,
-        AuthenticationError,
-        ValueError,
-        subprocess.CalledProcessError,
-    ) as error:
-        sys.exit(f'Upload helper: {error}')
-
-
-def main() -> None:
-    run(tyro.cli(Serve | Upload | Bootloader | Provision))
-
-
-REQUEST_LIMIT = 8192
 CACHE_DIRECTORY = cache_directory() / 'cntrl-upload'
-IPC_FAMILY = 'AF_PIPE' if os.name == 'nt' else 'AF_UNIX'
-SOCKET_PATH = (
-    r'\\.\pipe\cntrl-upload' if os.name == 'nt' else CACHE_DIRECTORY / 'helper.sock'
-)
 FLASH_CONFIG_SHA256 = '65b509525e8b0e6e92e4e6bc8fa39575399b27532e04a55f7a7883212042fe7a'

@@ -28,7 +28,7 @@ from ....patch_chooser import backups, cli, data_files, models
 from ....patch_chooser.core_midi import Midi
 from ....patch_chooser.transport import SerialConnection, SetupClient, UsbProtocolError
 from ....patch_chooser.usb_frames import Frame
-from . import flash_target, qualify_usb_midi, release, upload_helper
+from . import firmware_upload, flash_target, qualify_usb_midi, release
 
 
 class Phase(StrEnum):
@@ -957,13 +957,13 @@ def run_reliability(recipe: Path, report: Path | None, *, execute: bool) -> None
         (profile.target_export / artifacts.target).read_bytes()
     )
     if profile.stages == [Phase.upload]:
-        upload_helper.validate_firmware(
+        firmware_upload.validate_firmware(
             read_hex(profile.target_export / artifacts.image)
         )
     result['revision'] = subprocess.check_output(
         ['git', 'rev-parse', 'HEAD'], text=True
     ).strip()
-    updater = upload_helper.updater_path()
+    updater = firmware_upload.updater_path(provision_missing=True)
     result['updater_path'] = str(updater)
     result['host'] = platform.platform()
     result['python'] = sys.version

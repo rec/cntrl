@@ -70,7 +70,7 @@ See [deployment details](firmware/patch-chooser.md),
 
 See the [firmware build and inspection instructions](firmware/README.md),
 [patch-chooser build](firmware/patch-chooser.md),
-[upload-only helper](firmware/upload-helper.md),
+[firmware installation](firmware-distribution.md),
 [firmware analysis](firmware-analysis.md) and
 [pin/peripheral map](mc6-pro-pin-map.md).
 
@@ -90,10 +90,7 @@ contents match. The build revision lives in a separate compilation unit, so
 changing the Git ref alone recompiles that file and relinks the firmware.
 
 Builds do not flash anything. See [packaged firmware installation](firmware-distribution.md)
-for toolchain-free flashing. The helper accepts verified, user-owned images
-without requiring a checkout. Keep an existing helper
-running between uploads; restart it when its source or IPC changes. An
-address-in-use error can mean it is already serving, not that its socket is stale.
+for flashing from an installed package without a compiler or checkout.
 
 `cntrl flash --controller mc6-pro` retains the original pedal backup in the installation's `before/`
 directory and prepares a separate `restore/` copy before entering the bootloader.

@@ -140,7 +140,7 @@ pixel maps to one display pixel. Recompile and copy existing setups so their
 widths, line heights and selected sizes match the new classic metrics. Wrapped
 classic UI text uses actual glyph advances instead of fixed character columns.
 
-The native classic fix was built and flashed through upload_helper on 2026-10-31.
+The native classic fix was built and flashed on 2026-10-31.
 The active `simple-setup` was backed up, recompiled, copied with read-back
 verification and selected again. Device status is `CNTRL READY 20 21411 fa5ba7e8`.
 The 449 Python tests, native renderer tests, production type check and firmware
@@ -250,8 +250,8 @@ uv run --frozen cntrl setup set font-demo --port /dev/cu.usbmodem144682801
 
 Return to the saved performance setup with `cntrl setup set pman --port
 /dev/cu.usbmodem144682801`, or select it through the pedal's A+D management menu.
-Firmware uploads use the existing [upload helper](../../../../doc/upload_helper.md)
-and the combined stock/cntrl image to preserve dual boot.
+[Firmware installation](firmware-distribution.md) preserves dual boot by
+composing the combined stock/CNTRL image.
 
 ## Build verification, 2026-10-27
 
@@ -263,7 +263,7 @@ The linked font data and descriptors are in the `0x601...` flash region. RAM1
 leaves 96,768 bytes for the stack, and RAM2 leaves 309,216 bytes for the heap.
 These are linker budgets. Physical readability requires checking the pedal.
 
-The combined image was uploaded through the running upload helper. The first
+The combined image was uploaded. The first
 attempt reported a USB write error; after confirming the pedal still enumerated
 as HalfKay with serial 14468280, the same verified image uploaded successfully.
 The pedal returned directly to cntrl and reported the unchanged pman setup as
@@ -287,8 +287,8 @@ existing repaint, background, padding and transition tests still pass.
 
 The corrected combined image has SHA-256
 `f4edd145bf919958535d8dd23e575e580fdcb5ff2df6635299b0d78a5d7b5817`.
-It passed the native tests and combined-image build checks and was flashed
-through the upload helper. The first USB write failed; after verifying HalfKay
+It passed the native tests and combined-image build checks and was flashed.
+The first USB write failed; after verifying HalfKay
 identity, the second attempt completed and stock firmware returned. Enter cntrl
 with A+F to check the saved demo and confirm the corrected appearance.
 
@@ -303,7 +303,7 @@ budgets remain 96,768 and 309,216 bytes.
 
 Combined firmware SHA-256:
 `39057d704478f0c42d16b80ce04f5cab0d346aef16c881dd0340bc9e61e11c0e`.
-The image was flashed through the upload helper after a USB write error and
+The image was flashed after a USB write error and
 HalfKay identity verification before retrying. Stock firmware returned.
 The revised demo compiles to 1,340 bytes and uses size 32 for all three samples.
 After entering cntrl with A+F, the revised `font-demo` was copied with
@@ -333,7 +333,7 @@ Physical rendering and SD-card latency have not been verified for custom assets.
 
 ### SD font deployment completed, 2026-10-27
 
-The image above was subsequently installed through the running upload helper.
+The image above was subsequently installed.
 The first attempt reported a USB write error. After checking that the expected
 serial 14468280 still enumerated as HalfKay, the same verified image uploaded
 successfully. Stock firmware returned, and the user entered cntrl with A+F.

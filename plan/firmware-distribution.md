@@ -48,12 +48,9 @@ as the application: the hook is linked to that application's entry point, and
 composition also needs its stock-reader address. Shipping the application alone
 is insufficient.
 
-Two current bench restrictions also prevent distribution: the upload helper
-requires an image inside a registered Git worktree, and device selection contains
-a fixed unit serial. Replace these restrictions with private installer staging
-and explicit selection of a compatible physical unit, preserving the helper's
-authentication and image validation. This is necessary for users without Git
-checkouts and for pedals other than the development unit.
+The installer stages images privately and selects a compatible physical unit
+explicitly. Image validation works outside a Git checkout and device selection
+accepts the user's own pedal serial.
 
 ## Packaged resources
 
@@ -158,9 +155,8 @@ Before requesting bootloader entry:
 5. Complete the applicable backup and preflight workflow below.
 
 No compiler, linker, `objcopy`, `nm` or font generation may run on this path.
-Local composition does not itself write the pedal. Preserve the existing
-upload-only helper boundary and pinned native uploader provisioning. Do not
-silently start an unrestricted device service.
+Local composition does not itself write the pedal. The installer invokes the
+pinned native uploader directly after backup and bootloader entry.
 
 Select the user's device explicitly and retain its identity through application
 and bootloader transitions. Reject ambiguity and incompatible models before
@@ -244,7 +240,7 @@ Implement in this order:
    current composer. Add the TOML manifest and committed own-only resources.
 2. Add exact-version cache preparation and installed-resource loading.
 3. Make ordinary `cntrl flash` prepare packaged components; remove source-tree
-   assumptions from that path and generalize helper staging/device selection.
+   assumptions from that path and generalize staging and device selection.
 4. Add the explicit stock-first-install flow and retain the cntrl update flow.
 5. Verify packaging, document platform prerequisites and qualify real installs.
 

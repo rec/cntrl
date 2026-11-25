@@ -38,13 +38,12 @@ matching retained host revision, before packaged firmware distribution:
 uv run --frozen --no-editable cntrl flash --target-dir cntrl/maker/morningstar/mc/diagnostic_control --output build/sysex-transport-control --skip-build --port /dev/cu.usbmodem144682801
 ```
 
-This requires the existing user-launched upload helper. It preserves uploader
-exit status and retains its fresh backup in `before/`, including after an upload
-error. Do not start another uploader while one is running.
+The historical workflow preserves the uploader exit status and retains its
+backup in `before/`, including after an upload error.
 
 The current `cntrl flash --controller` command installs packaged firmware or
 current component exports. It does not install this frozen comparison export.
-Use the retained matching host/helper revision for reproducing this historical
+Use the retained matching host revision for reproducing this historical
 experiment; adapting the frozen control to the new installation protocol needs
 separate qualification.
 

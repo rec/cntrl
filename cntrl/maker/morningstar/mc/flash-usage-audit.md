@@ -32,9 +32,8 @@ The pinned Teensy 1.62.0 core sources were used to identify familiar routines;
 the stock instructions determine the reported addresses and ranges.
 
 This was a host-side static audit. It did not flash, reset, read or write the
-pedal, invoke an EEPROM test, or change running firmware. The existing upload
-helper performs uploads, not arbitrary flash readback, so it cannot provide a
-sector-content dump for this audit.
+pedal, invoke an EEPROM test, or change running firmware. The installer cannot
+read back arbitrary flash sectors for this audit.
 
 ## Observed application layout
 

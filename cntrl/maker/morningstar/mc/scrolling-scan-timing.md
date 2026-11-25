@@ -184,7 +184,7 @@ Python-consumed data changed, so Python checks were not run.
 
 Diagnostic image SHA-256:
 `a1af901ab4c184d56f3d457967711d32435a96fd4237ad39accc00d0c327dc18`.
-Uploaded through the existing helper on 2026-11-01. After its usual
+Uploaded on 2026-11-01. After its usual
 reset/disappearance status 1, USB returned `CNTRL READY 20 21411 fa5ba7e8`
 and `CNTRL EDGE ARMED`. The trial is waiting for C; no motion was triggered
 from the host. Optical results and actual duration remain pending.
@@ -314,7 +314,7 @@ and is not an isolated measurement of the transfer optimization.
 
 Native sanitizer tests and the ARM build/image checks pass. No Python source or
 Python-consumed data changed, so the Python checks were not run. The candidate
-was subsequently uploaded through the existing helper. The first upload hit
+was subsequently uploaded. The first upload hit
 a USB write error; after confirming HalfKay again, the retry completed and
 reset the pedal. The saved setup returned `CNTRL READY 20 21411 fa5ba7e8`.
 
@@ -334,7 +334,7 @@ bytes of RAM2 free for allocation. Test and build logs from this session are
 The restored hardware-scroll sources match `4ea3253` exactly. Native tests and
 ARM build/image checks passed again. Restored image SHA-256:
 `dca55d0cbfe3be31cd24b47ccf9c54c4baef3759376ad79f4f411f614ed76d20`.
-It was uploaded through the helper, reset successfully, and returned
+It was uploaded, reset successfully, and returned
 `CNTRL READY 20 21411 fa5ba7e8`. This confirms setup loading after restoration;
 the original moving-edge artifact remains unresolved.
 
@@ -859,7 +859,7 @@ source or Python-consumed data changed.
 
 Image SHA-256:
 `9651ebbf99335406e872ef0411c3ee9a67d3b9079c344f2ab9b74e987d0e8208`.
-Uploaded through the existing helper on 2026-11-01. The updater reported
+Uploaded on 2026-11-01. The updater reported
 reset/disappearance with status 1; USB subsequently returned
 `CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic is waiting
 for C at installation; no trials were triggered from the host. Subsequent
@@ -905,7 +905,7 @@ ARM build/image inspection passed. No Python source or Python-consumed data chan
 
 Image SHA-256:
 `d2ad579546b3c091762ca00e96d3c48cdc10d97dc2f25c2dd5dd6a38216be9a6`.
-Uploaded through the existing helper on 2026-11-01. The updater reported its
+Uploaded on 2026-11-01. The updater reported its
 reset/disappearance status 1, then USB returned `CNTRL READY 20 21411 fa5ba7e8`
 and `CNTRL EDGE ARMED`. The demo is waiting for C; no sequence was started from
 the host. The user confirmed complete agreement with the expected sequence, including
@@ -953,7 +953,7 @@ passed. No Python source or Python-consumed data changed.
 
 Diagnostic image SHA-256:
 `561bc292a8de481dbe8ca8984639314968568f153cc429b395a3557ff019dbd1`.
-Uploaded through the existing helper on 2026-11-01. The updater reported
+Uploaded on 2026-11-01. The updater reported
 reset/disappearance with status 1; subsequent USB responses were
 `CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. The diagnostic was left waiting
 for C; no motion was triggered from the host. The user subsequently reported
@@ -1334,7 +1334,7 @@ tests do not establish physical pointer application time.
 
 The original twelve-trial version was installed 2026-10-31 with image SHA-256
 `d88a1d3b158a483065e8f813a1ba45e846562abc749a3a926525448fa21fccd7`.
-The helper completed the upload and reset, then USB returned
+The uploader completed the upload and reset, then USB returned
 `CNTRL READY 20 21411 fa5ba7e8` and `CNTRL EDGE ARMED`. This verifies command
 acceptance and setup loading, not the visible pattern or physical timings.
 The recording sequence has not been started from the host.
@@ -1451,22 +1451,20 @@ whether the physical controller implements scrolling. Inspection compares HEX
 with ELF bytes and checks the stock flash-configuration digest. No build target
 uploads anything.
 
-The image is `../build/scroll-probe.hex`. To use the existing fixed-image upload
-helper, it is copied to `../build/patch-chooser.hex` only after inspection. This
-does not change the normal application sources or the helper's target restriction.
+The image is `../build/scroll-probe.hex`. The original trial staged it at
+`../build/patch-chooser.hex` after inspection.
 The normal build was preserved as `../build/application-before-scroll.hex` before
 staging the diagnostic. That saved build has SHA-256
 `60ebbcc450560197396faecdc9e6c96827fb078737ec73d82585ec9fb27353cd`.
-Restore it through the same software bootloader/helper workflow, or build and
-inspect the current patch-chooser target before restoration. Neither restoration
-path needs to modify saved card files.
+Restore the matching performance image after measuring. [Current firmware
+installation](firmware-distribution.md)
 
 ### Original upload record, 2026-10-24
 
 Diagnostic HEX SHA-256:
 `977daac74c91f826d1da56238a2029b75d358b4aeb59621dca18494d6fa54851`.
 Both native test targets and stock flash configuration/HEX-ELF checks passed.
-Software bootloader entry and helper upload completed; the uploader returned
+Software bootloader entry and upload completed; the uploader returned
 status 1 after its usual reset/disappearance, then USB confirmed the ONE status
 above. Before upload the application reported `CNTRL READY 7 0 00000000`:
 no compatible show was active. The diagnostic made no changes to that state.
@@ -1898,7 +1896,7 @@ scrolling diagnostics remain excluded.
 The 75 ms / 0.5 ms image SHA-256 is
 `81a7478ad325b3da9304a8748dd17a30ac11bc47b0e4b20f7aa02bae03dc8195`.
 Native tests, ARM compilation, HEX/ELF comparison and flash-header checks passed.
-The upload helper validated that image and selected the pedal in HalfKay mode.
+The uploader validated that image and selected the pedal in HalfKay mode.
 The uploader reached "Sending reset command", then returned exit status 1 with
 "Board ... has disappeared". The pedal subsequently returned
 `CNTRL READY 20 21411 fa5ba7e8`. This confirms it is responding with the same

@@ -124,7 +124,6 @@
  cli.flash.resources: path | null = null
  cli.flash.serial: string | null = null
  cli.flash.stock_version: string | null = null
- cli.flash.upload_helper: boolean = false
  cli.font-coverage.output: path = 'plan/font-coverage.md'
  cli.global.clear.port: path | null = null
  cli.global.clear.setting: string
@@ -215,12 +214,6 @@
  cli.songs.new.scenes: list<string> = ['Verse']
  cli.status.port: path | null = null
  cli.status.reset_starts: boolean = false
- cli.upload-helper.bootloader.serial: string
- cli.upload-helper.controller: string
- cli.upload-helper.serve.serial: string
- cli.upload-helper.upload.image: path
- cli.upload-helper.upload.serial: string
- cli.upload-helper.upload.sha256: string
  cli.verbose: boolean = false
  emulator.layout.catalogue: path
  emulator.layout.controller: string

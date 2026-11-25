@@ -49,7 +49,6 @@ exclude = [
     "**/firmware/build/**",
     "**/archive/**",
     "**/*.hex",
-    "**/.upload-helper.sock*",
 ]
 
 [tool.hatch.build.targets.sdist]

@@ -4,9 +4,6 @@ import os
 import struct
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
-from multiprocessing.connection import Listener
-from multiprocessing.context import AuthenticationError
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -14,56 +11,9 @@ import pytest
 from test_firmware import hex_record
 
 from cntrl.firmware.intel_hex import AddressRange, read_hex
-from cntrl.maker.morningstar.mc import boot_switch, upload_helper
+from cntrl.maker.morningstar.mc import boot_switch, firmware_upload
+from cntrl.maker.morningstar.mc.firmware_upload import Upload
 from cntrl.patch_chooser.devices import Device
-from cntrl.upload import Bootloader, Serve, Upload
-
-
-def test_upload_request_uses_authenticated_local_bytes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    key = os.urandom(32)
-    (tmp_path / 'authentication.key').write_bytes(key)
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path)
-    request = Upload(
-        image=(tmp_path / 'firmware.hex').resolve(), sha256='a' * 64, serial='12345'
-    )
-    expected = upload_helper.UploadResult(returncode=0, output='validated bytes')
-
-    def respond() -> bytes:
-        with listener.accept() as connection:
-            assert connection.poll(5)
-            payload = connection.recv_bytes(upload_helper.REQUEST_LIMIT)
-            connection.send_bytes(expected.model_dump_json().encode())
-            return payload
-
-    with Listener(family=upload_helper.IPC_FAMILY, authkey=key) as listener:
-        monkeypatch.setattr(upload_helper, 'SOCKET_PATH', listener.address)
-        with ThreadPoolExecutor(max_workers=1) as workers:
-            pending = workers.submit(respond)
-            assert upload_helper.request_upload(request) == expected
-            assert Upload.model_validate_json(pending.result(timeout=5)) == request
-
-
-def test_helper_keeps_listening_after_a_client_disconnect_or_bad_authentication(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    listener = MagicMock()
-    listener.accept.side_effect = [
-        EOFError('disconnected'),
-        AuthenticationError('bad authentication'),
-        KeyboardInterrupt,
-    ]
-    factory = MagicMock()
-    factory.return_value.__enter__.return_value = listener
-    monkeypatch.setattr(upload_helper, 'Listener', factory)
-    monkeypatch.setattr(upload_helper, 'authentication_key', lambda: b'key')
-    monkeypatch.setattr(upload_helper, 'updater_path', lambda: Path('tycmd'))
-    monkeypatch.setattr(os, 'umask', MagicMock())
-    with pytest.raises(KeyboardInterrupt):
-        upload_helper.serve('12345')
-    assert listener.accept.call_count == 3
-    assert 'disconnected' in capsys.readouterr().err
 
 
 @pytest.fixture
@@ -115,69 +65,6 @@ def firmware_path(tmp_path: Path) -> Path:
     return path
 
 
-@pytest.mark.parametrize(
-    'arguments, expected',
-    [
-        (['serve', '--serial', '12345'], Serve(serial='12345')),
-        (['bootloader', '--serial', '12345'], Bootloader(serial='12345')),
-        (
-            [
-                'upload',
-                '--image',
-                '/worktree/firmware.hex',
-                '--sha256',
-                'a' * 64,
-                '--serial',
-                '12345',
-            ],
-            Upload(
-                image=Path('/worktree/firmware.hex'), sha256='a' * 64, serial='12345'
-            ),
-        ),
-    ],
-)
-def test_adapter_module_dispatches_helper_commands(
-    arguments: list[str],
-    expected: Serve | Upload | Bootloader,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    received: list[Serve | Upload | Bootloader] = []
-    monkeypatch.setattr(upload_helper, 'run', received.append)
-    monkeypatch.setattr(sys, 'argv', ['upload-helper', *arguments])
-    upload_helper.main()
-    assert received == [expected]
-
-
-def test_adapter_module_returns_upload_output_and_exit_status(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(
-        upload_helper,
-        'request_upload',
-        lambda request: upload_helper.UploadResult(
-            returncode=7, output='upload output\n'
-        ),
-    )
-    monkeypatch.setattr(
-        sys,
-        'argv',
-        [
-            'upload-helper',
-            'upload',
-            '--image',
-            '/worktree/firmware.hex',
-            '--sha256',
-            'a' * 64,
-            '--serial',
-            '12345',
-        ],
-    )
-    with pytest.raises(SystemExit) as error:
-        upload_helper.main()
-    assert error.value.code == 7
-    assert capsys.readouterr().out == 'upload output\n'
-
-
 def test_bootloader_selects_special_baud_without_serial_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -190,7 +77,7 @@ def test_bootloader_selects_special_baud_without_serial_payload(
     master, slave = pty.openpty()
     try:
         monkeypatch.setattr(
-            upload_helper,
+            firmware_upload,
             'connected',
             lambda: [
                 Device(
@@ -200,7 +87,7 @@ def test_bootloader_selects_special_baud_without_serial_payload(
                 )
             ],
         )
-        upload_helper.request_bootloader('12345')
+        firmware_upload.request_bootloader('12345')
         after = termios.tcgetattr(slave)
         assert after[4:6] == [termios.B134, termios.B134]
         os.set_blocking(master, False)
@@ -215,47 +102,19 @@ def test_bootloader_uses_the_identified_pedal_and_special_line_coding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     backend = MagicMock()
-    monkeypatch.setattr(upload_helper, 'Serial', backend)
+    monkeypatch.setattr(firmware_upload, 'Serial', backend)
     monkeypatch.setattr(
-        upload_helper,
+        firmware_upload,
         'connected',
         lambda: [Device(port=Path('COM10'), name='cntrl', serial='12345')],
     )
-    upload_helper.request_bootloader('12345')
+    firmware_upload.request_bootloader('12345')
     backend.assert_called_once_with('COM10', baudrate=134, timeout=5, write_timeout=5)
     backend.return_value.__enter__.return_value.write.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    'body',
-    [
-        b'{}\n',
-        b'not JSON\n',
-        b'{"sha256":"' + b'a' * 64 + b'"}',
-        b'{"sha256":"' + b'a' * 64 + b'","path":"/some/file"}\n',
-        b'{"image":"/worktree/image.hex","sha256":"'
-        + b'a' * 64
-        + b'","command":"reset"}\n',
-        b'{"image":"/worktree/image.hex","sha256":"'
-        + b'a' * 64
-        + b'","board":"another"}\n',
-        b' ' * (upload_helper.REQUEST_LIMIT + 1) + b'\n',
-    ],
-)
-def test_invalid_requests_never_reach_uploader(
-    body: bytes, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def unexpected_upload(request: Upload) -> upload_helper.UploadResult:
-        pytest.fail('invalid request reached the uploader')
-
-    monkeypatch.setattr(upload_helper, 'upload_image', unexpected_upload)
-    result = upload_helper.process_request(body, '12345')
-    assert result.returncode == 1
-    assert result.output.startswith('Upload helper:')
-
-
 def test_valid_boot_image_is_accepted(firmware_path: Path) -> None:
-    upload_helper.validate_firmware(read_hex(firmware_path))
+    firmware_upload.validate_firmware(read_hex(firmware_path))
 
 
 def test_doom_is_kept_in_its_separately_linked_flash_slot(firmware_path: Path) -> None:
@@ -291,40 +150,13 @@ def test_doom_is_kept_in_its_separately_linked_flash_slot(firmware_path: Path) -
         )
 
 
-def test_helper_rejects_another_unit_before_upload(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    upload = MagicMock()
-    monkeypatch.setattr(upload_helper, 'upload_image', upload)
-    check = upload_helper.Check(serial='67890')
-    result = upload_helper.process_request(
-        check.model_dump_json().encode() + b'\n', '12345'
-    )
-    assert result.returncode == 1 and 'request serial differs' in result.output
-    upload.assert_not_called()
-
-
-def test_helper_can_be_checked_before_resetting_a_pedal(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    updater = tmp_path / 'tycmd'
-    updater.write_bytes(b'qualified uploader')
-    monkeypatch.setattr(upload_helper, 'updater_path', lambda: updater)
-    check = upload_helper.Check(serial='12345')
-    result = upload_helper.process_request(
-        check.model_dump_json().encode() + b'\n', '12345'
-    )
-    assert result.returncode == 0
-    assert result.uploader_sha256 == hashlib.sha256(updater.read_bytes()).hexdigest()
-
-
 def test_stock_bootloader_request_checks_usb_model_and_unit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from types import SimpleNamespace
 
     backend = MagicMock()
-    monkeypatch.setattr(upload_helper, 'Serial', backend)
+    monkeypatch.setattr(firmware_upload, 'Serial', backend)
     port = SimpleNamespace(
         vid=0x331B,
         pid=7,
@@ -332,31 +164,20 @@ def test_stock_bootloader_request_checks_usb_model_and_unit(
         serial_number='12345',
         device='COM7',
     )
-    monkeypatch.setattr(upload_helper, 'comports', lambda: [port])
-    board = upload_helper.Board(
+    monkeypatch.setattr(firmware_upload, 'comports', lambda: [port])
+    board = firmware_upload.Board(
         tag='12345-Morningstar',
         serial='12345',
         description='Morningstar MC6 Pro',
         model='Generic',
         capabilities=['serial'],
     )
-    assert upload_helper.request_stock_bootloader(board)
+    assert firmware_upload.request_stock_bootloader(board)
     backend.assert_called_once_with('COM7', baudrate=134, timeout=5, write_timeout=5)
     backend.reset_mock()
     port.serial_number = 'another-unit'
-    assert not upload_helper.request_stock_bootloader(board)
+    assert not firmware_upload.request_stock_bootloader(board)
     backend.assert_not_called()
-
-
-def test_upload_client_does_not_create_server_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cache = tmp_path / 'server-cache'
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', cache)
-    request = Upload(image=tmp_path / 'firmware.hex', sha256='0' * 64, serial='12345')
-    with pytest.raises(FileNotFoundError):
-        upload_helper.request_upload(request)
-    assert not cache.exists()
 
 
 def test_flash_record_prefers_the_checkout_over_the_user_log(
@@ -366,15 +187,15 @@ def test_flash_record_prefers_the_checkout_over_the_user_log(
     checkout = tmp_path / 'checkout'
     package = checkout / 'cntrl'
     package.mkdir(parents=True)
-    (package / 'upload.py').touch()
+    (package / 'flash.py').touch()
     record = checkout / 'doc' / 'flash-record.md'
     record.parent.mkdir()
     record.touch()
     monkeypatch.setattr(Path, 'home', lambda: home)
     monkeypatch.chdir(package)
-    assert upload_helper.flash_record_path() == record
+    assert firmware_upload.flash_record_path() == record
     monkeypatch.chdir(tmp_path)
-    assert upload_helper.flash_record_path() == home / '.cntrl/doc/flash-record.md'
+    assert firmware_upload.flash_record_path() == home / '.cntrl/doc/flash-record.md'
 
 
 @pytest.mark.parametrize('location', ['symlink', 'relative', 'extension'])
@@ -402,10 +223,8 @@ def test_disallowed_image_locations_never_reach_device_access(
         pytest.fail('disallowed image caused device access')
 
     monkeypatch.setattr(subprocess, 'run', unexpected_run)
-    request = Upload(image=source, sha256='0' * 64, serial='12345')
-    result = upload_helper.process_request(
-        request.model_dump_json().encode() + b'\n', '12345'
-    )
+    request = Upload(image=source, sha256='0' * 64, serial='12345', first_install=False)
+    result = firmware_upload.upload_image(request)
     assert result.returncode == 1
     assert (
         'path must be absolute' in result.output
@@ -419,7 +238,9 @@ def test_unsafe_boot_envelopes_are_rejected(firmware_path: Path, offset: int) ->
     data = bytearray(image.data)
     data[offset] ^= 1
     with pytest.raises(ValueError):
-        upload_helper.validate_firmware(image.model_copy(update={'data': bytes(data)}))
+        firmware_upload.validate_firmware(
+            image.model_copy(update={'data': bytes(data)})
+        )
 
 
 @pytest.mark.parametrize('platform', ['darwin', 'linux', 'win32'])
@@ -429,21 +250,7 @@ def test_explicit_updater_overrides_platform_default(
     executable = tmp_path / 'custom-tycmd'
     monkeypatch.setenv('CNTRL_TYCMD', str(executable))
     monkeypatch.setattr(sys, 'platform', platform)
-    assert upload_helper.updater_path() == executable
-
-
-@pytest.mark.parametrize('override', [None, ''])
-def test_default_requires_provisioning_before_serving(
-    override: str | None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv('CNTRL_TYCMD', raising=False)
-    if override is not None:
-        monkeypatch.setenv('CNTRL_TYCMD', override)
-    monkeypatch.setattr(sys, 'platform', 'darwin')
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path / 'cache')
-    with pytest.raises(ValueError, match='provision before starting the helper'):
-        upload_helper.serve('12345')
-    assert not (tmp_path / 'cache').exists()
+    assert firmware_upload.updater_path() == executable
 
 
 def test_direct_flash_provisions_only_a_missing_pinned_updater(
@@ -451,39 +258,39 @@ def test_direct_flash_provisions_only_a_missing_pinned_updater(
 ) -> None:
     monkeypatch.delenv('CNTRL_TYCMD', raising=False)
     monkeypatch.setattr(sys, 'platform', 'darwin')
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path)
+    monkeypatch.setattr(firmware_upload, 'CACHE_DIRECTORY', tmp_path)
     directory = tmp_path / 'tytools-0.9.9'
     updater = directory / 'tycmd'
     provision = MagicMock(return_value=updater)
-    monkeypatch.setattr(upload_helper.updater_provision, 'provision', provision)
+    monkeypatch.setattr(firmware_upload.updater_provision, 'provision', provision)
 
-    assert upload_helper.updater_path(provision_missing=True) == updater
+    assert firmware_upload.updater_path(provision_missing=True) == updater
     provision.assert_called_once_with(directory)
     directory.mkdir()
     updater.write_bytes(b'wrong checksum')
     provision.reset_mock()
     with pytest.raises(ValueError, match='checksum mismatch'):
-        upload_helper.updater_path(provision_missing=True)
+        firmware_upload.updater_path(provision_missing=True)
     provision.assert_not_called()
 
 
 @pytest.mark.parametrize('platform', ['linux', 'freebsd'])
-def test_unsupported_platform_requires_explicit_updater_before_serving(
+def test_unsupported_platform_requires_explicit_updater(
     platform: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('CNTRL_TYCMD', raising=False)
     monkeypatch.setattr(sys, 'platform', platform)
     cache = tmp_path / 'cache'
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', cache)
+    monkeypatch.setattr(firmware_upload, 'CACHE_DIRECTORY', cache)
     with pytest.raises(ValueError, match='set CNTRL_TYCMD explicitly'):
-        upload_helper.serve('12345')
+        firmware_upload.updater_path(provision_missing=True)
     assert not cache.exists()
 
 
 def test_changed_image_is_rejected_before_device_access(
     firmware_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path / 'staging')
+    monkeypatch.setattr(firmware_upload, 'CACHE_DIRECTORY', tmp_path / 'staging')
 
     def unexpected_run(
         *args: object, **kwargs: object
@@ -491,16 +298,16 @@ def test_changed_image_is_rejected_before_device_access(
         pytest.fail('changed image caused device access')
 
     monkeypatch.setattr(subprocess, 'run', unexpected_run)
-    request = Upload(image=firmware_path, sha256='0' * 64, serial='12345')
-    result = upload_helper.process_request(
-        request.model_dump_json().encode() + b'\n', '12345'
+    request = Upload(
+        image=firmware_path, sha256='0' * 64, serial='12345', first_install=False
     )
+    result = firmware_upload.upload_image(request)
     assert result.returncode == 1
     assert 'SHA-256 changed' in result.output
 
 
 @pytest.mark.parametrize('wrong_target', [False, True])
-@pytest.mark.parametrize('mode', ['manual', 'install', 'update', 'rollback'])
+@pytest.mark.parametrize('mode', ['install', 'update', 'rollback'])
 def test_upload_uses_snapshot_and_only_the_expected_halfkay(
     firmware_path: Path,
     tmp_path: Path,
@@ -515,12 +322,12 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
     updater.write_bytes(b'qualified uploader')
     record = tmp_path / 'doc' / 'flash-record.md'
     monkeypatch.setenv('CNTRL_TYCMD', str(updater))
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path / 'staging')
-    monkeypatch.setattr(upload_helper, 'flash_record_path', lambda: record)
+    monkeypatch.setattr(firmware_upload, 'CACHE_DIRECTORY', tmp_path / 'staging')
+    monkeypatch.setattr(firmware_upload, 'flash_record_path', lambda: record)
     if mode == 'rollback':
         monkeypatch.setattr(boot_switch, 'STOCK_SHA256', digest)
         monkeypatch.setattr(
-            upload_helper,
+            firmware_upload,
             'validate_firmware',
             MagicMock(side_effect=ValueError('not combined')),
         )
@@ -561,19 +368,13 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         )
 
     monkeypatch.setattr(subprocess, 'run', run)
-    request = (
-        Upload(image=firmware_path, sha256=digest, serial='12345')
-        if mode == 'manual'
-        else upload_helper.ManagedUpload(
-            image=firmware_path,
-            sha256=digest,
-            serial='12345',
-            first_install=mode != 'update',
-        )
+    request = Upload(
+        image=firmware_path,
+        sha256=digest,
+        serial='12345',
+        first_install=mode != 'update',
     )
-    result = upload_helper.process_request(
-        request.model_dump_json().encode() + b'\n', '12345'
-    )
+    result = firmware_upload.upload_image(request)
     if wrong_target:
         assert result.returncode == 1
         assert len(calls) == 1
@@ -585,9 +386,7 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         assert len(calls) == 2
         assert not snapshots[0].exists()
         firmware_path.write_bytes(original)
-        retry = upload_helper.process_request(
-            request.model_dump_json().encode() + b'\n', '12345'
-        )
+        retry = firmware_upload.upload_image(request)
         assert retry.returncode == 0
         entries = record.read_text()
         assert entries.count('\n## ') == 2
@@ -596,4 +395,4 @@ def test_upload_uses_snapshot_and_only_the_expected_halfkay(
         assert "I/O error while writing to 'IOService:/…'" in entries
         assert '/private/device' not in entries
         assert '12345' not in entries
-        assert ('I/O error' in capsys.readouterr().out) == (mode == 'manual')
+        assert capsys.readouterr().out == ''

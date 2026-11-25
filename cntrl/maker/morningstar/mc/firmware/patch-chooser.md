@@ -30,17 +30,15 @@ perform SD I/O; physical timing during those operations remains unqualified.
 
 ## Preparing an upload image
 
-After building and inspecting the combined firmware, use its absolute path and
-exact SHA-256 with the existing upload helper:
+After building and inspecting the component export, install it with:
 
 ```bash
-cntrl upload-helper --controller mc6-pro upload --image /absolute/path/to/firmware.hex --sha256 DIGEST --serial SERIAL
+cntrl flash --controller mc6-pro --port PORT --resources build/device/distribution
 ```
 
-The helper snapshots and validates the requested worktree image before flashing
-the expected pedal. No staging copy in another checkout is needed. Start the
-helper manually and enter the bootloader first, following the
-[upload helper guide](upload-helper.md).
+The installer backs up the pedal, enters its bootloader, validates a private
+snapshot of the composed image, and verifies the installation. [Firmware
+installation](../firmware-distribution.md)
 
 ## Switch response
 
@@ -122,7 +120,7 @@ storage inspection and MIDI status commands retain their existing behaviour.
   all three input/output pairs. Post-flash discovery/status sent no musical MIDI.
 - Before upload: 215 Python tests, portable/native controller and MIDI bridge
   tests, button/display/renderer and splash/runtime tests passed. HEX/ELF and
-  stock flash-configuration checks passed. The helper uploaded the image after
+  stock flash-configuration checks passed. The uploader uploaded the image after
   software bootloader entry; no PROGRAM press was needed.
 
 The latest build has 324,480 bytes of RAM1 variables and 98,304 bytes of RAM1
@@ -441,7 +439,7 @@ error; that path is covered with fake storage but not yet physically tested.
 
 - Firmware HEX SHA-256:
   `1d350bc7cb018452e835c7fa5f73c0a880ddc5440443023ef8c963eaace9b4bb`.
-- The upload-only helper selected the expected HalfKay board and uploaded the
+- The uploader selected the expected HalfKay board and uploaded the
   81 KiB image. The official uploader returned exit status 1 after sending reset
   and reporting that the board disappeared. USB serial nevertheless returned
   `CNTRL READY 1 0 00000000`, confirming the new application booted.
@@ -467,7 +465,7 @@ error; that path is covered with fake storage but not yet physically tested.
   and no transfers for unchanged content. SPI tests check transaction settings,
   exclusive panel selection and GPIO restoration before returning to scanning.
 - The HEX/ELF comparison and stock flash-configuration check passed. Uploaded
-  through the helper; the official updater again returned status 1 after reset
+ ; the official updater again returned status 1 after reset
   and disappearance. The application responded over USB with
   `CNTRL READY 1 20568 bb8baa89`, confirming a boot with the existing saved show.
 - Visible redraw speed and switch responsiveness still need the user's check.
@@ -502,7 +500,7 @@ tests passed, including address/undefined-behavior sanitizer checks.
 The image SHA-256 is
 `d53f49bd5225846fec6629cf833140745c49946e3db3a12027ba69993772089e`.
 HEX/ELF bytes and stock flash configuration matched. Software bootloader entry
-and helper upload succeeded without PROGRAM. The updater again returned status 1
+and upload succeeded without PROGRAM. The updater again returned status 1
 after reset/disappearance; the application then replied `CNTRL READY 2 0 00000000`.
 The recompiled pman show uploaded and verified as
 `CNTRL READY 2 20568 c7d6e19f`, including default brightness 64.
@@ -571,7 +569,7 @@ configuration. Its SHA-256 is
 `27c176c6e831ddee191cf6d2d012f38347f503b0e5cfc75a231d434ca4fd8f37`.
 Flash use is 379,900 bytes; RAM1 has 104,320 bytes free and RAM2 has 506,720 free.
 
-Software bootloader entry and helper upload succeeded. The updater returned
+Software bootloader entry and upload succeeded. The updater returned
 status 1 after reset/disappearance; subsequent USB status confirmed version 4
 running. The animation upload verified as
 `CNTRL SPLASH READY 1310800 4b7e5ee5`, followed by the recompiled pman show:
@@ -584,9 +582,9 @@ power-loss or interrupted-write qualification is claimed.
 Implemented named setups as described in the
 [application guide](../../../../../firmware/README.md).
 The image was built and inspected, then uploaded through software HalfKay entry
-and the existing upload-only helper. SHA-256:
+and the uploader. SHA-256:
 `b77c697957e1ebcc6a73b64dad9bbd67ae9933e2c4147801255cf2b112f60ac5`.
-The helper independently identified the expected Teensy/HalfKay target. The
+The uploader independently identified the expected Teensy/HalfKay target. The
 updater returned status 1 on reset/disappearance, as previously; the application
 then replied `CNTRL READY 7 0 00000000`, establishing boot of the new format.
 
@@ -643,7 +641,7 @@ and padded rendering of a complete 63-character name.
 All 194 Python tests and the portable, display, renderer and splash native tests
 passed, along with Ruff, formatting, ty, pyupgrade and diff checks. The ARM build
 and flash-configuration/HEX checks passed. The inspected image was uploaded via
-software bootloader entry and the existing helper, SHA-256
+software bootloader entry and the uploader, SHA-256
 `259673c606ce6214380408afb79e96a35a35f33c8ee1718fc3b73efad7c76606`.
 The updater returned its usual status 1 after reset/disappearance; the application
 subsequently replied `CNTRL READY 7 0 00000000`. Visible animation and enlarged
@@ -673,7 +671,7 @@ diff checks passed. The combined stock/cntrl image passed the builder's stock
 patch and boot-envelope checks, SHA-256
 `c03c690fecf51f911a411418c62407ec77549cc27ad39b281324fa91b85ebef0`.
 
-The existing upload helper installed the combined image after one USB write
+The uploader installed the combined image after one USB write
 error and a successful retry. After the user's A+F gesture, the converted pman
 setup was uploaded, read-back verified and selected. USB reports
 `CNTRL READY 11 34583 43363d4a`. The pre-installation pman bytes are backed up
@@ -695,8 +693,7 @@ TRS port is Serial2; the cable tester exercises only these two routes.
 The tester is included by default. Build `patch-chooser` with `CABLE_TEST=0` to
 exclude it and its page. See the generic
 [cable-test behavior](../../../../../doc/midi-cable-test.md). Native tests and
-included/excluded builds pass. The combined image was flashed through the running
-upload helper on 2026-10-27, SHA-256
+included/excluded builds pass. The combined image was flashed on 2026-10-27, SHA-256
 `4d3a22d26c42b1a861e33a7fb7bc78d84aab0867a443700901011cf7b0fc7ce2`.
 The first upload reported a USB write error; the same verified image succeeded
 on retry and the pedal enumerated as stock firmware after reset. After the user's
@@ -706,7 +703,7 @@ The three saved setups were downloaded before flashing. The original cable-test
 page and loopback behavior were confirmed by the user. The revised centered
 layout awaits physical verification.
 
-The centered layout was flashed through upload_helper on 2026-10-27, combined
+The centered layout was flashed on 2026-10-27, combined
 image SHA-256
 `a47039b721fc2537f7356365dd97858b4647384e13a2e11808d38100a3624221`.
 After an initial USB write error, the verified retry completed and reset to stock.
@@ -743,7 +740,7 @@ leave their directories to reserve numbers. These directories are separate from
 See [revision history](../../../../../doc/setup-revision-history.md) for commands
 and pedal controls. This implementation was built and tested without flashing.
 
-The cooperative history follow-up was flashed with the running upload helper on
+The cooperative history follow-up was flashed on
 2026-10-27. Combined image SHA-256:
 `2c564a6b7268116238e8ef1fc9369cbaf864a290034ba5cc92c9d99d05a01aab`.
 The first upload reported a USB write error; the identical verified image
@@ -759,7 +756,7 @@ exposed `invalid-command` for HISTORY LIST. The target nano C library does not
 support the long-long scanf conversion used for revision numbers. Revision wire
 numbers now use explicit bounded decimal parsing/formatting, and directory names
 use two 32-bit hexadecimal halves. Native boundary and protocol tests pass.
-The corrected combined image was flashed through upload_helper, SHA-256
+The corrected combined image was flashed, SHA-256
 `02766ccbb3922bbf623862a267c9aae233475c7377eae8672b8cffc543f28360`.
 Upload succeeded after the initial USB write error and retry. The pedal reset to
 stock firmware; the corrected live history-command check awaits A+F entry.
@@ -784,7 +781,7 @@ also clear the temporary boost.
 Portable tests cover hold/release, repeated selections, failed sends, duplicate
 press edges, undo, cancellation, setup activation/deactivation, same-program patch
 aliases, and brightness values 0 and 255. Native adapter tests and the combined
-firmware build pass. The combined image was flashed with upload_helper on
+firmware build pass. The combined image was flashed on
 2026-10-28, SHA-256
 `7d71d2f403cdb0517775d6c8b01dbd27ac6633a42839818ac2b5bbef3176c1ab`.
 An initial USB write error was followed by a successful retry of the same image.
@@ -809,7 +806,7 @@ startup-dismissal isolation. The splash harness was updated to the current Pane
 and document-version interfaces so this interaction is exercised again.
 Combined image SHA-256:
 `7deaa29ee65217f0d4237dda0f2d9096984fc4e9ada781361bb553601daedee5`.
-Flashed through upload_helper on 2026-10-28 after one initial USB write error and
+Flashed on 2026-10-28 after one initial USB write error and
 a successful retry. Stock USB returned after reset. The pre-flash setup status
 was unchanged at `CNTRL READY 14 34597 488beaf6`. After A+F entry, the user confirmed
 that both held and quick presses work in the requested reproduction test. USB
@@ -830,7 +827,7 @@ It can be excluded with `ORIGINAL_FIRMWARE=0`. Native tests cover fresh default,
 torn selections, explicit choices, journal capacity and the module's explicit
 start/failure/back behavior. Physical round-trip verification is pending.
 
-Flashed through upload_helper on 2026-10-28. USB enumerated directly as cntrl
+Flashed on 2026-10-28. USB enumerated directly as cntrl
 without an A+F press, confirming the fresh patch-mode default. Status remains
 `CNTRL READY 14 34597 488beaf6`, with pman selected. Combined image SHA-256:
 `eeaf97a0300a610cfd9f1372420b4226d89d81f25effb99bffdc7caf9bb9b49c`.
@@ -852,7 +849,7 @@ Panic was built and flashed on 2026-10-28 from the rebased main checkout,
 preserving the songs/setlists and Original firmware modules. Portable/native
 tests and PANIC-enabled/disabled builds pass. Combined image SHA-256:
 `a1a639f3bff6661770e82ff10bf49c0de2e1dc89991453b87eea11f1a86aa07f`.
-The running upload helper reported a USB write error on the first attempt. The
+The uploader reported a USB write error on the first attempt. The
 same verified image reached reset on retry; the updater returned a disappearance
 error, then USB enumerated as cntrl. Post-flash status was
 `CNTRL READY 14 34597 488beaf6` and pman remained selected. No Panic messages were

@@ -15,7 +15,7 @@ import tyro
 from pydantic import BaseModel, Field, ValidationError
 from tyro import _errors, _fmtlib
 
-from .. import build, flash, importing, qualify, target_process, upload
+from .. import build, flash, importing, qualify, target_process
 from ..animation.asset import AnimationFormatError
 from ..emulator.cli import Emulate, emulate
 from ..emulator.errors import EmulatorError, EmulatorFileError
@@ -194,7 +194,6 @@ class CommandLine(BaseModel, frozen=True):
         | Annotated[build.Build, tyro.conf.subcommand(name='build')]
         | Annotated[font_coverage.Report, tyro.conf.subcommand(name='font-coverage')]
         | Annotated[flash.Flash, tyro.conf.subcommand(name='flash')]
-        | Annotated[upload.Helper, tyro.conf.subcommand(name='upload-helper')]
         | Annotated[qualify.Qualify, tyro.conf.subcommand(name='qualify')]
         | Annotated[Emulate, tyro.conf.subcommand(name='emulate')]
         | Annotated[importing.Import, tyro.conf.subcommand(name='import')]
@@ -749,8 +748,6 @@ def main() -> None:
             emulate(command, compile_to_file)
         elif isinstance(command, qualify.Qualify):
             qualify.run(command)
-        elif isinstance(command, upload.Helper):
-            upload.run(command)
         elif isinstance(command, flash.Flash):
             flash.run(command)
         elif isinstance(command, build.Build):

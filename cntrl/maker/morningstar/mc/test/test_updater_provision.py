@@ -5,7 +5,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from cntrl.maker.morningstar.mc import updater_provision, upload_helper
+from cntrl.maker.morningstar.mc import firmware_upload, updater_provision
 
 
 @pytest.fixture
@@ -38,11 +38,11 @@ def test_provision_installs_verified_binary_and_keeps_matching_installation(
     assert updater_provision.provision(package) == path
     assert path.stat().st_mtime_ns == before
     monkeypatch.delenv('CNTRL_TYCMD', raising=False)
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', package.parent)
-    assert upload_helper.updater_path() == path
+    monkeypatch.setattr(firmware_upload, 'CACHE_DIRECTORY', package.parent)
+    assert firmware_upload.updater_path() == path
     path.write_bytes(b'changed')
     with pytest.raises(ValueError, match='executable checksum mismatch'):
-        upload_helper.updater_path()
+        firmware_upload.updater_path()
 
 
 @pytest.mark.parametrize('corruption', ['archive', 'executable'])

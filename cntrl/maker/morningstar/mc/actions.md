@@ -29,7 +29,7 @@ including the song bounds-check fix. Image SHA-256:
 2e0910558d020c76f9aa7eea04483f3c17911c1bfce271f485e3303c5c94121d
 ```
 
-The running upload helper installed the image on pedal serial 14468280. The
+The uploader installed the image on pedal serial 14468280. The
 updater's initial write failed; after verifying HalfKay identity, retrying the
 same image reached Sending reset and the application re-enumerated as
 `cntrl experimental`. Reset/disappearance exit status was checked against actual

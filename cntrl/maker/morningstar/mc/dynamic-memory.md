@@ -832,7 +832,7 @@ readable assets, songs and the `simple-setup` selection. The two previously
 unreadable, unreferenced movie files were left untouched.
 
 The first upload returned a USB write error while in HalfKay, before any MIDI
-test. A deliberate retry through `cntrl upload-helper ... upload` reached the
+test. A deliberate upload retry reached the
 reset command, then returned status 1 when the board disappeared. Application
 USB returned with startup count 90. The uploader did not attest successful
 installation, so this comparison cannot prove that the guard caused a change
@@ -1177,11 +1177,9 @@ application as Generic, tag `14468280-cntrl`, with only unique/serial capabiliti
 No active `tytools.ini` was found in the executable directory or the macOS
 system/user TyTools preference directories.
 
-With approval, `cntrl upload-helper ... provision` now installs the official
-TyTools 0.9.9 release in a private cache, independently of the Morningstar app.
-Both release-archive and executable checksums are pinned; the default helper
-verifies the executable before use. The IPC upload request and target restrictions
-are unchanged. Linux retains the explicit `CNTRL_TYCMD` selection because this
+CNTRL installs the official TyTools 0.9.9 release in a private cache,
+independently of the Morningstar app. Both release-archive and executable
+checksums are pinned. Linux retains the explicit `CNTRL_TYCMD` selection because this
 release has no Linux binary archive.
 
 Read-only `cntrl qualify ... --updater-info` on the connected pedal confirms
@@ -1210,8 +1208,7 @@ the memory budget.
 
 ### Pinned-uploader physical trial
 
-After the other flashing session finished, the user restarted the helper from
-the tested source. The approved `cntrl flash --skip-build` flow used the fresh
+The approved flash used the fresh
 production export `build/ci-production-current-export`, built from main through
 `3e3e31a`, retaining the newer RAM1 pool/RAM2 allocator and format-47
 implementation. Image SHA-256:
@@ -1491,7 +1488,7 @@ source and built under `build/expression-dirty-normal-target/`. Its HEX SHA-256 
 `e48514e4a0d0f7bf12bd18ed5103863e222c50b717b0413e488890085441cc83`.
 The approved `cntrl flash --skip-build` flow saved a fresh `before/` backup and
 prepared `restore/`. The first upload hit the same USB write failure; the
-`cntrl upload-helper` retry reached reset/disappearance, again with nonzero
+upload retry reached reset/disappearance, again with nonzero
 uploader status. The pedal returned with startup count 88, and
 `cntrl setup verify` against `restore/` confirmed both setups, all 15 history
 revisions, backed-up assets, songs and selection unchanged. No restore writes
@@ -1512,9 +1509,8 @@ the `63f43ca` changes and, for the Expression update, the production changes in
 `ca33347`. Keep the remaining production sources at `8e1f07f` and use
 an SDK containing only that revision's declared patches, preserving newlib and
 normal reset behavior. The local export used a private SDK copy with the later
-UART diagnostic patch reversed. Build through `cntrl build`, then use
-`cntrl flash --skip-build` and the existing upload helper if the first upload
-fails. The repaired data must come from the original format-36 backup through
+UART diagnostic patch reversed. Build through `cntrl build` and install the
+matching export with `cntrl flash`. The repaired data must come from the original format-36 backup through
 this export's `cntrl setup restore`, not the already-converted format-41 backup.
 Source exports, virtual environments, decoded images, reports and dependency
 symlinks under `build/` are disposable derivatives of tracked sources, not the

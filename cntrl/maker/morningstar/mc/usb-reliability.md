@@ -60,9 +60,8 @@ The export must include its `distribution/` resources. The normal installation
 flow composes those resources and verifies that they reproduce the selected
 image before any device access; each trial then uses `cntrl flash`'s maintained
 backup, install, restore and verification implementation.
-The user-launched upload helper must be running as documented in
-[upload-helper.md](firmware/upload-helper.md). The profile's serial number selects
-the unit explicitly; the uploader retains its normal image ownership checks.
+The profile's serial number selects the unit explicitly. The uploader
+retains its normal image ownership checks. [Firmware installation](firmware-distribution.md)
 
 All images and target/font inputs are copied into the run's artifact directory
 and hashed before any device access. The report records the expected image hash,

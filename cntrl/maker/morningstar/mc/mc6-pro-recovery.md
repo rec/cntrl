@@ -9,7 +9,7 @@ still require opening the enclosure to press PROGRAM.**
 
 For the current deployed application and verified upload sequence, see the
 [patch-chooser deployment record](firmware/patch-chooser.md#current-deployment-2026-10-25)
-and [upload helper](firmware/upload-helper.md). These results do not establish
+and [firmware installation](firmware-distribution.md). These results do not establish
 automatic rollback, recovery after every possible crash or interrupted flash,
 or an independent SD rescue loader. No deliberately broken image or fuse change
 was needed for the tests.

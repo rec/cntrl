@@ -109,29 +109,11 @@ Firmware byte-for-byte reproducibility is therefore not established by these
 builds. The qualification checks validate image structure and readback and
 compare static section layouts separately from the deterministic asset fixtures.
 
-On macOS and Windows, first run
-`cntrl upload-helper --controller mc6-pro provision` to install
-the pinned official TyTools 0.9.9 executable in the platform cache. The `serve`
-command defaults to that checksum-verified executable, leaving the Morningstar
-updater application untouched. Set `CNTRL_TYCMD` to select an explicitly managed
-executable instead; Linux requires that override because the pinned release has
-no Linux archive. See [upload-helper.md](firmware/upload-helper.md) for startup
-instructions. Start `serve --serial SERIAL` to bind the helper to your unit.
-The helper snapshots the requested user-owned image and verifies that unit's
-HalfKay identity. The bootloader command discovers the selected cntrl serial
-port and sends the 134-baud line-coding
-request through pySerial, with no serial payload.
-
-The helper uses authenticated local byte messages over named pipes on Windows
-and Unix sockets on POSIX. It uses neither TCP nor pickle. Authentication keys
-and image snapshots live in the user's platform cache directory (`LOCALAPPDATA`,
-`~/Library/Caches`, or `XDG_CACHE_HOME`/`~/.cache`). Unix cache/key permissions
-are restricted to the user. Named pipes use local access control plus the cache
-authentication key. Requests remain bounded and accept only an image path and
-digest and selected serial; board/image checks run before uploader invocation.
-An authenticated readiness request checks the helper's selected unit before
-resetting the pedal. Restart an old helper
-after updating its transport code.
+On macOS and Windows, `cntrl flash` installs the pinned official TyTools 0.9.9
+executable in the platform cache when needed. Set `CNTRL_TYCMD` to select an
+explicitly managed executable. Linux requires that override because the pinned
+release has no Linux archive. The installer snapshots the image and verifies
+the selected unit's HalfKay identity. [Firmware installation](firmware-distribution.md)
 
 Windows/Linux physical upload, serial permissions, reboot and MIDI qualification
-remain unverified. Builds and pipe peers do not supply that evidence.
+remain unverified.

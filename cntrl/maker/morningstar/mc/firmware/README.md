@@ -7,8 +7,8 @@ runtime drawing and software bootloader entry. Restrictions below apply to the
 diagnostic sketch unless explicitly stated otherwise.
 
 The first upload has booted and communicated over USB serial on the pedal.
-For subsequent uploads, see the [upload-only helper](upload-helper.md), whose
-live upload and subsequent USB heartbeat have been verified on this pedal.
+For managed uploads of the production firmware, see [firmware
+installation](../firmware-distribution.md).
 It is an independent application using the public Teensy core, not a patched
 Morningstar executable. It is not yet a functional MIDI controller.
 
@@ -53,8 +53,7 @@ outputs are under this directory's `build/`:
 - `symbols.txt` and `disassembly.txt`: inspection evidence.
 
 Each sketch has its own build directory, so Arduino CLI can clean or rebuild
-one without removing the other. The diagnostic HEX is a separate artifact;
-the current upload helper selects `patch-chooser.hex`.
+one without removing the other. The diagnostic HEX is a separate artifact.
 
 ## Application and startup boundary
 

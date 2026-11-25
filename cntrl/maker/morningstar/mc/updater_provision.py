@@ -21,10 +21,7 @@ def installed(directory: Path) -> Path:
         )
     path = directory / ('tycmd.exe' if sys.platform == 'win32' else 'tycmd')
     if not path.is_file():
-        raise MissingUpdater(
-            'run cntrl upload-helper --controller mc6-pro '
-            'provision before starting the helper'
-        )
+        raise MissingUpdater('run cntrl flash to install the pinned TyTools uploader')
     if hashlib.sha256(path.read_bytes()).hexdigest() != BINARIES[sys.platform]:
         raise ValueError('pinned TyTools executable checksum mismatch')
     return path

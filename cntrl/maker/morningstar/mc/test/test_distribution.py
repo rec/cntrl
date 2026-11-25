@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from cntrl.firmware import distribution
-from cntrl.maker.morningstar.mc import flash_target, release, upload_helper
+from cntrl.maker.morningstar.mc import firmware_upload, flash_target, release
 from cntrl.patch_chooser import compiler_inputs, transport
 from cntrl.patch_chooser.setup_sync_store import write_record
 
@@ -39,7 +39,6 @@ def test_installation_refuses_to_overwrite_previous_evidence(tmp_path: Path) -> 
         flash_target.run(flash_target.Flash(directory=tmp_path, prepare_only=True))
 
 
-@pytest.mark.parametrize('use_helper', [False, True])
 @pytest.mark.parametrize(
     'first_install, success_at, stock_at, recovery_status, error, recover',
     [
@@ -63,17 +62,14 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
     stock_at: int | None,
     recovery_status: str,
     error: str,
-    use_helper: bool,
     recover: bool,
 ) -> None:
     destination = tmp_path / 'install'
     history = tmp_path / 'flash-record.md'
     editor_backup = tmp_path / 'banks'
     editor_backup.write_bytes(b'editor backup')
-    if use_helper:
-        (tmp_path / 'authentication.key').touch()
     stock = tmp_path / release.STOCK.filename
-    uploads: list[upload_helper.ManagedUpload] = []
+    uploads: list[firmware_upload.Upload] = []
     manifest = Mock(
         controller='mc6-pro',
         source_commit='123abcd' + '0' * 33,
@@ -98,16 +94,18 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
         'load_target',
         Mock(return_value=compiler_inputs.read_document(target_file)),
     )
-    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path)
-    updater_path = Mock()
-    monkeypatch.setattr(upload_helper, 'updater_path', updater_path)
-    monkeypatch.setattr(upload_helper, 'stock_board', Mock())
+    monkeypatch.setattr(firmware_upload, 'CACHE_DIRECTORY', tmp_path)
+    updater = tmp_path / 'tycmd'
+    updater.write_bytes(b'qualified updater')
+    updater_path = Mock(return_value=updater)
+    monkeypatch.setattr(firmware_upload, 'updater_path', updater_path)
+    monkeypatch.setattr(firmware_upload, 'stock_board', Mock())
     monkeypatch.setattr(
-        upload_helper, 'request_stock_bootloader', Mock(return_value=True)
+        firmware_upload, 'request_stock_bootloader', Mock(return_value=True)
     )
     monkeypatch.setattr(flash_target, 'wait_halfkay', Mock(return_value=True))
     port = Path('pedal-port')
-    halfkay = upload_helper.Board(
+    halfkay = firmware_upload.Board(
         tag='12345-Teensy',
         serial='12345',
         description='HalfKay',
@@ -117,36 +115,25 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
     restored_at = None if stock_at is None else 6 + stock_at
 
     def upload(
-        request: upload_helper.ManagedUpload | upload_helper.Check,
-    ) -> upload_helper.UploadResult:
-        if isinstance(request, upload_helper.Check):
-            assert request.serial == '12345'
-            return upload_helper.UploadResult(
-                returncode=0, output='', managed_recovery=True
-            )
+        request: firmware_upload.Upload,
+    ) -> firmware_upload.UploadResult:
+        assert request.serial == '12345'
         uploads.append(request)
-        return upload_helper.UploadResult(
+        return firmware_upload.UploadResult(
             returncode=0
             if len(uploads) == restored_at or recovery_status == 'legacy'
             else 1,
             output='I/O error while writing',
-            attempt=upload_helper.FlashAttempt(id=uuid4(), record=history),
+            attempt=firmware_upload.FlashAttempt(id=uuid4(), record=history),
         )
 
-    def list_boards() -> list[upload_helper.Board]:
+    def list_boards() -> list[firmware_upload.Board]:
         if len(uploads) == restored_at:
             return [halfkay.model_copy(update={'description': 'Morningstar MC6 Pro'})]
         return [halfkay]
 
-    selected = Mock(side_effect=upload)
-    unused = Mock()
-    monkeypatch.setattr(
-        upload_helper, 'request_upload', selected if use_helper else unused
-    )
-    monkeypatch.setattr(
-        upload_helper, 'perform_request', unused if use_helper else selected
-    )
-    monkeypatch.setattr(upload_helper, 'list_boards', list_boards)
+    monkeypatch.setattr(firmware_upload, 'upload_image', upload)
+    monkeypatch.setattr(firmware_upload, 'list_boards', list_boards)
     monkeypatch.setattr(
         flash_target.devices,
         'connected',
@@ -165,7 +152,7 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
             ready_status,
         ]
     monkeypatch.setattr(transport, 'device_status', status)
-    monkeypatch.setattr(upload_helper, 'request_bootloader', Mock())
+    monkeypatch.setattr(firmware_upload, 'request_bootloader', Mock())
     monkeypatch.setattr(flash_target, 'wait_disconnected', Mock())
 
     def backup(path: Path, port: Path, connection: object) -> None:
@@ -200,7 +187,6 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
         directory=destination,
         first_install=first_install,
         recover_from=previous,
-        upload_helper=use_helper,
         serial='12345',
         stock_version=release.STOCK.version if first_install else None,
         editor_backup=editor_backup if first_install else None,
@@ -228,8 +214,7 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
                 compiler_inputs.read_document(target_file)
             ),
         )
-    updater_path.assert_called_once_with(provision_missing=not use_helper)
-    unused.assert_not_called()
+    updater_path.assert_called_once_with(provision_missing=True)
     attempts = success_at or 6
     stock_attempts = (stock_at or 5) if first_install and not success_at else 0
     assert [u.image for u in uploads] == (

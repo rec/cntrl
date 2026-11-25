@@ -30,7 +30,7 @@ is the previously identified MC6 PRO v1.2 board, serial `14468280`.
 
 The investigation used the repository's HEX decoder, reconstructed stock ITCM
 bytes, ARM disassembly, the installed Teensy 1.62.0 linker/startup sources, a
-relocated build of the current cntrl firmware, and the existing upload helper.
+relocated build of the current cntrl firmware, and the uploader.
 No dependency or production source changes were needed.
 
 Disposable binaries, assembly and the experimental linker script are in the
@@ -109,7 +109,7 @@ That is three four-byte patch fields in the original stock range. Eight bytes
 actually differ because some bytes in the two metadata fields are unchanged.
 The original 512-byte flash configuration, original reset entry, and complete
 stock ITCM payload were compared and retained. The final 3,072-byte CSF
-placeholder remains zero, satisfying the existing upload helper's envelope
+placeholder remains zero, satisfying the uploader's envelope
 checks. Updating that pointer is packaging, not adding a signature.
 
 ## Relocating cntrl
@@ -193,7 +193,7 @@ Before flashing, the pedal reported `CNTRL READY 9 26866 36424cc1`, selected
 checksum, and retained as `before-pman.bin` in the ignored experiment directory.
 The current application HEX was backed up separately.
 
-The combined HEX was decoded again and passed the existing upload helper's
+The combined HEX was decoded again and passed the uploader's
 boot-envelope checks. Its length was 1,444,864 bytes. SHA-256:
 
 `133ce401bfe9c89f5f39d4a8a98dddc225c9f88ba323f1b9065579517c458ef7`.

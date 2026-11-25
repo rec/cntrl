@@ -23,7 +23,7 @@ from serial.tools.list_ports import comports
 from ....patch_chooser import devices
 from ....patch_chooser.core_midi import Midi, exchange
 from ....patch_chooser.transport import SerialConnection, SetupClient
-from . import transport_trace, upload_helper
+from . import firmware_upload, transport_trace
 
 
 class Trial(StrEnum):
@@ -613,7 +613,7 @@ def run(options: Options) -> None:
         run_reliability(options.reliability, options.report, execute=options.run)
         return
     if options.updater_info:
-        updater = upload_helper.updater_path()
+        updater = firmware_upload.updater_path(provision_missing=True)
         result = subprocess.run(
             [str(updater), 'list', '--verbose', '--output', 'json'],
             capture_output=True,

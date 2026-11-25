@@ -81,8 +81,8 @@ An interrupted data stage leaves the last committed root selectable. Use
 by the running firmware. Recovery validates the bundle, library and selected
 setup before committing it. Back up newer edits first.
 
-For a damaged flash, recover with the retained matching image through the existing
-bootloader/upload-helper procedure. If the historical firmware does not support
+For a damaged flash, recover with the retained matching image using the
+[firmware recovery procedure](firmware-distribution.md). If the historical firmware does not support
 the current activation format, restore the original four mutable stores and
 activation journals exactly from the raw backup/card image with the card reader,
 then boot the matching image. Use its matching historical host when needed.

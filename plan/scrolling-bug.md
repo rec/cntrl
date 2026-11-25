@@ -270,7 +270,7 @@ offset latching and progressive scanning; they still cannot prove physical scan 
 absence of tearing, or visual smoothness. The marker checks and user animation
 reports are separate physical evidence, not consequences of test success.
 
-Uploads used the user-run upload_helper, with exact image digests. An initial
+Uploads used exact image digests. An initial
 write error was commonly followed by a verified bootloader check and successful
 retry ending in reset/disappearance status 1. Device status was then checked
 separately. Repeated saved-setup status was `CNTRL READY 20 21411 fa5ba7e8`;

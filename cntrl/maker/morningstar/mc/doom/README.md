@@ -112,7 +112,7 @@ and the boot hook, with image bounds checked against the reserved flash
 region. After the usual backup, installation and restore, the installer
 copies the asset to the pedal's microSD over USB and reads it back to verify
 the copy. The pedal checks that the asset is present before launching Doom.
-[MC6 Pro upload and recovery](../firmware/upload-helper.md)
+[MC6 Pro installation and recovery](../firmware-distribution.md)
 
 ## Play in the emulator
 
@@ -133,7 +133,7 @@ The demo occupies the application flash from `0x60000000`. Installing it
 would replace the current boot image. Power cycling restarts the demo.
 Returning to CNTRL requires reinstalling the previous verified image, so
 keep that image and a way to enter PROGRAM mode available for hardware
-bring-up. [MC6 Pro upload and recovery](../firmware/upload-helper.md)
+bring-up. [MC6 Pro installation and recovery](../firmware-distribution.md)
 
 The demo adapter and DMC100 Doom use GPL-2.0-or-later. The standalone
 build uses the open Teensy core and Freedoom assets. Keep their respective

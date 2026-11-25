@@ -167,7 +167,7 @@
 
 [Creating a setup](instrument-definitions.md) · [Global defaults and preferences](global-config.md) ·
 [Setup history](setup-revision-history.md) · [Setup sync](setup-sync.md) ·
-[Firmware upload helper](upload_helper.md)
+[Installing MC6 Pro firmware](../cntrl/maker/morningstar/mc/firmware-distribution.md)
 
 ## Emulator
 

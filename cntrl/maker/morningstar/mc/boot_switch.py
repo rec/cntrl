@@ -13,7 +13,7 @@ from reccy.configuration import units
 from ....firmware.intel_hex import FirmwareImage, read_hex
 from ....patch_chooser.models import millisecond_resolution
 from ....source_files import write_if_changed
-from . import toolchain, upload_helper
+from . import firmware_upload, toolchain
 
 
 class Build(BaseModel, frozen=True):
@@ -40,7 +40,7 @@ APPLICATION_END = 0x607C0000
 def append_doom(custom: FirmwareImage, doom: FirmwareImage) -> bytes:
     if custom.origin != 0x60100000 or custom.origin + len(custom.data) > DOOM_ORIGIN:
         raise ValueError('CNTRL does not fit before the Doom slot')
-    upload_helper.validate_firmware(doom, origin=DOOM_ORIGIN, end=APPLICATION_END)
+    firmware_upload.validate_firmware(doom, origin=DOOM_ORIGIN, end=APPLICATION_END)
     padding = b'\xff' * (DOOM_ORIGIN - custom.origin - len(custom.data))
     return custom.data + padding + doom.data
 

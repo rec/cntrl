@@ -28,8 +28,6 @@ class Flash(BaseModel, frozen=True):
     stock_version: str | None = None
     editor_backup: Path | None = None
     legacy_usb: bool = False
-    upload_helper: bool = False
-    """Use the separately started upload helper for a sandboxed client."""
     prepare_only: bool = False
     """Compose and validate the image without opening any device."""
 
@@ -63,7 +61,6 @@ def run(command: Flash) -> None:
     for name, enabled in (
         ('first-install', command.first_install),
         ('legacy-usb', command.legacy_usb),
-        ('upload-helper', command.upload_helper),
         ('prepare-only', command.prepare_only),
     ):
         if enabled:

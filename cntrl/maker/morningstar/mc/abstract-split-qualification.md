@@ -67,7 +67,7 @@ are linker measurements; they do not establish runtime stack high-water usage.
   `CNTRL READY 34 23084 a4c4967e starts=2 starts_status=ready`.
 - The uploader's staged image was replaced with the final image above. The
   preparation snapshot is at
-  `/Users/tom/code/cntrl/build/abstract-split/flash35-final`; the helper checked
+  `/Users/tom/code/cntrl/build/abstract-split/flash35-final`; the installer checked
   the exact digest before uploading to `14468280-Teensy`.
 
 The uploader sent the image and reset command, then returned status 1 because

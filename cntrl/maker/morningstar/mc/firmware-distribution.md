@@ -17,8 +17,8 @@ on first use on macOS and Windows. On Linux, set `CNTRL_TYCMD` to an installed
 TyTools executable. Offline use requires the package, uploader and verified
 stock file to be present already.
 
-Sandboxed clients such as Codex can pass `--upload-helper` after you start
-the helper in your Terminal. [Start the upload helper](firmware/upload-helper.md)
+If a restricted environment blocks USB access, approve the specific
+`cntrl flash` invocation or run that command from your Terminal.
 
 ## First installation from Morningstar firmware
 
@@ -162,8 +162,7 @@ provisioning or compilers on PATH. Both its public `cntrl flash --prepare-only`
 command and the package preparation check succeeded. A second preparation with
 the download function blocked produced an identical combined image from cache.
 
-These checks did not open a serial port, launch an upload helper or flash a
-pedal. Automatic entry from stock, first-install storage initialization, and the
+These checks did not open a serial port or flash a pedal. Automatic entry
+from stock, first-install storage initialization, and the
 complete upload/reset/restore flow still require physical qualification on the
-supported hardware, including the hub case. The manually started old helper
-must be restarted with the new selected-serial protocol before such a test.
+supported hardware, including the hub case.

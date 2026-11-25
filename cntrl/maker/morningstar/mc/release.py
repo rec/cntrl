@@ -12,7 +12,7 @@ from ....firmware.intel_hex import AddressRange, FirmwareImage, encode_hex, read
 from ....localization import catalogue
 from ....patch_chooser import data_files, models, resolved, setup_bundle, songs
 from ....patch_chooser.cli import compile_to_file
-from . import boot_switch, upload_helper
+from . import boot_switch, firmware_upload
 
 
 def input_names(source_root: Path) -> list[str]:
@@ -231,7 +231,7 @@ def prepare(resources: Path, output: Path) -> distribution.Manifest:
     shutil.copyfile(resources / 'manifest.toml', output / 'manifest.toml')
     image_path = output / 'firmware.hex'
     image_path.write_text(encode_hex(combined, 0x60000000, 0x60001000))
-    upload_helper.validate_firmware(read_hex(image_path))
+    firmware_upload.validate_firmware(read_hex(image_path))
     (output / 'build.toml').write_text(
         tomlkit.dumps({'image': 'firmware.hex', 'target': manifest.target})
     )

@@ -28,11 +28,9 @@ Only the exact stock v3.14.0 HEX identified in the investigation is supported.
 The builder rejects a different input hash or unexpected bytes at a patch site.
 The original stock HEX is a local input and is not committed.
 
-Upload through the running [upload helper](../upload-helper.md), placing the
-combined image at its fixed `../build/patch-chooser.hex` path after preserving
-the previous performance image. Request the exact combined image digest, then
-check the pedal's USB identity. Stock reports `Morningstar MC6 Pro`; cntrl
-reports `cntrl experimental` and responds to the normal `CNTRL STATUS` query.
+Install a component export with [`cntrl flash`](../../firmware-distribution.md).
+Stock reports `Morningstar MC6 Pro` over USB. CNTRL reports `cntrl experimental`
+and responds to the normal `CNTRL STATUS` query.
 
 ## Input behavior
 
@@ -114,14 +112,14 @@ Native sanitizer tests cover both press orders, the inclusive boundary, a late
 pair, simultaneous presses, startup-held switches, short singles, bounce and
 timer wraparound. Python tests check the configurable pair, exact patch sites,
 stock-byte preservation, slot placement and HEX encoding/decoding. The combined
-HEX also passes the existing upload helper's boot-envelope checks.
+HEX also passes the uploader's boot-envelope checks.
 Selection tests cover the ownership header, interrupted bit programming,
 last-valid-record ordering, torn/unknown records and a full journal. The stock
 gesture test also checks that cancelling a failed save cannot replay its keys.
 
 Initial installation on 2026-10-25 used SHA-256
 `ba51a2aebb23fef350252bac763ab3379d8f6b00179f2604562d9c805dae3fd5`.
-The running upload helper returned success, and the expected device enumerated
+The uploader returned success, and the expected device enumerated
 as `Morningstar MC6 Pro` afterward. The user then confirmed that A+F switched to
 cntrl. USB changed to `cntrl experimental`, and its status was
 `CNTRL READY 9 26866 36424cc1`, matching the pre-installation setup length and
@@ -134,7 +132,7 @@ silence and exact boot duration were not independently measured.
 
 The persistent-selection image was installed on 2026-10-25, SHA-256
 `cafb8c8ce9f5f59c62c89aebb3a3d239f85a9cd2f42d7a7d14751655baccf516`.
-After one USB write error, the helper retry succeeded and the pedal enumerated
+After one USB write error, the upload retry succeeded and the pedal enumerated
 as `Morningstar MC6 Pro`, matching a fresh stock selection. The 226 Python tests,
 native target tests (including the new selection tests), Ruff, formatting, type
 checking and pyupgrade passed. The user confirmed that A+F entered cntrl and

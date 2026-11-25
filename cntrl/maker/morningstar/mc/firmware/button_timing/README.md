@@ -10,11 +10,9 @@ Build and inspect from the repository root:
 make -C cntrl/maker/morningstar/mc/firmware button-timing
 ```
 
-The image is `../build/button-timing/button_timing.ino.hex`. Use the established
-upload-helper workflow, backing up `../build/patch-chooser.hex` before placing
-the diagnostic at that fixed upload path. Restore the saved performance image
-through the same workflow after measuring. Do not run the performance build
-while that fixed upload path is being used for the diagnostic.
+The image is `../build/button-timing/button_timing.ino.hex`. Save the matching
+performance image before installing the diagnostic. Use TyTools on the
+identified MC6 Pro in HalfKay mode to write each image.
 
 Open the pedal's USB serial port at 115200 baud. Press A and F together using
 two hands, then release both before each new attempt. No hold is required.
