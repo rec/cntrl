@@ -31,6 +31,7 @@ from . import legacy_usb, release, upload_helper
 
 class Flash(BaseModel, frozen=True):
     directory: Path
+    recover_from: Path | None = None
     resources: Path | None = None
     doom_assets: Path | None = None
     port: Path | None = None
@@ -63,6 +64,15 @@ def run(
     doom_assets = command.doom_assets.read_bytes() if command.doom_assets else None
     if doom_assets is not None and len(doom_assets) != 4 * 1024 * 1024:
         raise ValueError('expected a 4 MiB Doom E1M1 asset image')
+    if command.recover_from is not None and (
+        command.first_install
+        or command.legacy_usb
+        or command.port is not None
+        or command.serial is None
+    ):
+        raise ValueError(
+            '--recover-from requires --serial and applies only to a failed CNTRL update'
+        )
     if command.first_install:
         if command.port is not None:
             raise ValueError(
@@ -134,7 +144,35 @@ def run(
     stock: Path | None = None
     restore: Path | None = None
     try:
-        if command.first_install:
+        if command.recover_from is not None:
+            assert command.serial is not None
+            previous = command.recover_from.resolve()
+            receipt = tomlkit.parse((previous / 'installation.toml').read_text())
+            serial = command.serial
+            before = previous / 'before'
+            if (
+                receipt.get('result') != 'failed'
+                or receipt.get('controller') != manifest.controller
+                or receipt.get('serial') != serial
+                or receipt.get('backup') != str(before)
+            ):
+                raise ValueError(
+                    'recovery requires a failed update with a backup for this unit'
+                )
+            ready = check_uploader(serial, request_upload)
+            restore = backups.prepare_restore(before, directory / 'restore', target)
+            record.update(
+                backup=str(before),
+                recovered_from=str(previous),
+                uploader=ready.uploader,
+                uploader_sha256=ready.uploader_sha256,
+            )
+            write_record(directory / 'installation.toml', record)
+            if not _recover_halfkay(serial):
+                raise FlashError(
+                    'could not enter HalfKay on the unit selected for recovery'
+                )
+        elif command.first_install:
             assert command.serial and command.editor_backup
             serial = command.serial
             board = upload_helper.stock_board(serial)

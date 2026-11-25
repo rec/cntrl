@@ -17,6 +17,8 @@ class Flash(BaseModel, frozen=True):
     serial: str | None = Field(default=None, min_length=1)
     output: Path | None = None
     """New persistent installation directory; defaults to .cntrl-install/<id>."""
+    recover_from: Path | None = None
+    """Reuse the verified backup from a failed update of the selected unit."""
     resources: Path | None = None
     """Use an explicit maintainer component export instead of the packaged set."""
     doom_assets: Path | None = None
@@ -53,6 +55,7 @@ def run(command: Flash) -> None:
         ('stock-version', command.stock_version),
         ('editor-backup', command.editor_backup),
         ('resources', command.resources),
+        ('recover-from', command.recover_from),
         ('doom-assets', command.doom_assets),
     ):
         if value is not None:

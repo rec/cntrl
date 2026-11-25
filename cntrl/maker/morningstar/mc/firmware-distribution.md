@@ -88,6 +88,11 @@ the update reports failure and keeps the backup. Stock rollback applies only
 to first installs. The installation record identifies the source commit,
 stock, component and image hashes, and the uploader.
 
+If the firmware cannot provide a fresh backup after a failed update, pass
+`--recover-from PATH --serial SERIAL` to reuse the original installation's
+verified backup. Use the directory from the failed update and the same
+pedal. CNTRL enters HalfKay on the selected unit before attempting recovery.
+
 To populate the cache and inspect an image without opening any device:
 
 ```sh

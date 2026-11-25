@@ -146,6 +146,13 @@ def linker_script(original: str, *, diagnostics: bool = False) -> str:
             '*(.text._ZZN5cntrl18read_patch_actions*)',
             '*(.text._ZN5cntrl7SetupUi*)',
             '*(.text._ZNK5cntrl7SetupUi*)',
+            # Keep read-only menu labels and editor diagnostics in flash
+            # to leave more DTCM available for the application stack.
+            '*(.rodata._ZN5cntrl2ui*preference*)',
+            '*(.rodata._ZN*5cntrl7SetupUi*)',
+            '*(.rodata._ZZN5cntrl7SetupUi*)',
+            '*(.rodata.cntrl_setup_*)',
+            '*(.rodata.cntrl_documents_*)',
             '*(.text._ZN5cntrl5Songs3JobC[12]E*)',
             '*(.text._ZN5cntrl5Songs6resumeE*)',
             '*(.text._ZN5cntrl5Songs14rename_setlistE*)',

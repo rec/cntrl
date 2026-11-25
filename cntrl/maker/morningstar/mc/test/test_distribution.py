@@ -9,6 +9,7 @@ import pytest
 from cntrl.firmware import distribution
 from cntrl.maker.morningstar.mc import flash_target, release, upload_helper
 from cntrl.patch_chooser import compiler_inputs, transport
+from cntrl.patch_chooser.setup_sync_store import write_record
 
 
 @pytest.mark.parametrize(
@@ -40,16 +41,17 @@ def test_installation_refuses_to_overwrite_previous_evidence(tmp_path: Path) -> 
 
 @pytest.mark.parametrize('use_helper', [False, True])
 @pytest.mark.parametrize(
-    'first_install, success_at, stock_at, recovery_status, error',
+    'first_install, success_at, stock_at, recovery_status, error, recover',
     [
-        (True, 1, None, '', ''),
-        (True, 6, None, '', ''),
-        (True, None, 2, '', 'Morningstar stock 3.14.0 was restored'),
-        (True, None, None, '', 'internal PROGRAM button'),
-        (False, 6, None, '', ''),
-        (False, 1, None, ' model=mc6-pro git=123abcd', ''),
-        (False, 1, None, 'legacy', ''),
-        (False, None, None, '', 'could not verify the firmware update'),
+        (True, 1, None, '', '', False),
+        (True, 6, None, '', '', False),
+        (True, None, 2, '', 'Morningstar stock 3.14.0 was restored', False),
+        (True, None, None, '', 'internal PROGRAM button', False),
+        (False, 6, None, '', '', False),
+        (False, 1, None, ' model=mc6-pro git=123abcd', '', False),
+        (False, 1, None, 'legacy', '', False),
+        (False, None, None, '', 'could not verify the firmware update', False),
+        (False, 1, None, '', '', True),
     ],
 )
 def test_flash_recovers_silently_and_rolls_back_only_first_installs(
@@ -62,6 +64,7 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
     recovery_status: str,
     error: str,
     use_helper: bool,
+    recover: bool,
 ) -> None:
     destination = tmp_path / 'install'
     history = tmp_path / 'flash-record.md'
@@ -171,9 +174,8 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
 
     monkeypatch.setattr(flash_target.backups, 'backup_pedal', backup)
     restore = destination / 'restore'
-    monkeypatch.setattr(
-        flash_target.backups, 'prepare_restore', Mock(return_value=restore)
-    )
+    prepare_restore = Mock(return_value=restore)
+    monkeypatch.setattr(flash_target.backups, 'prepare_restore', prepare_restore)
     restore_setups = Mock()
     monkeypatch.setattr(flash_target.backups, 'restore_setups', restore_setups)
     verify = Mock()
@@ -182,14 +184,27 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
     monkeypatch.setattr(flash_target.time, 'sleep', sleep)
     starter = Mock()
     monkeypatch.setattr(flash_target, 'install_starter', starter)
+    previous = tmp_path / 'previous' if recover else None
+    if previous is not None:
+        previous.mkdir()
+        write_record(
+            previous / 'installation.toml',
+            {
+                'result': 'failed',
+                'controller': 'mc6-pro',
+                'serial': '12345',
+                'backup': str(previous / 'before'),
+            },
+        )
     command = flash_target.Flash(
         directory=destination,
         first_install=first_install,
+        recover_from=previous,
         upload_helper=use_helper,
         serial='12345',
         stock_version=release.STOCK.version if first_install else None,
         editor_backup=editor_backup if first_install else None,
-        port=None if first_install else port,
+        port=None if first_install or recover else port,
     )
     if error:
         with pytest.raises(flash_target.FlashError, match=error):
@@ -205,6 +220,14 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
         == int(not first_install and not error)
     )
     assert stock_image.call_count == int(first_install)
+    if previous is not None:
+        prepare_restore.assert_called_once_with(
+            previous / 'before',
+            restore,
+            flash_target.models.Target.model_validate(
+                compiler_inputs.read_document(target_file)
+            ),
+        )
     updater_path.assert_called_once_with(provision_missing=not use_helper)
     unused.assert_not_called()
     attempts = success_at or 6
