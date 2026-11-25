@@ -38,6 +38,7 @@ def test_installation_refuses_to_overwrite_previous_evidence(tmp_path: Path) -> 
         flash_target.run(flash_target.Flash(directory=tmp_path, prepare_only=True))
 
 
+@pytest.mark.parametrize('use_helper', [False, True])
 @pytest.mark.parametrize(
     'first_install, success_at, stock_at, recovery_status, error',
     [
@@ -60,12 +61,14 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
     stock_at: int | None,
     recovery_status: str,
     error: str,
+    use_helper: bool,
 ) -> None:
     destination = tmp_path / 'install'
     history = tmp_path / 'flash-record.md'
     editor_backup = tmp_path / 'banks'
     editor_backup.write_bytes(b'editor backup')
-    (tmp_path / 'authentication.key').touch()
+    if use_helper:
+        (tmp_path / 'authentication.key').touch()
     stock = tmp_path / release.STOCK.filename
     uploads: list[upload_helper.ManagedUpload] = []
     manifest = Mock(
@@ -93,23 +96,13 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
         Mock(return_value=compiler_inputs.read_document(target_file)),
     )
     monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path)
-    monkeypatch.setattr(upload_helper, 'updater_path', Mock())
+    updater_path = Mock()
+    monkeypatch.setattr(upload_helper, 'updater_path', updater_path)
     monkeypatch.setattr(upload_helper, 'stock_board', Mock())
     monkeypatch.setattr(
         upload_helper, 'request_stock_bootloader', Mock(return_value=True)
     )
     monkeypatch.setattr(flash_target, 'wait_halfkay', Mock(return_value=True))
-    monkeypatch.setattr(
-        flash_target,
-        'check_helper',
-        Mock(
-            return_value=upload_helper.UploadResult(
-                returncode=0,
-                output='',
-                managed_recovery=True,
-            )
-        ),
-    )
     port = Path('pedal-port')
     halfkay = upload_helper.Board(
         tag='12345-Teensy',
@@ -120,7 +113,14 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
     )
     restored_at = None if stock_at is None else 6 + stock_at
 
-    def upload(request: upload_helper.ManagedUpload) -> upload_helper.UploadResult:
+    def upload(
+        request: upload_helper.ManagedUpload | upload_helper.Check,
+    ) -> upload_helper.UploadResult:
+        if isinstance(request, upload_helper.Check):
+            assert request.serial == '12345'
+            return upload_helper.UploadResult(
+                returncode=0, output='', managed_recovery=True
+            )
         uploads.append(request)
         return upload_helper.UploadResult(
             returncode=0
@@ -135,7 +135,14 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
             return [halfkay.model_copy(update={'description': 'Morningstar MC6 Pro'})]
         return [halfkay]
 
-    monkeypatch.setattr(upload_helper, 'request_upload', upload)
+    selected = Mock(side_effect=upload)
+    unused = Mock()
+    monkeypatch.setattr(
+        upload_helper, 'request_upload', selected if use_helper else unused
+    )
+    monkeypatch.setattr(
+        upload_helper, 'perform_request', unused if use_helper else selected
+    )
     monkeypatch.setattr(upload_helper, 'list_boards', list_boards)
     monkeypatch.setattr(
         flash_target.devices,
@@ -178,6 +185,7 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
     command = flash_target.Flash(
         directory=destination,
         first_install=first_install,
+        upload_helper=use_helper,
         serial='12345',
         stock_version=release.STOCK.version if first_install else None,
         editor_backup=editor_backup if first_install else None,
@@ -197,6 +205,8 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
         == int(not first_install and not error)
     )
     assert stock_image.call_count == int(first_install)
+    updater_path.assert_called_once_with(provision_missing=not use_helper)
+    unused.assert_not_called()
     attempts = success_at or 6
     stock_attempts = (stock_at or 5) if first_install and not success_at else 0
     assert [u.image for u in uploads] == (

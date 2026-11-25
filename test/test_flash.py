@@ -10,8 +10,9 @@ import tyro
 from cntrl import flash
 
 
+@pytest.mark.parametrize('helper_args', [[], ['--upload-helper']])
 def test_packaged_flash_forwards_first_install_and_never_builds(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, helper_args: list[str]
 ) -> None:
     adapter = tmp_path / 'adapter'
     adapter.mkdir()
@@ -35,6 +36,7 @@ def test_packaged_flash_forwards_first_install_and_never_builds(
             '1.2.3',
             '--editor-backup',
             'backup.file',
+            *helper_args,
         ],
     )
     flash.run(command)
@@ -50,6 +52,7 @@ def test_packaged_flash_forwards_first_install_and_never_builds(
         '--editor-backup',
         'backup.file',
         '--first-install',
+        *helper_args,
     ]
     assert run.call_count == 1
 

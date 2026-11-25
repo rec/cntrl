@@ -68,7 +68,8 @@ use the public command, from any working directory:
 cntrl flash --controller mc6-pro --port PORT
 ```
 
-The upload helper must already be running in your Terminal. Use a fresh output
+When using `cntrl flash --upload-helper`, the helper must already be running
+in your Terminal. Use a fresh output
 directory for each installation. The command retains the immutable backup in
 `before/` and validates its current-format data before asking the pedal to
 reboot. Add `--legacy-usb` only when the installed firmware uses

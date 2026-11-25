@@ -39,6 +39,7 @@ class Flash(BaseModel, frozen=True):
     stock_version: str | None = None
     editor_backup: Path | None = None
     legacy_usb: bool = False
+    upload_helper: bool = False
     prepare_only: bool = False
 
 
@@ -106,8 +107,16 @@ def run(
     print(f'Prepared firmware source {manifest.source_commit}: {source}', flush=True)
     if command.prepare_only:
         return
-    if not (upload_helper.CACHE_DIRECTORY / 'authentication.key').is_file():
+    if (
+        command.upload_helper
+        and not (upload_helper.CACHE_DIRECTORY / 'authentication.key').is_file()
+    ):
         raise ValueError('start the upload helper in Terminal before flashing')
+    request_upload = (
+        upload_helper.request_upload
+        if command.upload_helper
+        else upload_helper.perform_request
+    )
     errors: list[str] = []
     target = models.Target.model_validate(
         data_files.load_target(
@@ -120,7 +129,7 @@ def run(
         raise ValueError('\n'.join(errors))
     if doom_assets is not None and 'doom' not in target.functions:
         raise ValueError('--doom-assets requires a Doom-enabled firmware build')
-    upload_helper.updater_path()
+    upload_helper.updater_path(provision_missing=not command.upload_helper)
     expected_commit = manifest.source_commit[:7]
     stock: Path | None = None
     restore: Path | None = None
@@ -129,7 +138,7 @@ def run(
             assert command.serial and command.editor_backup
             serial = command.serial
             board = upload_helper.stock_board(serial)
-            ready = check_helper(serial)
+            ready = check_uploader(serial, request_upload)
             stock = release.stock_image()
             record.update(
                 uploader=ready.uploader, uploader_sha256=ready.uploader_sha256
@@ -171,7 +180,7 @@ def run(
                     'the selected cntrl port has no unique matching unit serial'
                 )
             serial = matches[0].serial
-            ready = check_helper(serial)
+            ready = check_uploader(serial, request_upload)
             record.update(
                 uploader=ready.uploader, uploader_sha256=ready.uploader_sha256
             )
@@ -209,6 +218,7 @@ def run(
             stock,
             expected_commit,
             connection_factory,
+            request_upload,
         )
         record['uploader_returncode'] = result.returncode
         record.update(uploader=result.uploader, uploader_sha256=result.uploader_sha256)
@@ -267,6 +277,7 @@ def _install_with_recovery(
     stock: Path | None,
     expected: str,
     connection_factory: Callable[[Path], transport.SerialConnection] | None,
+    request_upload: Callable[[upload_helper.Upload], upload_helper.UploadResult],
 ) -> tuple[upload_helper.UploadResult, Path, bool]:
     attempted = False
     for delay in (0, *RETRY_DELAYS):
@@ -274,7 +285,7 @@ def _install_with_recovery(
             time.sleep(delay)
             if not _recover_halfkay(image.serial):
                 continue
-        result = upload_helper.request_upload(image)
+        result = request_upload(image)
         attempted = attempted or result.attempt is not None
         port, outcome = _observe_installation(
             image, expected, result, connection_factory
@@ -285,8 +296,8 @@ def _install_with_recovery(
 
     if not attempted:
         raise FlashError(
-            'CNTRL could not start a firmware upload. Check the USB connection '
-            'and the running upload helper. The installer did not start a flash.'
+            f'CNTRL could not start a firmware upload. Check the USB connection. '
+            f'{result.output.strip()}'
         )
 
     if stock is None:
@@ -301,7 +312,7 @@ def _install_with_recovery(
         time.sleep(delay)
         if not _recover_halfkay(image.serial):
             continue
-        result = upload_helper.request_upload(rollback)
+        result = request_upload(rollback)
         _, outcome = _observe_installation(rollback, None, result, None)
         upload_helper.record_reconnect(result, stock_version, outcome)
         if result.returncode == 0 and outcome == 'Morningstar stock running':
@@ -410,8 +421,13 @@ def _firmware_commit(status: str) -> str | None:
     return None
 
 
-def check_helper(serial: str) -> upload_helper.UploadResult:
-    result = upload_helper.request_upload(upload_helper.Check(serial=serial))
+def check_uploader(
+    serial: str,
+    request_upload: Callable[
+        [upload_helper.Upload | upload_helper.Check], upload_helper.UploadResult
+    ],
+) -> upload_helper.UploadResult:
+    result = request_upload(upload_helper.Check(serial=serial))
     if result.returncode:
         raise ValueError(result.output)
     if not result.managed_recovery:

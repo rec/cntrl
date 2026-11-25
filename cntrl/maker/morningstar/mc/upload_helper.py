@@ -155,11 +155,17 @@ def validate_firmware(
         raise ValueError('unexpected boot header, reset entry, boot data or CSF')
 
 
-def updater_path() -> Path:
+def updater_path(*, provision_missing: bool = False) -> Path:
     """Use the explicit updater, or the checksum-pinned private installation."""
     if executable := os.environ.get('CNTRL_TYCMD'):
         return Path(executable)
-    return updater_provision.installed(CACHE_DIRECTORY / 'tytools-0.9.9')
+    directory = CACHE_DIRECTORY / 'tytools-0.9.9'
+    try:
+        return updater_provision.installed(directory)
+    except updater_provision.MissingUpdater:
+        if not provision_missing:
+            raise
+        return updater_provision.provision(directory)
 
 
 def flash_record_path() -> Path:
@@ -307,18 +313,9 @@ def _record_outcome(path: Path, entry: str) -> None:
         )
 
 
-def process_request(line: bytes, serial: str) -> UploadResult:
-    """Accept one bounded JSON object containing an image path and digest."""
+def perform_request(request: Upload | Check) -> UploadResult:
+    """Run the same upload checks for the local installer and the helper."""
     try:
-        if len(line) > REQUEST_LIMIT or not line.endswith(b'\n'):
-            raise ValueError(
-                f'expected a newline-terminated request (maximum {REQUEST_LIMIT} bytes)'
-            )
-        request = TypeAdapter(Upload | ManagedUpload | Check).validate_json(line)
-        if request.serial != serial:
-            raise ValueError(
-                'request serial differs from the unit selected when starting the helper'
-            )
         if isinstance(request, Check):
             updater = updater_path()
             return UploadResult(
@@ -331,6 +328,23 @@ def process_request(line: bytes, serial: str) -> UploadResult:
         return upload_image(request)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         return UploadResult(returncode=1, output=f'Upload helper: {error}\n')
+
+
+def process_request(line: bytes, serial: str) -> UploadResult:
+    """Accept one bounded JSON object for the unit selected by the helper."""
+    try:
+        if len(line) > REQUEST_LIMIT or not line.endswith(b'\n'):
+            raise ValueError(
+                f'expected a newline-terminated request (maximum {REQUEST_LIMIT} bytes)'
+            )
+        request = TypeAdapter(Upload | ManagedUpload | Check).validate_json(line)
+        if request.serial != serial:
+            raise ValueError(
+                'request serial differs from the unit selected when starting the helper'
+            )
+    except ValueError as error:
+        return UploadResult(returncode=1, output=f'Upload helper: {error}\n')
+    return perform_request(request)
 
 
 def serve(serial: str) -> None:

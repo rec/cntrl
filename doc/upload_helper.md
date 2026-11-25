@@ -19,8 +19,9 @@ entry without uploading. `upload` sends an existing image without rebuilding or
 transferring setups. The target owns validation and device access; uploader
 output and exit status are returned unchanged.
 
-Use the running, user-launched upload helper for firmware flashing. Reuse that
-process; do not start a second server. Each upload request supplies an absolute
+For normal Terminal use, `cntrl flash` invokes the uploader directly. Pass
+`--upload-helper` to use the running, user-launched helper from a sandboxed
+client such as Codex. Each upload request supplies an absolute
 HEX image path, its exact SHA-256 and the serial selected when starting the
 helper. The file must be regular, owned by the user and not publicly writable.
 The helper validates and snapshots that image, then calls the installed updater.

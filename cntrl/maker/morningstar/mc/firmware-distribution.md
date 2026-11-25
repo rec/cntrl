@@ -10,28 +10,15 @@ cached under its original filename in the platform user cache, inside
 `cntrl-firmware/mc6-pro/`. Our verified SHA-256 must match on every use. A valid
 cached copy is used without any network request; no latest-version lookup runs.
 
-## Prepare and start the upload helper
+## Uploader
 
-Provision the pinned uploader once, without accessing a pedal:
+Run `cntrl flash` from your Terminal. It installs the pinned TyTools uploader
+on first use on macOS and Windows. On Linux, set `CNTRL_TYCMD` to an installed
+TyTools executable. Offline use requires the package, uploader and verified
+stock file to be present already.
 
-```sh
-cntrl upload-helper --controller mc6-pro provision
-```
-
-Linux needs an explicitly managed `CNTRL_TYCMD`, as described in
-[the helper guide](firmware/upload-helper.md). Offline use also requires the
-Python package, uploader and verified stock file to be present already.
-
-Start the helper manually in a separate terminal, selecting your unit's USB
-serial number. Keep it running during the installation:
-
-```sh
-cntrl upload-helper --controller mc6-pro serve --serial SERIAL
-```
-
-This is the unit serial, not a serial-port path. Use your operating system's USB
-device information or `tycmd list --verbose --output json` with the provisioned
-uploader to find it. The helper checks that each request names the same unit.
+Sandboxed clients such as Codex can pass `--upload-helper` after you start
+the helper in your Terminal. [Start the upload helper](firmware/upload-helper.md)
 
 ## First installation from Morningstar firmware
 
@@ -39,7 +26,7 @@ uploader to find it. The helper checks that each request names the same unit.
    supported release. Follow Morningstar's backup instructions before upgrading.
 2. Export a fresh **All Banks** backup, including controller settings, with the
    Morningstar editor after that upgrade. Retain this stock recovery artifact.
-3. Close the editor and other USB serial applications and start the helper.
+3. Close the editor and other USB serial applications.
 4. Run:
 
 ```sh
@@ -88,8 +75,8 @@ are recorded in [the flash log](../../../../doc/flash-record.md).
 cntrl flash --controller mc6-pro --port PORT
 ```
 
-The installer discovers the serial from the selected cntrl USB port, checks it
-against the running helper, makes a fresh backup, and prepares offline conversion.
+The installer discovers the serial from the selected cntrl USB port, makes a
+fresh backup, and prepares offline conversion.
 It uses the same boot verification and silent retries as a first install. Once
 the expected firmware boots, the installer restores and verifies the saved data.
 Add `--legacy-usb` only for the earlier cntrl USB transport.

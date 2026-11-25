@@ -9,6 +9,10 @@ from urllib.request import urlopen
 from zipfile import ZipFile
 
 
+class MissingUpdater(ValueError):
+    """The pinned uploader has not been installed."""
+
+
 def installed(directory: Path) -> Path:
     if sys.platform not in BINARIES:
         raise ValueError(
@@ -17,7 +21,7 @@ def installed(directory: Path) -> Path:
         )
     path = directory / ('tycmd.exe' if sys.platform == 'win32' else 'tycmd')
     if not path.is_file():
-        raise ValueError(
+        raise MissingUpdater(
             'run cntrl upload-helper --controller mc6-pro '
             'provision before starting the helper'
         )

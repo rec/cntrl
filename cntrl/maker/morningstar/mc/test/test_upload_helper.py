@@ -446,6 +446,27 @@ def test_default_requires_provisioning_before_serving(
     assert not (tmp_path / 'cache').exists()
 
 
+def test_direct_flash_provisions_only_a_missing_pinned_updater(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv('CNTRL_TYCMD', raising=False)
+    monkeypatch.setattr(sys, 'platform', 'darwin')
+    monkeypatch.setattr(upload_helper, 'CACHE_DIRECTORY', tmp_path)
+    directory = tmp_path / 'tytools-0.9.9'
+    updater = directory / 'tycmd'
+    provision = MagicMock(return_value=updater)
+    monkeypatch.setattr(upload_helper.updater_provision, 'provision', provision)
+
+    assert upload_helper.updater_path(provision_missing=True) == updater
+    provision.assert_called_once_with(directory)
+    directory.mkdir()
+    updater.write_bytes(b'wrong checksum')
+    provision.reset_mock()
+    with pytest.raises(ValueError, match='checksum mismatch'):
+        upload_helper.updater_path(provision_missing=True)
+    provision.assert_not_called()
+
+
 @pytest.mark.parametrize('platform', ['linux', 'freebsd'])
 def test_unsupported_platform_requires_explicit_updater_before_serving(
     platform: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
