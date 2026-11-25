@@ -9,21 +9,26 @@ import pytest
 from cntrl.emulator import backend, cli
 from cntrl.emulator.layout import EmulatorLayout
 from cntrl.maker.morningstar.mc.emulator import profiles
-from cntrl.patch_chooser import compiler, device_globals, setup_bundle, songs
+from cntrl.patch_chooser import compiler, device_globals, models, setup_bundle, songs
 from cntrl.patch_chooser.global_overlay import Overlay
 
 
-@pytest.mark.parametrize('include_empty', [False, True])
-def test_setlist_page_cycle_respects_an_explicit_empty(
-    tmp_path: Path, include_empty: bool
+@pytest.mark.parametrize('rotation', ['custom', 'custom-with-blank', 'default'])
+def test_utility_page_cycles_place_the_blank_stop(
+    tmp_path: Path, rotation: str
 ) -> None:
     target = cli.load_target(profiles.export(None, 'mc6_pro', tmp_path / 'profile'))
-    pages = {
-        **({'blank': {'type': 'None'}} if include_empty else {}),
-        'status': {'type': 'status'},
-        'language': {'type': 'language'},
-    }
-    source = {'pages': pages, 'use_animations': False}
+    source: dict[str, object] = {'use_animations': False}
+    if rotation == 'default':
+        utilities = [
+            p.type for p in models.Setup().pages.values() if p.type != 'patch-chooser'
+        ]
+    else:
+        utilities = ['status', 'language']
+        source['pages'] = {
+            **({'blank': {'type': 'None'}} if rotation == 'custom-with-blank' else {}),
+            **{p: {'type': p} for p in utilities},
+        }
     raw = compiler.compile_show(source, {}, [], target)
     bundle = tmp_path / 'setup.bin'
     bundle.write_bytes(
@@ -51,13 +56,22 @@ def test_setlist_page_cycle_respects_an_explicit_empty(
 
     executable = backend.build(target, tmp_path / 'native', BASE.parents[3])
     layout = EmulatorLayout.load(BASE / 'emulator/mc6-pro.toml')
+    if rotation == 'default':
+        with backend.Session(
+            layout, target, executable, tmp_path / 'browse', bundle
+        ) as session:
+            session.advance(1_000_000)
+            assert session.tooltip_context[0] == utilities[0]
+            for page in [*utilities[1:], 'None', utilities[0]]:
+                press(session, 'f')
+                assert session.tooltip_context[0] == page
+
     with backend.Session(layout, target, executable, storage, bundle) as session:
         session.advance(1_000_000)
-        expected = [
-            'status',
-            'language',
-            'songs-and-setlists' if include_empty else 'status',
-        ]
+        assert session.tooltip_context[0] == 'songs-and-setlists'
+        expected = [*utilities, utilities[0]]
+        if rotation != 'custom':
+            expected.insert(-1, 'songs-and-setlists')
         for page in expected:
             session.button('f', True)
             session.advance(session.time_us + 600_000)

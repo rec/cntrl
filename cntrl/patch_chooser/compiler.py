@@ -133,7 +133,6 @@ def compile_show(
                     pages.pop('midi-looper')
                 if show.page_settings.arpeggiator is None:
                     pages.pop('arpeggiator')
-            pages['None'] = models.Page(type='None')
             if show.pages['pong'].min_displays <= len(target.displays):
                 pages['pong'] = show.pages['pong']
             if 'doom' in target.functions:
@@ -145,6 +144,8 @@ def compile_show(
                 and memon.output(show, target, defaults.device) is not None
             ):
                 pages['memon'] = show.pages['memon']
+            # Browse ends here. Setlist starts here and wraps to the first tool.
+            pages['None'] = models.Page(type='None')
         show = show.model_copy(
             update={
                 'pages': pages,

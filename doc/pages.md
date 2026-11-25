@@ -13,14 +13,15 @@ second press to browse backward.
 Page and region names contain 1 to 31 printable ASCII characters.
 
 The default utility pages for testing are Status, MIDI Cable Test, Panic,
-MIDI Monitor, MIDI Looper, Arpeggiator, Time, Pong, Language, Setups,
-Songs and setlists, Switches, Settings, and Calibration, in that order.
+MIDI Monitor, MIDI Looper, Arpeggiator, Time, Language, Setups,
+Songs and setlists, Switches, Settings, Calibration, Pong, Doom, and Memon,
+in that order as supported by the target.
 Press C on Setups, Songs and setlists, Switches, or Settings to open its editor.
 Pong requires three displays. Time and Language require two.
 MIDI Looper and Arpeggiator need an enabled MIDI input and output.
 Banked views are configured with the Banked patches they display.
-When the setup inherits the whole default cycle, Patch Chooser mode puts one
-Empty stop at the end and Setlist mode puts it at the start. Empty gives the
+When the setup inherits the whole default cycle, Browse adds one
+Empty stop at the end and Setlist puts it at the start. Empty gives the
 performance view the full display. Authored page and region lists use only the
 Empty entries explicitly listed, in their authored positions. A utility cycle
 with no Empty moves directly between its configured pages when it wraps.
@@ -139,11 +140,10 @@ displays while Pong is selected, preserving its state and background execution.
 Controllers with fewer than three displays omit Pong from the implicit
 catalogue. Selecting None returns all displays to the Patch Chooser.
 
-The default tools rotation puts the None stop before Pong, Doom, and Memon.
-It includes each game when the target supports it. Doom uses one
-display. Press C on that page to start the standalone game. An explicit page
-catalogue can include `type = 'doom'`
-in its chosen rotation. [Doom build and launch](../cntrl/maker/morningstar/mc/doom/README.md)
+The default tools rotation includes each game when the target supports it.
+Doom uses one display. Press C on that page to start the standalone game.
+An explicit page catalogue can include `type = 'doom'` in its chosen rotation.
+[Doom build and launch](../cntrl/maker/morningstar/mc/doom/README.md)
 
 Setups, Songs and setlists, and Switches each use one utility display. Back from
 an editor returns to its page. To switch from a set to the Patch Chooser, open

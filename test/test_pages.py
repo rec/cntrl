@@ -115,6 +115,7 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     assert not {'menu', 'trs-ports', 'expression'} & pages.keys()
     assert pages['patch-chooser']['min_displays'] == 0
     rotation = exported['regions']['tools' if count >= 2 else 'main']['pages']
+    assert rotation[-1] == 'None'
     start = rotation.index('panic') + 1
     assert rotation[start : start + 3] == [
         'midi-monitor',
@@ -129,9 +130,9 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
             'switches',
             'settings',
             'calibration',
-            'None',
             'pong',
             'memon',
+            'None',
         ]
         assert pages['pong']['min_displays'] == 3
         assert pages['memon']['min_displays'] == 3
@@ -149,17 +150,30 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     assert compiler.compile_show(exported, {}, [], device) == data
 
 
-def test_default_tools_rotation_ends_with_pong_doom_and_memon() -> None:
+def test_default_tools_rotation_adds_one_blank_after_the_default_pages() -> None:
+    assert 'None' not in models.Setup().pages
     standard = target()
     device = standard.model_copy(update={'functions': [*standard.functions, 'doom']})
     data = compiler.compile_show({'fill_in_styles': False}, {}, [], device)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
-    assert exported['regions']['tools']['pages'][-5:] == [
+    assert exported['regions']['tools']['pages'] == [
+        'status',
+        'cable-test',
+        'panic',
+        'midi-monitor',
+        'midi-looper',
+        'arpeggiator',
+        'time',
+        'language',
+        'setups',
+        'songs-and-setlists',
+        'switches',
+        'settings',
         'calibration',
-        'None',
         'pong',
         'doom',
         'memon',
+        'None',
     ]
     assert exported['pages']['doom']['type'] == 'doom'
     assert exported['pages']['doom']['min_displays'] == 1
