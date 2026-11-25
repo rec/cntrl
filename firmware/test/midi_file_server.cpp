@@ -37,11 +37,16 @@ int main(int argc, char **argv) {
     assert(argc == 3); cntrl::memory_budget = 192 * 1024;
     FileSystem filesystem(argv[1], argv[2]); File reader(filesystem), writer(filesystem); Replies replies;
     cntrl::FileTransfer transfer(filesystem, reader, writer, replies);
+    File doom_reader(filesystem), doom_writer(filesystem);
+    cntrl::FileTransfer doom(filesystem, doom_reader, doom_writer, replies, cntrl::FileTransfer::Namespace::doom);
     std::string line;
     return usb_peer(replies.usb, [&](uint8_t byte) {
         if (byte != '\n') line += char(byte);
-        else { assert(transfer.command(line.c_str(), 0)); line.clear(); }
+        else { assert(transfer.command(line.c_str(), 0) || doom.command(line.c_str(), 0)); line.clear(); }
     }, [&]() { transfer.poll(0); }, []() { return true; },
-        [&]() { transfer.cancel(); line.clear(); },
-        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) { assert(kind == cntrl::UsbKind::midi_file); transfer.data(bytes, n, 0); });
+        [&]() { transfer.cancel(); doom.cancel(); line.clear(); },
+        [&](cntrl::UsbKind kind, const uint8_t *bytes, unsigned n) {
+            if (kind == cntrl::UsbKind::doom_asset) doom.data(bytes, n, 0);
+            else { assert(kind == cntrl::UsbKind::midi_file); transfer.data(bytes, n, 0); }
+        });
 }

@@ -795,6 +795,11 @@ class SetupClient:
             raise UsbTransferInputError('invalid source snapshot checksum or size')
         self._copy_asset('SOURCE', Kind.source, snapshot + '.bin', data, False)
 
+    def copy_doom_assets(self, data: bytes) -> None:
+        if len(data) != 4 * 1024 * 1024:
+            raise UsbTransferInputError('expected a 4 MiB Doom E1M1 asset image')
+        self._copy_asset('DOOM_ASSET', Kind.doom_asset, 'e1m1.img', data, True)
+
     def copy_language(self, tag: str, data: bytes) -> None:
         from ..localization.catalogue import CatalogueError, inspect
 
@@ -826,9 +831,11 @@ class SetupClient:
     def _copy_asset(
         self, protocol: str, kind: Kind, name: str, data: bytes, overwrite: bool
     ) -> None:
-        label = {'MIDI_FILE': 'MIDI', 'LANGUAGE': 'language pack'}.get(
-            protocol, 'source'
-        )
+        label = {
+            'MIDI_FILE': 'MIDI',
+            'LANGUAGE': 'language pack',
+            'DOOM_ASSET': 'Doom asset',
+        }.get(protocol, 'source')
         try:
             existing = self._download_asset(protocol, name)
         except UsbFileMissing:

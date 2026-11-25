@@ -33,7 +33,7 @@ class Components(BaseModel, frozen=True):
     stock_reader: int
 
 
-DOOM_ORIGIN = 0x60390000
+DOOM_ORIGIN = 0x60780000
 APPLICATION_END = 0x607C0000
 
 

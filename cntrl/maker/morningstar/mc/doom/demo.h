@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 enum { DEMO_WIDTH = 160, DEMO_HEIGHT = 128 };
+int demo_read_assets(uint32_t offset, void *dest, uint32_t count);
 void demo_run(void);
 uint32_t demo_millis(void);
 void demo_delay(uint32_t ms);

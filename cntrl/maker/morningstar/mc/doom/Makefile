@@ -29,7 +29,7 @@ export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
 .PHONY: firmware check relocated host
 relocated:
-	$(MAKE) firmware OUT="$(OUT)/relocated" FLASH_ORIGIN=0x60390000 FLASH_LENGTH=4288K
+	$(MAKE) firmware OUT="$(OUT)/relocated" FLASH_ORIGIN=0x60780000 FLASH_LENGTH=256K
 
 ifneq ($(FLASH_ORIGIN),)
 CORE_LINKER := $(TOOLS)/data/packages/teensy/hardware/avr/1.62.0/cores/teensy4/imxrt1062_t41.ld
@@ -49,14 +49,14 @@ firmware: $(OUT)/elf/doom_demo.ino.elf
 	"$(SDK)/arm-none-eabi-objcopy" -I ihex -O binary "$(OUT)/elf/doom_demo.ino.hex" "$(OUT)/hex.bin"
 	cmp "$(OUT)/elf.bin" "$(OUT)/hex.bin"
 
-$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h Makefile $(NOR) $(FLASH_CONFIG) $(LINKER) $(RETURN_HEADERS)
+$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h asset_path.h Makefile $(FLASH_CONFIG) $(LINKER) $(RETURN_HEADERS)
+	@test ! -f "$(SKETCH)/src/rom.S" || { echo 'Choose a new OUT directory for the microSD Doom build'; exit 1; }
 	mkdir -p "$(SKETCH)/src"
 	touch "$(SKETCH)/doom_demo.ino"
-	cp $(SHARED) board.cpp demo.h return_button.h "$(FLASH_CONFIG)" "$(SKETCH)/src/"
+	cp $(SHARED) board.cpp demo.h asset_path.h return_button.h "$(FLASH_CONFIG)" "$(SKETCH)/src/"
 	cd "$(DMC)" && for source in $(patsubst $(DMC)/%,%,$(SOURCES)); do \
 		mkdir -p "$(SKETCH)/src/$$(dirname "$$source")" && \
 		cp "$$source" "$(SKETCH)/src/$$source" || exit; done
-	printf '.section .progmem.doom,"a",%%progbits\n.balign 4\n.global demo_rom\ndemo_rom:\n.incbin "%s"\n' "$(NOR)" > "$(SKETCH)/src/rom.S"
 	"$(TOOLS)/bin/arduino-cli" compile --fqbn teensy:avr:teensy41:usb=serial,speed=600,opt=osstd,keys=en-us \
 		--build-path "$(OUT)/elf" \
 		$(LINK_PROPERTY) \
@@ -89,3 +89,6 @@ $(OUT)/doom-host: $(SOURCES) $(HEADERS) $(SHARED) host.c demo.h Makefile
 		$(SOURCES) $(SHARED) host.c $(LDFLAGS) -lm -o "$@"
 
 host: $(OUT)/doom-host $(NOR)
+
+.PHONY: assets
+assets: $(NOR)

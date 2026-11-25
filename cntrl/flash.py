@@ -19,6 +19,8 @@ class Flash(BaseModel, frozen=True):
     """New persistent installation directory; defaults to .cntrl-install/<id>."""
     resources: Path | None = None
     """Use an explicit maintainer component export instead of the packaged set."""
+    doom_assets: Path | None = None
+    """Copy the generated Doom E1M1 image to the MC6 Pro over USB."""
     first_install: bool = False
     """Confirm the selected physical model and install from supported stock."""
     stock_version: str | None = None
@@ -49,6 +51,7 @@ def run(command: Flash) -> None:
         ('stock-version', command.stock_version),
         ('editor-backup', command.editor_backup),
         ('resources', command.resources),
+        ('doom-assets', command.doom_assets),
     ):
         if value is not None:
             arguments.extend([f'--{name}', str(value)])

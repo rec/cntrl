@@ -22,6 +22,7 @@ class Kind(IntEnum):
     midi_file = 23
     source = 24
     language = 25
+    doom_asset = 26
     text = 128
     data = 129
     error = 255

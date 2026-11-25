@@ -7,14 +7,50 @@
 #include "nor.h"
 #include "platform.h"
 
+#ifndef ARDUINO
 extern const uint8_t demo_rom[NOR_SIZE];
+
+int demo_read_assets(uint32_t offset, void *dest, uint32_t count)
+{
+    memcpy(dest, demo_rom + offset, count);
+    return 1;
+}
+#endif
+
+enum { block_size = 4096, cache_slots = 16 };
+static struct {
+    uint32_t block_plus_one;
+    uint8_t bytes[block_size];
+} cache[cache_slots];
+
 dmc_set_t dmc_set;
 
 void nor_read(uint32_t offset, void *dest, uint32_t count)
 {
     if (offset > NOR_SIZE || count > NOR_SIZE - offset)
-        demo_fail("Read outside the built-in Freedoom data");
-    memcpy(dest, demo_rom + offset, count);
+        demo_fail("Read outside the Freedoom image");
+    uint8_t *out = dest;
+    while (count) {
+        const uint32_t block = offset / block_size;
+        const uint32_t start = offset % block_size;
+        uint32_t length;
+        if (!start && count >= block_size) {
+            length = count - count % block_size;
+            if (!demo_read_assets(offset, out, length))
+                demo_fail("Could not read the Freedoom image");
+        } else {
+            const unsigned slot = block % cache_slots;
+            if (cache[slot].block_plus_one != block + 1) {
+                if (!demo_read_assets(block * block_size, cache[slot].bytes, block_size))
+                    demo_fail("Could not read the Freedoom image");
+                cache[slot].block_plus_one = block + 1;
+            }
+            length = block_size - start;
+            if (length > count) length = count;
+            memcpy(out, cache[slot].bytes + start, length);
+        }
+        offset += length; out += length; count -= length;
+    }
 }
 
 int nor_read_async(uint32_t offset, void *dest, uint32_t count, int priority)

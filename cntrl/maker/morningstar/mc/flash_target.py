@@ -32,6 +32,7 @@ from . import legacy_usb, release, upload_helper
 class Flash(BaseModel, frozen=True):
     directory: Path
     resources: Path | None = None
+    doom_assets: Path | None = None
     port: Path | None = None
     serial: str | None = Field(default=None, pattern=r'^[0-9]+$')
     first_install: bool = False
@@ -58,6 +59,9 @@ def run(
             f'{directory}: choose a new installation directory '
             'to preserve previous evidence'
         )
+    doom_assets = command.doom_assets.read_bytes() if command.doom_assets else None
+    if doom_assets is not None and len(doom_assets) != 4 * 1024 * 1024:
+        raise ValueError('expected a 4 MiB Doom E1M1 asset image')
     if command.first_install:
         if command.port is not None:
             raise ValueError(
@@ -114,6 +118,8 @@ def run(
     )
     if errors:
         raise ValueError('\n'.join(errors))
+    if doom_assets is not None and 'doom' not in target.functions:
+        raise ValueError('--doom-assets requires a Doom-enabled firmware build')
     upload_helper.updater_path()
     expected_commit = manifest.source_commit[:7]
     stock: Path | None = None
@@ -222,6 +228,11 @@ def run(
         status = _read_status(port, connection_factory)
         if _firmware_commit(status) != expected_commit:
             raise FlashError('CNTRL could not verify the installed firmware.')
+        if doom_assets is not None:
+            print('Copying and verifying Doom assets over USB', flush=True)
+            connect = connection_factory or transport.SerialConnection
+            with connect(port) as connection:
+                transport.SetupClient(connection).copy_doom_assets(doom_assets)
         if verify_after_restore:
             upload_helper.record_reconnect(
                 result,

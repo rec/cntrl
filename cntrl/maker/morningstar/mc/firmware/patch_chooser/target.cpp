@@ -25,6 +25,9 @@ extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #include <cntrl/ui/input.h>
 #include <usb_keyboard.h>
 #include <SD.h>
+#if CNTRL_DOOM
+#include "../../doom/asset_path.h"
+#endif
 #include "expression_pedals.h"
 #include "midi_files.h"
 #include <cntrl/startup_counter.h>
@@ -224,6 +227,9 @@ public:
     CNTRL_FLASH_ROUTINE(board_launch_doom)
     bool launch_doom() override {
         if (!doom_available() ||
+#if CNTRL_DOOM
+            usb_session.active() || !SD.exists(cntrl::doom_asset_path) ||
+#endif
             inspect_boot_selection(reinterpret_cast<const volatile uint32_t *>(0x60084000)).choice != BootChoice::cntrl) return false;
         reboot_into(request_doom);
     }
@@ -1114,6 +1120,10 @@ cntrl::device::SdFile source_reader, source_writer;
 cntrl::FileTransfer source_transfer(setup_filesystem, source_reader, source_writer, board, cntrl::FileTransfer::Namespace::source);
 cntrl::device::SdFile language_reader, language_writer;
 cntrl::FileTransfer language_transfer(setup_filesystem, language_reader, language_writer, board, cntrl::FileTransfer::Namespace::language);
+#if CNTRL_DOOM
+DMAMEM cntrl::device::SdFile doom_reader, doom_writer;
+DMAMEM cntrl::FileTransfer doom_transfer(setup_filesystem, doom_reader, doom_writer, board, cntrl::FileTransfer::Namespace::doom);
+#endif
 struct AssetServices {
     Board &hardware, &replies;
     cntrl::StartupCounter &counter;
@@ -1237,6 +1247,9 @@ FLASHMEM bool asset_command(const char *line) {
         board.reply("CNTRL ERROR deployment-command"); return true;
     }
     if (midi_files.storage_busy()) { board.reply("CNTRL ERROR midi-storage-busy"); return true; }
+#if CNTRL_DOOM
+    if (doom_transfer.command(line, millis())) return true;
+#endif
     if (!std::strncmp(line, "CNTRL MIDI_FILE ", 16)
         && board.midi_file_assets_busy()) {
         board.reply("CNTRL ERROR midi-file-active"); return true;
@@ -1244,6 +1257,9 @@ FLASHMEM bool asset_command(const char *line) {
     return asset_commands.command(line, millis());
 }
 bool asset_data(cntrl::UsbKind kind, const uint8_t *bytes, unsigned length, uint32_t now) {
+#if CNTRL_DOOM
+    if (kind == cntrl::UsbKind::doom_asset) return doom_transfer.data(bytes, length, now);
+#endif
     if (kind == cntrl::UsbKind::language) return language_transfer.data(bytes, length, now);
     return asset_commands.data(kind, bytes, length, now);
 }
@@ -1472,7 +1488,12 @@ public:
     }
     int serial_read() { return Serial.read(); }
     bool reply_ready() const { return board.reply_ready(); }
-    void cancel_listing() { storage_listing.cancel(); language_transfer.cancel(); global_commands.cancel(); }
+    void cancel_listing() {
+        storage_listing.cancel(); language_transfer.cancel(); global_commands.cancel();
+#if CNTRL_DOOM
+        doom_transfer.cancel();
+#endif
+    }
     bool commands_allowed() const {
         if (midi_files.storage_busy()) return false;
 #if CNTRL_ORIGINAL_FIRMWARE
@@ -1486,6 +1507,10 @@ public:
     void navigation() {
         if (usb_session.active()) language_transfer.keepalive(millis());
         if (board.reply_ready()) language_transfer.poll(millis());
+#if CNTRL_DOOM
+        if (usb_session.active()) doom_transfer.keepalive(millis());
+        if (board.reply_ready()) doom_transfer.poll(millis());
+#endif
         if (deployment.pending() || !deployment.ready()) { global_commands.poll(application.patch_pending()); return; }
         CNTRL_RUNTIME_TRACE(navigation);
         if (!history_import.busy()) input_coordinator.finish(target_controls);

@@ -144,7 +144,7 @@ def test_short_command_compiles_a_setup_and_preserves_session_data(
     rotation = exported['regions']['tools']['pages']
     if controller is None:
         assert command.playable_doom_host == host
-        assert rotation[-4:] == ['pong', 'doom', 'memon', 'None']
+        assert rotation[-4:] == ['None', 'pong', 'doom', 'memon']
     else:
         assert not {'doom', 'memon'} & set(rotation)
     assert all(Path(p).is_file() for p in target.font_sources.values())

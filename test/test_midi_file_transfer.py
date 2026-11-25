@@ -51,6 +51,15 @@ def test_copy_is_byte_exact_and_requires_explicit_overwrite(
     assert [p.name for p in (tmp_path / 'cntrl/midi').iterdir()] == ['A song.mid']
 
 
+def test_doom_assets_use_their_own_sd_path_over_usb(peer: Path, tmp_path: Path) -> None:
+    data = bytes(range(256)) * 16384
+    with NativePeer([str(peer), str(tmp_path), '']) as port:
+        with transport.SerialConnection(Path(port)) as connection:
+            client = transport.SetupClient(connection)
+            client.copy_doom_assets(data)
+    assert (tmp_path / 'cntrl/doom/e1m1.img').read_bytes() == data
+
+
 @pytest.mark.parametrize('failure', ['write', 'sync', 'rename'])
 def test_failed_replacement_keeps_the_previous_file(
     peer: Path, tmp_path: Path, failure: str

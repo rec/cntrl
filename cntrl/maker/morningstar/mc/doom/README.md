@@ -2,7 +2,7 @@
 
 The demo boots directly into Freedoom Phase 1 E1M1 and renders a 160×128
 image on the centre display. The firmware runs silently, reads game data
-from flash and uses USB Serial for diagnostics. It has no MIDI runtime
+from the pedal's microSD card and uses USB Serial for diagnostics. It has no MIDI runtime
 or writable game storage.
 [DMC100 Doom](https://github.com/ArturBieniek4/DMC100-Doom)
 
@@ -44,11 +44,10 @@ two packs matched byte for byte. The pack's SHA-256 is
 The generated files and downloaded upstream archives are disposable
 qualification inputs and outputs.
 
-The MC6 Pro linker reserves 6,912 KiB for the relocated application. The
-checked-in CNTRL application image used 2,614,272 bytes when this comparison
-was made. Approximately 1.58 MiB would remain after adding the measured
-pack, before the engine, any extra buffers represented in flash, alignment
-and other build overhead. Use a fresh linker map to decide the real budget.
+The MC6 Pro linker reserves 6,912 KiB for the relocated applications.
+The Doom engine has a 256 KiB slot at the end of that region. The generated
+4 MiB asset image lives on the card at `/cntrl/doom/e1m1.img`. Doom reads
+it in place, using a 64 KiB cache for small reads.
 [Linker region](../boot_switch.py) · [Packaged application manifest](../distribution/manifest.toml)
 
 ## Build and check the demo
@@ -68,7 +67,7 @@ Teensy 1.62.0 core and the validated MC6 Pro FlexSPI hardware configuration.
 make -C cntrl/maker/morningstar/mc/doom \
   DMC=/absolute/path/to/DMC100-Doom OUT=/absolute/path/to/build \
   TOOLS=/absolute/path/to/cntrl/cntrl/maker/morningstar/mc/firmware/.tools \
-  check firmware
+  check assets firmware
 ```
 
 `check` runs the same engine, storage reader, input mapping and pixel
@@ -78,16 +77,14 @@ ELF and an Intel HEX in the output directory's `elf/` subdirectory, then
 compares the decoded HEX bytes against the ELF flash bytes. The build disables
 the Teensy Loader and encryption hooks.
 
-The first build produced a 4,345,856-byte flash image and passed the MC6 Pro
-upload helper's structural image validation. The linker reports 125,568 bytes
-for RAM1 stack and local variables and 511,840 bytes for the RAM2 heap. The
-demo's boot, display, switches and frame rate on the pedal still need live
-verification.
+Use a fresh output directory when moving from the old build that embedded
+the asset image in firmware, so the generated assembly from that build
+stays out of the new sketch.
 
 ## Launch from CNTRL
 
 Compile the setup against the Doom-enabled target. In the default utility
-rotation, **Doom** appears immediately before the empty page. Setups with
+rotation ends with **Pong**, **Doom**, and **Memon**. Setups with
 explicit page rotations can add a page of type `doom` to their tools region.
 Cycle to the illustrated **Doom** page, then press C to start the game.
 Tap F to open doors and activate switches. Hold F for two seconds to
@@ -97,7 +94,7 @@ one-time Doom request. The launcher requires CNTRL to be the default
 firmware.
 
 Use the same DMC100 inputs as above and replace `firmware` with
-`relocated` to build the separate Doom application at `0x60390000`.
+`relocated` to build the separate Doom application at `0x60780000`.
 From the repository root, export the two separately linked applications
 and then use the standard MC6 Pro flash workflow.
 
@@ -106,12 +103,15 @@ cntrl build --target-dir cntrl/maker/morningstar/mc \
   --output /absolute/path/to/doom-export \
   --doom-image /absolute/path/to/build/relocated/elf/doom_demo.ino.hex
 cntrl flash --controller mc6-pro \
-  --resources /absolute/path/to/doom-export/distribution
+  --resources /absolute/path/to/doom-export/distribution \
+  --doom-assets /absolute/path/to/build/e1m1.img
 ```
 
 The export contains the CNTRL application, the relocated Doom application
 and the boot hook, with image bounds checked against the reserved flash
-region. The installer uses the existing MC6 Pro backup and restore workflow.
+region. After the usual backup, installation and restore, the installer
+copies the asset to the pedal's microSD over USB and reads it back to verify
+the copy. The pedal checks that the asset is present before launching Doom.
 [MC6 Pro upload and recovery](../firmware/upload-helper.md)
 
 ## Play in the emulator

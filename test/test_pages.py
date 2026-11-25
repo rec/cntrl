@@ -129,9 +129,9 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
             'switches',
             'settings',
             'calibration',
+            'None',
             'pong',
             'memon',
-            'None',
         ]
         assert pages['pong']['min_displays'] == 3
         assert pages['memon']['min_displays'] == 3
@@ -149,17 +149,17 @@ def test_default_tools_include_only_pages_that_fit_the_displays(
     assert compiler.compile_show(exported, {}, [], device) == data
 
 
-def test_default_tools_rotation_ends_with_the_three_games_before_none() -> None:
+def test_default_tools_rotation_ends_with_pong_doom_and_memon() -> None:
     standard = target()
     device = standard.model_copy(update={'functions': [*standard.functions, 'doom']})
     data = compiler.compile_show({'fill_in_styles': False}, {}, [], device)
     exported = tomlkit.parse(resolved.export(data)).unwrap()
     assert exported['regions']['tools']['pages'][-5:] == [
         'calibration',
+        'None',
         'pong',
         'doom',
         'memon',
-        'None',
     ]
     assert exported['pages']['doom']['type'] == 'doom'
     assert exported['pages']['doom']['min_displays'] == 1

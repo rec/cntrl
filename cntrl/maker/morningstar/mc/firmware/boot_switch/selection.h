@@ -8,7 +8,7 @@ enum class BootChoice : uint32_t { stock = 0x53544b31, cntrl = 0x43545231, doom 
 constexpr uintptr_t boot_request_register = 0x400f8030;
 constexpr uint32_t request_stock = 0x434e5701, request_cntrl = 0x434e5702, visiting_stock = 0x434e5703;
 constexpr uint32_t request_doom = 0x434e5704;
-constexpr uintptr_t doom_origin = 0x60390000, application_end = 0x607c0000;
+constexpr uintptr_t doom_origin = 0x60780000, application_end = 0x607c0000;
 inline BootChoice select_boot(BootChoice default_firmware, volatile uint32_t &request) {
     const uint32_t marker = request;
     if (marker == request_doom) {

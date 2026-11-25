@@ -139,8 +139,8 @@ displays while Pong is selected, preserving its state and background execution.
 Controllers with fewer than three displays omit Pong from the implicit
 catalogue. Selecting None returns all displays to the Patch Chooser.
 
-The default tools rotation ends with Pong, Doom, and Memon, followed by the
-None stop. It includes each game when the target supports it. Doom uses one
+The default tools rotation puts the None stop before Pong, Doom, and Memon.
+It includes each game when the target supports it. Doom uses one
 display. Press C on that page to start the standalone game. An explicit page
 catalogue can include `type = 'doom'`
 in its chosen rotation. [Doom build and launch](../cntrl/maker/morningstar/mc/doom/README.md)

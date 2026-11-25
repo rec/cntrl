@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <Arduino.h>
+#include <SD.h>
 #include <SPI.h>
 
 #include "demo.h"
+#include "nor.h"
+#include "asset_path.h"
 #if defined(CNTRL_DOOM_RETURN)
 #include "return_button.h"
 #include "boot_switch/selection.h"
@@ -13,6 +16,7 @@ constexpr uint8_t CENTER_CS = 24;
 constexpr uint8_t CENTER_DC = 23;
 constexpr uint8_t CENTER_RESET = 22;
 constexpr uint8_t BACKLIGHT = 6;
+File assets;
 
 #if defined(CNTRL_DOOM_RETURN)
 [[noreturn]] void return_to_cntrl()
@@ -133,10 +137,18 @@ void setup()
     pinMode(29, OUTPUT);
     Serial.begin(115200);
     initialize_panel();
+    if (!SD.begin(BUILTIN_SDCARD)) demo_fail("Could not mount the Doom microSD card");
+    assets = SD.open(cntrl::doom_asset_path, FILE_READ);
+    if (!assets || assets.size() != NOR_SIZE) demo_fail("Missing or invalid Doom asset image");
     demo_run();
 }
 
 void loop() {}
+
+int demo_read_assets(uint32_t offset, void *dest, uint32_t count)
+{
+    return assets.seek(offset) && assets.read(dest, count) == int(count);
+}
 
 uint32_t demo_millis() { return millis(); }
 void demo_delay(uint32_t ms) { delay(ms); }
@@ -193,6 +205,9 @@ void demo_fail(const char *message)
 {
     while (true) {
         Serial.println(message);
-        delay(1000);
+        for (unsigned i = 0; i < 100; ++i) {
+            demo_buttons(); // Keep the hold-to-return switch working after an SD error.
+            delay(10);
+        }
     }
 }

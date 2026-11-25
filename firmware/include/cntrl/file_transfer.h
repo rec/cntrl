@@ -12,7 +12,7 @@ namespace cntrl {
 // a synced temporary file; a failed replacement retains/restores the old file.
 class FileTransfer {
 public:
-    enum class Namespace { midi, source, language };
+    enum class Namespace { midi, source, language, doom };
     FileTransfer(files::FileSystem &filesystem, files::File &reader,
                  files::File &writer, Replies &replies, Namespace space = Namespace::midi)
         : filesystem_(filesystem), reader_(reader), writer_(writer), replies_(replies), space_(space) {}
@@ -47,7 +47,7 @@ public:
     CNTRL_FLASH_ROUTINE(midi_file_command)
 #endif
     bool command(const char *line, uint32_t now) {
-        const char *prefix = space_ == Namespace::source ? "CNTRL SOURCE " : space_ == Namespace::language ? "CNTRL LANGUAGE " : "CNTRL MIDI_FILE ";
+        const char *prefix = space_ == Namespace::source ? "CNTRL SOURCE " : space_ == Namespace::language ? "CNTRL LANGUAGE " : space_ == Namespace::doom ? "CNTRL DOOM_ASSET " : "CNTRL MIDI_FILE ";
         const unsigned prefix_length = unsigned(std::strlen(prefix));
         if (std::strncmp(line, prefix, prefix_length)) return false;
         line += prefix_length;
@@ -71,6 +71,7 @@ public:
             && end && !line[end] && length && crc <= 0xfffffffful && overwrite <= 1) {
             cancel();
             if (!decode(hex, name) || (space_ == Namespace::source && (overwrite || !source_name(name)))
+                || (space_ == Namespace::doom && (std::strcmp(name, "e1m1.img") || length != 4 * 1024 * 1024))
                 || (space_ == Namespace::language && (!language_name(name) || length > 262144))) return error("midi-file-name");
             paths(name);
             if (!filesystem_.available() || !recover()) return error("midi-file-storage");
@@ -89,12 +90,14 @@ public:
         }
         if (uploading_) return error("midi-file-busy");
         if (!decode(hex, name) || (space_ == Namespace::source && !source_name(name))
-            || (space_ == Namespace::language && !language_name(name))) return error("midi-file-name");
+            || (space_ == Namespace::language && !language_name(name))
+            || (space_ == Namespace::doom && std::strcmp(name, "e1m1.img"))) return error("midi-file-name");
         paths(name);
         if (!filesystem_.available() || !recover(false)) return error("midi-file-storage");
         if (!reader_.open(path_, files::Mode::read)) {
             if (filesystem_.exists(path_)) return error("midi-file-open");
-            replies_.reply(space_ == Namespace::source ? "CNTRL SOURCE MISSING" : space_ == Namespace::language ? "CNTRL LANGUAGE MISSING" : "CNTRL MIDI_FILE MISSING"); return true;
+            char response[40]; std::snprintf(response, sizeof(response), "%sMISSING", prefix);
+            replies_.reply(response); return true;
         }
         if (size) {
             char response[64]; std::snprintf(response, sizeof(response), "%s%lu", prefix, (unsigned long)reader_.size());
@@ -113,7 +116,7 @@ private:
     uint32_t last_ = 0, expected_ = 0, received_ = 0, checksum_ = 0, crc_ = 0;
     bool uploading_ = false, overwrite_ = false;
     Namespace space_;
-    const char *folder() const { return space_ == Namespace::source ? "/cntrl/source" : space_ == Namespace::language ? "/cntrl/languages" : "/cntrl/midi"; }
+    const char *folder() const { return space_ == Namespace::source ? "/cntrl/source" : space_ == Namespace::language ? "/cntrl/languages" : space_ == Namespace::doom ? "/cntrl/doom" : "/cntrl/midi"; }
     static bool language_name(const char *name) {
         const unsigned length = unsigned(std::strlen(name));
         if (length < 5 || length > 19 || std::strcmp(name + length - 4, ".bin")) return false;
@@ -130,7 +133,7 @@ private:
     CNTRL_FLASH_ROUTINE(midi_file_error)
 #endif
     bool error(const char *message) {
-        cancel(); char response[80]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s%s", space_ == Namespace::source ? "source-" : space_ == Namespace::language ? "language-" : "midi-file-", message + 10); replies_.reply(response); return true;
+        cancel(); char response[80]; std::snprintf(response, sizeof(response), "CNTRL ERROR %s%s", space_ == Namespace::source ? "source-" : space_ == Namespace::language ? "language-" : space_ == Namespace::doom ? "doom-asset-" : "midi-file-", message + 10); replies_.reply(response); return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(midi_file_decode)
