@@ -597,6 +597,27 @@ public:
         return accept_setup_draft();
     }
 #ifdef CNTRL_FLASH_ROUTINE
+    CNTRL_FLASH_ROUTINE(documents_add_counter)
+#endif
+    bool add_counter(const char *name, const Counters::Definition &values) {
+        Document draft;
+        const auto length = std::strlen(name);
+        if (!length || length > 63 || busy() || hardware_.configuration_locked() || !edit_document(draft)) return false;
+        const unsigned count = draft.counters();
+        if (count == UINT16_MAX) return false;
+        const unsigned section = unsigned(draft.counter_section() - draft.data());
+        const unsigned row = count ? unsigned(draft.counter(count) - draft.data()) : section;
+        constexpr unsigned size = 64 + sizeof(Counters::Definition);
+        if (!splice_setup(draft, row, 0, size + (count ? 0 : 6))) return false;
+        auto *bytes = scratch_.data;
+        if (!count) std::memcpy(bytes + section, "CCNT", 4);
+        binary::write16(bytes + section + 4, uint16_t(count + 1));
+        auto *record = bytes + row + (count ? 0 : 6);
+        std::memcpy(record, name, length);
+        std::memcpy(record + 64, &values, sizeof(values));
+        return accept_setup_draft();
+    }
+#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(documents_edit_value)
 #endif
     int64_t edit_value(unsigned patch, unsigned field) const {

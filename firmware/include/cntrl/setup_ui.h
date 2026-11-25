@@ -29,7 +29,7 @@ public:
     void resume_settings() { mode_ = Mode::current; locked_ = true; render(); }
     void refresh() { if (open()) render(); }
     bool editing_text() const {
-        return mode_ == Mode::contact || mode_ == Mode::layout_name || (mode_ == Mode::decision
+        return mode_ == Mode::contact || mode_ == Mode::object_name || (mode_ == Mode::decision
             && (device_editor_ == Mode::contact || device_editor_ == Mode::calibration_name));
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -52,7 +52,7 @@ public:
     void text_key(uint8_t key, uint32_t now) {
         if (locked_ || !editing_text()) return;
         if (key == 27) {
-            if (mode_ == Mode::layout_name) { leave_layout_name(); render(); }
+            if (mode_ == Mode::object_name) { leave_object_name(); render(); }
             else button(5, true, now);
             return;
         }
@@ -60,7 +60,7 @@ public:
             if (key == '\n') button(2, true, now);
             return;
         }
-        if (key == '\n' && (mode_ == Mode::layout_name || device_editor_ == Mode::calibration_name)) {
+        if (key == '\n' && (mode_ == Mode::object_name || device_editor_ == Mode::calibration_name)) {
             button(5, true, now);
             return;
         }
@@ -117,12 +117,12 @@ public:
     bool return_to_performance() {
         if (!settings_ || !open() || docs_.busy() || browsing_ || mode_ == Mode::language_saving) return false;
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
-        if (editing_layout_name()) {
-            if (!stage_layout_name()) {
+        if (editing_object_name()) {
+            if (!stage_object_name()) {
                 render();
                 return true;
             }
-            if (layout_option_ == LayoutOption::split || layout_option_ == LayoutOption::add) leave_layout_name();
+            if (counter_naming_ || layout_option_ == LayoutOption::split || layout_option_ == LayoutOption::add) leave_object_name(true);
         }
         if (mode_ == Mode::layout_chooser_minimum && !stage_chooser_minimum()) {
             render();
@@ -334,7 +334,7 @@ public:
             expression_button(button);
         } else if (is_contact_style_view()) {
             contact_style_button(button);
-        } else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
+        } else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_object_name()) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
             if (button < 2) {
@@ -477,7 +477,7 @@ private:
                       calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value,
                       movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
                       layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
-                      layout_chooser_order, layout_chooser_order_move, layout_add_type, layout_name, layout_name_action,
+                      layout_chooser_order, layout_chooser_order_move, layout_add_type, object_name, object_name_action,
                       counters, counter_fields, counter_value, navigation_shortcuts, navigation_value,
                       expression_jacks, expression_fields, expression_value, contact_style_fields, contact_style_value };
     enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, split, join, add, count };
@@ -530,6 +530,7 @@ private:
     enum CounterField { counter_output, counter_type, counter_channel, counter_controller,
         counter_initial, counter_minimum, counter_maximum, counter_step, counter_boundary, counter_field_count };
     unsigned counter_index_ = 0, counter_field_ = 0;
+    bool counter_naming_ = false, counter_adding_ = false;
     Counters::Definition counter_values_{};
     const char *counter_feedback_ = nullptr;
     static constexpr const char *counter_fields[] = {
@@ -746,7 +747,7 @@ private:
         }
         if (index == ui::counter_preference_index) {
             Document draft;
-            return setup_preferences_ && docs_.edit_document(draft) && draft.counters();
+            return setup_preferences_ && docs_.edit_document(draft) && (draft.counters() || enabled_outputs(draft));
         }
         if (index == ui::navigation_preference_index) {
             Document draft;
@@ -780,14 +781,22 @@ private:
     bool is_layout_view() const {
         return mode_ >= Mode::layout_menu && mode_ <= Mode::layout_add_type;
     }
-    bool editing_layout_name() const { return mode_ == Mode::layout_name || mode_ == Mode::layout_name_action; }
-    unsigned text_capacity() const { return editing_layout_name() ? 32 : sizeof(contact_draft_); }
-    void begin_layout_name(const char *name) {
+    bool editing_object_name() const { return mode_ == Mode::object_name || mode_ == Mode::object_name_action; }
+    unsigned text_capacity() const { return editing_object_name() ? (counter_naming_ ? 64 : 32) : sizeof(contact_draft_); }
+    void begin_object_name(const char *name, bool counter = false) {
+        counter_naming_ = counter;
         std::strcpy(contact_draft_, name);
         contact_cursor_ = 0;
-        mode_ = Mode::layout_name;
+        mode_ = Mode::object_name;
     }
-    void leave_layout_name() {
+    void leave_object_name(bool accepted = false) {
+        if (counter_naming_) {
+            counter_naming_ = false;
+            counter_adding_ = accepted;
+            mode_ = accepted ? Mode::counter_fields : Mode::counters;
+            counter_feedback_ = nullptr;
+            return;
+        }
         mode_ = layout_option_ == LayoutOption::add ? Mode::layout_add_type
             : layout_option_ == LayoutOption::region_names ? Mode::layout_region : Mode::layout_pages;
         layout_rejected_ = false;
@@ -807,15 +816,22 @@ private:
             do { page_position_ = (page_position_ + (button ? 1 : count - 1)) % count; }
             while (!utility_available(utility_pages[page_position_], draft));
         } else if (button == 2) {
-            if (utility_available(utility_pages[page_position_], draft)) begin_layout_name(utility_pages[page_position_].label);
+            if (utility_available(utility_pages[page_position_], draft)) begin_object_name(utility_pages[page_position_].label);
         } else if (button == 5) mode_ = Mode::layout_region;
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_stage_layout_name)
+    CNTRL_FLASH_ROUTINE(setup_ui_stage_object_name)
 #endif
-    bool stage_layout_name() {
+    bool stage_object_name() {
         Document draft;
         if (!docs_.edit_document(draft)) return false;
+        if (counter_naming_) {
+            counter_feedback_ = "Enter a unique counter name";
+            if (!contact_draft_[0]) return false;
+            for (unsigned i = 0; i < draft.counters(); ++i)
+                if (!std::strcmp(contact_draft_, reinterpret_cast<const char *>(draft.counter(i)))) return false;
+            return true;
+        }
         if (layout_option_ == LayoutOption::add) {
             const auto &page = utility_pages[page_position_];
             layout_rejected_ = !docs_.add_utility_page(page_region_, page.type, page.displays, contact_draft_);
@@ -924,7 +940,7 @@ private:
             return;
         }
         if (layout_option_ == LayoutOption::region_names) {
-            begin_layout_name(layout.region_name(region));
+            begin_object_name(layout.region_name(region));
             return;
         }
         if (layout_option_ == LayoutOption::regions && !moving) {
@@ -997,11 +1013,11 @@ private:
         } else if (button == 5) mode_ = moving ? Mode::layout_pages : Mode::layout_menu;
         else if (button == 2 && !moving) {
             if (layout_option_ == LayoutOption::split) {
-                if (position) begin_layout_name("");
+                if (position) begin_object_name("");
                 return;
             }
             if (layout_option_ == LayoutOption::page_names) {
-                begin_layout_name(layout.name(layout.region_page(region, position)));
+                begin_object_name(layout.name(layout.region_page(region, position)));
                 return;
             }
             destination_region_ = region;
@@ -1287,9 +1303,9 @@ private:
         return true;
     }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_expression_outputs)
+    CNTRL_FLASH_ROUTINE(setup_ui_enabled_outputs)
 #endif
-    unsigned expression_outputs(const Document &draft) const {
+    unsigned enabled_outputs(const Document &draft) const {
         Document fallback = draft;
         fallback.bind_globals(nullptr);
         unsigned mask = 0;
@@ -1318,7 +1334,7 @@ private:
                 expression_assignment_ = draft.page_settings().expression[expression_jack_];
                 expression_changed_ = !expression_assignment_.channel;
                 if (expression_changed_) {
-                    const unsigned mask = expression_outputs(draft);
+                    const unsigned mask = enabled_outputs(draft);
                     if (!mask) { expression_feedback_ = "No enabled MIDI output"; return; }
                     expression_assignment_ = ExpressionAssignment{};
                     for (const auto &output : hardware_.midi_outputs()) if (mask & (1u << output.route)) {
@@ -1346,7 +1362,7 @@ private:
                 const auto *primary = outputs.find(a.output);
                 const bool mirror = expression_field_ == expression_mirror;
                 const unsigned exclude = mirror ? (primary ? primary->route : 255) : a.mirror_route;
-                unsigned mask = expression_outputs(draft);
+                unsigned mask = enabled_outputs(draft);
                 if (exclude < 16) mask &= ~(1u << exclude);
                 if (mirror) mask |= 1u << 16;
                 if (!mask) return;
@@ -1449,16 +1465,18 @@ private:
     bool stage_counter() {
         Document draft;
         if (!docs_.edit_document(draft)) return false;
-        if (!std::memcmp(draft.counter(counter_index_) + 64, &counter_values_, sizeof(counter_values_))) return true;
+        if (!counter_adding_ && !std::memcmp(draft.counter(counter_index_) + 64, &counter_values_, sizeof(counter_values_))) return true;
         if (counter_values_.minimum > counter_values_.initial || counter_values_.initial > counter_values_.maximum) {
             counter_feedback_ = "Check min, initial and max";
             return false;
         }
-        if (!docs_.edit_counter(counter_index_, counter_values_)) {
+        if (!(counter_adding_ ? docs_.add_counter(contact_draft_, counter_values_) : docs_.edit_counter(counter_index_, counter_values_))) {
             counter_feedback_ = "Could not change counter";
             return false;
         }
         changed_fields_ |= 1u << 13;
+        if (counter_adding_) counter_index_ = draft.counters();
+        counter_adding_ = false;
         counter_feedback_ = nullptr;
         return true;
     }
@@ -1471,8 +1489,23 @@ private:
         counter_feedback_ = nullptr;
         if (mode_ == Mode::counters) {
             const unsigned count = draft.counters();
-            if (button < 2) counter_index_ = (counter_index_ + (button ? 1 : count - 1)) % count;
+            if (button < 2 && count) counter_index_ = (counter_index_ + (button ? 1 : count - 1)) % count;
             else if (button == 5) mode_ = Mode::preferences;
+            else if (button == 4 || (button == 2 && !count)) {
+                const unsigned mask = enabled_outputs(draft);
+                if (count == UINT16_MAX || !mask) { counter_feedback_ = "No space or MIDI output"; return; }
+                counter_values_ = Counters::Definition{};
+                for (const auto &output : hardware_.midi_outputs()) {
+                    if (!(mask & (1u << output.route))) continue;
+                    std::snprintf(counter_values_.output, sizeof(counter_values_.output), "%s", output.name);
+                    break;
+                }
+                counter_values_.status = 0xb0;
+                counter_values_.maximum = 127;
+                counter_values_.step[0] = 1;
+                counter_field_ = 0;
+                begin_object_name("", true);
+            }
             else if (button == 2) {
                 std::memcpy(&counter_values_, draft.counter(counter_index_) + 64, sizeof(counter_values_));
                 counter_field_ = 0;
@@ -1485,7 +1518,10 @@ private:
             } else if (button == 2) {
                 preference_step_ = 1;
                 mode_ = Mode::counter_value;
-            } else if (button == 3 || (button == 5 && stage_counter())) mode_ = Mode::counters;
+            } else if (button == 3 || (button == 5 && stage_counter())) {
+                counter_adding_ = false;
+                mode_ = Mode::counters;
+            }
         } else if (button == 2 || button == 5) mode_ = Mode::counter_fields;
         else if (button == 4 && counter_field_ >= counter_controller && counter_field_ < counter_boundary) {
             const unsigned limit = counter_field_ == counter_step ? 10000 : 100;
@@ -1590,6 +1626,8 @@ private:
                 }
                 if (preference_index_ == ui::counter_preference_index) {
                     counter_index_ = 0;
+                    counter_adding_ = false;
+                    counter_feedback_ = nullptr;
                     mode_ = Mode::counters;
                     return;
                 }
@@ -1755,27 +1793,27 @@ private:
         ui::utf8::next(next, code);
         const unsigned length = unsigned(std::strlen(contact_draft_));
         const bool naming = device_editor_ == Mode::calibration_name;
-        const bool layout_name = editing_layout_name();
-        if (mode_ == Mode::contact_action || mode_ == Mode::layout_name_action) {
+        const bool object_name = editing_object_name();
+        if (mode_ == Mode::contact_action || mode_ == Mode::object_name_action) {
             if (button < 2) item_ = naming ? (item_ == 0 ? 2 : 0) : (item_ + (button ? 1 : 2)) % 3;
-            else if (button == 5) mode_ = layout_name ? Mode::layout_name : Mode::contact;
+            else if (button == 5) mode_ = object_name ? Mode::object_name : Mode::contact;
             else if (button == 2) {
-                if (layout_name && item_ == 1) { leave_layout_name(); return; }
+                if (object_name && item_ == 1) { leave_object_name(); return; }
                 if (item_ == 2) std::memmove(position, next, std::strlen(next) + 1);
                 else if (length + 1 < text_capacity()) {
                     std::memmove(position + 1, position, std::strlen(position) + 1);
                     *position = item_ ? '\n' : ' ';
                 } else { hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return; }
-                mode_ = layout_name ? Mode::layout_name : Mode::contact;
+                mode_ = object_name ? Mode::object_name : Mode::contact;
             }
             return;
         }
         if (button == 5) {
-            if (layout_name) {
-                if (stage_layout_name()) leave_layout_name();
+            if (object_name) {
+                if (stage_object_name()) leave_object_name(true);
             } else if (text_changed()) { mode_ = Mode::decision; item_ = contact_shortcut_ ? 0 : 2; }
             else leave_device_editor();
-        } else if (button == 2) { mode_ = layout_name ? Mode::layout_name_action : Mode::contact_action; item_ = 0; }
+        } else if (button == 2) { mode_ = object_name ? Mode::object_name_action : Mode::contact_action; item_ = 0; }
         else if (button == 3 && contact_cursor_) {
             do { --contact_cursor_; } while ((uint8_t(contact_draft_[contact_cursor_]) & 0xc0) == 0x80);
         } else if (button == 4) contact_cursor_ = unsigned(next - contact_draft_);
@@ -2110,13 +2148,15 @@ private:
 #endif
     void render_counter(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) {
         using Role = ControlRole;
-        const auto *record = draft.counter(counter_index_);
         const bool picking = mode_ == Mode::counters, adjusting = mode_ == Mode::counter_value;
-        ui::copy_caption(views[1].lines[1], reinterpret_cast<const char *>(record));
+        const auto *record = !counter_adding_ && draft.counters() ? draft.counter(counter_index_) : nullptr;
+        const char *name = counter_adding_ ? contact_draft_ : record ? reinterpret_cast<const char *>(record) : "Counters";
+        ui::copy_caption(views[1].lines[1], name);
         ui::copy_caption(views[2].lines[2], "Shared by patches in this setup");
         if (picking) {
             ui::copy_caption(views[2].lines[0], "Counters");
-            std::snprintf(views[2].lines[1].text, 64, "%u/%u", counter_index_ + 1, draft.counters());
+            if (record) std::snprintf(views[2].lines[1].text, 64, "%u/%u", counter_index_ + 1, draft.counters());
+            else ui::copy_caption(views[2].lines[1], "No counters");
         } else {
             ui::copy_caption(views[2].lines[0], counter_fields[counter_field_]);
             auto &value = views[2].lines[1];
@@ -2133,15 +2173,17 @@ private:
                 else number = counter_number() + unsigned(counter_is_program());
                 std::snprintf(value.text, sizeof(value.text), "%d", number);
             }
-            if (counter_feedback_) ui::copy_caption(views[1].lines[2], counter_feedback_);
-            else if (std::memcmp(record + 64, &counter_values_, sizeof(counter_values_)))
+            if (!counter_feedback_ && (!record || std::memcmp(record + 64, &counter_values_, sizeof(counter_values_))))
                 ui::copy_caption(views[1].lines[2], ui::i18n::text(ui::i18n::Message::changed));
         }
+        if (counter_feedback_) ui::copy_caption(views[1].lines[2], counter_feedback_);
         ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
             adjusting ? "Adjust" : "Browse").text());
-        prompt.clear().add(Role::confirm, adjusting ? "Accept" : picking ? "Open" : "Edit");
+        prompt.clear().add(Role::confirm, adjusting ? "Accept" : picking ? (record ? "Open" : "New counter") : "Edit");
         ui::copy_caption(views[0].lines[1], prompt.add(Role::back, mode_ == Mode::counter_fields ? "Accept counter" : "Back", ", ").text());
-        if (mode_ == Mode::counter_fields)
+        if (picking && record && draft.counters() < UINT16_MAX && enabled_outputs(draft))
+            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, "New counter").text());
+        else if (mode_ == Mode::counter_fields)
             ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Cancel counter").text());
         else if (adjusting && counter_field_ >= counter_controller && counter_field_ < counter_boundary) {
             char step[24]; std::snprintf(step, sizeof(step), "Step %u", unsigned(preference_step_));
@@ -2371,9 +2413,10 @@ private:
             preference_text(number, sizeof(number), display, editing);
             value = number;
         }
-        else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_layout_name()) {
+        else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_object_name()) {
             title = ui::i18n::text(ui::i18n::Message::owner_contact);
-            if (editing_layout_name()) title = layout_option_ == LayoutOption::add ? "New page name"
+            if (editing_object_name()) title = counter_naming_ ? "New counter name"
+                : layout_option_ == LayoutOption::add ? "New page name"
                 : layout_option_ == LayoutOption::split ? "New region name"
                 : layout_option_ == LayoutOption::region_names ? "Region name" : "Page name";
             else if (device_editor_ == Mode::calibration_name) {
@@ -2394,10 +2437,10 @@ private:
             std::snprintf(number, sizeof(number), "%.*s[%.*s]%.*s", int(selected - start), start,
                 code == '\n' ? 0 : int(next - selected), selected, int(end - next), next);
             value = number;
-            if (mode_ == Mode::contact_action || mode_ == Mode::layout_name_action) {
+            if (mode_ == Mode::contact_action || mode_ == Mode::object_name_action) {
                 const ui::i18n::Message actions[] = {ui::i18n::Message::insert_space, ui::i18n::Message::insert_line_break, ui::i18n::Message::delete_character};
-                value_label = mode_ == Mode::layout_name_action && item_ == 1
-                    ? (layout_option_ == LayoutOption::add ? "Cancel addition"
+                value_label = mode_ == Mode::object_name_action && item_ == 1
+                    ? (counter_naming_ || layout_option_ == LayoutOption::add ? "Cancel addition"
                         : layout_option_ == LayoutOption::split ? "Cancel split" : "Cancel rename") : ui::i18n::text(actions[item_]);
             } else if (code == '\n') value_label = ui::i18n::text(ui::i18n::Message::line_break);
             else value_label = ui::i18n::text(ui::i18n::Message::value);
@@ -2577,12 +2620,14 @@ private:
                 char step[24]; std::snprintf(step, sizeof(step), "Step %lu ms", (unsigned long)preference_step_);
                 ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
             }
-            if (mode_ == Mode::contact || mode_ == Mode::layout_name) {
+            if (mode_ == Mode::contact || mode_ == Mode::object_name) {
                 ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
                 ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action))
-                    .add(Role::back, mode_ == Mode::layout_name ? "Accept name" : ui::i18n::text(ui::i18n::Message::back), ", ").text());
+                    .add(Role::back, mode_ == Mode::object_name ? "Accept name" : ui::i18n::text(ui::i18n::Message::back), ", ").text());
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, ui::i18n::text(ui::i18n::Message::position_action)).text());
-                if (mode_ == Mode::layout_name && layout_rejected_)
+                if (mode_ == Mode::object_name && counter_naming_ && counter_feedback_)
+                    ui::copy_caption(views[1].lines[2], counter_feedback_);
+                else if (mode_ == Mode::object_name && layout_rejected_)
                     ui::copy_caption(views[1].lines[2], layout_option_ == LayoutOption::add ? "Check name and layout limits"
                         : layout_option_ == LayoutOption::split ? "Check name and display space" : "Could not use that name");
             }

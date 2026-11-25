@@ -333,9 +333,8 @@ def test_song_step_navigation_and_boundaries(
         ],
         check=True,
     )
-    saved_counter = tomlkit.parse(resolved.export(edited.read_bytes()))['counters'][
-        'Scenes'
-    ]
+    saved_counters = tomlkit.parse(resolved.export(edited.read_bytes()))['counters']
+    saved_counter = saved_counters['Scenes']
     assert (
         saved_counter['minimum'],
         saved_counter['initial'],
@@ -344,6 +343,15 @@ def test_song_step_navigation_and_boundaries(
         3,
         4,
         -1,
+    )
+    subprocess.run(
+        [str(runner), str(fixture), str(setup), '--counter-settings', str(edited)],
+        check=True,
+    )
+    first_counter = tomlkit.parse(resolved.export(edited.read_bytes()))['counters']
+    assert list(first_counter) == ['Lights']
+    assert (
+        first_counter['Lights']['channel'] == saved_counters['Lights']['channel'] == 2
     )
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--song-settings'], check=True

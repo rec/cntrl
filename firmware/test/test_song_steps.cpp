@@ -624,29 +624,47 @@ int main(int argc, char **argv) {
     }
     if (argc == 5 && !std::strcmp(argv[3], "--counter-settings")) {
         app.allocation.configure(configuration.page_layout());
-        settings(); tap(2); tap(3); tap(3); // Setup fields, Layout, Counters.
+        settings(); tap(2); tap(3); tap(3); tap(3); tap(3);
         assert(!std::strcmp(board.panes[1].lines[1].text, "Counters"));
-        tap(2); tap(2); // Open the configured counter.
-        assert(!std::strcmp(board.panes[1].lines[1].text, "Scenes"));
-        for (unsigned i = 0; i < 5; ++i) tap(1);
-        assert(!std::strcmp(board.panes[2].lines[0].text, "Minimum"));
-        tap(2); tap(1); tap(1); tap(2); tap(5);
-        assert(!std::strcmp(board.panes[1].lines[2].text, "Check min, initial and max"));
-        tap(0); tap(2); tap(1); tap(1); tap(5); // Initial now lies inside the new range.
-        tap(1); tap(1); tap(1); tap(2); tap(0); tap(2); // Decreasing step skips zero.
-        tap(5);
-        assert(documents.document().counter(0)[98] == 2 && board.sent.empty());
+        tap(2);
+        const unsigned original_count = configuration.counters();
+        if (original_count) {
+            tap(2); // Open the configured counter.
+            assert(!std::strcmp(board.panes[1].lines[1].text, "Scenes"));
+            for (unsigned i = 0; i < 5; ++i) tap(1);
+            assert(!std::strcmp(board.panes[2].lines[0].text, "Minimum"));
+            tap(2); tap(1); tap(1); tap(2); tap(5);
+            assert(!std::strcmp(board.panes[1].lines[2].text, "Check min, initial and max"));
+            tap(0); tap(2); tap(1); tap(1); tap(5); // Initial now lies inside the new range.
+            tap(1); tap(1); tap(1); tap(2); tap(0); tap(2); // Decreasing step skips zero.
+            tap(5);
+            assert(documents.document().counter(0)[98] == 2 && board.sent.empty());
+            tap(4); // Try to add a duplicate, then cancel.
+            for (const char c : std::string("Scenes")) app.text_key(uint8_t(c), board.now);
+            app.text_key('\n', board.now);
+            assert(!std::strcmp(board.panes[1].lines[2].text, "Enter a unique counter name"));
+            app.text_key(27, board.now);
+        }
+        tap(original_count ? 4 : 2);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "New counter name"));
+        for (const char c : std::string("Lights")) app.text_key(uint8_t(c), board.now);
+        app.text_key('\n', board.now);
+        assert(!std::strcmp(board.panes[1].lines[1].text, "Lights"));
+        tap(1); tap(1); tap(2); tap(1); tap(2); tap(5); // Set channel 2 and accept.
+        assert(documents.document().counters() == original_count && board.sent.empty());
         settings(); tap(1); tap(2); // Save and reload.
         while (documents.busy()) sample(0);
         const auto &document = documents.document();
-        assert(board.sent.empty());
-        const int address = document.named_patch("advance");
-        assert(address >= 0);
-        for (unsigned i = 0; i < 2; ++i) {
-            assert(board.entry.start(document, unsigned(address)));
-            while (board.entry.busy()) sample(0);
+        assert(document.counters() == original_count + 1 && board.sent.empty());
+        if (original_count) {
+            const int address = document.named_patch("advance");
+            assert(address >= 0);
+            for (unsigned i = 0; i < 2; ++i) {
+                assert(board.entry.start(document, unsigned(address)));
+                while (board.entry.busy()) sample(0);
+            }
+            assert(board.sent.size() == 2 && board.sent[0].first == 7 && board.sent[0].second == 4 && board.sent[1].second == 3);
         }
-        assert(board.sent.size() == 2 && board.sent[0].first == 7 && board.sent[0].second == 4 && board.sent[1].second == 3);
         std::ofstream exported(argv[4], std::ios::binary);
         exported.write(reinterpret_cast<const char *>(document.data()), document.length());
         assert(exported);

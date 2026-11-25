@@ -190,7 +190,10 @@ focus, the joined region gets that focus.
 page type and give it a unique name. The editor checks the layout against
 the setup's display and memory budgets before accepting the addition.
 
-**Counters** lists the MIDI counters defined in the setup. Choose a counter
+**Counters** lists the MIDI counters defined in the setup. Choose **New counter**
+to add one. On the MC6 Pro, press C when the list is empty or E when a counter
+is selected. Enter a unique name of up to 63 printable ASCII characters,
+then set its MIDI fields and accept the counter into the draft. Choose a counter
 to edit its output, message type, channel, controller number for Control
 Change, initial value, range, step, or boundary behavior. Edit related
 values before accepting the counter into the draft. The minimum, initial
