@@ -86,7 +86,8 @@ public:
             if (!label || !label[0] || label[1]) return true;
             const char key = char(label[0] >= 'a' && label[0] <= 'z' ? label[0] - 'a' + 'A' : label[0]);
             const uint32_t now = platform_.milliseconds();
-            if (key == 'F') browse_page(false);
+            if (key == 'F')
+                browse_page(controls_.reverse_page < 64 && (application_.held & (uint64_t(1) << controls_.reverse_page)));
             else if (key == 'C') memon_.start(now, platform_.microseconds(), platform_);
             else {
                 constexpr char keys[] = "DEAB";

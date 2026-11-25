@@ -18,6 +18,9 @@ def test_memon_uses_three_displays_and_recovers_high_score(tmp_path: Path) -> No
         'dict[str, object]', compiler_inputs.read_document(BASE / 'emulator/memon.toml')
     )
     assert isinstance(source, dict)
+    pages = cast('dict[str, object]', source['pages'])
+    pages['Time'] = {'type': 'time'}
+    source['regions'] = {'main': {'pages': list(pages)}}
     source['page_settings'] = {'memon': {'channel': 3, 'timeout': 1.0}}
     raw = compiler.compile_show(source, {}, [], target)
     restored = tomlkit.parse(resolved.export(raw)).unwrap()
@@ -77,6 +80,14 @@ def test_memon_uses_three_displays_and_recovers_high_score(tmp_path: Path) -> No
         ] == [b'\x92\x3c\x64', b'\x92\x40\x64']
         tap('f')
         assert packets()[-3:] == [b'\x82\x3c\x00', b'\x82\x40\x00', b'\xb2\x02\x00']
+        assert session.tooltip_context[0] == 'status'
+        for page in ('memon', 'time'):
+            session.button('d', True)
+            session.advance(session.time_us + 60_000)
+            tap('f')
+            session.button('d', False)
+            session.advance(session.time_us + 60_000)
+            assert session.tooltip_context[0] == page
         assert not [m.message for m in session.messages if m.kind == 'error']
 
     with backend.Session(layout, target, executable, directory, bundle) as session:
