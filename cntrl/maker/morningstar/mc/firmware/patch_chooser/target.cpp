@@ -11,6 +11,7 @@
 extern "C" void eepromemu_flash_write(void *, const void *, uint32_t);
 #endif
 #include <Arduino.h>
+#include "cpu_load.h"
 #if defined(CNTRL_MEMORY_QUALIFICATION) && CNTRL_MEMORY_QUALIFICATION
 #define CNTRL_RUNTIME_TRACE(name) cntrl::device::qualification_phase(cntrl::device::QualificationPhase::name)
 #define CNTRL_RUNTIME_PACKET(route, packet) cntrl::device::qualification_packet(route, packet)
@@ -92,6 +93,20 @@ namespace {
 using cntrl::ui::Pages;
 using cntrl::ui::PerformanceStatus;
 using cntrl::ui::PixelThrob;
+using cntrl::CpuWork;
+using cntrl::device::cpu_load;
+using cntrl::device::CpuWorkScope;
+
+FLASHMEM void append_cpu_status(char *text, unsigned capacity) {
+    const auto load = cpu_load.reading();
+    const unsigned size = std::strlen(text);
+    std::snprintf(text + size, capacity - size,
+        " cpu_bp=%u cpu_midi_bp=%u cpu_display_bp=%u cpu_input_bp=%u cpu_storage_bp=%u cpu_window_ms=%lu cpu_scan_gap_ms=%lu",
+        load.total_basis_points, load.work(CpuWork::midi), load.work(CpuWork::display),
+        load.work(CpuWork::input), load.work(CpuWork::storage),
+        (unsigned long)load.window_ms, (unsigned long)load.max_scan_gap_ms);
+}
+
 cntrl::ui::AssetFonts fonts(embedded_fonts, sizeof(embedded_fonts) / sizeof(*embedded_fonts));
 #ifdef CNTRL_DIAGNOSTICS
 ScrollTimingProbe scroll_timing;
@@ -698,7 +713,7 @@ public:
     bool reply_ready() const override { return usb_session.reply_ready(); }
     void reply(const char *text) override {
         if (!std::strncmp(text, "CNTRL READY ", 12)) {
-            char response[288];
+            char response[448];
             if (!deployment.ready()) {
                 std::snprintf(response, sizeof(response), "CNTRL ERROR deployment-recovery model=mc6-pro git=%07x",
                     unsigned(cntrl_build_revision));
@@ -708,6 +723,7 @@ public:
             char status[192]; startup_counter.usb_status(text, status, sizeof(status));
             std::snprintf(response, sizeof(response), "%s persistent_format=%u persistent_root=%lu model=mc6-pro git=%07x", status,
                 cntrl::binary::development_format, (unsigned long)deployment.root(), unsigned(cntrl_build_revision));
+            append_cpu_status(response, sizeof(response));
             usb_session.reply(response);
         } else usb_session.reply(text);
     }
@@ -857,7 +873,10 @@ public:
                     if (!midi_read_event(source, ignored)) break;
                 }
             }
-        } else midi_runtime_.poll(*this);
+        } else {
+            const CpuWorkScope work(cpu_load, CpuWork::midi);
+            midi_runtime_.poll(*this);
+        }
         if (usb_session.output_pending() && Serial.availableForWrite() > 0) {
             unsigned n = usb_session.output_size();
             unsigned room = Serial.availableForWrite();
@@ -1333,6 +1352,7 @@ FLASHMEM void initialize_target() {
         card.ready = false; board.error(cntrl::ui::i18n::text(cntrl::ui::i18n::Message::target_deployment_recovery));
     }
     cntrl::device::heap_phase(cntrl::device::HeapPhase::runtime);
+    cpu_load.start(millis());
 }
 
 namespace {
@@ -1394,7 +1414,11 @@ TargetControls target_controls;
 cntrl::ui::InputCoordinator input_coordinator(buttons, cntrl::target::controls, documents.document(), application, board);
 class TargetRuntime {
 public:
-    uint32_t now() const { return millis(); }
+    uint32_t now() const {
+        const uint32_t time = millis();
+        cpu_load.sample(time);
+        return time;
+    }
     void complete_display() { CNTRL_RUNTIME_TRACE(display); poll_display_dma(); }
     FLASHMEM void keyboard() {
         CNTRL_RUNTIME_TRACE(keyboard); board.poll_keyboard();
@@ -1412,6 +1436,8 @@ public:
     void scan(uint32_t now, uint32_t gap) {
         if (deployment.pending() || !deployment.ready()) return;
         CNTRL_RUNTIME_TRACE(scan);
+        const CpuWorkScope work(cpu_load, CpuWork::input);
+        cpu_load.scanned(now);
         if (gap) board.scanned(gap);
         const uint8_t raw = read_buttons();
         uint8_t logical = 0;
@@ -1516,7 +1542,11 @@ public:
         if (!history_import.busy()) input_coordinator.finish(target_controls);
         global_commands.poll(application.patch_pending());
     }
-    void display(uint32_t now) { CNTRL_RUNTIME_TRACE(display); board.display(now, documents.busy() || application.feature_open(board) || application.patch_pending()); }
+    void display(uint32_t now) {
+        CNTRL_RUNTIME_TRACE(display);
+        const CpuWorkScope work(cpu_load, CpuWork::display);
+        board.display(now, documents.busy() || application.feature_open(board) || application.patch_pending());
+    }
 };
 TargetRuntime target_runtime;
 } // namespace

@@ -17,6 +17,7 @@ public:
         }
         pedals_.poll(now, [&](unsigned i) { return tip_pin(i) >= 0; },
             [&](unsigned i, unsigned phase) {
+                const cntrl::device::CpuWorkScope work(cntrl::device::cpu_load, cntrl::CpuWork::input);
                 int pin = tip_pin(i);
                 if (!phase) { pinMode(pin, INPUT_PULLDOWN); return 0; }
                 int reading = analogRead(pin);

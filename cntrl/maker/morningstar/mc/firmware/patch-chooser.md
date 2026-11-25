@@ -373,6 +373,21 @@ servicing, not a visual rendering guarantee. SD operations, particularly the
 storage scan, can still stall the main loop. The previous
 software-clocked driver had an observed update time around 1,500 ms.
 
+## CPU workload
+
+`cntrl status` reports `cpu_bp` and the MIDI, display, input and SD storage
+shares in basis points (100 basis points equals 1%). It uses the last ten
+completed samples of roughly 100 ms each. `cpu_window_ms` is the actual
+sampled span, and `cpu_scan_gap_ms` is its longest interval between footswitch
+scans. A zero window means the first sample has yet to complete.
+
+The total covers the measured foreground paths. MIDI and display service
+include their routine maintenance. Input covers footswitch scans and expression
+ADC access. Storage covers SD file and directory operations through the board's
+filesystem adapter, including synchronous waits. Nested work is attributed to
+its own category once. The measurement excludes time spent waiting for display
+DMA outside those paths and does not separately account for interrupts.
+
 ## Capacity measurements
 
 Named-setup document and transfer bytes are allocated from RAM2's heap, leaving RAM1 for

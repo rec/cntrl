@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+inline uint32_t ARM_DWT_CYCCNT = 0;
+
 constexpr uint8_t LOW = 0;
 constexpr uint8_t HIGH = 1;
 constexpr uint8_t OUTPUT = 1;

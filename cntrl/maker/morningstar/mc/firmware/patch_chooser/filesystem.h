@@ -4,6 +4,7 @@
 #include <cntrl/filesystem.h>
 #include <cntrl/memory.h>
 #include <cntrl/deployment.h>
+#include "cpu_load.h"
 
 namespace cntrl::device {
 // The storage service runs on the main loop. A writable handle can change
@@ -21,19 +22,24 @@ public:
         if (mode == files::Mode::exclusive) flags |= O_EXCL;
         if (mode == files::Mode::truncate) flags |= O_TRUNC;
         if (mode != files::Mode::read) ++sd_write_generation;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
         file_ = SD.sdfs.open(mapped, flags);
         writable_ = file_ && mode != files::Mode::read;
         if (writable_) ++sd_open_writers;
         return bool(file_);
     }
     void close() override {
-        file_.close();
+        if (file_) {
+            const CpuWorkScope work(cpu_load, CpuWork::storage);
+            file_.close();
+        }
         if (writable_) { --sd_open_writers; writable_ = false; }
     }
     bool opened() const override { return bool(file_); }
     uint32_t size() const override { return const_cast<FsFile &>(file_).size(); }
     int read_some(uint32_t offset, uint8_t *data, unsigned length) override {
         if (!file_) return -1;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
         if (!file_.seekSet(offset)) return files::position_error;
         return file_.read(data, length);
     }
@@ -42,26 +48,42 @@ public:
     }
     int write_some(uint32_t offset, const uint8_t *data, unsigned length) override {
         if (!file_) return 0;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
         if (!file_.seekSet(offset)) return files::position_error;
         return int(file_.write(data, length));
     }
     bool write(uint32_t offset, const uint8_t *data, unsigned length) override {
         return write_some(offset, data, length) == int(length);
     }
-    bool resize(uint32_t length) override { return file_ && file_.truncate(length); }
-    bool sync() override { return file_ && file_.sync(); }
+    bool resize(uint32_t length) override {
+        if (!file_) return false;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
+        return file_.truncate(length);
+    }
+    bool sync() override {
+        if (!file_) return false;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
+        return file_.sync();
+    }
 private:
     FsFile file_;
     bool writable_ = false;
 };
 class SdDirectory : public files::Directory, public CheckedHeapAllocation {
 public:
+    // Directory traversal and metadata changes are I/O-bound. Keep their
+    // instrumented adapters in flash and leave the hot scan code in ITCM.
+    __attribute__((section(".flashmem.cntrl_sd_directory_open"), noinline))
     bool open(const char *path) override {
         char mapped[224]; if (!persistent_path(path, mapped)) return false;
-        close(); failed_ = false; directory_ = SD.sdfs.open(mapped, O_RDONLY);
+        close(); failed_ = false;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
+        directory_ = SD.sdfs.open(mapped, O_RDONLY);
         return directory_ && directory_.isDirectory();
     }
+    __attribute__((section(".flashmem.cntrl_sd_directory_next"), noinline))
     bool next(char *name, unsigned capacity, bool &is_directory) override {
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
         FsFile entry;
         if (!entry.openNext(&directory_, O_RDONLY)) { failed_ = directory_.getError(); return false; }
         bool named = entry.getName(name, capacity);
@@ -69,7 +91,12 @@ public:
         if (!named) failed_ = true;
         return named;
     }
-    void close() override { directory_.close(); }
+    __attribute__((section(".flashmem.cntrl_sd_directory_close"), noinline))
+    void close() override {
+        if (!directory_) return;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
+        directory_.close();
+    }
     uint64_t entry_size() const override { return size_; }
     bool failed() const override { return failed_; }
 private:
@@ -80,22 +107,30 @@ private:
 class SdFileSystem : public files::FileSystem {
 public:
     bool exists(const char *path) override {
-        char mapped[224]; return persistent_path(path, mapped) && SD.sdfs.exists(mapped);
+        char mapped[224]; if (!persistent_path(path, mapped)) return false;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
+        return SD.sdfs.exists(mapped);
     }
+    __attribute__((section(".flashmem.cntrl_sd_make_directory"), noinline))
     bool make_directory(const char *path) override {
         char mapped[224]; if (!persistent_path(path, mapped)) return false;
         ++sd_write_generation;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
         return SD.sdfs.mkdir(mapped, true);
     }
+    __attribute__((section(".flashmem.cntrl_sd_rename"), noinline))
     bool rename(const char *from, const char *to) override {
         char first[224], second[224];
         if (!persistent_path(from, first) || !persistent_path(to, second)) return false;
         ++sd_write_generation;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
         return SD.sdfs.rename(first, second);
     }
+    __attribute__((section(".flashmem.cntrl_sd_remove"), noinline))
     bool remove(const char *path) override {
         char mapped[224]; if (!persistent_path(path, mapped)) return false;
         ++sd_write_generation;
+        const CpuWorkScope work(cpu_load, CpuWork::storage);
         return SD.sdfs.remove(mapped);
     }
     bool available() const override { return SD.sdfs.card() && !SD.sdfs.card()->errorCode(); }

@@ -5,6 +5,7 @@
 #undef write_display_group
 #undef write_display_segment
 #include "panorama.h"
+#include "cpu_load.h"
 #include "target.h"
 #include <EventResponder.h>
 
@@ -28,6 +29,7 @@ bool display_dma_pending() { return display_spi_busy() || queued_band < 2; }
 bool take_display_dma_error() { bool result = dma_error; dma_error = false; return result; }
 void poll_display_dma() {
     if (!display_spi_busy() || !dma_complete) return;
+    const cntrl::device::CpuWorkScope work(cntrl::device::cpu_load, cntrl::CpuWork::display);
     dma_complete.clearEvent();
     digitalWrite(panorama_panels[bands[active_band].panel].cs, HIGH);
     end_transfer();
@@ -35,6 +37,7 @@ void poll_display_dma() {
 }
 void start_display_dma() {
     if (display_spi_busy() || queued_band >= 2 || switch_scan_due()) return;
+    const cntrl::device::CpuWorkScope work(cntrl::device::cpu_load, cntrl::CpuWork::display);
     active_band = queued_band; queued_band = 2;
     const auto &band = bands[active_band];
     const auto &panel = panorama_panels[band.panel];

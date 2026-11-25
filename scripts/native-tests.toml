@@ -11,6 +11,7 @@
 "test/test_buttons.cpp" = []
 "test/test_input_pipeline.cpp" = ["test/show.golden"]
 "test/test_runtime.cpp" = []
+"test/test_cpu_load.cpp" = []
 "test/test_page_layout.cpp" = []
 "test/test_presentation.cpp" = []
 "test/test_pixel_throb.cpp" = []
