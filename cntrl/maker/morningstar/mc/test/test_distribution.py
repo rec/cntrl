@@ -213,6 +213,7 @@ def test_flash_recovers_silently_and_rolls_back_only_first_installs(
             flash_target.models.Target.model_validate(
                 compiler_inputs.read_document(target_file)
             ),
+            packaged_languages=destination / 'languages',
         )
     updater_path.assert_called_once_with(provision_missing=True)
     attempts = success_at or 6

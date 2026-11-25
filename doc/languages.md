@@ -77,6 +77,9 @@ downloads include the selected pack when available; recovered emulator sessions
 import it without modifying the setup source. A full restore of a selected
 non-English language needs a valid matching pack. Packs are matched to the
 firmware's message schema; install updated packs with updated firmware.
+During an MC6 Pro flash, the restore uses matching packs from the firmware
+export for installed languages that use an older message schema. The original
+packs are retained in the pre-flash backup.
 
 Install a locale by its tag, for example `cntrl language install de --port PORT`.
 The additional tags are `de`, `es`, `it`, `pt-PT`, `nl`, `pl`, `cs`, `sk`, `hu`,

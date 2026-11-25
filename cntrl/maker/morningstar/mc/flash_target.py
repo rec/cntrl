@@ -152,7 +152,12 @@ def run(
                 raise ValueError(
                     'recovery requires a failed update with a backup for this unit'
                 )
-            restore = backups.prepare_restore(before, directory / 'restore', target)
+            restore = backups.prepare_restore(
+                before,
+                directory / 'restore',
+                target,
+                packaged_languages=directory / 'languages',
+            )
             record.update(
                 backup=str(before),
                 recovered_from=str(previous),
@@ -221,7 +226,12 @@ def run(
                 raise ValueError(
                     'the connected cntrl firmware identifies a different controller'
                 )
-            restore = backups.prepare_restore(before, directory / 'restore', target)
+            restore = backups.prepare_restore(
+                before,
+                directory / 'restore',
+                target,
+                packaged_languages=directory / 'languages',
+            )
             record['backup'] = str(before)
             write_record(directory / 'installation.toml', record)
             firmware_upload.request_bootloader(serial, quiet=True)

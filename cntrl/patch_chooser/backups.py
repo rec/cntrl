@@ -1089,7 +1089,11 @@ def read_setup_binaries(directory: Path) -> dict[str, bytes]:
 
 
 def validate_assets(
-    directory: Path, setups: list[bytes], libraries: list[bytes]
+    directory: Path,
+    setups: list[bytes],
+    libraries: list[bytes],
+    *,
+    language_replacements: dict[str, bytes] | None = None,
 ) -> None:
     """Require every executable document's assets before deployment or conversion."""
     needed: set[str] = set()
@@ -1103,7 +1107,10 @@ def validate_assets(
         from ..localization.catalogue import inspect
 
         pack = directory / 'raw/cntrl/languages' / f'{language}.bin'
-        if not _is_file(pack) or inspect(read_sync_file(pack)).language != language:
+        replacement = (language_replacements or {}).get(language)
+        if replacement is None and _is_file(pack):
+            replacement = read_sync_file(pack)
+        if replacement is None or inspect(replacement).language != language:
             raise BackupError(
                 f'{language}: language pack is absent or invalid in the backup'
             )
@@ -1161,7 +1168,41 @@ def check_deployment_space(
         )
 
 
-def prepare_restore(directory: Path, destination: Path, target: models.Target) -> Path:
+def replacement_languages(directory: Path, packaged: Path) -> dict[str, bytes]:
+    """Resolve archived language packs against the destination firmware catalogue."""
+    canonical = directory / 'raw/cntrl/languages'
+    prefix = persistent_prefix(_read_text(directory / 'status.txt')) or '/cntrl/'
+    archived = directory / 'raw' / prefix.lstrip('/') / 'languages'
+    installed = {p.stem: p for p in _glob(archived, '*.bin')}
+    installed.update({p.stem: p for p in _glob(canonical, '*.bin')})
+    replacements: dict[str, bytes] = {}
+    for tag, path in installed.items():
+        data = read_sync_file(path)
+        try:
+            pack = catalogue.inspect(data)
+        except catalogue.IncompatibleCatalogueError:
+            replacement = packaged / path.name
+            if not _is_file(replacement):
+                raise BackupError(
+                    f'{tag}: the firmware export lacks a matching language pack'
+                ) from None
+            data = read_sync_file(replacement)
+            pack = catalogue.inspect(data)
+            replacements[tag] = data
+        if pack.language != tag:
+            raise BackupError(f'{path}: language pack tag differs from filename')
+        if path.parent != canonical:
+            replacements[tag] = data
+    return replacements
+
+
+def prepare_restore(
+    directory: Path,
+    destination: Path,
+    target: models.Target,
+    *,
+    packaged_languages: Path | None = None,
+) -> Path:
     """Validate a backup and prepare current-format copies, retaining originals."""
     check_conversion(directory)
     recording_high_water(directory)
@@ -1200,8 +1241,16 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
         )
         for n, r, d in snapshots
     ]
+    replacements = (
+        replacement_languages(directory, packaged_languages)
+        if packaged_languages is not None
+        else {}
+    )
     validate_assets(
-        directory, [*upgraded.values(), *(d for _, _, d in revisions)], [library, undo]
+        directory,
+        [*upgraded.values(), *(d for _, _, d in revisions)],
+        [library, undo],
+        language_replacements=replacements,
     )
     bundle = b''
     bundle_path = directory / 'bundle.bin'
@@ -1263,6 +1312,12 @@ def prepare_restore(directory: Path, destination: Path, target: models.Target) -
     write_record(destination / 'conversion-pending.toml', {'source': str(source_root)})
     with sync_files():
         shutil.copytree(directory, destination, dirs_exist_ok=True)
+    if replacements:
+        languages = destination / 'raw/cntrl/languages'
+        with sync_files():
+            languages.mkdir(parents=True, exist_ok=True)
+        for tag, data in replacements.items():
+            _write_file(languages / f'{tag}.bin', data)
     _write_file(destination / 'songs.bin', library)
     if bundle:
         _write_file(destination / 'bundle.bin', bundle)

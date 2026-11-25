@@ -12,6 +12,7 @@ import tomlkit
 import tyro
 
 from cntrl.animation import asset
+from cntrl.localization import catalogue
 from cntrl.patch_chooser import (
     backups,
     binary_format,
@@ -23,6 +24,7 @@ from cntrl.patch_chooser import (
     display,
     graphics,
     history,
+    languages,
     models,
     resolved,
     setup_bundle,
@@ -1161,6 +1163,45 @@ def test_unreadable_movies_block_backup_only_when_referenced(
     assert (
         directory / 'unavailable-assets.txt'
     ).read_text() == f'/cntrl/movies/{name}\n'
+
+
+@pytest.mark.parametrize('root', [0, 7])
+def test_flash_restore_replaces_archived_language_catalogue(
+    tmp_path: Path, target: models.Target, root: int
+) -> None:
+    before = tmp_path / 'before'
+    (before / 'setups').mkdir(parents=True)
+    (before / 'selected.txt').write_text('')
+    (before / 'songs.bin').write_bytes(songs.encode(songs.Library()))
+    (before / 'status.txt').write_text(f'CNTRL READY persistent_root={root}')
+    (before / 'device-globals.toml').write_text(
+        'format = 3\nlanguage = "fr"\n[values]\n'
+    )
+    destination_pack = languages.pack('fr')
+    old_pack = bytearray(destination_pack)
+    old_pack[64] ^= 1
+    old_pack[12:16] = bytes(4)
+    struct.pack_into('<I', old_pack, 12, crc32(old_pack))
+    with pytest.raises(catalogue.IncompatibleCatalogueError):
+        catalogue.inspect(bytes(old_pack))
+    storage = before / 'raw/cntrl'
+    if root:
+        storage /= f'generations/{root:08x}'
+    archived = storage / 'languages/fr.bin'
+    archived.parent.mkdir(parents=True)
+    archived.write_bytes(old_pack)
+    package = tmp_path / 'package'
+    package.mkdir()
+    (package / 'fr.bin').write_bytes(destination_pack)
+    restored = backups.prepare_restore(
+        before, tmp_path / 'restore', target, packaged_languages=package
+    )
+    assert (restored / 'raw/cntrl/languages/fr.bin').read_bytes() == destination_pack
+    assert archived.read_bytes() == old_pack
+    assert (
+        device_globals.load((restored / 'device-globals.toml').read_bytes()).language
+        == 'fr'
+    )
 
 
 def test_post_flash_verification_accepts_all_saved_data(
