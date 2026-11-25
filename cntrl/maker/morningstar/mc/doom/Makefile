@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 .DEFAULT_GOAL := firmware
+.DELETE_ON_ERROR:
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 DMC ?= $(ROOT)/upstream
 OUT ?= $(ROOT)/build
 TOOLS ?= $(ROOT)/../firmware/.tools
 PYTHON ?= python3
+UV ?= uv
 PACK := $(DMC)/build/packs/E1M1
 NOR := $(OUT)/e1m1.img
+FLASH_CACHE := $(OUT)/flash-cache.c
 SKETCH := $(OUT)/doom_demo
 SDK := $(TOOLS)/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin
 FLASH_CONFIG := $(ROOT)/../firmware/usb_probe/flash_config.c
@@ -29,7 +32,7 @@ export ARDUINO_UPDATER_ENABLE_NOTIFICATION := false
 
 .PHONY: firmware check relocated host
 relocated:
-	$(MAKE) firmware OUT="$(OUT)/relocated" FLASH_ORIGIN=0x60780000 FLASH_LENGTH=256K
+	$(MAKE) firmware OUT="$(OUT)/relocated" FLASH_ORIGIN=0x60740000 FLASH_LENGTH=512K
 
 ifneq ($(FLASH_ORIGIN),)
 CORE_LINKER := $(TOOLS)/data/packages/teensy/hardware/avr/1.62.0/cores/teensy4/imxrt1062_t41.ld
@@ -49,19 +52,19 @@ firmware: $(OUT)/elf/doom_demo.ino.elf
 	"$(SDK)/arm-none-eabi-objcopy" -I ihex -O binary "$(OUT)/elf/doom_demo.ino.hex" "$(OUT)/hex.bin"
 	cmp "$(OUT)/elf.bin" "$(OUT)/hex.bin"
 
-$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h asset_path.h Makefile $(FLASH_CONFIG) $(LINKER) $(RETURN_HEADERS)
+$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h asset_path.h Makefile $(FLASH_CONFIG) $(LINKER) $(RETURN_HEADERS) $(FLASH_CACHE)
 	@test ! -f "$(SKETCH)/src/rom.S" || { echo 'Choose a new OUT directory for the microSD Doom build'; exit 1; }
 	mkdir -p "$(SKETCH)/src"
 	touch "$(SKETCH)/doom_demo.ino"
-	cp $(SHARED) board.cpp demo.h asset_path.h return_button.h "$(FLASH_CONFIG)" "$(SKETCH)/src/"
+	cp $(SHARED) board.cpp demo.h asset_path.h return_button.h "$(FLASH_CONFIG)" "$(FLASH_CACHE)" "$(SKETCH)/src/"
 	cd "$(DMC)" && for source in $(patsubst $(DMC)/%,%,$(SOURCES)); do \
 		mkdir -p "$(SKETCH)/src/$$(dirname "$$source")" && \
 		cp "$$source" "$(SKETCH)/src/$$source" || exit; done
 	"$(TOOLS)/bin/arduino-cli" compile --fqbn teensy:avr:teensy41:usb=serial,speed=600,opt=osstd,keys=en-us \
 		--build-path "$(OUT)/elf" \
 		$(LINK_PROPERTY) \
-		--build-property 'build.flags.c=$(FLAGS) -DCNTRL_EXTERNAL_FLASH_CONFIG $(INC)' \
-		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fno-rtti $(INC) $(RETURN_FLAGS)' \
+		--build-property 'build.flags.c=$(FLAGS) -DCNTRL_EXTERNAL_FLASH_CONFIG -DCNTRL_DOOM_FLASH_CACHE $(INC)' \
+		--build-property 'build.flags.cpp=-std=gnu++17 -fno-exceptions -fno-rtti -DCNTRL_DOOM_FLASH_CACHE $(INC) $(RETURN_FLAGS)' \
 		--build-property 'recipe.hooks.objcopy.postobjcopy.1.pattern=' \
 		--build-property 'recipe.hooks.postbuild.1.pattern=' \
 		--build-property 'recipe.hooks.postbuild.4.pattern=' "$(SKETCH)"
@@ -70,10 +73,10 @@ $(NOR): $(PACK)/DOOM.DAT $(DMC)/tests/host/mknor.py
 	mkdir -p "$(OUT)"
 	$(PYTHON) -I "$(DMC)/tests/host/mknor.py" "$(PACK)" "$@"
 
-$(OUT)/check: $(SOURCES) $(HEADERS) $(SHARED) check.c demo.h Makefile
+$(OUT)/check: $(SOURCES) $(HEADERS) $(SHARED) check.c demo.h Makefile $(FLASH_CACHE)
 	mkdir -p "$(OUT)"
 	$(CC) -O2 -g $(CFLAGS) $(FLAGS) $(INC) -Wno-unused-value -Wno-pointer-sign \
-		$(SOURCES) $(SHARED) check.c $(LDFLAGS) -lm -o "$@"
+		-DCNTRL_DOOM_FLASH_CACHE $(SOURCES) $(SHARED) check.c "$(FLASH_CACHE)" $(LDFLAGS) -lm -o "$@"
 
 $(OUT)/test-return: test_return.cpp return_button.h Makefile
 	mkdir -p "$(OUT)"
@@ -89,6 +92,14 @@ $(OUT)/doom-host: $(SOURCES) $(HEADERS) $(SHARED) host.c demo.h Makefile
 		$(SOURCES) $(SHARED) host.c $(LDFLAGS) -lm -o "$@"
 
 host: $(OUT)/doom-host $(NOR)
+
+$(OUT)/doom-profile: $(SOURCES) $(HEADERS) $(SHARED) host.c demo.h Makefile
+	mkdir -p "$(OUT)"
+	$(CC) -O2 $(CFLAGS) $(FLAGS) $(INC) -Wno-unused-value -Wno-pointer-sign \
+		-DCNTRL_DOOM_PROFILE $(SOURCES) $(SHARED) host.c $(LDFLAGS) -lm -o "$@"
+
+$(FLASH_CACHE): flash_cache.py $(OUT)/doom-profile $(NOR)
+	$(UV) run --frozen --no-sync python flash_cache.py --profiler "$(OUT)/doom-profile" --image "$(NOR)" --output "$@"
 
 .PHONY: assets
 assets: $(NOR)

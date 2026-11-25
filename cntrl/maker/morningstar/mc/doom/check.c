@@ -109,6 +109,10 @@ int main(int argc, char **argv)
     if (!file || fread(demo_rom, 1, sizeof(demo_rom), file) != sizeof(demo_rom))
         demo_fail("Could not read the generated Freedoom image");
     fclose(file);
+#ifdef CNTRL_DOOM_FLASH_CACHE
+    if (!demo_verify_flash_cache())
+        demo_fail("The Doom flash cache does not match the asset image");
+#endif
     demo_run();
     demo_fail("Doom returned before rendering the test frames");
 }

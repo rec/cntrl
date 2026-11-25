@@ -9,6 +9,12 @@ extern "C" {
 
 enum { DEMO_WIDTH = 160, DEMO_HEIGHT = 128 };
 int demo_read_assets(uint32_t offset, void *dest, uint32_t count);
+#ifdef CNTRL_DOOM_FLASH_CACHE
+int demo_verify_flash_cache(void);
+#endif
+#ifdef CNTRL_DOOM_PROFILE
+void demo_trace_block(uint16_t block);
+#endif
 void demo_run(void);
 uint32_t demo_millis(void);
 void demo_delay(uint32_t ms);

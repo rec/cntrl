@@ -140,6 +140,9 @@ void setup()
     if (!SD.begin(BUILTIN_SDCARD)) demo_fail("Could not mount the Doom microSD card");
     assets = SD.open(cntrl::doom_asset_path, FILE_READ);
     if (!assets || assets.size() != NOR_SIZE) demo_fail("Missing or invalid Doom asset image");
+#ifdef CNTRL_DOOM_FLASH_CACHE
+    if (!demo_verify_flash_cache()) demo_fail("Doom assets do not match the firmware cache");
+#endif
     demo_run();
 }
 

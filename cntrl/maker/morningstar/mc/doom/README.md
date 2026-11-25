@@ -45,9 +45,13 @@ The generated files and downloaded upstream archives are disposable
 qualification inputs and outputs.
 
 The MC6 Pro linker reserves 6,912 KiB for the relocated applications.
-The Doom engine has a 256 KiB slot at the end of that region. The generated
-4 MiB asset image lives on the card at `/cntrl/doom/e1m1.img`. Doom reads
-it in place, using a 64 KiB cache for small reads.
+The Doom engine and flash cache have a 512 KiB slot at the end of that
+region. The generated 4 MiB asset image lives at `/cntrl/doom/e1m1.img`.
+The build profiles the first 30 seconds of E1M1 with four sets of inputs
+and embeds up to 256 KiB of the most frequently missed blocks. Doom checks
+those blocks against the card at startup and serves small reads of those
+blocks from flash during play. Other small reads use a 64 KiB RAM cache
+backed by microSD.
 [Linker region](../boot_switch.py) · [Packaged application manifest](../distribution/manifest.toml)
 
 ## Build and check the demo
@@ -59,7 +63,8 @@ native overlay tables link directly into the standalone executable.
 
 Run this from the repository root with absolute paths for the DMC100
 checkout and output directory. Set `TOOLS` to the installed Teensy SDK
-directory if it lives outside this worktree. The build uses the patched
+directory if it lives outside this worktree. Run `uv sync --frozen` first
+to install the dependencies for the flash-cache generator. The build uses the patched
 Teensy 1.62.0 core and the validated MC6 Pro FlexSPI hardware configuration.
 [Toolchain setup](../firmware/README.md#historical-diagnostic-build)
 
@@ -94,7 +99,7 @@ one-time Doom request. The launcher requires CNTRL to be the default
 firmware.
 
 Use the same DMC100 inputs as above and replace `firmware` with
-`relocated` to build the separate Doom application at `0x60780000`.
+`relocated` to build the separate Doom application at `0x60740000`.
 From the repository root, export the two separately linked applications
 and then use the standard MC6 Pro flash workflow.
 
