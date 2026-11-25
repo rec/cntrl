@@ -112,8 +112,17 @@ int main(int argc, char **argv) {
         status.disk_used = 1024ull * 1024 * 1024;
         status.disk_free = 29 * status.disk_used;
         status.starts_status = cntrl::ui::StartsStatus::ready; status.starts = 119;
+        status.cpu_basis_points = 1234;
         pages.time(3456789, 0, false);
         const auto pane = pages.view(3456789, 0, status);
+        assert(!std::strcmp(pane.lines[2].text, "Tempo:---.--  CPU:12.3%"));
+        auto full_load = pages.capture_status(status);
+        full_load.tempo_period_us = 500000;
+        full_load.performance.cpu_basis_points = 10000;
+        pages.status_snapshot = &full_load;
+        const auto loaded = pages.view(3456789, 0, {});
+        assert(!std::strcmp(loaded.lines[2].text, "Tempo:120.00  CPU:100.0%"));
+        pages.status_snapshot = nullptr;
         assert(!std::strcmp(pane.lines[5].text, "Disk:1.0/30G"));
         assert(!std::strcmp(pane.lines[6].text, "Starts:119"));
         assert(!std::strcmp(pane.lines[7].text, "Up:0:57:36"));

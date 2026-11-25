@@ -86,11 +86,11 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
     if storage_manifest(client, prefix) != manifest:
         raise EmulatorError('pedal storage listing changed during mirror capture')
     snapshot = client.request_data('CNTRL STATUS SNAPSHOT')
-    if len(snapshot) != 111 or snapshot[:4] != b'CSS1':
+    if (snapshot[:4], len(snapshot)) not in {(b'CSS1', 111), (b'CSS2', 108)}:
         raise EmulatorError('pedal returned an unsupported Status snapshot')
     if client.current() != selected:
         raise EmulatorError('pedal setup selection changed during mirror capture')
-    if client.request('CNTRL STATUS') != status:
+    if stable_status(client.request('CNTRL STATUS')) != stable_status(status):
         raise EmulatorError('pedal status changed during mirror capture')
     if storage_generation(client) != generation:
         raise EmulatorError('pedal storage generation changed during mirror capture')
@@ -101,6 +101,11 @@ def capture(client: transport.SetupClient, directory: Path, status: str) -> Path
         (directory / 'status-snapshot.bin').write_bytes(snapshot)
         (directory / 'mirror.toml').write_text(metadata)
     return setup
+
+
+def stable_status(status: str) -> list[str]:
+    # Workload readings change continuously during the capture.
+    return [v for v in status.split() if not v.startswith('cpu_')]
 
 
 def storage_generation(client: transport.SetupClient) -> str:

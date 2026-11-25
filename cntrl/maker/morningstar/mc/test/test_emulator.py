@@ -492,13 +492,17 @@ def test_starter_status_labels_remain_editable_with_the_real_time_clock(
         assert summary[0].right < summary[1].left
         assert [len(r.glyphs) for r in summary] == [7, 8]
         assert {
-            'clock_value',
-            'tap_value',
+            'tempo_cpu',
             'ram_value',
             'git_value',
             'starts_value',
             'uptime_value',
         } <= {r.message for r in regions}
+        tempo_cpu = [r for r in regions if r.message == 'tempo_cpu']
+        assert [r.editor_text(r.original).strip() for r in tempo_cpu] == [
+            'Tempo:',
+            'CPU:',
+        ]
         original = session.frames.copy()
         session.preview_correction(heading, 'Device status')
         assert session.frames['lcd-1'] != original['lcd-1']

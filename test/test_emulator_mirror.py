@@ -19,6 +19,7 @@ class CapturedPedal(transport.SetupClient):
         self.changed_file = changed_file
         self.change = change
         self.generation = 1
+        self.status_reads = 0
         self.reads: dict[str, int] = {}
 
     def current(self) -> str:
@@ -32,9 +33,13 @@ class CapturedPedal(transport.SetupClient):
                 raise transport.UsbReplyError('CNTRL ERROR mirror-storage-busy')
             return f'CNTRL MIRROR {self.generation}'
         assert command == 'CNTRL STATUS'
+        self.status_reads += 1
+        workload = (
+            f' cpu_bp={self.status_reads}' if self.change == 'cpu-workload' else ''
+        )
         return (
             'CNTRL READY model=mc6-pro persistent_root=305419896 '
-            f'persistent_format={binary_format.DEVELOPMENT_FORMAT}'
+            f'persistent_format={binary_format.DEVELOPMENT_FORMAT}{workload}'
         )
 
     def download_bundle(self) -> bytes:
@@ -44,6 +49,8 @@ class CapturedPedal(transport.SetupClient):
         assert command == 'CNTRL STATUS SNAPSHOT'
         if self.change in {'generation', 'busy'}:
             self.generation += 1
+        if self.change == 'cpu-workload':
+            return b'CSS2' + bytes(102) + b'\xd2\x04'
         return b'CSS1' + bytes(107)
 
     def download_state(self, path: str) -> bytes:
@@ -78,6 +85,7 @@ def test_mirror_requires_one_session_source(arguments: list[str]) -> None:
     ('change', 'error'),
     [
         ('', ''),
+        ('cpu-workload', ''),
         ('asset', 'changed during mirror capture'),
         ('journal', 'changed during mirror capture'),
         ('new-slot', 'changed during mirror capture'),
@@ -159,4 +167,9 @@ def test_capture_preserves_active_journals_and_exact_asset_set(
     }
     manifest = tomlkit.loads((capture / 'mirror.toml').read_text())
     assert manifest['selected'] == 'stored-setup'
-    assert (capture / 'status-snapshot.bin').read_bytes() == b'CSS1' + bytes(107)
+    if change == 'cpu-workload':
+        assert (capture / 'status-snapshot.bin').read_bytes() == b'CSS2' + bytes(
+            102
+        ) + b'\xd2\x04'
+    else:
+        assert (capture / 'status-snapshot.bin').read_bytes() == b'CSS1' + bytes(107)

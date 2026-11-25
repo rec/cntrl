@@ -198,8 +198,8 @@ context = 'TRS mode control'
 en = 'Cycles:{cycles:u}  Patches:{patches:u}'
 context = 'Status summary'
 
-[messages.clock_value]
-en = 'Clock:{clock:s}'
+[messages.tempo_cpu]
+en = 'Tempo:{tempo:s}  CPU:{cpu:s}'
 context = 'Status summary'
 
 [messages.disk_value]
@@ -221,10 +221,6 @@ context = 'Startup counter'
 [messages.error]
 en = 'error'
 context = 'Status failure'
-
-[messages.tap_value]
-en = 'Tap:{tempo:s}'
-context = 'Tap tempo status'
 
 [messages.player_score]
 en = 'PLAYER {player:u}   {score:u}'

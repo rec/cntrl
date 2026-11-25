@@ -56,13 +56,12 @@ aux_switch = { text = 'Interruttore ausiliario', short = 'Interr. ausiliario' }
 jack_mode_prompt = { text = '{jack:s}: Presa {mode:s}: Modo' }
 apply_prompt = { text = '{button:s}: Applica' }
 cycles_patches = { text = 'Cicli:{cycles:u} Suoni:{patches:u}' }
-clock_value = { text = 'Clock:{clock:s}' }
+tempo_cpu = { text = 'Tempo:{tempo:s}  CPU:{cpu:s}' }
 disk_value = { text = 'Disco:{whole:lu}.{fraction:lu}/{total:lu}G' }
 disk_unknown = { text = 'Disco:--/--G' }
 uptime_value = { text = ' Attivo:{hours:lu}:{minutes:02u}:{seconds:02u}' }
 starts_value = { text = 'Avvii:{starts:s}' }
 error = { text = 'errore' }
-tap_value = { text = 'Tap:{tempo:s}' }
 player_score = { text = 'GIOCATORE {player:u} {score:u}' }
 up_down_prompt = { text = '{up:s} Su / {down:s} Giù' }
 serve_exit_prompt = { text = '{serve:s} Servi/Pausa {exit:s} Esci' }

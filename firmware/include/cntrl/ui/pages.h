@@ -32,8 +32,7 @@ public:
     const StatusSnapshot *status_snapshot = nullptr;
     StatusSnapshot capture_status(const PerformanceStatus &performance) const {
         StatusSnapshot result{performance, uptime_, 0};
-        result.tap_period_ms = tap_.period();
-        result.clock_period_us = observed_clock().period_us(); result.clock_active = observed_clock().measured();
+        result.tempo_period_us = source_period(clock_selection());
         result.git_commit = build_revision();
         return result;
     }
@@ -452,8 +451,8 @@ public:
         }
         if (page_ == Page::time) {
             char number[24], sample[24];
-            number_text(number, sizeof(number), tap_.period(), false, true);
             const unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];
+            number_text(number, sizeof(number), source_period(0), digits, decimals);
             unsigned pos = 0;
             for (unsigned i = 0; i < digits; ++i) sample[pos++] = '8';
             if (decimals) { sample[pos++] = '.'; for (unsigned i = 0; i < decimals; ++i) sample[pos++] = '8'; }
@@ -483,10 +482,14 @@ public:
 #endif
             };
             format_status(rows[0], 1, i18n::Message::cycles_patches, status.cycles, status.patches);
-            char tap[24], clock[24], tap_label[32], uptime[32], git[16] = {};
-            number_text(tap, sizeof(tap), status_snapshot ? status_snapshot->tap_period_ms : tap_.period(), false, true);
-            number_text(clock, sizeof(clock), status_snapshot ? status_snapshot->clock_period_us : observed_clock().period_us(), true, true);
-            format_status(rows[1], 2, i18n::Message::clock_value, clock + std::strspn(clock," "));
+            char tempo[24], cpu[8] = "--.-%", uptime[32], git[16] = {};
+            number_text(tempo, sizeof(tempo),
+                status_snapshot ? status_snapshot->tempo_period_us : source_period(clock_selection()), 3, 2);
+            if (status.cpu_basis_points != PerformanceStatus::cpu_unavailable) {
+                const unsigned tenths = (status.cpu_basis_points + 5u) / 10u;
+                std::snprintf(cpu, sizeof(cpu), "%u.%u%%", tenths / 10, tenths % 10);
+            }
+            format_status(rows[1], 2, i18n::Message::tempo_cpu, tempo + std::strspn(tempo, " "), cpu);
             format_status(rows[2], 4, i18n::Message::ram_value,
                 (unsigned long)(status.ram_used[0] / 1024),
                 (unsigned long)((status.ram_used[0] + status.ram_free[0]) / 1024),
@@ -522,27 +525,20 @@ public:
             else format_status(rows[4], 6, i18n::Message::starts_value, status.starts_status == StartsStatus::error ? (status.starts_error[0] ? status.starts_error : i18n::text(i18n::Message::error)) : "--");
             if (const auto revision = status_snapshot ? status_snapshot->git_commit : build_revision())
                 format_status(git, 8, i18n::Message::git_value, unsigned(revision));
-            format_status(tap_label, 3, i18n::Message::tap_value, tap + std::strspn(tap," "));
             const unsigned body_top = pad + heading_height;
             const unsigned body_height = viewport_.height - pad - body_top;
             auto body = [&](unsigned maximum_size) {
                 for (unsigned i = 0; i < 5; ++i) {
                     const unsigned y = body_top + body_height * i / 5;
                     const unsigned height = body_height * (i + 1) / 5 - body_height * i / 5;
-                    if (i == 1) {
-                        const auto inset = pane.graphics.pad;
-                        pane.graphics.pad = std::min<uint8_t>(inset,1);
-                        line(pane, 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width / 2, maximum_size);
-                        line(pane, 3, tap_label, y, height, settings_[R::status_font], false, nullptr, viewport_.width / 2, viewport_.width, maximum_size);
-                        pane.graphics.pad = inset;
-                    } else if (i >= 3) {
+                    if (i >= 3) {
                         const unsigned right = i + 4;
                         const char *value = i == 3 ? uptime + std::strspn(uptime, " ") : git;
                         if (*value) line(pane, right, value, y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size, true);
                         line(pane, i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, *value ? unsigned(pane.lines[right].x) : viewport_.width, maximum_size);
                         if (*value) pane.lines[right].y = pane.lines[i + 2].y;
                     } else {
-                        line(pane, i == 0 ? 1 : i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size);
+                        line(pane, i < 2 ? i + 1 : i + 2, rows[i], y, height, settings_[R::status_font], false, nullptr, 0, viewport_.width, maximum_size);
                     }
                 }
             };
@@ -563,11 +559,10 @@ public:
                 for (unsigned j = 0; *cursor; ++j) {
                     uint32_t code; if (!utf8::next(cursor, code)) break;
                     if (code == ':' && !value) { value = true; continue; }
-                    if (i == 1 && code == ' ' && *cursor == ' ') value = false;
+                    if (i <= 2 && code == ' ' && *cursor == ' ') value = false;
                     if (value) l.color_mask |= uint64_t(1) << j;
                 }
             }
-            pane.lines[2].stippled = status_snapshot ? status_snapshot->clock_period_us && !status_snapshot->clock_active : observed_clock().period_us() && !observed_clock().measured();
         }
         return pane;
     }
@@ -628,11 +623,6 @@ private:
         }
     }
 
-    const ClockTempo &observed_clock() const {
-        if (selected_clock_) return clocks_[selected_clock_ - 1];
-        if (clocks_[0].measured() || !clocks_[1].period_us()) return clocks_[0];
-        return clocks_[1];
-    }
     unsigned clock_input(unsigned source) const {
         const auto *input = outputs_.find(source == 1 ? "din" : "trs");
         return input && input->input && input->transport == midi::OutputTransport::physical ? input->route : ~0u;
@@ -661,7 +651,7 @@ private:
         const char *names[] = {"Tap:", "DIN:", "TRS:"};
         char numbers[3][24];
         for (unsigned i = 0; i < 3; ++i)
-            number_text(numbers[i], sizeof(numbers[i]), source_period(i), true, true);
+            number_text(numbers[i], sizeof(numbers[i]), source_period(i), settings_[R::digits], settings_[R::decimals]);
         const unsigned height = vertical(16), column = horizontal(55);
         auto rows = [&](unsigned maximum_size) {
             for (unsigned i = 0; i < 3; ++i) {
@@ -843,11 +833,8 @@ private:
     bool sending_clock_ = false, waiting_for_clock_ = false;
     unsigned horizontal(unsigned value) const { return value * viewport_.width / design_width; }
     unsigned vertical(unsigned value) const { return value * viewport_.height / design_height; }
-    void number_text(char *text, unsigned length, uint64_t period, bool microseconds, bool fixed) const {
-        using R = cntrl::PageSettings;
-        unsigned digits = settings_[R::digits], decimals = settings_[R::decimals];
+    static void number_text(char *text, unsigned length, uint64_t period, unsigned digits, unsigned decimals) {
         if (!period) {
-            if (!fixed) { std::snprintf(text, length, "--"); return; }
             unsigned pos = 0;
             for (unsigned i = 0; i < digits; ++i) text[pos++] = '-';
             if (decimals) { text[pos++] = '.'; for (unsigned i = 0; i < decimals; ++i) text[pos++] = '-'; }
@@ -856,11 +843,11 @@ private:
         unsigned scale = 1, limit = 1;
         for (unsigned i = 0; i < decimals; ++i) scale *= 10;
         for (unsigned i = 0; i < digits; ++i) limit *= 10;
-        uint64_t value = ((microseconds ? 60000000ull : 60000ull) * scale + period / 2) / period;
-        if (fixed && value / scale >= limit) { i18n::format(text, length, i18n::Message::over); return; }
-        if (decimals) std::snprintf(text, length, "%*lu.%0*lu", fixed ? int(digits) : 1,
+        uint64_t value = (60000000ull * scale + period / 2) / period;
+        if (value / scale >= limit) { i18n::format(text, length, i18n::Message::over); return; }
+        if (decimals) std::snprintf(text, length, "%*lu.%0*lu", int(digits),
             (unsigned long)(value / scale), int(decimals), (unsigned long)(value % scale));
-        else std::snprintf(text, length, "%*lu", fixed ? int(digits) : 1, (unsigned long)value);
+        else std::snprintf(text, length, "%*lu", int(digits), (unsigned long)value);
     }
     void line(cntrl::Pane &pane, unsigned index, const char *text, unsigned y, unsigned height,
               unsigned face, bool centered, const char *sample = nullptr, unsigned left_edge = 0, unsigned right_edge = 0, unsigned maximum_size = 96, bool right_aligned = false) {
@@ -875,7 +862,11 @@ private:
         if (ordinary) {
             face = 17;
             maximum_size = std::min(maximum_size, index ? (page_ == Page::panic ? 24u : 12u) : 16u);
-        } else if (!preview && page_ == Page::status && index) face = status_face;
+        } else if (!preview && page_ == Page::status && index) {
+            // Both Status values must fit on one 160-pixel panel at full precision.
+            face = index == 2 ? localized_face : status_face;
+            if (index == 2) maximum_size = std::min(maximum_size, status_size);
+        }
         if (!preview && i18n::translated_ui && face != status_face && page_ != Page::memon) face = localized_face;
         l.graphics = pane.graphics; l.graphics.font = uint8_t(face);
         l.graphics.asset = preview ? 0 : i18n::identity(text);

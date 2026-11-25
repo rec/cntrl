@@ -169,8 +169,8 @@ text = '{button:s} : appliquer'
 [messages.cycles_patches]
 text = 'Cycles : {cycles:u} Sons : {patches:u}'
 
-[messages.clock_value]
-text = 'Horloge : {clock:s}'
+[messages.tempo_cpu]
+text = 'Tempo:{tempo:s}  CPU:{cpu:s}'
 
 [messages.disk_value]
 text = 'Disque:{whole:lu}.{fraction:lu}/{total:lu}G'
@@ -186,9 +186,6 @@ text = 'Démarrages : {starts:s}'
 
 [messages.error]
 text = 'erreur'
-
-[messages.tap_value]
-text = 'Frappe : {tempo:s}'
 
 [messages.player_score]
 text = 'JOUEUR {player:u}   {score:u}'

@@ -56,13 +56,12 @@ aux_switch = { text = 'Ekstra fotbryter' }
 jack_mode_prompt = { text = '{jack:s}: Kontakt {mode:s}: Modus' }
 apply_prompt = { text = '{button:s}: Bruk' }
 cycles_patches = { text = 'Sykluser:{cycles:u} Lyder:{patches:u}' }
-clock_value = { text = 'Klokke:{clock:s}' }
+tempo_cpu = { text = 'Tempo:{tempo:s}  CPU:{cpu:s}' }
 disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
 disk_unknown = { text = 'Disk:--/--G' }
 uptime_value = { text = ' Tid:{hours:lu}:{minutes:02u}:{seconds:02u}' }
 starts_value = { text = 'Starter:{starts:s}' }
 error = { text = 'feil' }
-tap_value = { text = 'Trykk:{tempo:s}' }
 player_score = { text = 'SPILLER {player:u}   {score:u}' }
 up_down_prompt = { text = '{up:s} Opp / {down:s} Ned' }
 serve_exit_prompt = { text = '{serve:s} Serve/Pause {exit:s} Avslutt' }

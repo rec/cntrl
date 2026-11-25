@@ -56,13 +56,12 @@ aux_switch = { text = 'Lisäkytkin' }
 jack_mode_prompt = { text = '{jack:s}: Liitin {mode:s}: Tila' }
 apply_prompt = { text = '{button:s}: Käytä' }
 cycles_patches = { text = 'Kierrot:{cycles:u} Soundit:{patches:u}' }
-clock_value = { text = 'Kello:{clock:s}' }
+tempo_cpu = { text = 'Tempo:{tempo:s}  CPU:{cpu:s}' }
 disk_value = { text = 'Levy:{whole:lu}.{fraction:lu}/{total:lu}G' }
 disk_unknown = { text = 'Levy:--/--G' }
 uptime_value = { text = ' Aika:{hours:lu}:{minutes:02u}:{seconds:02u}' }
 starts_value = { text = 'Käynnistykset:{starts:s}' }
 error = { text = 'virhe' }
-tap_value = { text = 'Naputus:{tempo:s}' }
 player_score = { text = 'PELAAJA {player:u}   {score:u}' }
 up_down_prompt = { text = '{up:s} Ylös / {down:s} Alas' }
 serve_exit_prompt = { text = '{serve:s} Syöttö/Tauko {exit:s} Poistu' }

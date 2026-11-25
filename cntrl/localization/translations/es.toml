@@ -56,13 +56,12 @@ aux_switch = { text = 'Pulsador auxiliar' }
 jack_mode_prompt = { text = '{jack:s}: Toma {mode:s}: Modo' }
 apply_prompt = { text = '{button:s}: Aplicar' }
 cycles_patches = { text = 'Ciclos:{cycles:u} Sonidos:{patches:u}' }
-clock_value = { text = 'Reloj:{clock:s}' }
+tempo_cpu = { text = 'Tempo:{tempo:s}  CPU:{cpu:s}' }
 disk_value = { text = 'Disco:{whole:lu}.{fraction:lu}/{total:lu}G' }
 disk_unknown = { text = 'Disco:--/--G' }
 uptime_value = { text = ' Activo:{hours:lu}:{minutes:02u}:{seconds:02u}' }
 starts_value = { text = 'Inicios:{starts:s}' }
 error = { text = 'error' }
-tap_value = { text = 'Pulso:{tempo:s}' }
 player_score = { text = 'JUGADOR {player:u} {score:u}' }
 up_down_prompt = { text = '{up:s} Arriba / {down:s} Abajo' }
 serve_exit_prompt = { text = '{serve:s} Saque/Pausa {exit:s} Salir' }

@@ -1046,8 +1046,10 @@ void capture_disk_space() {
     cached_disk.disk_valid = true;
 }
 
-PerformanceStatus performance_status() {
+FLASHMEM PerformanceStatus performance_status() {
     PerformanceStatus result = cached_disk;
+    const auto load = cpu_load.reading();
+    if (load.window_ms) result.cpu_basis_points = uint16_t(load.total_basis_points);
     result.starts = startup_counter.count; result.starts_status = cntrl::ui::StartsStatus(startup_counter.status);
     std::snprintf(result.starts_error, sizeof(result.starts_error), "%s", startup_counter.error);
     uintptr_t stack;

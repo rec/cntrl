@@ -6,6 +6,7 @@ namespace cntrl::ui {
 enum class StartsStatus { unavailable, ready, error };
 
 struct PerformanceStatus {
+    static constexpr uint16_t cpu_unavailable = UINT16_MAX;
     uint32_t ram_used[2] = {}, ram_free[2] = {};
     uint64_t disk_used = 0, disk_free = 0;
     bool disk_valid = false;
@@ -13,19 +14,18 @@ struct PerformanceStatus {
     StartsStatus starts_status = StartsStatus::unavailable;
     char starts_error[32] = {};
     unsigned cycles = 0, patches = 0;
+    uint16_t cpu_basis_points = cpu_unavailable;
 };
 
 struct StatusSnapshot {
-    static constexpr unsigned wire_size = 111;
+    static constexpr unsigned wire_size = 108;
     PerformanceStatus performance;
     uint64_t uptime_ms = 0;
     uint32_t git_commit = 0;
-    uint32_t tap_period_ms = 0;
-    uint64_t clock_period_us = 0;
-    bool clock_active = false;
+    uint64_t tempo_period_us = 0;
 
     void encode(uint8_t *bytes) const {
-        std::memcpy(bytes, "CSS1", 4);
+        std::memcpy(bytes, "CSS2", 4);
         unsigned offset = 4;
         auto put = [&](uint64_t value, unsigned size) {
             for (unsigned i = 0; i < size; ++i) bytes[offset++] = uint8_t(value >> (8 * i));
@@ -37,12 +37,14 @@ struct StatusSnapshot {
         put(performance.disk_valid, 1); put(unsigned(performance.starts_status), 1);
         std::memcpy(bytes + offset, performance.starts_error, sizeof(performance.starts_error));
         offset += sizeof(performance.starts_error);
-        put(tap_period_ms, 4); put(clock_period_us, 8); put(clock_active, 1);
+        put(tempo_period_us, 8); put(performance.cpu_basis_points, 2);
     }
 
     bool decode(const uint8_t *bytes, unsigned length) {
-        if (length != wire_size || std::memcmp(bytes, "CSS1", 4)
-            || bytes[64] > 1 || bytes[65] > unsigned(StartsStatus::error) || bytes[97] || bytes[110] > 1) return false;
+        const bool legacy = length == 111 && !std::memcmp(bytes, "CSS1", 4);
+        if ((!legacy && (length != wire_size || std::memcmp(bytes, "CSS2", 4)))
+            || bytes[64] > 1 || bytes[65] > unsigned(StartsStatus::error) || bytes[97]
+            || (legacy && bytes[110] > 1)) return false;
         unsigned offset = 4;
         auto get = [&](unsigned size) {
             uint64_t value = 0;
@@ -56,8 +58,10 @@ struct StatusSnapshot {
         performance.disk_valid = get(1); performance.starts_status = StartsStatus(get(1));
         std::memcpy(performance.starts_error, bytes + offset, sizeof(performance.starts_error));
         offset += sizeof(performance.starts_error);
-        tap_period_ms = uint32_t(get(4)); clock_period_us = get(8); clock_active = get(1);
-        return true;
+        // The old snapshot didn't identify the Time page's selected source.
+        tempo_period_us = legacy ? 0 : get(8);
+        performance.cpu_basis_points = legacy ? PerformanceStatus::cpu_unavailable : uint16_t(get(2));
+        return performance.cpu_basis_points <= 10000 || performance.cpu_basis_points == PerformanceStatus::cpu_unavailable;
     }
 };
 } // namespace cntrl::ui

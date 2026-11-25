@@ -53,13 +53,12 @@ enum class Message : uint16_t {
     jack_mode_prompt,
     apply_prompt,
     cycles_patches,
-    clock_value,
+    tempo_cpu,
     disk_value,
     disk_unknown,
     uptime_value,
     starts_value,
     error,
-    tap_value,
     player_score,
     up_down_prompt,
     serve_exit_prompt,
@@ -383,8 +382,8 @@ enum class Message : uint16_t {
     delete_character,
     line_break,
 };
-inline constexpr unsigned message_count = 379;
-inline constexpr uint32_t catalogue_schema = 0xb5d69e41u;
+inline constexpr unsigned message_count = 378;
+inline constexpr uint32_t catalogue_schema = 0xabf31f0du;
 inline const char *(*lookup)(Message, bool) = nullptr;
 inline bool translated_ui = false;
 inline const char patch_chooser_text[] CNTRL_I18N_STORAGE = "Patch Chooser";
@@ -534,12 +533,15 @@ inline const Field cycles_patches_fields[] CNTRL_I18N_STORAGE = {
     {cycles_patches_cycles_name, cycles_patches_cycles_spec},
     {cycles_patches_patches_name, cycles_patches_patches_spec},
 };
-inline const char clock_value_text[] CNTRL_I18N_STORAGE = "Clock:{clock:s}";
-inline const char clock_value_short[] CNTRL_I18N_STORAGE = "";
-inline const char clock_value_clock_name[] CNTRL_I18N_STORAGE = "clock";
-inline const char clock_value_clock_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field clock_value_fields[] CNTRL_I18N_STORAGE = {
-    {clock_value_clock_name, clock_value_clock_spec},
+inline const char tempo_cpu_text[] CNTRL_I18N_STORAGE = "Tempo:{tempo:s}  CPU:{cpu:s}";
+inline const char tempo_cpu_short[] CNTRL_I18N_STORAGE = "";
+inline const char tempo_cpu_tempo_name[] CNTRL_I18N_STORAGE = "tempo";
+inline const char tempo_cpu_tempo_spec[] CNTRL_I18N_STORAGE = "s";
+inline const char tempo_cpu_cpu_name[] CNTRL_I18N_STORAGE = "cpu";
+inline const char tempo_cpu_cpu_spec[] CNTRL_I18N_STORAGE = "s";
+inline const Field tempo_cpu_fields[] CNTRL_I18N_STORAGE = {
+    {tempo_cpu_tempo_name, tempo_cpu_tempo_spec},
+    {tempo_cpu_cpu_name, tempo_cpu_cpu_spec},
 };
 inline const char disk_value_text[] CNTRL_I18N_STORAGE = "Disk:{whole:lu}.{fraction:lu}/{total:lu}G";
 inline const char disk_value_short[] CNTRL_I18N_STORAGE = "";
@@ -578,13 +580,6 @@ inline const Field starts_value_fields[] CNTRL_I18N_STORAGE = {
 };
 inline const char error_text[] CNTRL_I18N_STORAGE = "error";
 inline const char error_short[] CNTRL_I18N_STORAGE = "";
-inline const char tap_value_text[] CNTRL_I18N_STORAGE = "Tap:{tempo:s}";
-inline const char tap_value_short[] CNTRL_I18N_STORAGE = "";
-inline const char tap_value_tempo_name[] CNTRL_I18N_STORAGE = "tempo";
-inline const char tap_value_tempo_spec[] CNTRL_I18N_STORAGE = "s";
-inline const Field tap_value_fields[] CNTRL_I18N_STORAGE = {
-    {tap_value_tempo_name, tap_value_tempo_spec},
-};
 inline const char player_score_text[] CNTRL_I18N_STORAGE = "PLAYER {player:u}   {score:u}";
 inline const char player_score_short[] CNTRL_I18N_STORAGE = "";
 inline const char player_score_player_name[] CNTRL_I18N_STORAGE = "player";
@@ -1628,13 +1623,12 @@ inline const Definition definitions[] CNTRL_I18N_STORAGE = {
     {jack_mode_prompt_text, jack_mode_prompt_short, jack_mode_prompt_fields, 2},
     {apply_prompt_text, apply_prompt_short, apply_prompt_fields, 1},
     {cycles_patches_text, cycles_patches_short, cycles_patches_fields, 2},
-    {clock_value_text, clock_value_short, clock_value_fields, 1},
+    {tempo_cpu_text, tempo_cpu_short, tempo_cpu_fields, 2},
     {disk_value_text, disk_value_short, disk_value_fields, 3},
     {disk_unknown_text, disk_unknown_short, nullptr, 0},
     {uptime_value_text, uptime_value_short, uptime_value_fields, 3},
     {starts_value_text, starts_value_short, starts_value_fields, 1},
     {error_text, error_short, nullptr, 0},
-    {tap_value_text, tap_value_short, tap_value_fields, 1},
     {player_score_text, player_score_short, player_score_fields, 2},
     {up_down_prompt_text, up_down_prompt_short, up_down_prompt_fields, 2},
     {serve_exit_prompt_text, serve_exit_prompt_short, serve_exit_prompt_fields, 2},

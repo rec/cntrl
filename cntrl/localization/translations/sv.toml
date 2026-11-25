@@ -56,13 +56,12 @@ aux_switch = { text = 'Extra fotknapp' }
 jack_mode_prompt = { text = '{jack:s}: Uttag {mode:s}: Läge' }
 apply_prompt = { text = '{button:s}: Tillämpa' }
 cycles_patches = { text = 'Cykler:{cycles:u} Ljud:{patches:u}' }
-clock_value = { text = 'Klocka:{clock:s}' }
+tempo_cpu = { text = 'Tempo:{tempo:s}  CPU:{cpu:s}' }
 disk_value = { text = 'Disk:{whole:lu}.{fraction:lu}/{total:lu}G' }
 disk_unknown = { text = 'Disk:--/--G' }
 uptime_value = { text = ' Tid:{hours:lu}:{minutes:02u}:{seconds:02u}' }
 starts_value = { text = 'Starter:{starts:s}' }
 error = { text = 'fel' }
-tap_value = { text = 'Tryck:{tempo:s}' }
 player_score = { text = 'SPELARE {player:u}   {score:u}' }
 up_down_prompt = { text = '{up:s} Upp / {down:s} Ned' }
 serve_exit_prompt = { text = '{serve:s} Serve/Paus {exit:s} Avsluta' }

@@ -56,8 +56,12 @@ int main(int argc, char **argv) {
                 std::cerr << "page " << page << ": unavailable font " << unsigned(line.graphics.font) << "/" << unsigned(line.graphics.size) << ": " << line.text << '\n'; valid = false;
             }
         }
-        if (types[page] == Page::status) for (unsigned i = 1; i < cntrl::max_lines; ++i)
-            if (pane.lines[i].text[0]) assert(pane.lines[i].graphics.font == cntrl::ui::status_face && pane.lines[i].graphics.size == cntrl::ui::status_size);
+        if (types[page] == Page::status) for (unsigned i = 1; i < cntrl::max_lines; ++i) {
+            const auto &line = pane.lines[i];
+            if (!line.text[0]) continue;
+            if (i == 2) assert(line.graphics.font == cntrl::ui::localized_face && line.graphics.size <= cntrl::ui::status_size);
+            else assert(line.graphics.font == cntrl::ui::status_face && line.graphics.size == cntrl::ui::status_size);
+        }
         if (types[page] == Page::pong) {
             for (const auto &line : pane.lines) if (line.text[0])
                 assert(line.graphics.font == settings.words[R::status_font]);

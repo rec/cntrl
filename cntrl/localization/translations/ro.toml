@@ -56,13 +56,12 @@ aux_switch = { text = 'Comutator auxiliar' }
 jack_mode_prompt = { text = '{jack:s}: mufă {mode:s}: mod' }
 apply_prompt = { text = '{button:s}: aplică' }
 cycles_patches = { text = 'Cicluri:{cycles:u} Sunete:{patches:u}' }
-clock_value = { text = 'Ceas:{clock:s}' }
+tempo_cpu = { text = 'Tempo:{tempo:s}  CPU:{cpu:s}' }
 disk_value = { text = 'Disc:{whole:lu}.{fraction:lu}/{total:lu}G' }
 disk_unknown = { text = 'Disc:--/--G' }
 uptime_value = { text = ' Timp:{hours:lu}:{minutes:02u}:{seconds:02u}' }
 starts_value = { text = 'Porniri:{starts:s}' }
 error = { text = 'eroare' }
-tap_value = { text = 'Tempo:{tempo:s}' }
 player_score = { text = 'JUCĂTOR {player:u} {score:u}' }
 up_down_prompt = { text = '{up:s} Sus / {down:s} Jos' }
 serve_exit_prompt = { text = '{serve:s} Servire/Pauză {exit:s} Ieșire' }

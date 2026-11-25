@@ -56,13 +56,12 @@ aux_switch = { text = 'Hulpschakelaar' }
 jack_mode_prompt = { text = '{jack:s}: Aansluiting {mode:s}: Modus' }
 apply_prompt = { text = '{button:s}: Toepassen' }
 cycles_patches = { text = 'Cycli:{cycles:u} Patches:{patches:u}' }
-clock_value = { text = 'Klok:{clock:s}' }
+tempo_cpu = { text = 'Tempo:{tempo:s}  CPU:{cpu:s}' }
 disk_value = { text = 'Schijf:{whole:lu}.{fraction:lu}/{total:lu}G' }
 disk_unknown = { text = 'Schijf:--/--G' }
 uptime_value = { text = ' Actief:{hours:lu}:{minutes:02u}:{seconds:02u}' }
 starts_value = { text = 'Starts:{starts:s}' }
 error = { text = 'fout' }
-tap_value = { text = 'Tik:{tempo:s}' }
 player_score = { text = 'SPELER {player:u} {score:u}' }
 up_down_prompt = { text = '{up:s} Omhoog / {down:s} Omlaag' }
 serve_exit_prompt = { text = '{serve:s} Service/Pauze {exit:s} Sluiten' }

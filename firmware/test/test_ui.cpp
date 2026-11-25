@@ -853,6 +853,7 @@ int main() {
     assert(display.pixels[view.lines[0].graphics.top * 24 + title_x] == 0xffff);
     pages.viewport({200, 128, 0, 0});
     const auto status_view = pages.view(0,0,status);
+    assert(std::strcmp(status_view.lines[2].text, "Tempo:---.--  CPU:--.-%") == 0);
     assert(std::strcmp(status_view.lines[6].text, "Starts:42") == 0);
     assert(std::strcmp(status_view.lines[7].text, "Up:0:00:00") == 0);
     assert(std::strcmp(status_view.lines[8].text, "Git:000a1b2") == 0);
@@ -871,6 +872,7 @@ int main() {
         captured_status.ram_used[0] = 400 * 1024; captured_status.ram_free[0] = 112 * 1024;
         captured_status.ram_used[1] = 250 * 1024; captured_status.ram_free[1] = 262 * 1024;
         captured_status.cycles = 4; captured_status.patches = 32; captured_status.starts = 118;
+        captured_status.cpu_basis_points = 1234;
         pages.time(123456789, 0, false);
         const auto original = pages.view(123456789, 0, captured_status);
         const auto snapshot = pages.capture_status(captured_status);
@@ -881,6 +883,7 @@ int main() {
         assert(decoded.performance.disk_used == captured_status.disk_used);
         assert(decoded.performance.disk_free == captured_status.disk_free);
         assert(decoded.performance.starts == 118 && decoded.git_commit == CNTRL_GIT_COMMIT);
+        assert(decoded.performance.cpu_basis_points == 1234);
         assert(decoded.uptime_ms == 123456789);
         pages.status_snapshot = &decoded;
         pages.time(987654321, 0, false);
@@ -891,6 +894,9 @@ int main() {
             assert(captured.lines[i].color_mask == original.lines[i].color_mask);
         }
         bytes[0] = 'X'; assert(!decoded.decode(bytes, sizeof(bytes)));
+        uint8_t legacy[111] = {'C', 'S', 'S', '1'};
+        assert(decoded.decode(legacy, sizeof(legacy)));
+        assert(decoded.tempo_period_us == 0 && decoded.performance.cpu_basis_points == cntrl::ui::PerformanceStatus::cpu_unavailable);
         pages.status_snapshot = nullptr;
     }
     {
@@ -901,7 +907,8 @@ int main() {
         const auto localized = pages.view(0, 0, status);
         assert(localized.lines[0].graphics.font == cntrl::ui::localized_face);
         for (unsigned i = 1; i <= 8; ++i)
-            assert(localized.lines[i].graphics.font == cntrl::ui::status_face);
+            if (localized.lines[i].text[0])
+                assert(localized.lines[i].graphics.font == (i == 2 ? cntrl::ui::localized_face : cntrl::ui::status_face));
         cntrl::ui::i18n::translated_ui = false;
         pages.configure(settings);
     }
@@ -925,18 +932,25 @@ int main() {
         cntrl::ui::Pages tempo(fonts,{200,128,0,0}); tempo.outputs(test_midi_outputs); tempo.configure(tempo_settings);
         auto tempo_layout = page_fixture(1,{unsigned(cntrl::ui::Pages::Page::time),unsigned(cntrl::ui::Pages::Page::status)},{{0,1}});
         tempo.layout({tempo_layout.data()}); tempo.tap(0); tempo.tap(1000); tempo.select(1);
-        for (unsigned i = 0; i <= 24; ++i) tempo.clock(0,i * 41667);
-        const auto text = tempo.view(1001,1000008,status);
-        assert(std::strcmp(text.lines[2].text,"Clock:60") == 0);
-        assert(std::strcmp(text.lines[3].text,"Tap:60") == 0);
-        tempo_settings.words[cntrl::PageSettings::padding] = 2;
-        tempo_settings.words[cntrl::PageSettings::decimals] = 1;
-        cntrl::ui::Pages narrow(fonts,{48,128,0,0}); narrow.outputs(test_midi_outputs); narrow.configure(tempo_settings);
-        narrow.layout({tempo_layout.data()}); narrow.tap(0); narrow.tap(500); narrow.select(1);
-        for (unsigned i = 0; i <= 24; ++i) narrow.clock(0,i * 20833);
-        const auto compact = narrow.view(501,499992,status);
-        assert(std::strcmp(compact.lines[2].text,"Clock:120.0") == 0);
-        assert(std::strcmp(compact.lines[3].text,"Tap:120.0") == 0);
+        for (unsigned i = 0; i <= 24; ++i) tempo.clock(0, i * 20833);
+        auto loaded = status;
+        loaded.cpu_basis_points = 1234;
+        const auto tap = tempo.view(1001, 1000008, loaded);
+        assert(std::strcmp(tap.lines[2].text, "Tempo:60.00  CPU:12.3%") == 0);
+        assert(tap.lines[2].color_mask == 0x3e07c0);
+        tempo.cycle_clock();
+        const auto din = tempo.view(1001, 1000008, loaded);
+        assert(std::strcmp(din.lines[2].text, "Tempo:120.00  CPU:12.3%") == 0);
+        uint8_t bytes[cntrl::ui::StatusSnapshot::wire_size];
+        tempo.capture_status(loaded).encode(bytes);
+        cntrl::ui::StatusSnapshot captured;
+        assert(captured.decode(bytes, sizeof(bytes)));
+        tempo.cycle_clock();
+        const auto missing = tempo.view(1001, 1000008, loaded);
+        assert(std::strcmp(missing.lines[2].text, "Tempo:---.--  CPU:12.3%") == 0);
+        tempo.status_snapshot = &captured;
+        const auto mirror = tempo.view(1001, 1000008, {});
+        assert(std::strcmp(mirror.lines[2].text, din.lines[2].text) == 0);
     }
     {
         cntrl::ui::Pages preview(fonts,{24,128,0,0});
@@ -947,6 +961,7 @@ int main() {
         assert(!sample.lines[6].text[0]);
         assert(std::strcmp(sample.lines[8].text,"Git:000a1b") == 0);
         for (unsigned i = 1; i <= 8; ++i) {
+            if (i == 3) continue;
             assert(sample.lines[i].graphics.font == 254);
             assert(sample.lines[i].graphics.size == 12);
         }
