@@ -1469,7 +1469,8 @@ class EmulatorWindow(QtWidgets.QMainWindow):
             return
         displays = self.session.target.displays
         if len(displays) != 3 or any(
-            (d.width, d.height) != (doom.WIDTH, doom.HEIGHT) for d in displays
+            (d.width, d.height) != (doom_cards.WIDTH, doom_cards.HEIGHT)
+            for d in displays
         ):
             self.log.appendPlainText('Doom requires three 160 by 128 displays.')
             return

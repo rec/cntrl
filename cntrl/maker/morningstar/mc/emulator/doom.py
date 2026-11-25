@@ -5,7 +5,8 @@ from time import monotonic_ns
 
 from PySide6 import QtCore
 
-WIDTH, HEIGHT = 160, 128
+from .doom_cards import HEIGHT, WIDTH
+
 FRAME_BYTES = WIDTH * HEIGHT * 2
 PEDAL_BITS = {label: 1 << bit for bit, label in enumerate('CBADEF')}
 

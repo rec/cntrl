@@ -92,6 +92,8 @@ Compile the setup against the Doom-enabled target. In the default utility
 rotation ends with **Pong**, **Doom**, and **Memon**. Setups with
 explicit page rotations can add a page of type `doom` to their tools region.
 Cycle to the illustrated **Doom** page, then press C to start the game.
+The game runs on the center display with control instructions on both side
+displays. The instructions are drawn from flash once at startup.
 Tap F to open doors and activate switches. Hold F for two seconds to
 restart into the ordinary CNTRL startup without cycling power. A power
 cycle also returns to CNTRL because the boot selector consumes the

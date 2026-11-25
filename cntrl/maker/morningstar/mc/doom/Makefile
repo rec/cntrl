@@ -10,6 +10,7 @@ UV ?= uv
 PACK := $(DMC)/build/packs/E1M1
 NOR := $(OUT)/e1m1.img
 FLASH_CACHE := $(OUT)/flash-cache.c
+CONTROL_CARDS := $(OUT)/control_cards.h
 SKETCH := $(OUT)/doom_demo
 SDK := $(TOOLS)/data/packages/teensy/tools/teensy-compile/15.2.1/arm/bin
 FLASH_CONFIG := $(ROOT)/../firmware/usb_probe/flash_config.c
@@ -52,11 +53,11 @@ firmware: $(OUT)/elf/doom_demo.ino.elf
 	"$(SDK)/arm-none-eabi-objcopy" -I ihex -O binary "$(OUT)/elf/doom_demo.ino.hex" "$(OUT)/hex.bin"
 	cmp "$(OUT)/elf.bin" "$(OUT)/hex.bin"
 
-$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h asset_path.h Makefile $(FLASH_CONFIG) $(LINKER) $(RETURN_HEADERS) $(FLASH_CACHE)
+$(OUT)/elf/doom_demo.ino.elf: $(SOURCES) $(HEADERS) $(SHARED) board.cpp demo.h asset_path.h Makefile $(FLASH_CONFIG) $(LINKER) $(RETURN_HEADERS) $(FLASH_CACHE) $(CONTROL_CARDS)
 	@test ! -f "$(SKETCH)/src/rom.S" || { echo 'Choose a new OUT directory for the microSD Doom build'; exit 1; }
 	mkdir -p "$(SKETCH)/src"
 	touch "$(SKETCH)/doom_demo.ino"
-	cp $(SHARED) board.cpp demo.h asset_path.h return_button.h "$(FLASH_CONFIG)" "$(FLASH_CACHE)" "$(SKETCH)/src/"
+	cp $(SHARED) board.cpp demo.h asset_path.h return_button.h "$(FLASH_CONFIG)" "$(FLASH_CACHE)" "$(CONTROL_CARDS)" "$(SKETCH)/src/"
 	cd "$(DMC)" && for source in $(patsubst $(DMC)/%,%,$(SOURCES)); do \
 		mkdir -p "$(SKETCH)/src/$$(dirname "$$source")" && \
 		cp "$$source" "$(SKETCH)/src/$$source" || exit; done
@@ -100,6 +101,10 @@ $(OUT)/doom-profile: $(SOURCES) $(HEADERS) $(SHARED) host.c demo.h Makefile
 
 $(FLASH_CACHE): flash_cache.py $(OUT)/doom-profile $(NOR)
 	$(UV) run --frozen --no-sync python flash_cache.py --profiler "$(OUT)/doom-profile" --image "$(NOR)" --output "$@"
+
+$(CONTROL_CARDS): ../emulator/doom_cards.py ../../../../fonts/metal-lord/MetalLord.otf ../../../../patch_chooser/graphics.py
+	mkdir -p "$(OUT)"
+	cd "$(ROOT)/../../../../.." && $(UV) run --frozen --no-sync python -m cntrl.maker.morningstar.mc.emulator.doom_cards --output "$(abspath $@)"
 
 .PHONY: assets
 assets: $(NOR)

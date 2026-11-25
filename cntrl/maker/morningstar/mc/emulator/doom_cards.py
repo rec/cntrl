@@ -1,13 +1,21 @@
 """Render the two MC6 Pro Doom control cards as RGB565 display images."""
 
 from functools import cache
+from itertools import groupby
 from pathlib import Path
-from struct import pack
+from struct import iter_unpack, pack
 
+import tyro
 from PIL import Image, ImageDraw, ImageFont
+from pydantic import BaseModel
 
 from .....patch_chooser.graphics import rgb565
-from .doom import HEIGHT, WIDTH
+
+WIDTH, HEIGHT = 160, 128
+
+
+class ControlCardExport(BaseModel, frozen=True):
+    output: Path
 
 
 @cache
@@ -52,4 +60,20 @@ def render_card(labels: list[tuple[str, int, int, int, str]]) -> bytes:
     )
 
 
+def export_control_cards(output: Path) -> None:
+    with output.open('w') as stream:
+        for side, card in zip(('left', 'right'), control_cards(), strict=True):
+            stream.write(
+                '__attribute__((section(".progmem.doom_cards")))\n'
+                f'constexpr CardRun {side}_card[] = {{\n'
+            )
+            for (color,), run in groupby(iter_unpack('>H', card)):
+                stream.write(f'    {{{sum(1 for _ in run)}, 0x{color:04x}}},\n')
+            stream.write('};\n')
+
+
 FONT = Path(__file__).resolve().parents[4] / 'fonts/metal-lord/MetalLord.otf'
+
+
+if __name__ == '__main__':
+    export_control_cards(tyro.cli(ControlCardExport).output)

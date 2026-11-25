@@ -12,11 +12,20 @@
 #endif
 
 namespace {
-constexpr uint8_t CENTER_CS = 24;
-constexpr uint8_t CENTER_DC = 23;
-constexpr uint8_t CENTER_RESET = 22;
+struct Panel {
+    uint8_t cs, dc, reset;
+};
+constexpr Panel LEFT{15, 34, 21};
+constexpr Panel CENTER{24, 23, 22};
+constexpr Panel RIGHT{27, 25, 20};
+constexpr Panel PANELS[] = {LEFT, CENTER, RIGHT};
 constexpr uint8_t BACKLIGHT = 6;
 File assets;
+
+struct CardRun {
+    uint16_t count, color;
+};
+#include "control_cards.h"
 
 #if defined(CNTRL_DOOM_RETURN)
 [[noreturn]] void return_to_cntrl()
@@ -33,32 +42,42 @@ File assets;
 }
 #endif
 
-void panel_command(uint8_t command, const uint8_t *args = nullptr, unsigned count = 0)
+void panel_command(const Panel &panel, uint8_t command, const uint8_t *args, unsigned count)
 {
-    digitalWriteFast(CENTER_CS, LOW);
-    digitalWriteFast(CENTER_DC, LOW);
+    digitalWriteFast(panel.cs, LOW);
+    digitalWriteFast(panel.dc, LOW);
     SPI.transfer(command);
-    digitalWriteFast(CENTER_DC, HIGH);
+    digitalWriteFast(panel.dc, HIGH);
     for (unsigned i = 0; i < count; ++i)
         SPI.transfer(args[i]);
-    digitalWriteFast(CENTER_CS, HIGH);
+    digitalWriteFast(panel.cs, HIGH);
 }
 
-void initialize_panel()
+void initialize_panels()
 {
-    digitalWriteFast(CENTER_RESET, HIGH);
-    pinMode(CENTER_RESET, OUTPUT);
-    pinMode(CENTER_DC, OUTPUT);
+    auto command_all = [](uint8_t command, const uint8_t *args = nullptr, unsigned count = 0) {
+        for (const Panel &panel : PANELS)
+            panel_command(panel, command, args, count);
+    };
+    for (const Panel &panel : PANELS) {
+        digitalWriteFast(panel.cs, HIGH);
+        digitalWriteFast(panel.reset, HIGH);
+        pinMode(panel.cs, OUTPUT);
+        pinMode(panel.reset, OUTPUT);
+        pinMode(panel.dc, OUTPUT);
+    }
     delay(100);
-    digitalWriteFast(CENTER_RESET, LOW);
+    for (const Panel &panel : PANELS)
+        digitalWriteFast(panel.reset, LOW);
     delay(100);
-    digitalWriteFast(CENTER_RESET, HIGH);
+    for (const Panel &panel : PANELS)
+        digitalWriteFast(panel.reset, HIGH);
     delay(200);
     SPI.begin();
     SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0));
-    panel_command(0x01);
+    command_all(0x01);
     delay(150);
-    panel_command(0x11);
+    command_all(0x11);
     delay(500);
     // ST7735 register values and panel offsets for the MC6 Pro.
     constexpr uint8_t settings[] = {
@@ -83,14 +102,43 @@ void initialize_panel()
     for (unsigned i = 0; i < sizeof(settings);) {
         uint8_t command = settings[i++];
         uint8_t count = settings[i++];
-        panel_command(command, settings + i, count);
+        command_all(command, settings + i, count);
         i += count;
     }
-    panel_command(0x13);
+    command_all(0x13);
     delay(10);
-    panel_command(0x29);
+    command_all(0x29);
     SPI.endTransaction();
     delay(100);
+}
+
+void begin_frame(const Panel &panel)
+{
+    constexpr uint8_t cols[] = {0, 1, 0, DEMO_WIDTH};
+    constexpr uint8_t rows[] = {0, 2, 0, DEMO_HEIGHT + 1};
+    SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0));
+    panel_command(panel, 0x2a, cols, sizeof(cols));
+    panel_command(panel, 0x2b, rows, sizeof(rows));
+    digitalWriteFast(panel.cs, LOW);
+    digitalWriteFast(panel.dc, LOW);
+    SPI.transfer(0x2c);
+    digitalWriteFast(panel.dc, HIGH);
+}
+
+void end_frame(const Panel &panel)
+{
+    digitalWriteFast(panel.cs, HIGH);
+    SPI.endTransaction();
+}
+
+template <unsigned size>
+void write_card(const Panel &panel, const CardRun (&card)[size])
+{
+    begin_frame(panel);
+    for (const CardRun &run : card)
+        for (unsigned i = 0; i < run.count; ++i)
+            SPI.transfer16(run.color);
+    end_frame(panel);
 }
 
 uint8_t read_switch_register()
@@ -119,24 +167,14 @@ uint8_t read_switch_register()
 void setup()
 {
     analogWrite(BACKLIGHT, 0);
-    // Keep every panel deselected during switch scans on the shared clock.
-    digitalWriteFast(15, HIGH);
-    digitalWriteFast(CENTER_CS, HIGH);
-    digitalWriteFast(27, HIGH);
-    pinMode(15, OUTPUT);
-    pinMode(CENTER_CS, OUTPUT);
-    pinMode(27, OUTPUT);
-    // Keep the side displays asleep when the shared backlight comes on.
-    digitalWriteFast(21, LOW);
-    digitalWriteFast(20, LOW);
-    pinMode(21, OUTPUT);
-    pinMode(20, OUTPUT);
     digitalWriteFast(28, HIGH);
     digitalWriteFast(29, HIGH);
     pinMode(28, OUTPUT);
     pinMode(29, OUTPUT);
     Serial.begin(115200);
-    initialize_panel();
+    initialize_panels();
+    write_card(LEFT, left_card);
+    write_card(RIGHT, right_card);
     if (!SD.begin(BUILTIN_SDCARD)) demo_fail("Could not mount the Doom microSD card");
     assets = SD.open(cntrl::doom_asset_path, FILE_READ);
     if (!assets || assets.size() != NOR_SIZE) demo_fail("Missing or invalid Doom asset image");
@@ -184,20 +222,11 @@ uint8_t demo_buttons()
 void demo_present(const uint16_t *pixels)
 {
     static bool first_frame = true;
-    constexpr uint8_t cols[] = {0, 1, 0, DEMO_WIDTH};
-    constexpr uint8_t rows[] = {0, 2, 0, DEMO_HEIGHT + 1};
     SPI.begin(); // Restore the clock and data pin mux after switch scans.
-    SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0));
-    panel_command(0x2a, cols, sizeof(cols));
-    panel_command(0x2b, rows, sizeof(rows));
-    digitalWriteFast(CENTER_CS, LOW);
-    digitalWriteFast(CENTER_DC, LOW);
-    SPI.transfer(0x2c);
-    digitalWriteFast(CENTER_DC, HIGH);
+    begin_frame(CENTER);
     for (unsigned i = 0; i < DEMO_WIDTH * DEMO_HEIGHT; ++i)
         SPI.transfer16(pixels[i]);
-    digitalWriteFast(CENTER_CS, HIGH);
-    SPI.endTransaction();
+    end_frame(CENTER);
     if (first_frame) {
         first_frame = false;
         analogWrite(BACKLIGHT, 192);
