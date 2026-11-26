@@ -224,21 +224,5 @@ int main(int argc, char **argv) {
     board.button(5, true);
     assert(board.exiting && !board.switches.open() && !board.switches.performance());
     assert(board.pins == 0);
-    // The normal editor and history path can still reach a program wrapped
-    // by bindings, and exported derivations retain the edited volume.
-    TestStorage storage; TestController controller(board);
-    cntrl::Documents documents(storage, board, controller, board); documents.boot();
-    auto command = [&](const std::string &line) { for (char c : line + "\n") documents.receive(uint8_t(c), 0); };
-    char put[128]; std::snprintf(put, sizeof(put), "CNTRL SETUP PUT 54657374 %u %08lx 0",
-        unsigned(bytes.size()), (unsigned long)cntrl::checksum(bytes.data(), unsigned(bytes.size())));
-    command(put); assert(board.response == "CNTRL SEND");
-    for (uint8_t b : bytes) documents.receive(b, 0);
-    while (documents.busy()) documents.tick(0);
-    assert(board.response == "CNTRL OK" && documents.select("Test")); documents.tick(0);
-    assert(documents.edit_begin());
-    assert(documents.edit_adjust(4, 3, 1, true) && documents.edit_value(4, 3) == 101);
-    assert(documents.edit_save(0)); while (documents.busy()) documents.tick(0);
-    const auto &saved = documents.document();
-    std::ofstream output(argv[2], std::ios::binary);
-    output.write(reinterpret_cast<const char *>(saved.data()), saved.length());
+
 }

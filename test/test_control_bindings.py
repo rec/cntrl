@@ -33,10 +33,7 @@ def test_patch_bindings_round_trip_and_execute(
     assert compiler.compile_show(exported, {}, [], target) == data
     fixture = tmp_path / 'bindings.bin'
     fixture.write_bytes(data)
-    edited = tmp_path / 'edited.bin'
-    subprocess.run([str(binding_runner), str(fixture), str(edited)], check=True)
-    saved = tomlkit.parse(resolved.export(edited.read_bytes())).unwrap()
-    assert saved['patches']['program_louder'] == {'parent': 'program', 'volume': 101}
+    subprocess.run([str(binding_runner), str(fixture), '--execute'], check=True)
 
 
 def test_song_patch_names_inherit_bindings() -> None:

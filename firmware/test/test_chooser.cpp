@@ -529,32 +529,15 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     cntrl::SetupUi ui(docs, hw);
     ui.enter(); ui.poll(0);
     for (const auto &pane : hw.panes) assert(pane.lines[1].graphics.size == 16 && pane.lines[1].graphics.line_height == 16 && pane.lines[1].wrap);
-    ui.button(2, true, 1); // Select/Edit menu.
-    ui.button(1, true, 2); ui.button(2, true, 3); // Edit selected setup.
-    assert(docs.dirty() && hw.sent.empty());
-    ui.button(2, true, 4); ui.button(2, true, 5); // PC value of first patch.
-    ui.button(1, true, 6);
-    assert(docs.edit_value(0, 0) == 2 && hw.sent.empty());
+    ui.button(2, true, 1);
+    assert(!std::strcmp(hw.panes[2].lines[1].text, "Select"));
+    ui.button(1, true, 2);
+    assert(!std::strcmp(hw.panes[2].lines[1].text, "History"));
+    ui.button(1, true, 3);
+    assert(!std::strcmp(hw.panes[2].lines[1].text, "Select"));
+    assert(docs.edit_begin() && docs.edit_brightness(191));
     command(docs, "CNTRL SETUP SET 54657374");
     assert(hw.replies.back() == "CNTRL ERROR unsaved-edits");
-    assert(docs.edit_value(0, 0) == 2);
-    ui.button(2, true, 7); ui.button(5, true, 8); ui.button(5, true, 9);
-    ui.button(0, true, 10); ui.button(0, true, 11); ui.button(2, true, 12); // Save.
-    while (docs.busy()) docs.tick(13);
-    ui.poll(0);
-    assert(!ui.open() && !docs.dirty() && docs.document().patch(0)[4] == 1);
-    assert(hw.sent.empty());
-    // Each numeric field is edited in its existing ownership scope.
-    assert(docs.edit_begin());
-    assert(docs.edit_adjust(0, 1, -1) && docs.edit_value(0, 1) == -1);
-    assert(docs.edit_adjust(0, 2, 1) && docs.edit_value(0, 2) == 2);
-    assert(docs.edit_adjust(0, 3, -1) && docs.edit_value(0, 3) == 99);
-    assert(docs.edit_adjust(0, 4, 1) && docs.edit_value(0, 4) == -63);
-    assert(docs.edit_adjust(0, 5, -1) && docs.edit_value(0, 5) == 191);
-    assert(docs.edit_adjust(0, 6, 1) && docs.edit_value(0, 6) == 1);
-    assert(docs.edit_value(0, 7) == 0);
-    assert(docs.edit_adjust(0, 7, 1) && docs.edit_value(0, 7) == 1);
-    assert(!docs.edit_adjust(0, 7, 1));
     docs.edit_cancel();
     assert(docs.document().brightness() == 192 && hw.sent.empty());
     // An interrupted inactive slot with a valid newer HEADER must not cause
@@ -564,17 +547,18 @@ void test_setup_editing_and_empty_ui(const std::vector<uint8_t> &bytes) {
     cntrl::Documents broken(interrupted, hw, controller, hw); broken.boot(); upload(broken, bytes);
     interrupted.remaining = -1;
     cntrl::Documents recovered(interrupted, hw, controller, hw); recovered.boot();
-    assert(recovered.edit_begin() && recovered.edit_adjust(0, 0, 1));
+    assert(recovered.edit_begin() && recovered.edit_brightness(193));
     interrupted.remaining = 120;
     assert(recovered.edit_save(0)); // Failure is reported by the asynchronous job.
     while (recovered.busy()) recovered.tick(1);
-    assert(recovered.dirty() && recovered.edit_value(0, 0) == 3);
+    cntrl::Document draft;
+    assert(recovered.edit_document(draft) && draft.brightness() == 193);
     interrupted.remaining = -1;
     assert(recovered.edit_save(2));
     while (recovered.busy()) recovered.tick(3);
-    assert(!recovered.dirty() && recovered.document().patch(0)[4] == 2);
+    assert(!recovered.dirty() && recovered.document().brightness() == 193);
     cntrl::Documents reboot(interrupted, hw, controller, hw); reboot.boot();
-    assert(reboot.document().valid() && reboot.document().patch(0)[4] == 2);
+    assert(reboot.document().valid() && reboot.document().brightness() == 193);
     assert(reboot.save_trs_mode(2, cntrl::midi::TrsMode::midi_b, 4));
     while (reboot.busy()) reboot.tick(5);
     cntrl::Documents ports(interrupted, hw, controller, hw); ports.boot();
@@ -637,10 +621,10 @@ void test_revision_history(const std::vector<uint8_t> &bytes) {
     assert(docs.busy()); finish(docs);
     assert(!std::strcmp(docs.history_revision().label, "Rehearsal"));
     upload(docs, bytes); latest(docs, 1);
-    assert(docs.edit_begin() && docs.edit_adjust(0, 0, 1) && docs.edit_save(0)); finish(docs);
+    assert(docs.edit_begin() && docs.edit_brightness(193) && docs.edit_save(0)); finish(docs);
     latest(docs, 2);
     assert(docs.history_compare("Test", 1)); finish(docs);
-    assert(docs.history_comparison().patches == 1);
+    assert(docs.history_comparison().settings);
     auto sent = hw.sent.size();
     assert(docs.history_restore("Test", 1, 2)); finish(docs);
     assert(hw.sent.size() == sent); latest(docs, 3);
@@ -800,122 +784,8 @@ static void test_pages_run_independently(const std::string &path) {
     assert(!hw.splash && hw.idle_timeout == 0);
 }
 
-void test_patch_reference_edits(const char *input, const char *output) {
-    std::ifstream file(input, std::ios::binary);
-    std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), {}};
-    struct EditorHardware : Fake {
-        unsigned switch_capacity() const override { return 5; }
-    } hw;
-    TestStorage card; TestController controller(hw);
-    cntrl::Documents docs(card, hw, controller, hw);
-    docs.boot();
-    upload(docs, bytes); command(docs, "CNTRL SETUP FINISH");
-    assert(docs.document().patches() == 3);
-    assert(docs.edit_begin() && docs.edit_has_original(0));
-    assert(!docs.edit_adjust(0, 3, 0) && docs.edit_has_original(0));
-    assert(docs.edit_adjust(0, 2, 1) && docs.edit_has_original(0));
-    assert(docs.edit_value(1, 2) == 2);
-    assert(docs.edit_adjust(0, 3, 5) && !docs.edit_has_original(0));
-    assert(docs.edit_value(0, 3) == 85 && docs.edit_value(1, 3) == 80);
-    docs.edit_cancel();
-    assert(docs.edit_begin() && docs.edit_has_original(0));
-    assert(docs.edit_value(0, 3) == 80);
-    assert(docs.edit_adjust(0, 3, 5));
-    assert(docs.edit_save(0));
-    while (docs.busy()) docs.tick(1);
-    cntrl::SetupUi ui(docs, hw);
-    ui.enter(); ui.poll(0);
-    auto press = [&](unsigned button) { ui.button(button, true, 1); };
-    press(2); press(1); press(2); // Edit the selected setup.
-    press(1); press(1); press(2); // Open the third entry's fields.
-    press(0); // Last field action: Edit original patch.
-    assert(!std::strcmp(hw.panes[1].lines[1].text, "Edit original patch"));
-    press(2); press(1); press(1); press(1); press(2); // Volume of the original.
-    press(1); press(1);
-    assert(docs.edit_value(0, 3) == 85 && docs.edit_value(1, 3) == 82 && docs.edit_value(2, 3) == 82);
-    press(5); press(5); press(5); press(0); press(0); press(2); // Save.
-    while (docs.busy()) docs.tick(2);
-    ui.poll(0); assert(!ui.open() && !docs.dirty());
-    assert(docs.edit_begin() && docs.edit_adjust(1, 0, 1));
-    assert(docs.edit_adjust(1, 4, 65) && docs.edit_value(1, 4) == 0);
-    assert(docs.edit_value(0, 0) == 7 && docs.edit_value(2, 0) == 7);
-    assert(docs.edit_save(2));
-    while (docs.busy()) docs.tick(3);
-    cntrl::Documents reboot(card, hw, controller, hw);
-    reboot.boot();
-    assert(reboot.edit_begin() && !reboot.edit_has_original(0) && !reboot.edit_has_original(1));
-    assert(reboot.edit_has_original(2));
-    assert(reboot.edit_value(0, 3) == 85 && reboot.edit_value(1, 3) == 82);
-    const auto &document = reboot.document();
-    std::ofstream saved(output, std::ios::binary);
-    saved.write(reinterpret_cast<const char *>(document.data()), document.length());
-    assert(saved);
-}
-
-void test_automatic_cycle_save(const char *input, const char *output) {
-    std::ifstream file(input, std::ios::binary);
-    std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), {}};
-    Fake hw; TestStorage card; TestController controller(hw);
-    cntrl::Documents docs(card, hw, controller, hw);
-    docs.boot();
-    upload(docs, bytes); command(docs, "CNTRL SETUP FINISH");
-    assert(docs.document().patches() == 1);
-    assert(docs.document().cycle_catalogue().count(0) == 3);
-
-    cntrl::SetupUi ui(docs, hw);
-    ui.enter(); ui.poll(0);
-    auto press = [&](unsigned button) { ui.button(button, true, 1); };
-    press(2); press(1); press(2);
-    assert(std::strstr(hw.panes[0].lines[2].text, "Add cycle"));
-    press(4); press(2); press(1); press(2);
-    assert(!std::strcmp(hw.panes[2].lines[1].text, "synth brass"));
-    press(2);
-    assert(docs.document().patch_cycles() == 1);
-    card.remaining = 0;
-    press(2);
-    while (docs.busy()) docs.tick(2);
-    ui.poll(0);
-    assert(docs.last_error()[0] && docs.document().patch_cycles() == 1);
-    card.remaining = -1;
-    press(2); press(2);
-    while (docs.busy()) docs.tick(3);
-    ui.poll(0);
-    assert(!ui.open() && docs.document().patch_cycles() == 2);
-
-    assert(docs.edit_begin());
-    assert(!docs.edit_add_cycle("Synth Brass", 0, cntrl::CycleCatalogue::all));
-    assert(!docs.edit_add_cycle("Empty", 0, 1000));
-    assert(docs.edit_adjust(1, 0, 1));
-    assert(docs.edit_add_cycle("All", 0, cntrl::CycleCatalogue::all));
-    assert(docs.edit_value(4, 0) == 3);
-    assert(!docs.edit_add_cycle("Another", 0, cntrl::CycleCatalogue::all));
-    docs.edit_cancel();
-
-    cntrl::Documents reboot(card, hw, controller, hw);
-    reboot.boot();
-    const auto &document = reboot.document();
-    assert(document.patch_cycles() == 2 && document.patches() == 3);
-    controller.action(4);
-    assert(!std::strcmp(hw.panes[0].lines[1].text, "Brass"));
-    controller.action(2);
-    assert(hw.routes.back() == "din");
-    assert((hw.sent.back() == std::vector<uint8_t>{0xb1, 32, 1, 0xc1, 2}));
-
-    std::ofstream saved(output, std::ios::binary);
-    saved.write(reinterpret_cast<const char *>(document.data()), document.length());
-    assert(saved);
-}
-
 int main(int argc, char **argv) {
     assert(argc >= 3);
-    if (argc == 4 && !std::strcmp(argv[1], "--patch-edit")) {
-        test_patch_reference_edits(argv[2], argv[3]);
-        return 0;
-    }
-    if (argc == 4 && !std::strcmp(argv[1], "--automatic-cycle")) {
-        test_automatic_cycle_save(argv[2], argv[3]);
-        return 0;
-    }
     bool profiling = false, exhaustive = false;
     for (int i = 3; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--profile")) profiling = true;
@@ -995,14 +865,14 @@ int main(int argc, char **argv) {
         cntrl::Documents documents(storage, output, app, output);
         documents.boot(); upload(documents, display_bytes); command(documents, "CNTRL SETUP FINISH");
         assert(documents.edit_begin());
-        assert(documents.edit_adjust(0, 3, 1) && documents.edit_adjust(0, 5, 1) && documents.edit_adjust(0, 0, 1));
+        assert(documents.edit_brightness(193));
         assert(documents.edit_save(100));
         while (documents.busy()) documents.tick(101);
         assert(!std::strcmp(output.panes[0].lines[0].text, "193"));
-        assert(!std::strcmp(output.panes[0].lines[2].text, "0"));
+        assert(!output.panes[0].lines[2].text[0]);
         documents.document().page(numeric, 0, 2, false);
-        assert(!std::strcmp(numeric.lines[0].text, "2"));
-        assert(!std::strcmp(numeric.lines[2].text, "0"));
+        assert(!std::strcmp(numeric.lines[0].text, "1"));
+        assert(!numeric.lines[2].text[0]);
     }
     {
         auto scaled = bytes;
@@ -1024,7 +894,7 @@ int main(int argc, char **argv) {
         TestController controller(display);
         cntrl::Documents documents(storage, display, controller, display);
         documents.boot(); upload(documents, scaled); command(documents, "CNTRL SETUP FINISH");
-        assert(documents.edit_begin() && documents.edit_adjust(0, 7, 1));
+        assert(documents.edit_begin() && documents.edit_brightness(193));
         assert(documents.edit_save(100));
         while (documents.busy()) documents.tick(101);
         assert(display.panes[0].lines[0].graphics.size == 16);

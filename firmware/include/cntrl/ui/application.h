@@ -234,10 +234,9 @@ public:
         if (page == PageLayout::settings) {
             if (editing_tool || !settings_shortcut_available(services)) return false;
             const bool performing = song_navigation_active();
-            const auto patch = !performing && layout.controllers() ? controller().selected_patch() : UINT16_MAX;
             editing_tool = page;
             settings_shortcut_hint_ = shortcut_hint;
-            if (!setups.enter_settings(patch, songs_, performing, shortcut_hint)) { editing_tool = 0; return false; }
+            if (!setups.enter_settings(songs_, performing, shortcut_hint)) { editing_tool = 0; return false; }
         } else if (page == PageLayout::setups) {
             if (documents_.dirty()) return false;
             setups.enter();

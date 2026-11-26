@@ -115,7 +115,6 @@ class Document;
 enum class ControlRole { previous, next, confirm, previous_section, next_section, back };
 enum class BootFirmware { unavailable, cntrl, stock };
 class ExpressionPedals;
-namespace animation { class MovieLibrary; }
 struct Hardware : RelayDriver {
     RelayOutputs relays{*this};
     Counters counters;
@@ -180,7 +179,6 @@ struct Hardware : RelayDriver {
     virtual void set_midi_interface(bool) {}
     virtual void set_splash(bool enabled, uint32_t idle_ms) = 0;
     virtual void set_movies(const uint8_t *, unsigned, const uint8_t *, unsigned) {}
-    virtual animation::MovieLibrary *movie_library() { return nullptr; }
     virtual void set_animation_color_cycle(bool) {}
     virtual bool global_setting(unsigned, uint32_t, bool) { return false; }
     virtual bool global_settings_busy() { return !output_idle(); }

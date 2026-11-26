@@ -67,7 +67,7 @@ void test_saving_and_history(File &file, Board &board) {
     const auto &before = documents.document();
     const unsigned tail = before.core_offset() + before.core_length();
     std::vector<uint8_t> metadata(before.data() + tail, before.data() + before.length());
-    assert(documents.edit_begin() && documents.edit_adjust(0, 5, 5) && documents.edit_save(0));
+    assert(documents.edit_begin() && documents.edit_brightness(105) && documents.edit_save(0));
     for (unsigned i = 0; i < 10000 && documents.busy(); ++i) documents.tick(i);
     assert(!documents.busy() && !documents.dirty() && documents.document().brightness() == 105);
     const auto &after = documents.document();

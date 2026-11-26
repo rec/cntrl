@@ -480,52 +480,24 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
     assert(after_tools.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes && hardware.sent == before_tools);
     {
         const auto &doc = documents.document();
-        const unsigned instrument = cntrl::u16(doc.patch(primary.selected_patch()));
-        const unsigned channel = doc.instrument(instrument)[64];
+        const unsigned channel = doc.instrument(0)[64];
         assert(app.open_tool(cntrl::PageLayout::settings, platform));
         app.setups.poll(0);
         const auto edit = [&](unsigned button) { app.setups.button(button, true, 3500); };
-        edit(2); // Current patch
-        edit(3); // Open the instrument list at the current patch's instrument.
+        edit(3);
         assert(hardware.settings_text[1] == "Instruments");
-        edit(5);
-        edit(2); // Instrument MIDI channel
+        edit(2);
         edit(channel == 15 ? 0 : 1);
-        assert(documents.edit_value(primary.selected_patch(), 2) == (channel == 15 ? 15 : channel + 2));
-        assert(doc.instrument(instrument)[64] == channel);
-        edit(5); edit(5); // Back to the field, then open the unsaved changes prompt.
+        cntrl::Document draft;
+        assert(documents.edit_document(draft) && draft.instrument(0)[64] == (channel == 15 ? 14 : channel + 1));
+        assert(doc.instrument(0)[64] == channel);
+        edit(5); edit(5);
         edit(0); edit(2); // Discard.
         assert(!app.setups.open() && !documents.dirty());
         app.finish_tool(); app.controls_locked = false;
         const auto navigation = primary.navigation();
         assert(navigation.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes);
-        assert(hardware.sent == before_tools && doc.instrument(instrument)[64] == channel);
-    }
-    {
-        const auto *active = documents.document().data();
-        assert(app.open_tool(cntrl::PageLayout::settings, platform));
-        app.setups.poll(0);
-        app.controls_locked = false;
-        const auto button = [&](unsigned control) { click(control, 3505); };
-        button(1); button(1); button(2); // Setups.
-        button(1); settle_documents(); app.setups.poll(0); // Spare.
-        button(2); settle_documents(); app.setups.poll(0);
-        assert(!std::strcmp(documents.edit_name(), "Spare") && !documents.edit_reloads());
-        const int64_t program = documents.edit_value(0, 0);
-        const unsigned adjust = program == 128 ? 0 : 1;
-        button(2); button(2); button(adjust); // Edit the first patch's program.
-        button(5); button(5); button(5); // Review changes.
-        button(1); button(2); // Save.
-        settle_documents(); app.setups.poll(0); app.finish_tool();
-        assert(!app.setups.open() && !documents.dirty());
-        assert(!std::strcmp(documents.selected(), "Legacy") && documents.document().data() == active);
-        assert(hardware.sent == before_tools && !storage.revisions.at("Spare").empty());
-        const auto navigation = primary.navigation();
-        assert(navigation.encode(after_bytes.data(), unsigned(after_bytes.size())) && after_bytes == performance_bytes);
-        assert(documents.edit_begin("Spare"));
-        settle_documents();
-        assert(documents.edit_value(0, 0) == program + (adjust ? 1 : -1));
-        documents.edit_cancel();
+        assert(hardware.sent == before_tools && doc.instrument(0)[64] == channel);
     }
     {
         assert(documents.name_and_contact("Ané\na@example.org"));
@@ -609,8 +581,8 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         app.controls_locked = false;
         const auto button = [&](unsigned control) { click(control, 3520); };
         button(0); button(2); // Pedal.
-        button(0); button(2); // Device preferences.
-        button(2); button(setup_brightness == 255 ? 0 : 1);
+        button(1); button(1); button(2); // Brightness.
+        button(4); button(setup_brightness == 255 ? 0 : 1);
         assert(!(preferences.values().known & 1));
         button(5); button(1); button(2); // Save brightness.
         assert((preferences.values().known & 1) && preferences.values().values[0] == adjusted);
@@ -623,18 +595,7 @@ static void legacy_single_patch_chooser_preserves_performance_while_cycling_tool
         assert(preferences.values().known & 1);
         button(5); button(1); button(2);
         assert(!(preferences.values().known & 1) && documents.document().brightness() == setup_brightness);
-        button(4); // MIDI group.
-        for (unsigned i = 0; i < 6; ++i) button(1); // Clock outputs.
-        assert(hardware.settings_text[1] == "MIDI clock outputs");
-        button(2);
-        const auto output = hardware.settings_text[2];
-        assert(output.find("DIN") != std::string::npos);
-        button(2); // Toggle the first named output in the draft.
-        assert(hardware.settings_text[2] != output && hardware.settings_text[2].find("DIN") != std::string::npos);
-        assert(!(preferences.values().known & (uint64_t(1) << 28)));
-        button(5); button(0); button(2); // Discard the route change.
-        assert(!(preferences.values().known & (uint64_t(1) << 28)));
-        button(5); button(5); button(5); app.finish_tool();
+        button(5); button(5); app.finish_tool();
         assert(!app.setups.open() && hardware.sent == before_tools);
     }
     {

@@ -12,9 +12,7 @@ public:
     InputCoordinator(ButtonState *states, Controls controls, const Document &configuration,
                      Application &application, ApplicationServices &application_services)
         : states_(states), controls_(controls), configuration_(configuration), application_(application),
-          application_services_(application_services), router_(controls) {
-        application_.setups.set_shortcut_mask(controls.settings_mask());
-    }
+          application_services_(application_services), router_(controls) {}
     template<class Services>
     void scan(uint8_t sample, uint32_t now, Services &services, uint32_t auxiliary_held = 0) {
         std::array<uint8_t, 8> events{};
@@ -33,7 +31,7 @@ public:
         consumed = services.diagnostic_controls(events.data(), pressed, now) || consumed;
         if (consumed) application_.controller().cancel_gesture();
         application_.setups.poll(pressed);
-        if (!application_.setups.open()) application_.song_ui.poll(pressed, now);
+        if (!application_.setups.open()) application_.song_ui.poll(pressed);
         if (!pressed) application_.controls_locked = false;
         if (auto *visit = services.visit()) { visit->poll(!pressed); consumed = consumed || visit->busy(); }
         consumed = route_settings(events, pressed, now, consumed || services.actions().midi_reserved()) || consumed;

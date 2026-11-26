@@ -118,18 +118,19 @@ void inherited_settings_remain_separate_from_authored_setups(const char *bundle,
         };
         open_spare();
         assert(!documents.edit_reloads());
-        assert(!std::strcmp(documents.edit_name(), "b") && documents.edit_value(0, 2) == 1);
-        assert(documents.edit_adjust(0, 2, 1));
+        cntrl::Document draft;
+        assert(documents.edit_document(draft) && !std::strcmp(documents.edit_name(), "b") && draft.instrument(0)[64] == 0);
+        assert(documents.edit_instrument_channel(0, 2));
         documents.edit_cancel();
         open_spare();
-        assert(documents.edit_value(0, 2) == 1);
-        assert(documents.edit_adjust(0, 2, 1) && documents.edit_save(0));
+        assert(documents.edit_document(draft) && draft.instrument(0)[64] == 0);
+        assert(documents.edit_instrument_channel(0, 2) && documents.edit_save(0));
         for (unsigned i = 0; i < 10000 && documents.busy(); ++i) documents.tick(i);
         assert(!documents.busy() && !documents.dirty() && !documents.last_error()[0]);
         assert(!std::strcmp(documents.selected(), "a") && documents.document().data() == active);
         assert(board.prepared_pages == prepared && documents.document().brightness() == 192);
         open_spare();
-        assert(documents.edit_value(0, 2) == 2);
+        assert(documents.edit_document(draft) && draft.instrument(0)[64] == 1);
         documents.edit_cancel();
     }
     {
@@ -247,7 +248,7 @@ void inherited_settings_remain_separate_from_authored_setups(const char *bundle,
     assert(!documents.global_change(7, 1, false, false));
     assert(documents.document().frame_buffers() == 0 && settings.values().values[7] == 0);
     board.resources = true;
-    assert(documents.edit_begin() && documents.edit_adjust(0, 5, 1) && documents.edit_save(0));
+    assert(documents.edit_begin() && documents.edit_brightness(181) && documents.edit_save(0));
     for (unsigned i = 0; i < 10000 && documents.busy(); ++i) documents.tick(i);
     assert(!documents.busy() && documents.document().brightness() == 181 && (documents.document().explicit_settings() & 1));
     assert(documents.global_change(0, 150, false, false) && documents.document().brightness() == 181);

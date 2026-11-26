@@ -1,9 +1,8 @@
 #pragma once
-#include "animation/movie_library.h"
+#include <algorithm>
 #include "ui/messages.h"
 #include "ui/fonts.h"
 #include "ui/presentation.h"
-#include "ui/preferences.h"
 #include "ui/prompts.h"
 #include "ui/raster.h"
 #include "documents.h"
@@ -15,7 +14,6 @@ namespace cntrl {
 class SetupUi {
 public:
     SetupUi(Documents &documents, Hardware &hardware) : docs_(documents), hardware_(hardware) {}
-    void set_shortcut_mask(uint8_t mask) { shortcut_mask_ = mask; }
     bool open() const { return mode_ != Mode::closed; }
     ExpressionPedals *calibration() const { return mode_ == Mode::calibration ? hardware_.expression_calibration() : nullptr; }
     enum class Library { none, songs, setlists };
@@ -29,7 +27,7 @@ public:
     void resume_settings() { mode_ = Mode::current; locked_ = true; render(); }
     void refresh() { if (open()) render(); }
     bool editing_text() const {
-        return mode_ == Mode::contact || mode_ == Mode::object_name || (mode_ == Mode::decision
+        return mode_ == Mode::contact || (mode_ == Mode::decision
             && (device_editor_ == Mode::contact || device_editor_ == Mode::calibration_name));
     }
 #ifdef CNTRL_FLASH_ROUTINE
@@ -51,19 +49,12 @@ public:
 #endif
     void text_key(uint8_t key, uint32_t now) {
         if (locked_ || !editing_text()) return;
-        if (key == 27) {
-            if (mode_ == Mode::object_name) { leave_object_name(); render(); }
-            else button(5, true, now);
-            return;
-        }
+        if (key == 27) { button(5, true, now); return; }
         if (mode_ == Mode::decision) {
             if (key == '\n') button(2, true, now);
             return;
         }
-        if (key == '\n' && (mode_ == Mode::object_name || device_editor_ == Mode::calibration_name)) {
-            button(5, true, now);
-            return;
-        }
+        if (key == '\n' && device_editor_ == Mode::calibration_name) { button(5, true, now); return; }
         char *position = contact_draft_ + contact_cursor_;
         if (key == '\b') {
             if (!contact_cursor_) return;
@@ -71,7 +62,7 @@ public:
             std::memmove(contact_draft_ + contact_cursor_, position, std::strlen(position) + 1);
         } else {
             if (key != '\n' && (key < 32 || key > 126)) return;
-            if (std::strlen(contact_draft_) + 1 >= text_capacity()) {
+            if (std::strlen(contact_draft_) + 1 >= sizeof(contact_draft_)) {
                 hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return;
             }
             std::memmove(position + 1, position, std::strlen(position) + 1);
@@ -83,27 +74,22 @@ public:
     void enter() {
         if (docs_.busy() || docs_.dirty()) return;
         settings_ = false;
-        setup_preferences_ = false;
-        setup_changes_ = 0;
         mode_ = Mode::catalogue; locked_ = true;
         std::snprintf(name_, sizeof(name_), "%s", docs_.selected());
         if (!name_[0]) browse(false);
         render();
     }
-    bool enter_settings(unsigned patch, const Songs &songs, bool performing, bool shortcut_hint = false) {
+    bool enter_settings(const Songs &songs, bool performing, bool shortcut_hint = false) {
         if (open() || docs_.busy() || docs_.dirty() || !docs_.document().valid()) return false;
         settings_ = true;
         shortcut_hint_ = shortcut_hint;
-        const auto &doc = docs_.document();
-        current_patch_ = patch < doc.patches() && u16(doc.patch(patch)) != UINT16_MAX
-            && patch_edit_node(doc, doc.browser_root(patch)) >= 0 ? patch : UINT16_MAX;
         songs_ = &songs;
         std::snprintf(current_set_, sizeof(current_set_), "%s", performing ? songs.active_set() : "");
         shortcut_ = has_performance_shortcut() ? Shortcut::performance : Shortcut::setup;
         device_editor_ = Mode::closed;
         resume_editor_ = Mode::closed;
-        setup_preferences_ = false;
-        setup_changes_ = 0;
+        setup_brightness_ = false;
+        draft_changed_ = false;
         return_from_shortcut_ = false;
         library_request_ = Library::none;
         locked_ = true;
@@ -117,53 +103,15 @@ public:
     bool return_to_performance() {
         if (!settings_ || !open() || docs_.busy() || browsing_ || mode_ == Mode::language_saving) return false;
         if (mode_ == Mode::decision) { return_from_shortcut_ = true; return true; }
-        if (editing_object_name()) {
-            if (!stage_object_name()) {
-                render();
-                return true;
-            }
-            if (counter_naming_ || layout_option_ == LayoutOption::split || layout_option_ == LayoutOption::add) leave_object_name(true);
-        }
-        if (mode_ == Mode::layout_chooser_minimum && !stage_chooser_minimum()) {
-            render();
-            return true;
-        }
-        if (mode_ == Mode::movie_scan) {
-            hardware_.movie_library()->close();
-            mode_ = Mode::movie_entries;
-        }
-        if ((mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value) && !stage_neutral()) {
-            render();
-            return true;
-        }
-        if ((mode_ == Mode::counter_fields || mode_ == Mode::counter_value) && !stage_counter()) {
-            render();
-            return true;
-        }
-        if (mode_ == Mode::navigation_value && !stage_navigation()) {
-            render();
-            return true;
-        }
-        if ((mode_ == Mode::expression_fields || mode_ == Mode::expression_value) && !stage_expression()) {
-            render();
-            return true;
-        }
-        if (mode_ == Mode::contact_style_value && !stage_contact_style()) {
-            render();
-            return true;
-        }
-        if (setup_preferences_ && mode_ == Mode::preference_value && !stage_setup_preference()) {
-            render();
-            return true;
-        }
+        if (setup_brightness_ && mode_ == Mode::brightness && !stage_brightness()) return true;
         const bool changed = device_editor_ == Mode::contact || device_editor_ == Mode::calibration_name ? text_changed()
             : device_editor_ == Mode::startup_set ? std::strcmp(startup_draft_, docs_.startup_set()) != 0
-            : device_editor_ == Mode::preference_value ? preference_changed()
+            : device_editor_ == Mode::brightness ? brightness_changed()
             : device_editor_ == Mode::boot_firmware ? boot_draft_ != hardware_.boot_firmware()
             : device_editor_ == Mode::language ? language_changed()
             : device_editor_ == Mode::calibration ? hardware_.expression_calibration()->captured()
             : device_editor_ == Mode::calibration_delay ? calibration_delay_ != hardware_.expression_calibration()->settle_ms()
-            : docs_.dirty() && (changed_fields_ || setup_changes_);
+            : docs_.dirty() && draft_changed_;
         if (!changed) {
             if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->cancel();
             if (docs_.dirty()) docs_.edit_cancel();
@@ -183,7 +131,6 @@ public:
 #endif
     void poll(uint8_t held) {
         if (locked_ && !held) locked_ = false;
-        if (mode_ == Mode::movie_scan) poll_movies();
         if (mode_ == Mode::language_saving && !hardware_.language_change_pending()) {
             if (language_changed()) mode_ = Mode::decision;
             else leave_device_editor();
@@ -193,7 +140,6 @@ public:
             if (docs_.last_error()[0]) { mode_ = Mode::failed; render(); }
             else close();
         }
-        if (mode_ == Mode::loading_draft && !docs_.busy()) open_draft();
         if (browsing_ && !docs_.busy()) {
             browsing_ = false;
             if (docs_.last_error()[0]) mode_ = Mode::failed;
@@ -219,7 +165,7 @@ public:
     CNTRL_FLASH_ROUTINE(setup_ui_button)
 #endif
     void button(unsigned button, bool down, uint32_t now) {
-        if (!down || locked_ || browsing_ || mode_ == Mode::selecting || mode_ == Mode::loading_draft
+        if (!down || locked_ || browsing_ || mode_ == Mode::selecting
             || mode_ == Mode::saving || mode_ == Mode::language_saving || mode_ == Mode::history_work) return;
         if (mode_ == Mode::failed) {
             if (button == 2 || button == 5) {
@@ -250,14 +196,14 @@ public:
                 }
                 else {
                     if (!docs_.edit_begin()) { hardware_.error(ui::i18n::text(ui::i18n::Message::operation_failed)); return; }
-                    original_ = false;
-                    changed_fields_ = 0;
-                    current_field_ = shortcut_ == Shortcut::performance;
-                    patch_ = current_field_ ? current_patch_ : 0;
-                    field_ = current_field_ ? 2 : 5;
-                    mode_ = draft_return_ = Mode::field;
-                    if (instruments) begin_instruments(0, Mode::closed);
-                    else if (!current_field_) begin_setup_preferences(Mode::closed);
+                    draft_changed_ = false;
+                    if (instruments) {
+                        setup_brightness_ = false;
+                        instrument_ = 0;
+                        instrument_feedback_ = nullptr;
+                        mode_ = Mode::instruments;
+                    }
+                    else begin_brightness(true);
                 }
             }
         } else if (mode_ == Mode::pedal) {
@@ -274,7 +220,7 @@ public:
             else if (button == 5) mode_ = Mode::current;
             else if (button == 2 && !item_) begin_startup_set(docs_.startup_set());
             else if (button == 2 && item_ == 1) begin_contact();
-            else if (button == 2 && item_ == 2) { preference_index_ = 0; mode_ = Mode::preferences; }
+            else if (button == 2 && item_ == 2) begin_brightness(false);
             else if (button == 2 && item_ == 3) {
                 boot_draft_ = hardware_.boot_firmware();
                 mode_ = device_editor_ = Mode::boot_firmware;
@@ -318,23 +264,9 @@ public:
                 if (boot_draft_ == hardware_.boot_firmware()) leave_device_editor();
                 else { mode_ = Mode::decision; item_ = 2; }
             }
-        } else if (mode_ == Mode::preferences || mode_ == Mode::preference_value) {
-            preference_button(button);
-        } else if (is_layout_view()) {
-            layout_button(button);
-        } else if (mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value) {
-            neutral_button(button);
-        } else if (is_movie_view()) {
-            movie_button(button);
-        } else if (is_counter_view()) {
-            counter_button(button);
-        } else if (is_navigation_view()) {
-            navigation_button(button);
-        } else if (is_expression_view()) {
-            expression_button(button);
-        } else if (is_contact_style_view()) {
-            contact_style_button(button);
-        } else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_object_name()) {
+        } else if (mode_ == Mode::brightness) {
+            brightness_button(button);
+        } else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
             contact_button(button);
         } else if (mode_ == Mode::startup_set) {
             if (button < 2) {
@@ -352,26 +284,22 @@ public:
         } else if (mode_ == Mode::catalogue) {
             if (button < 2) browse(button == 0);
             else if (button == 2 && name_[0]) {
-                if (settings_) { begin_edit(); return; }
                 mode_ = Mode::action; item_ = 0;
             } else if (button == 5) {
                 if (settings_) mode_ = Mode::current;
                 else { close(); return; }
             }
         } else if (mode_ == Mode::action) {
-            if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
+            if (button < 2) item_ = 1 - item_;
             else if (button == 5) mode_ = Mode::catalogue;
             else if (button == 2) {
-                if (item_ == 2) {
+                if (item_) {
                     revision_ = Revision(); mode_ = Mode::history; render(); return;
                 }
-                if (item_ == 0) {
-                    if (!docs_.select(name_)) { hardware_.error(ui::i18n::text(ui::i18n::Message::selection_failed)); return; }
-                    if (docs_.busy()) { mode_ = Mode::selecting; render(); }
-                    else close();
-                    return;
-                }
-                begin_edit(); return;
+                if (!docs_.select(name_)) { hardware_.error(ui::i18n::text(ui::i18n::Message::selection_failed)); return; }
+                if (docs_.busy()) { mode_ = Mode::selecting; render(); }
+                else close();
+                return;
             }
         } else if (mode_ == Mode::history) {
             if (button == 2 && !revision_.number) {
@@ -397,48 +325,8 @@ public:
                 if (docs_.history_restore(name_, revision_.number, now)) mode_ = Mode::saving;
                 else { hardware_.error(ui::i18n::text(ui::i18n::Message::restore_failed)); return; }
             }
-        } else if (mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
-                   || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name) {
-            cycle_button(button);
-        } else if (mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value) {
+        } else if (mode_ == Mode::instruments || mode_ == Mode::instrument_value) {
             instrument_button(button);
-        } else if (mode_ == Mode::patch) {
-            Document draft;
-            if (!docs_.edit_document(draft)) return;
-            if (button < 2) {
-                patch_ = (patch_ + draft.patches() + (button == 0 ? -1 : 1)) % draft.patches();
-                original_ = false;
-            }
-            else if (button == 2) { mode_ = Mode::field; field_ = 0; original_ = false; }
-            else if (button == 3 && settings_) begin_setup_preferences(Mode::patch);
-            else if (button == 4) begin_cycle(draft);
-            else if (button == 5) finish_draft();
-        } else if (mode_ == Mode::field) {
-            Document draft;
-            if (!docs_.edit_document(draft)) return;
-            if (button < 2) {
-                if (settings_ && current_field_) return;
-                const unsigned first = draft_return_ == Mode::field || !draft.patches() ? 5 : 0;
-                const unsigned end = settings_ ? 6 + bool(draft.instruments()) : 8;
-                const unsigned count = end - first + (first == 0 && docs_.edit_has_original(patch_));
-                const unsigned cursor = field_ == 8 ? end : field_;
-                field_ = first + (cursor - first + count + (button == 0 ? -1 : 1)) % count;
-                if (field_ == end) field_ = 8;
-            }
-            else if (button == 2 && field_ == 8) { original_ = !original_; field_ = 0; }
-            else if (button == 2 && settings_ && field_ == 5) begin_setup_preferences(Mode::field);
-            else if (button == 2 && settings_ && field_ == 6) begin_instruments(0, Mode::field);
-            else if (button == 2) mode_ = Mode::value;
-            else if (button == 3 && settings_ && current_field_) begin_instruments(u16(draft.patch(patch_)), Mode::field);
-            else if (button == 4) begin_cycle(draft);
-            else if (button == 5) {
-                if (draft_return_ == Mode::patch) mode_ = Mode::patch;
-                else finish_draft();
-            }
-        } else if (mode_ == Mode::value) {
-            if (button < 2 && docs_.edit_adjust(patch_, field_, button == 0 ? -1 : 1, original_ && field_ < 5))
-                changed_fields_ |= 1u << field_;
-            else if (button == 2 || button == 5) mode_ = Mode::field;
         } else if (mode_ == Mode::decision && device_editor_ != Mode::closed) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
             else if (button == 5 || (button == 2 && item_ == 2))
@@ -449,46 +337,37 @@ public:
                     else hardware_.error(ui::i18n::text(ui::i18n::Message::language_change_rejected));
                     return;
                 }
-                const bool reload = device_editor_ == Mode::preference_value && preference_reloads();
                 if (!item_ && !save_device_editor()) {
                     if (device_editor_ != Mode::boot_firmware) {
-                        const char *reason = device_editor_ == Mode::preference_value ? docs_.last_error() : "";
+                        const char *reason = device_editor_ == Mode::brightness ? docs_.last_error() : "";
                         hardware_.error(*reason ? reason : ui::i18n::text(ui::i18n::Message::save_failed));
                     }
                     return;
                 }
-                if (!item_ && reload) { close(); return; }
                 leave_device_editor();
             }
         } else if (mode_ == Mode::decision) {
             if (button < 2) item_ = (item_ + 3 + (button == 0 ? -1 : 1)) % 3;
-            else if (button == 5) keep_editing(setup_preferences_ ? Mode::preferences : draft_return_);
+            else if (button == 5) keep_editing(draft_editor());
             else if (button == 2) {
                 if (item_ == 0) { if (docs_.edit_save(now)) mode_ = Mode::saving; else { hardware_.error(ui::i18n::text(ui::i18n::Message::save_failed)); return; } }
                 else if (item_ == 1) { docs_.edit_cancel(); close(); return; }
-                else keep_editing(setup_preferences_ ? Mode::preferences : draft_return_);
+                else keep_editing(draft_editor());
             }
         }
         render();
     }
 private:
-    enum class Mode { closed, current, pedal, preferences, preference_value, startup_set, boot_firmware, language, language_saving, calibration, contact, contact_action, catalogue, action, selecting, loading_draft, patch, field, value, decision, saving, failed, history, comparison, history_work,
-                      cycle_instrument, cycle_tag, cycle_confirm, cycle_name, instruments, instrument, instrument_value,
-                      calibration_options, calibration_delay, calibration_name, neutrals, neutral_fields, neutral_value,
-                      movie_lists, movie_entries, movie_picker, movie_scan, layout_menu, layout_pages,
-                      layout_move, layout_region, layout_region_move, layout_chooser, layout_chooser_minimum,
-                      layout_chooser_order, layout_chooser_order_move, layout_add_type, object_name, object_name_action,
-                      counters, counter_fields, counter_value, navigation_shortcuts, navigation_value,
-                      expression_jacks, expression_fields, expression_value, contact_style_fields, contact_style_value };
-    enum class LayoutOption { pages, regions, focus, priority, chooser_displays, page_names, region_names, split, join, add, count };
+    enum class Mode { closed, current, pedal, brightness, startup_set, boot_firmware, language, language_saving,
+                      calibration, contact, contact_action, catalogue, action, selecting, decision, saving,
+                      failed, history, comparison, history_work, instruments, instrument_value,
+                      calibration_options, calibration_delay, calibration_name };
     Documents &docs_; Hardware &hardware_;
     Mode mode_ = Mode::closed, history_destination_ = Mode::history;
     Revision revision_;
     unsigned changed_patches_ = 0, changed_routes_ = 0;
     bool changed_settings_ = false, changed_formatting_ = false;
-    bool locked_ = false, browsing_ = false, original_ = false;
-    bool settings_ = false, current_field_ = false;
-    unsigned current_patch_ = UINT16_MAX, changed_fields_ = 0;
+    bool locked_ = false, browsing_ = false, settings_ = false, draft_changed_ = false;
     enum class Shortcut { performance, setup, setups, songs, setlists, pedal, count };
     Shortcut shortcut_ = Shortcut::setup;
     const Songs *songs_ = nullptr;
@@ -496,75 +375,8 @@ private:
     Mode resume_editor_ = Mode::closed;
     bool return_from_shortcut_ = false;
     bool shortcut_hint_ = false;
-    unsigned preference_index_ = 0, preference_route_ = 0, preference_component_ = 0;
-    uint32_t preference_value_ = 0, setup_preference_ = 0, preference_step_ = 1;
-    bool preference_known_ = false;
-    Mode setup_preference_return_ = Mode::closed;
-    uint64_t setup_changes_ = 0;
-    std::optional<uint32_t> movie_pivot_, movie_choice_, movie_original_;
-    unsigned movie_index_ = 0;
-    bool movie_idle_ = false, movie_reverse_ = false, movie_advance_ = false, movie_rejected_ = false;
-    unsigned page_region_ = 0, page_position_ = 0, destination_region_ = 0, destination_position_ = 0;
-    LayoutOption layout_option_ = LayoutOption::pages;
-    bool layout_rejected_ = false, layout_left_ = false;
-    unsigned chooser_minimum_ = 0;
-    uint8_t shortcut_mask_ = 0;
-    unsigned navigation_index_ = 0, navigation_slot_ = 0, navigation_buttons_[2] = {};
-    const char *navigation_feedback_ = nullptr;
-    static constexpr const char *navigation_names[] = {"Next song patch", "Previous song patch", "Next page", "Previous page"};
-    enum ExpressionField { expression_output, expression_mirror, expression_channel, expression_controller,
-        expression_minimum, expression_maximum, expression_reverse, expression_curve, expression_field_count };
-    unsigned expression_jack_ = 0, expression_field_ = 0;
-    ExpressionAssignment expression_assignment_;
-    bool expression_changed_ = false;
-    const char *expression_feedback_ = nullptr;
-    static constexpr const char *expression_fields[] = {
-        "MIDI output", "Mirror output", "MIDI channel", "Controller", "Minimum", "Maximum", "Reverse", "Response curve",
-    };
-    static constexpr const char *expression_curves[] = {"Linear", "Slow", "Fast"};
-    enum ContactField { contact_foreground, contact_background, contact_font, contact_field_count };
-    unsigned contact_field_ = 0, contact_face_ = ui::localized_face, contact_size_ = 16;
-    uint16_t contact_colors_[2] = {};
-    bool contact_style_rejected_ = false;
-    static constexpr const char *contact_style_fields[] = {"Text color", "Background color", "Text font"};
-    enum CounterField { counter_output, counter_type, counter_channel, counter_controller,
-        counter_initial, counter_minimum, counter_maximum, counter_step, counter_boundary, counter_field_count };
-    unsigned counter_index_ = 0, counter_field_ = 0;
-    bool counter_naming_ = false, counter_adding_ = false;
-    Counters::Definition counter_values_{};
-    const char *counter_feedback_ = nullptr;
-    static constexpr const char *counter_fields[] = {
-        "MIDI output", "Message type", "MIDI channel", "Controller", "Initial", "Minimum", "Maximum", "Step", "Boundary",
-    };
-    static constexpr const char *layout_options[] = {"Move pages", "Move regions", "Startup focus", "Spare displays", "Patch Chooser displays",
-        "Rename pages", "Rename regions", "Split region", "Join regions", "Add utility page"};
-    struct UtilityPage { unsigned type, displays; const char *label; };
-    static constexpr UtilityPage utility_pages[] = {
-        {1, 1, "Status"},
-#if CNTRL_CABLE_TEST
-        {3, 1, "Cable test"},
-#endif
-#if CNTRL_PANIC
-        {4, 1, "Panic"},
-#endif
-        {10, 0, "Empty"}, {PageLayout::midi_monitor, 1, "MIDI monitor"},
-        {PageLayout::pong, 3, "Pong"}, {PageLayout::language, 2, "Language"},
-        {PageLayout::time, 2, "Time"}, {PageLayout::calibrate, 1, "Calibrate"},
-        {PageLayout::setups, 1, "Setups"}, {PageLayout::songs, 1, "Songs and setlists"},
-#if CNTRL_SWITCHES
-        {PageLayout::switches, 1, "Switches"},
-#endif
-        {PageLayout::settings, 1, "Settings"}, {PageLayout::memon, 3, "Memon"},
-    };
-    midi::Parameter neutral_{};
-    unsigned neutral_index_ = 0, neutral_output_ = 0, neutral_field_ = 0;
-    bool neutral_changed_ = false, neutral_rejected_ = false;
-    static constexpr uint8_t neutral_kinds[] = {midi::Parameter::cc7, midi::Parameter::cc14,
-        midi::Parameter::nrpn7, midi::Parameter::nrpn14, midi::Parameter::rpn14};
-    static constexpr const char *neutral_types[] = {"CC 7-bit", "CC 14-bit", "NRPN 7-bit", "NRPN 14-bit", "RPN 14-bit"};
-    uint32_t preference_initial_ = 0;
-    bool setup_preferences_ = false, preference_initial_known_ = false, preference_rejected_ = false;
-    bool preference_can_inherit_ = false;
+    unsigned brightness_ = 0, compiled_brightness_ = 0, brightness_step_ = 10;
+    bool brightness_known_ = false, setup_brightness_ = false;
     BootFirmware boot_draft_ = BootFirmware::unavailable;
     char language_draft_[sizeof(GlobalSettings::Values::language)] = {};
     Library library_request_ = Library::none;
@@ -574,32 +386,15 @@ private:
     char contact_draft_[sizeof(GlobalSettings::Values::name_and_contact)] = {};
     unsigned contact_cursor_ = 0;
     bool contact_shortcut_ = false;
-    unsigned calibration_choice_ = 0, calibration_delay_ = 0;
-    bool has_performance_shortcut() const { return current_patch_ != UINT16_MAX || current_set_[0]; }
+    unsigned calibration_choice_ = 0, calibration_delay_ = 0, calibration_step_ = 100;
+    bool has_performance_shortcut() const { return current_set_[0]; }
     char name_[64] = {};
-    unsigned item_ = 0, patch_ = 0, field_ = 0;
-    Mode cycle_return_ = Mode::closed;
-    Mode draft_return_ = Mode::field;
-    Mode instrument_return_ = Mode::closed;
-    unsigned instrument_ = 0;
-    unsigned instrument_changed_ = 0;
-    bool instrument_output_ = false;
+    unsigned item_ = 0, instrument_ = 0;
     const char *instrument_feedback_ = nullptr;
-    unsigned alias_ = 0, tag_ = CycleCatalogue::all, character_ = 0;
-    char cycle_name_[64] = {};
-    char suggested_[64] = {};
+    Mode draft_editor() const { return setup_brightness_ ? Mode::brightness : Mode::instruments; }
     void finish_draft() {
-        if (settings_ && !changed_fields_ && !setup_changes_) {
-            docs_.edit_cancel();
-            setup_preferences_ = false;
-            mode_ = shortcut_ == Shortcut::setups ? Mode::catalogue : Mode::current;
-        } else { mode_ = Mode::decision; item_ = 2; }
-    }
-    void begin_instruments(unsigned index, Mode back) {
-        instrument_ = index;
-        instrument_changed_ = 0;
-        instrument_return_ = back;
-        mode_ = Mode::instruments;
+        if (draft_changed_) { mode_ = Mode::decision; item_ = 2; }
+        else { docs_.edit_cancel(); mode_ = Mode::current; }
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_instrument_button)
@@ -611,58 +406,16 @@ private:
         if (mode_ == Mode::instruments) {
             if (button < 2) {
                 const unsigned count = draft.instruments();
-                if (count > 1) instrument_changed_ = 0;
                 instrument_ = (instrument_ + (button ? 1 : count - 1)) % count;
-            } else if (button == 2) { instrument_output_ = false; mode_ = Mode::instrument; }
-            else if (button == 5) {
-                if (instrument_return_ == Mode::closed) {
-                    draft_return_ = Mode::instruments;
-                    finish_draft();
-                } else mode_ = instrument_return_;
-            }
-        } else if (mode_ == Mode::instrument) {
-            if (button < 2) instrument_output_ = !instrument_output_;
-            else if (button == 2) mode_ = Mode::instrument_value;
-            else if (button == 5) mode_ = Mode::instruments;
-        } else if (button == 2 || button == 5) mode_ = Mode::instrument;
+            } else if (button == 2) mode_ = Mode::instrument_value;
+            else if (button == 5) finish_draft();
+        } else if (button == 2 || button == 5) mode_ = Mode::instruments;
         else if (button < 2) {
-            const auto *selected = draft.instrument(instrument_);
-            const auto *output = reinterpret_cast<const char *>(selected + 32);
-            unsigned channel = selected[64] + 1;
-            if (instrument_output_) {
-                const auto outputs = hardware_.midi_outputs();
-                const auto *current = outputs.find(output);
-                if (!current) return;
-                const unsigned start = unsigned(current - outputs.data);
-                Document fallback = draft;
-                fallback.bind_globals(nullptr);
-                for (unsigned i = 1; i < outputs.count; ++i) {
-                    const auto &candidate = outputs.data[(start + (button ? i : outputs.count - i)) % outputs.count];
-                    if (draft.has_output(hardware_, candidate.name) && fallback.has_output(hardware_, candidate.name)) {
-                        output = candidate.name;
-                        break;
-                    }
-                }
-                if (!std::strcmp(output, reinterpret_cast<const char *>(selected + 32))) {
-                    instrument_feedback_ = "No other enabled output";
-                    return;
-                }
-            } else {
-                if ((button == 0 && channel == 1) || (button == 1 && channel == 16)) return;
-                channel += button ? 1 : -1;
-            }
-            if (docs_.edit_instrument(instrument_, output, channel)) {
-                instrument_changed_ |= 1u << unsigned(instrument_output_);
-                changed_fields_ |= 1u << 10;
-            } else instrument_feedback_ = "Could not change instrument";
+            const unsigned channel = draft.instrument(instrument_)[64] + 1;
+            if ((button == 0 && channel == 1) || (button == 1 && channel == 16)) return;
+            if (docs_.edit_instrument_channel(instrument_, channel + (button ? 1 : -1))) draft_changed_ = true;
+            else instrument_feedback_ = "Could not change instrument channel";
         }
-    }
-    void begin_cycle(const Document &draft) {
-        if (!draft.cycle_catalogue().size()) return;
-        cycle_return_ = mode_;
-        alias_ = 0;
-        while (!draft.cycle_catalogue().count(alias_)) ++alias_;
-        mode_ = Mode::cycle_instrument;
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_begin_startup_set)
@@ -681,8 +434,8 @@ private:
         if (device_editor_ == Mode::calibration_name || device_editor_ == Mode::calibration_delay) {
             mode_ = Mode::calibration_options; device_editor_ = Mode::closed; return;
         }
-        if (device_editor_ == Mode::preference_value) {
-            mode_ = Mode::preferences; device_editor_ = Mode::closed; return;
+        if (device_editor_ == Mode::brightness) {
+            mode_ = Mode::pedal; item_ = 2; device_editor_ = Mode::closed; return;
         }
         mode_ = shortcut_ == Shortcut::pedal ? Mode::pedal : Mode::current;
         item_ = device_editor_ == Mode::calibration ? 5 : device_editor_ == Mode::language ? 4
@@ -722,1019 +475,54 @@ private:
             return true;
         }
         if (device_editor_ == Mode::contact) return docs_.name_and_contact(contact_draft_);
-        if (device_editor_ == Mode::preference_value)
-            return docs_.global_change(preference().field, preference_value_, !preference_known_, hardware_.global_settings_busy());
+        if (device_editor_ == Mode::brightness)
+            return docs_.global_change(0, brightness_, !brightness_known_, hardware_.global_settings_busy());
         return (!startup_draft_[0] || songs_->setlist(startup_draft_)) && docs_.startup_set(startup_draft_);
     }
-    const ui::Preference &preference() const { return ui::preference_at(preference_index_); }
-    bool preference_overridden() const {
-        return docs_.document().explicit_settings() & (uint64_t(1) << preference().field);
-    }
-    bool preference_reloads() const {
-        return GlobalSettings::reload(preference().field) && !preference_overridden();
-    }
-    bool preference_changed() const {
+    bool brightness_changed() const {
         const auto *values = docs_.global_preferences();
-        if (!values) return false;
-        const unsigned field = preference().field;
-        const bool known = values->known & (uint64_t(1) << field);
-        return known != preference_known_ || (known && values->values[field] != preference_value_);
+        const bool known = values && (values->known & 1);
+        return known != brightness_known_ || (known && values->values[0] != brightness_);
     }
-    bool preference_supported(unsigned index) const {
-        if (index == ui::layout_preference_index) {
-            Document draft;
-            return setup_preferences_ && docs_.edit_document(draft) && draft.page_layout().pages();
-        }
-        if (index == ui::counter_preference_index) {
-            Document draft;
-            return setup_preferences_ && docs_.edit_document(draft) && (draft.counters() || enabled_outputs(draft));
-        }
-        if (index == ui::navigation_preference_index) {
-            Document draft;
-            return setup_preferences_ && hardware_.input_count() && docs_.edit_document(draft) && draft.page_layout().pages();
-        }
-        if (index == ui::expression_preference_index) {
-            Document draft;
-            return setup_preferences_ && docs_.edit_document(draft) && expression_jacks(draft);
-        }
-        if (index == ui::contact_preference_index) {
-            Document draft;
-            return setup_preferences_ && docs_.edit_document(draft)
-                && (draft.contact_style() || hardware_.supports_font(ui::localized_face, 16));
-        }
-        const unsigned field = ui::preference_at(index).field;
-        if (setup_preferences_ && !Documents::setup_preference_editable(field)) return false;
-        if (field >= 23 && field <= 26) return hardware_.supports_trs_mode(field - 23, midi::TrsMode::aux);
-        if (field >= 19 && field <= 22) {
-            for (unsigned mode = 1; mode <= unsigned(midi::TrsMode::aux); ++mode)
-                if (hardware_.supports_trs_mode(field - 19, midi::TrsMode(mode))) return true;
-            return false;
-        }
-        return true;
-    }
-    void begin_setup_preferences(Mode back) {
-        setup_preferences_ = true;
-        setup_preference_return_ = back;
-        preference_index_ = 0;
-        mode_ = Mode::preferences;
-    }
-    bool is_layout_view() const {
-        return mode_ >= Mode::layout_menu && mode_ <= Mode::layout_add_type;
-    }
-    bool editing_object_name() const { return mode_ == Mode::object_name || mode_ == Mode::object_name_action; }
-    unsigned text_capacity() const { return editing_object_name() ? (counter_naming_ ? 64 : 32) : sizeof(contact_draft_); }
-    void begin_object_name(const char *name, bool counter = false) {
-        counter_naming_ = counter;
-        std::strcpy(contact_draft_, name);
-        contact_cursor_ = 0;
-        mode_ = Mode::object_name;
-    }
-    void leave_object_name(bool accepted = false) {
-        if (counter_naming_) {
-            counter_naming_ = false;
-            counter_adding_ = accepted;
-            mode_ = accepted ? Mode::counter_fields : Mode::counters;
-            counter_feedback_ = nullptr;
-            return;
-        }
-        mode_ = layout_option_ == LayoutOption::add ? Mode::layout_add_type
-            : layout_option_ == LayoutOption::region_names ? Mode::layout_region : Mode::layout_pages;
-        layout_rejected_ = false;
-    }
-    bool utility_available(const UtilityPage &page, const Document &draft) const {
-        return page.displays <= draft.page_layout().displays()
-            && (page.type != PageLayout::calibrate || hardware_.expression_calibration())
-            && (page.type != PageLayout::switches || hardware_.switch_capacity())
-            && (page.type != PageLayout::memon || draft.memon_settings());
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_utility_type_button)
-#endif
-    void utility_type_button(unsigned button, const Document &draft) {
-        constexpr unsigned count = sizeof(utility_pages) / sizeof(utility_pages[0]);
-        if (button < 2) {
-            do { page_position_ = (page_position_ + (button ? 1 : count - 1)) % count; }
-            while (!utility_available(utility_pages[page_position_], draft));
-        } else if (button == 2) {
-            if (utility_available(utility_pages[page_position_], draft)) begin_object_name(utility_pages[page_position_].label);
-        } else if (button == 5) mode_ = Mode::layout_region;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_stage_object_name)
-#endif
-    bool stage_object_name() {
-        Document draft;
-        if (!docs_.edit_document(draft)) return false;
-        if (counter_naming_) {
-            counter_feedback_ = "Enter a unique counter name";
-            if (!contact_draft_[0]) return false;
-            for (unsigned i = 0; i < draft.counters(); ++i)
-                if (!std::strcmp(contact_draft_, reinterpret_cast<const char *>(draft.counter(i)))) return false;
-            return true;
-        }
-        if (layout_option_ == LayoutOption::add) {
-            const auto &page = utility_pages[page_position_];
-            layout_rejected_ = !docs_.add_utility_page(page_region_, page.type, page.displays, contact_draft_);
-            if (!layout_rejected_) changed_fields_ |= 1u << 12;
-            return !layout_rejected_;
-        }
-        const auto layout = draft.page_layout();
-        const bool region = layout_option_ == LayoutOption::region_names;
-        const unsigned index = region ? page_region_ : layout.region_page(page_region_, page_position_);
-        const char *original = region ? layout.region_name(index) : layout.name(index);
-        const bool split = layout_option_ == LayoutOption::split;
-        if (!split && !std::strcmp(original, contact_draft_)) return true;
-        layout_rejected_ = split ? !docs_.split_region(page_region_, page_position_, contact_draft_)
-            : !docs_.rename_layout_entry(region, index, contact_draft_);
-        if (layout_rejected_) return false;
-        if (split) {
-            ++page_region_;
-            page_position_ = 0;
-        }
-        changed_fields_ |= 1u << 12;
-        return true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_stage_chooser_minimum)
-#endif
-    bool stage_chooser_minimum() {
-        Document draft;
-        if (!docs_.edit_document(draft)) return false;
-        const auto layout = draft.page_layout();
-        const unsigned page = layout.controller_page(page_position_);
-        if (chooser_minimum_ == layout.minimum_displays(page)) return true;
-        layout_rejected_ = !docs_.edit_chooser_displays(page, chooser_minimum_, 0, 0);
-        if (layout_rejected_) return false;
-        changed_fields_ |= 1u << 12;
-        return true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_chooser_displays_button)
-#endif
-    void chooser_displays_button(unsigned button, PageLayout layout) {
-        const unsigned page = layout.controller_page(page_position_);
-        if (mode_ == Mode::layout_chooser) {
-            if (button < 2) {
-                const unsigned count = layout.controllers();
-                page_position_ = (page_position_ + (button ? 1 : count - 1)) % count;
-            } else if (button == 2) {
-                chooser_minimum_ = layout.minimum_displays(page);
-                mode_ = Mode::layout_chooser_minimum;
-            } else if (button == 4) {
-                page_region_ = 0;
-                mode_ = Mode::layout_chooser_order;
-            } else if (button == 5) mode_ = Mode::layout_menu;
-        } else if (mode_ == Mode::layout_chooser_minimum) {
-            if (button < 2)
-                chooser_minimum_ = unsigned(std::clamp(int(chooser_minimum_) + (button ? 1 : -1), 0, int(layout.displays())));
-            else if (button == 5 || (button == 2 && stage_chooser_minimum())) mode_ = Mode::layout_chooser;
-        } else {
-            const bool moving = mode_ == Mode::layout_chooser_order_move;
-            auto &position = moving ? destination_position_ : page_region_;
-            const unsigned count = layout.displays();
-            if (button < 2) position = (position + (button ? 1 : count - 1)) % count;
-            else if (button == 5) mode_ = moving ? Mode::layout_chooser_order : Mode::layout_chooser;
-            else if (button == 2 && !moving) {
-                destination_position_ = position;
-                mode_ = Mode::layout_chooser_order_move;
-            } else if (button == 2) {
-                if (position != page_region_) {
-                    if (!docs_.edit_chooser_displays(page, layout.minimum_displays(page), page_region_, position)) {
-                        layout_rejected_ = true;
-                        return;
-                    }
-                    changed_fields_ |= 1u << 12;
-                }
-                page_region_ = position;
-                mode_ = Mode::layout_chooser_order;
-            }
-        }
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_region_button)
-#endif
-    void region_button(unsigned button, PageLayout layout) {
-        const bool joining = layout_option_ == LayoutOption::join;
-        const unsigned regions = layout.regions() - unsigned(joining);
-        const bool moving = mode_ == Mode::layout_region_move;
-        auto &region = moving ? destination_region_ : page_region_;
-        if (button == 5) { mode_ = moving ? Mode::layout_region : Mode::layout_menu; return; }
-        if (button < 2) {
-            if (layout_option_ == LayoutOption::priority) layout_left_ = !layout_left_;
-            else region = (region + (button ? 1 : regions - 1)) % regions;
-            return;
-        }
-        if (button != 2) return;
-        if (layout_option_ == LayoutOption::add) {
-            page_position_ = 0;
-            mode_ = Mode::layout_add_type;
-            return;
-        }
-        if (joining) {
-            layout_rejected_ = !docs_.join_regions(region);
-            if (!layout_rejected_) {
-                changed_fields_ |= 1u << 12;
-                if (regions == 1) layout_option_ = LayoutOption::regions;
-                mode_ = Mode::layout_menu;
-            }
-            return;
-        }
-        if (layout_option_ == LayoutOption::region_names) {
-            begin_object_name(layout.region_name(region));
-            return;
-        }
-        if (layout_option_ == LayoutOption::regions && !moving) {
-            destination_region_ = page_region_;
-            mode_ = Mode::layout_region_move;
-            return;
-        }
-        const unsigned focus = layout_option_ == LayoutOption::focus ? region : layout.initial_focus();
-        const bool changed = moving ? region != page_region_ : focus != layout.initial_focus() || layout_left_ != layout.left_wins();
-        if (changed) {
-            const bool saved = moving ? docs_.edit_region_position(page_region_, region)
-                : docs_.edit_region_policy(focus, layout_left_);
-            if (!saved) { layout_rejected_ = true; return; }
-            changed_fields_ |= 1u << 12;
-        }
-        page_region_ = region;
-        mode_ = moving ? Mode::layout_region : Mode::layout_menu;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_layout_button)
-#endif
-    void layout_button(unsigned button) {
-        Document draft;
-        if (!docs_.edit_document(draft)) return;
-        const auto layout = draft.page_layout();
-        layout_rejected_ = false;
-        if (mode_ == Mode::layout_menu) {
-            if (button < 2) {
-                constexpr unsigned count = unsigned(LayoutOption::count);
-                const unsigned step = button ? 1 : count - 1;
-                do {
-                    layout_option_ = LayoutOption((unsigned(layout_option_) + step) % count);
-                } while ((layout_option_ == LayoutOption::chooser_displays && !layout.controllers())
-                    || (layout_option_ == LayoutOption::split && layout.pages() == layout.regions())
-                    || (layout_option_ == LayoutOption::join && layout.regions() < 2)
-                    || (layout_option_ == LayoutOption::add && layout.pages() == PageLayout::max_pages));
-            } else if (button == 5) {
-                mode_ = Mode::preferences;
-            } else if (button == 2) {
-                page_region_ = layout_option_ == LayoutOption::focus ? layout.initial_focus() : 0;
-                page_position_ = 0;
-                layout_left_ = layout.left_wins();
-                mode_ = layout_option_ == LayoutOption::pages || layout_option_ == LayoutOption::page_names
-                    || layout_option_ == LayoutOption::split ? Mode::layout_pages
-                    : layout_option_ == LayoutOption::chooser_displays ? Mode::layout_chooser : Mode::layout_region;
-            }
-            return;
-        }
-        if (mode_ == Mode::layout_add_type) {
-            utility_type_button(button, draft);
-            return;
-        }
-        if (mode_ >= Mode::layout_chooser) {
-            chooser_displays_button(button, layout);
-            return;
-        }
-        if (mode_ == Mode::layout_region || mode_ == Mode::layout_region_move) {
-            region_button(button, layout);
-            return;
-        }
-        const bool moving = mode_ == Mode::layout_move;
-        auto &region = moving ? destination_region_ : page_region_;
-        auto &position = moving ? destination_position_ : page_position_;
-        const unsigned count = layout.region_size(region) + unsigned(moving && region != page_region_);
-        if (button < 2) position = (position + (button ? 1 : count - 1)) % count;
-        else if (button == 3 || button == 4) {
-            region = (region + (button == 4 ? 1 : layout.regions() - 1)) % layout.regions();
-            if (moving && region == page_region_) position = page_position_;
-            else position = 0;
-        } else if (button == 5) mode_ = moving ? Mode::layout_pages : Mode::layout_menu;
-        else if (button == 2 && !moving) {
-            if (layout_option_ == LayoutOption::split) {
-                if (position) begin_object_name("");
-                return;
-            }
-            if (layout_option_ == LayoutOption::page_names) {
-                begin_object_name(layout.name(layout.region_page(region, position)));
-                return;
-            }
-            destination_region_ = region;
-            destination_position_ = position;
-            mode_ = Mode::layout_move;
-        } else if (button == 2) {
-            if (region != page_region_ || position != page_position_) {
-                if (!docs_.edit_page_position(page_region_, page_position_, region, position)) {
-                    layout_rejected_ = true;
-                    return;
-                }
-                changed_fields_ |= 1u << 12;
-            }
-            page_region_ = region;
-            page_position_ = position;
-            mode_ = Mode::layout_pages;
-        }
-    }
-    bool stage_setup_preference() {
-        if (preference_known_ == preference_initial_known_ && preference_value_ == preference_initial_) return true;
-        const unsigned field = preference().field;
-        preference_rejected_ = !docs_.edit_setup_preference(field, preference_value_, !preference_known_);
-        if (preference_rejected_) return false;
-        setup_changes_ |= uint64_t(1) << field;
-        preference_initial_ = preference_value_;
-        preference_initial_known_ = preference_known_;
-        return true;
-    }
-    bool is_movie_view() const {
-        return mode_ == Mode::movie_lists || mode_ == Mode::movie_entries
-            || mode_ == Mode::movie_picker || mode_ == Mode::movie_scan;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_poll_movies)
-#endif
-    void poll_movies() {
-        std::optional<uint32_t> key;
-        if (hardware_.movie_library()->step(key)) {
-            mode_ = Mode::movie_picker;
-            render();
-        } else if (key) {
-            const auto rank = [&](uint32_t candidate) {
-                if (!movie_pivot_) return uint64_t(movie_reverse_ ? UINT32_MAX - candidate : candidate);
-                const uint32_t distance = movie_reverse_ ? *movie_pivot_ - candidate : candidate - *movie_pivot_;
-                return !distance && movie_advance_ ? uint64_t(1) << 32 : uint64_t(distance);
-            };
-            if (!movie_choice_ || rank(*key) < rank(*movie_choice_)) movie_choice_ = key;
-        }
-    }
-    void scan_movies(std::optional<uint32_t> pivot, bool reverse = false, bool advance = false) {
-        movie_pivot_ = pivot;
-        movie_reverse_ = reverse;
-        movie_advance_ = advance;
-        movie_choice_.reset();
-        hardware_.movie_library()->start();
-        mode_ = Mode::movie_scan;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_movie_button)
-#endif
-    void movie_button(unsigned button) {
-        movie_rejected_ = false;
-        if (mode_ == Mode::movie_lists) {
-            if (button < 2) movie_idle_ = !movie_idle_;
-            else if (button == 2) { movie_index_ = 0; mode_ = Mode::movie_entries; }
-            else if (button == 5) mode_ = Mode::preferences;
-            return;
-        }
-        if (mode_ == Mode::movie_scan || mode_ == Mode::movie_picker) {
-            if (button == 5) {
-                hardware_.movie_library()->close();
-                mode_ = Mode::movie_entries;
-            } else if (mode_ == Mode::movie_picker && button < 2) scan_movies(movie_choice_, button == 0, true);
-            else if (mode_ == Mode::movie_picker && button == 2 && movie_choice_) {
-                if (movie_choice_ == movie_original_) mode_ = Mode::movie_entries;
-                else if (hardware_.movie_library()->playable(*movie_choice_) && docs_.edit_movie(movie_idle_, movie_index_, movie_choice_)) {
-                    changed_fields_ |= 1u << 11;
-                    mode_ = Mode::movie_entries;
-                } else movie_rejected_ = true;
-            }
-            return;
-        }
-        Document draft;
-        if (!docs_.edit_document(draft)) return;
-        const unsigned count = draft.movies(movie_idle_);
-        if (button < 2) movie_index_ = (movie_index_ + (button ? 1 : count)) % (count + 1);
-        else if (button == 5) mode_ = Mode::movie_lists;
-        else if (button == 3 && movie_index_ < count) {
-            if (docs_.edit_movie(movie_idle_, movie_index_, {})) changed_fields_ |= 1u << 11;
-            else movie_rejected_ = true;
-        } else if (button == 2) {
-            movie_original_.reset();
-            if (movie_index_ < count) movie_original_ = u32(draft.movie_keys(movie_idle_) + 4 * movie_index_);
-            scan_movies(movie_original_);
-        }
-    }
-    bool stage_neutral() {
-        if (!neutral_changed_) return true;
-        neutral_rejected_ = !docs_.edit_loop_neutral(neutral_index_, neutral_output_, &neutral_);
-        if (neutral_rejected_) return false;
-        setup_changes_ |= uint64_t(1) << 33;
-        neutral_changed_ = false;
-        return true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_neutral_button)
-#endif
-    void neutral_button(unsigned button) {
-        Document draft;
-        if (!docs_.edit_document(draft)) return;
-        const auto *record = draft.loop_stop_settings();
-        const unsigned count = record ? u16(record + 5) : 0;
-        const auto outputs = hardware_.midi_outputs();
-        const auto browse_output = [&](unsigned current, bool forward) {
-            Document fallback = draft;
-            fallback.bind_globals(nullptr);
-            for (unsigned i = 1; i <= 16; ++i) {
-                const unsigned route = (current + (forward ? i : 16 - i)) % 16;
-                const auto *output = outputs.route(route);
-                if (output && draft.has_output(hardware_, output->name) && fallback.has_output(hardware_, output->name))
-                    return route;
-            }
-            return 16u;
-        };
-        neutral_rejected_ = false;
-        if (mode_ == Mode::neutrals) {
-            if (button < 2) neutral_index_ = (neutral_index_ + (button ? 1 : count)) % (count + 1);
-            else if (button == 5) mode_ = Mode::preferences;
-            else if (button == 4 && neutral_index_ < count) {
-                if (docs_.edit_loop_neutral(neutral_index_, 0, nullptr)) setup_changes_ |= uint64_t(1) << 33;
-                else neutral_rejected_ = true;
-            } else if (button == 2) {
-                neutral_changed_ = neutral_index_ == count;
-                if (neutral_changed_) {
-                    neutral_output_ = browse_output(15, true);
-                    if (neutral_output_ == 16) { neutral_rejected_ = true; return; }
-                    neutral_ = {midi::Parameter::cc7, 0, 1, 0};
-                } else {
-                    const auto *row = record + 7 + 7 * neutral_index_;
-                    neutral_output_ = row[0];
-                    neutral_ = {row[1], row[2], uint16_t(u16(row + 3)), int(u16(row + 5))};
-                }
-                neutral_field_ = 0;
-                mode_ = Mode::neutral_fields;
-            }
-        } else if (mode_ == Mode::neutral_fields) {
-            if (button < 2) neutral_field_ = (neutral_field_ + (button ? 1 : 4)) % 5;
-            else if (button == 2) { preference_step_ = 1; mode_ = Mode::neutral_value; }
-            else if (button == 3 || (button == 5 && stage_neutral())) mode_ = Mode::neutrals;
-        } else if (button == 2 || button == 5) mode_ = Mode::neutral_fields;
-        else if (button == 4 && neutral_field_ >= 3)
-            preference_step_ = preference_step_ < 1000 ? preference_step_ * 10 : 1;
-        else if (button < 2) {
-            const int direction = button ? 1 : -1;
-            const int delta = direction * int(preference_step_);
-            if (neutral_field_ == 0) {
-                const unsigned route = browse_output(neutral_output_, button == 1);
-                if (route == 16) { neutral_rejected_ = true; return; }
-                neutral_output_ = route;
-            } else if (neutral_field_ == 1) {
-                unsigned i = 0;
-                while (neutral_kinds[i] != neutral_.kind) ++i;
-                neutral_.kind = neutral_kinds[(i + (button ? 1 : 4)) % 5];
-                neutral_.address = 1;
-                neutral_.value = std::min(int(neutral_.value), neutral_.maximum());
-            } else if (neutral_field_ == 2) neutral_.channel = uint8_t(std::clamp(int(neutral_.channel) + direction, 0, 15));
-            else if (neutral_field_ == 4) neutral_.value = std::clamp(int(neutral_.value) + delta, 0, neutral_.maximum());
-            else if (neutral_.kind != midi::Parameter::rpn14) {
-                const int maximum = neutral_.kind == midi::Parameter::cc7 ? 119 : neutral_.kind == midi::Parameter::cc14 ? 31 : 16383;
-                auto proposed = neutral_;
-                for (int n = std::clamp(int(neutral_.address) + delta, 0, maximum); n >= 0 && n <= maximum; n += direction) {
-                    proposed.address = uint16_t(n);
-                    if (proposed.valid()) { neutral_.address = proposed.address; break; }
-                }
-            }
-            neutral_changed_ = true;
-        }
-    }
-    void browse_preference(bool backward, bool group) {
-        const unsigned count = setup_preferences_ ? ui::setup_preferences : ui::pedal_preferences;
-        const char *original_group = preference().group;
-        for (unsigned i = 0; i < count; ++i) {
-            preference_index_ = (preference_index_ + (backward ? count - 1 : 1)) % count;
-            if ((!group || std::strcmp(preference().group, original_group)) && preference_supported(preference_index_)) return;
-        }
-    }
-    bool is_counter_view() const { return mode_ >= Mode::counters && mode_ <= Mode::counter_value; }
-    bool is_navigation_view() const { return mode_ == Mode::navigation_shortcuts || mode_ == Mode::navigation_value; }
-    bool is_expression_view() const { return mode_ >= Mode::expression_jacks && mode_ <= Mode::expression_value; }
-    bool is_contact_style_view() const { return mode_ == Mode::contact_style_fields || mode_ == Mode::contact_style_value; }
-    void read_contact_style(const Document &draft) {
-        const auto *style = draft.contact_style();
-        contact_face_ = style ? style[0] : ui::localized_face;
-        contact_size_ = style ? style[1] : 16;
-        contact_colors_[contact_foreground] = style ? u16(style + 4) : 0;
-        contact_colors_[contact_background] = style ? u16(style + 6) : draft.page_settings()[PageSettings::background];
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_stage_contact_style)
-#endif
-    bool stage_contact_style() {
-        Document draft;
-        if (!docs_.edit_document(draft)) return false;
-        const auto *style = draft.contact_style();
-        if (contact_face_ == (style ? style[0] : ui::localized_face)
-            && contact_size_ == (style ? style[1] : 16)
-            && contact_colors_[contact_foreground] == (style ? u16(style + 4) : 0)
-            && contact_colors_[contact_background] == (style ? u16(style + 6) : draft.page_settings()[PageSettings::background])) return true;
-        contact_style_rejected_ = !docs_.edit_contact_style(contact_face_, contact_size_,
-            contact_colors_[contact_foreground], contact_colors_[contact_background]);
-        if (contact_style_rejected_) return false;
-        changed_fields_ |= 1u << 16;
-        return true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_contact_style_button)
-#endif
-    void contact_style_button(unsigned button) {
-        contact_style_rejected_ = false;
-        if (mode_ == Mode::contact_style_fields) {
-            if (button < 2) contact_field_ = (contact_field_ + (button ? 1 : contact_field_count - 1)) % contact_field_count;
-            else if (button == 5) mode_ = Mode::preferences;
-            else if (button == 2) {
-                preference_component_ = 0;
-                mode_ = Mode::contact_style_value;
-            }
-        } else if (button == 2 || button == 5) {
-            if (stage_contact_style()) mode_ = Mode::contact_style_fields;
-        } else if (button == 4) {
-            if (contact_field_ == contact_font) {
-                contact_face_ = ui::localized_face;
-                contact_size_ = 16;
-            } else {
-                Document draft;
-                if (!docs_.edit_document(draft)) return;
-                contact_colors_[contact_field_] = contact_field_ == contact_background ? draft.page_settings()[PageSettings::background] : 0;
-            }
-        } else if (contact_field_ != contact_font) {
-            if (button == 3) preference_component_ = (preference_component_ + 1) % 3;
-            else if (button < 2) contact_colors_[contact_field_] = ui::adjust_color(contact_colors_[contact_field_],
-                preference_component_, button ? 1 : -1);
-        } else if (button < 2) {
-            constexpr unsigned default_face = sizeof(ui::preference_faces) / sizeof(ui::preference_faces[0]);
-            constexpr unsigned count = default_face + 1;
-            unsigned index = contact_face_ == ui::localized_face ? default_face : ui::preference_face_index(contact_face_);
-            for (unsigned i = 0; i < count; ++i) {
-                index = (index + (button ? 1 : count - 1)) % count;
-                const unsigned face = index == default_face ? ui::localized_face : ui::preference_faces[index];
-                for (unsigned size = 16; size >= 8; --size) {
-                    if (!hardware_.supports_font(face, size)) continue;
-                    contact_face_ = face;
-                    contact_size_ = size;
-                    return;
-                }
-            }
-        }
-    }
-    static unsigned expression_jacks(const Document &draft) {
-        unsigned mask = 0;
-        Document fallback = draft;
-        fallback.bind_globals(nullptr);
-        const auto *own = fallback.trs_modes();
-        const auto *ports = draft.trs_modes();
-        for (unsigned i = 0; i < 4; ++i)
-            if (own[i] == unsigned(midi::TrsMode::expression) && ports[i] == own[i]) mask |= 1u << i;
-        return mask;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_stage_expression)
-#endif
-    bool stage_expression() {
-        if (!expression_changed_) return true;
-        if (expression_assignment_.minimum > expression_assignment_.maximum) {
-            expression_feedback_ = "Check min and max";
-            return false;
-        }
-        if (!docs_.edit_expression(expression_jack_, expression_assignment_)) {
-            expression_feedback_ = "Could not change assignment";
-            return false;
-        }
-        changed_fields_ |= 1u << 15;
-        expression_changed_ = false;
-        return true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_enabled_outputs)
-#endif
-    unsigned enabled_outputs(const Document &draft) const {
-        Document fallback = draft;
-        fallback.bind_globals(nullptr);
-        unsigned mask = 0;
-        for (const auto &output : hardware_.midi_outputs())
-            if (draft.has_output(hardware_, output.name) && fallback.has_output(hardware_, output.name)) mask |= 1u << output.route;
-        return mask;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_expression_button)
-#endif
-    void expression_button(unsigned button) {
-        Document draft;
-        if (!docs_.edit_document(draft)) return;
-        expression_feedback_ = nullptr;
-        if (mode_ == Mode::expression_jacks) {
-            if (button < 2) {
-                const unsigned mask = expression_jacks(draft);
-                do { expression_jack_ = (expression_jack_ + (button ? 1 : 3)) % 4; }
-                while (!(mask & (1u << expression_jack_)));
-            } else if (button == 5) mode_ = Mode::preferences;
-            else if (button == 3 && draft.page_settings().expression[expression_jack_].channel) {
-                expression_assignment_ = ExpressionAssignment{};
-                expression_changed_ = true;
-                if (!stage_expression()) expression_changed_ = false;
-            } else if (button == 2) {
-                expression_assignment_ = draft.page_settings().expression[expression_jack_];
-                expression_changed_ = !expression_assignment_.channel;
-                if (expression_changed_) {
-                    const unsigned mask = enabled_outputs(draft);
-                    if (!mask) { expression_feedback_ = "No enabled MIDI output"; return; }
-                    expression_assignment_ = ExpressionAssignment{};
-                    for (const auto &output : hardware_.midi_outputs()) if (mask & (1u << output.route)) {
-                        std::snprintf(expression_assignment_.output, sizeof(expression_assignment_.output), "%s", output.name);
-                        break;
-                    }
-                    expression_assignment_.channel = 1;
-                    expression_assignment_.controller = 11;
-                }
-                expression_field_ = 0;
-                mode_ = Mode::expression_fields;
-            }
-        } else if (mode_ == Mode::expression_fields) {
-            if (button < 2) expression_field_ = (expression_field_ + (button ? 1 : expression_field_count - 1)) % expression_field_count;
-            else if (button == 2) { preference_step_ = 1; mode_ = Mode::expression_value; }
-            else if (button == 3 || (button == 5 && stage_expression())) mode_ = Mode::expression_jacks;
-        } else if (button == 2 || button == 5) mode_ = Mode::expression_fields;
-        else if (button == 4 && expression_field_ >= expression_controller && expression_field_ <= expression_maximum)
-            preference_step_ = preference_step_ < 100 ? preference_step_ * 10 : 1;
-        else if (button < 2) {
-            auto &a = expression_assignment_;
-            const int direction = button ? 1 : -1;
-            if (expression_field_ == expression_output || expression_field_ == expression_mirror) {
-                const auto outputs = hardware_.midi_outputs();
-                const auto *primary = outputs.find(a.output);
-                const bool mirror = expression_field_ == expression_mirror;
-                const unsigned exclude = mirror ? (primary ? primary->route : 255) : a.mirror_route;
-                unsigned mask = enabled_outputs(draft);
-                if (exclude < 16) mask &= ~(1u << exclude);
-                if (mirror) mask |= 1u << 16;
-                if (!mask) return;
-                unsigned route = mirror ? std::min(unsigned(a.mirror_route), 16u) : primary ? primary->route : 16;
-                do { route = (route + (button ? 1 : 16)) % 17; } while (!(mask & (1u << route)));
-                if (mirror) a.mirror_route = uint8_t(route == 16 ? UINT8_MAX : route);
-                else std::snprintf(a.output, sizeof(a.output), "%s", outputs.route(route)->name);
-            } else if (expression_field_ == expression_reverse) a.reverse = !a.reverse;
-            else if (expression_field_ == expression_curve) a.curve = ExpressionCurve((unsigned(a.curve) + (button ? 1 : 2)) % 3);
-            else if (expression_field_ == expression_channel) a.channel = uint8_t(std::clamp(int(a.channel) + direction, 1, 16));
-            else {
-                auto &number = expression_field_ == expression_controller ? a.controller : expression_field_ == expression_minimum ? a.minimum : a.maximum;
-                number = uint8_t(std::clamp(int(number) + direction * int(preference_step_), 0, 127));
-            }
-            expression_changed_ = true;
-        }
-    }
-    unsigned navigation_mask() const {
-        unsigned mask = 0;
-        for (auto button : navigation_buttons_) if (button) mask |= 1u << (button - 1);
-        return mask;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_stage_navigation)
-#endif
-    bool stage_navigation() {
-        Document draft;
-        if (!docs_.edit_document(draft)) return false;
-        const auto *current = draft.page_layout().navigation();
-        uint8_t shortcuts[4] = {};
-        if (current) std::copy_n(current, 4, shortcuts);
-        const unsigned mask = navigation_mask();
-        if (shortcuts[navigation_index_] == mask) return true;
-        if (mask && mask == shortcut_mask_) {
-            navigation_feedback_ = "Reserved for Settings";
-            return false;
-        }
-        const unsigned back = hardware_.control_input(ControlRole::back);
-        if (navigation_index_ >= 2 && back < 8 && (mask & (1u << back))) {
-            navigation_feedback_ = "Page shortcut uses Back";
-            return false;
-        }
-        for (unsigned i = 0; i < 4; ++i) {
-            if (mask && i != navigation_index_ && shortcuts[i] == mask) {
-                navigation_feedback_ = "Shortcut is already assigned";
-                return false;
-            }
-        }
-        shortcuts[navigation_index_] = uint8_t(mask);
-        if (!docs_.edit_navigation(shortcuts)) {
-            navigation_feedback_ = "Could not change shortcut";
-            return false;
-        }
-        changed_fields_ |= 1u << 14;
-        navigation_feedback_ = nullptr;
-        return true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_navigation_button)
-#endif
-    void navigation_button(unsigned button) {
-        navigation_feedback_ = nullptr;
-        if (mode_ == Mode::navigation_shortcuts) {
-            if (button < 2) navigation_index_ = (navigation_index_ + (button ? 1 : 3)) % 4;
-            else if (button == 5) mode_ = Mode::preferences;
-            else if (button == 2) {
-                Document draft;
-                if (!docs_.edit_document(draft)) return;
-                const auto *shortcuts = draft.page_layout().navigation();
-                navigation_buttons_[0] = navigation_buttons_[1] = navigation_slot_ = 0;
-                if (shortcuts) {
-                    for (unsigned i = 0; i < 8; ++i) if (shortcuts[navigation_index_] & (1u << i))
-                        navigation_buttons_[navigation_buttons_[0] ? 1 : 0] = i + 1;
-                }
-                mode_ = Mode::navigation_value;
-            }
-        } else if (button == 2 || button == 5) {
-            if (stage_navigation()) mode_ = Mode::navigation_shortcuts;
-        } else if (button == 3) navigation_buttons_[0] = navigation_buttons_[1] = 0;
-        else if (button == 4) navigation_slot_ ^= 1;
-        else if (button < 2) {
-            const unsigned count = std::min(hardware_.input_count(), 8u) + 1;
-            auto &selected = navigation_buttons_[navigation_slot_];
-            const unsigned other = navigation_buttons_[navigation_slot_ ^ 1];
-            do { selected = (selected + (button ? 1 : count - 1)) % count; } while (selected && selected == other);
-        }
-    }
-    bool counter_is_program() const { return (counter_values_.status >> 4) == 12; }
-    uint8_t &counter_number() {
-        switch (counter_field_) {
-        case counter_controller: return counter_values_.controller;
-        case counter_initial: return counter_values_.initial;
-        case counter_minimum: return counter_values_.minimum;
-        default: return counter_values_.maximum;
-        }
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_stage_counter)
-#endif
-    bool stage_counter() {
-        Document draft;
-        if (!docs_.edit_document(draft)) return false;
-        if (!counter_adding_ && !std::memcmp(draft.counter(counter_index_) + 64, &counter_values_, sizeof(counter_values_))) return true;
-        if (counter_values_.minimum > counter_values_.initial || counter_values_.initial > counter_values_.maximum) {
-            counter_feedback_ = "Check min, initial and max";
-            return false;
-        }
-        if (!(counter_adding_ ? docs_.add_counter(contact_draft_, counter_values_) : docs_.edit_counter(counter_index_, counter_values_))) {
-            counter_feedback_ = "Could not change counter";
-            return false;
-        }
-        changed_fields_ |= 1u << 13;
-        if (counter_adding_) counter_index_ = draft.counters();
-        counter_adding_ = false;
-        counter_feedback_ = nullptr;
-        return true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_counter_button)
-#endif
-    void counter_button(unsigned button) {
-        Document draft;
-        if (!docs_.edit_document(draft)) return;
-        counter_feedback_ = nullptr;
-        if (mode_ == Mode::counters) {
-            const unsigned count = draft.counters();
-            if (button < 2 && count) counter_index_ = (counter_index_ + (button ? 1 : count - 1)) % count;
-            else if (button == 5) mode_ = Mode::preferences;
-            else if (button == 4 || (button == 2 && !count)) {
-                const unsigned mask = enabled_outputs(draft);
-                if (count == UINT16_MAX || !mask) { counter_feedback_ = "No space or MIDI output"; return; }
-                counter_values_ = Counters::Definition{};
-                for (const auto &output : hardware_.midi_outputs()) {
-                    if (!(mask & (1u << output.route))) continue;
-                    std::snprintf(counter_values_.output, sizeof(counter_values_.output), "%s", output.name);
-                    break;
-                }
-                counter_values_.status = 0xb0;
-                counter_values_.maximum = 127;
-                counter_values_.step[0] = 1;
-                counter_field_ = 0;
-                begin_object_name("", true);
-            }
-            else if (button == 2) {
-                std::memcpy(&counter_values_, draft.counter(counter_index_) + 64, sizeof(counter_values_));
-                counter_field_ = 0;
-                mode_ = Mode::counter_fields;
-            }
-        } else if (mode_ == Mode::counter_fields) {
-            if (button < 2) {
-                do { counter_field_ = (counter_field_ + (button ? 1 : counter_field_count - 1)) % counter_field_count; }
-                while (counter_field_ == counter_controller && counter_is_program());
-            } else if (button == 2) {
-                preference_step_ = 1;
-                mode_ = Mode::counter_value;
-            } else if (button == 3 || (button == 5 && stage_counter())) {
-                counter_adding_ = false;
-                mode_ = Mode::counters;
-            }
-        } else if (button == 2 || button == 5) mode_ = Mode::counter_fields;
-        else if (button == 4 && counter_field_ >= counter_controller && counter_field_ < counter_boundary) {
-            const unsigned limit = counter_field_ == counter_step ? 10000 : 100;
-            preference_step_ = preference_step_ < limit ? preference_step_ * 10 : 1;
-        } else if (button < 2) {
-            const int direction = button ? 1 : -1;
-            const int delta = direction * int(preference_step_);
-            if (counter_field_ == counter_output) {
-                const auto outputs = hardware_.midi_outputs();
-                const auto *selected = outputs.find(counter_values_.output);
-                const unsigned start = selected ? unsigned(selected - outputs.data) : 0;
-                Document fallback = draft;
-                fallback.bind_globals(nullptr);
-                for (unsigned i = 1; i <= outputs.count; ++i) {
-                    const auto &output = outputs.data[(start + (button ? i : outputs.count - i)) % outputs.count];
-                    if (!draft.has_output(hardware_, output.name) || !fallback.has_output(hardware_, output.name)) continue;
-                    std::memset(counter_values_.output, 0, sizeof(counter_values_.output));
-                    std::snprintf(counter_values_.output, sizeof(counter_values_.output), "%s", output.name);
-                    break;
-                }
-            } else if (counter_field_ == counter_type) {
-                counter_values_.status = uint8_t((counter_values_.status & 15) | (counter_is_program() ? 0xb0 : 0xc0));
-                counter_values_.controller = 0;
-            } else if (counter_field_ == counter_channel) {
-                auto &status = counter_values_.status;
-                status = uint8_t((status & 0xf0) | std::clamp(int(status & 15) + direction, 0, 15));
-            } else if (counter_field_ == counter_step) {
-                const int old = int16_t(u16(counter_values_.step));
-                const int value = std::clamp(old + delta, -32767, 32767);
-                binary::write16(counter_values_.step, uint16_t(value ? value : direction));
-            } else if (counter_field_ == counter_boundary) counter_values_.bounce ^= 1;
-            else {
-                auto &value = counter_number();
-                value = uint8_t(std::clamp(int(value) + delta, 0, 127));
-            }
-        }
-    }
-    const midi::OutputConnection *preference_output() const {
-        const auto outputs = hardware_.midi_outputs();
-        if (preference_route_ >= outputs.count) return nullptr;
-        const auto &output = outputs.data[preference_route_];
-        if (output.output || (output.port < 4 && (hardware_.supports_trs_mode(output.port, midi::TrsMode::midi_a)
-            || hardware_.supports_trs_mode(output.port, midi::TrsMode::midi_b)))) return &output;
-        return nullptr;
-    }
-    void browse_preference_output(bool backward) {
-        const unsigned count = hardware_.midi_outputs().count;
-        for (unsigned i = 0; i < count; ++i) {
-            preference_route_ = (preference_route_ + (backward ? count - 1 : 1)) % count;
-            if (preference_output()) return;
-        }
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_preference_text)
-#endif
-    void preference_text(char *text, unsigned capacity, uint32_t value, bool by_output = false) const {
-        const auto &field = preference();
-        using Kind = ui::PreferenceKind;
-        using Message = ui::i18n::Message;
-        if (field.kind == Kind::boolean || (!value && ui::optional_tempo_preference(field.field)))
-            ui::utf8::copy(text, capacity, ui::i18n::text(value ? Message::on : Message::off));
-        else if (field.kind == Kind::choice && value <= field.maximum) ui::utf8::copy(text, capacity, field.choices[value]);
-        else if (field.kind == Kind::font)
-            ui::utf8::copy(text, capacity, ui::preference_face_names[ui::preference_face_index(value)]);
-        else if (field.kind == Kind::color)
-            ui::color_caption(text, capacity, uint16_t(value));
-        else if (field.kind == Kind::outputs) {
-            if (const auto *output = by_output ? preference_output() : nullptr) {
-                std::snprintf(text, capacity, "%s  %s", output->label, ui::i18n::text(value & (1u << output->route) ? Message::on : Message::off));
-            } else {
-                unsigned length = 0;
-                for (const auto &output : hardware_.midi_outputs()) {
-                    if (!(value & (1u << output.route))) continue;
-                    if (length && length + 2 < capacity) { text[length++] = ','; text[length++] = ' '; }
-                    ui::utf8::copy(text + length, capacity - length, output.label);
-                    length += unsigned(std::strlen(text + length));
-                }
-                if (!length) ui::utf8::copy(text, capacity, ui::i18n::text(Message::none));
-            }
-        } else std::snprintf(text, capacity, "%lu", (unsigned long)value);
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_preference_button)
-#endif
-    void preference_button(unsigned button) {
-        const auto &field = preference();
+    void begin_brightness(bool setup) {
+        setup_brightness_ = setup;
         const auto *values = docs_.global_preferences();
-        if (!values && !setup_preferences_) return;
-        if (mode_ == Mode::preferences) {
-            if (button < 2 || button == 3 || button == 4) browse_preference(button == 0 || button == 3, button >= 3);
-            else if (button == 5) {
-                if (!setup_preferences_) { mode_ = Mode::pedal; item_ = 2; }
-                else if (setup_preference_return_ == Mode::closed) finish_draft();
-                else { mode_ = setup_preference_return_; setup_preferences_ = false; }
-            }
-            else if (button == 2) {
-                if (preference_index_ == ui::layout_preference_index) {
-                    layout_option_ = LayoutOption::pages;
-                    layout_rejected_ = false;
-                    mode_ = Mode::layout_menu;
-                    return;
-                }
-                if (preference_index_ == ui::counter_preference_index) {
-                    counter_index_ = 0;
-                    counter_adding_ = false;
-                    counter_feedback_ = nullptr;
-                    mode_ = Mode::counters;
-                    return;
-                }
-                if (preference_index_ == ui::navigation_preference_index) {
-                    navigation_index_ = 0;
-                    mode_ = Mode::navigation_shortcuts;
-                    return;
-                }
-                if (preference_index_ == ui::expression_preference_index) {
-                    Document draft;
-                    if (!docs_.edit_document(draft)) return;
-                    const unsigned mask = expression_jacks(draft);
-                    expression_jack_ = 0;
-                    while (!(mask & (1u << expression_jack_))) ++expression_jack_;
-                    expression_feedback_ = nullptr;
-                    mode_ = Mode::expression_jacks;
-                    return;
-                }
-                if (preference_index_ == ui::contact_preference_index) {
-                    Document draft;
-                    if (!docs_.edit_document(draft)) return;
-                    read_contact_style(draft);
-                    contact_field_ = 0;
-                    contact_style_rejected_ = false;
-                    mode_ = Mode::contact_style_fields;
-                    return;
-                }
-                const uint64_t bit = uint64_t(1) << field.field;
-                const bool page_field = field.field >= ui::page_preference;
-                const bool pedal_known = !page_field && values && (values->known & bit);
-                Document draft;
-                if (setup_preferences_) {
-                    if (!docs_.edit_document(draft)) return;
-                    const uint32_t fallback = ui::setup_preference(draft, field.field);
-                    preference_initial_known_ = preference_known_ = page_field || (draft.explicit_settings() & bit);
-                    preference_can_inherit_ = draft.global_mask_offset() && pedal_known;
-                    setup_preference_ = pedal_known ? values->values[field.field] : fallback;
-                    preference_initial_ = preference_value_ = preference_known_ ? fallback : setup_preference_;
-                    preference_rejected_ = false;
-                } else {
-                    preference_known_ = pedal_known;
-                    setup_preference_ = ui::setup_preference(docs_.document(), field.field);
-                    preference_value_ = preference_known_ ? values->values[field.field] : setup_preference_;
-                    device_editor_ = Mode::preference_value;
-                }
-                preference_step_ = 1;
-                preference_route_ = 0;
-                preference_component_ = 0;
-                if (!preference_output()) browse_preference_output(false);
-                mode_ = Mode::preference_value;
-            }
-        } else if (button == 4 && setup_preferences_ && field.field == 8 && hardware_.movie_library()) {
-            if (stage_setup_preference()) {
-                movie_idle_ = movie_rejected_ = false;
-                mode_ = Mode::movie_lists;
-            }
-        } else if (button == 4 && setup_preferences_ && field.field == 33) {
-            if (stage_setup_preference()) {
-                neutral_index_ = 0;
-                neutral_rejected_ = false;
-                mode_ = Mode::neutrals;
-            }
+        Document source = docs_.document();
+        source.bind_globals(nullptr);
+        compiled_brightness_ = source.brightness();
+        brightness_known_ = setup ? bool(source.explicit_settings() & 1) : values && (values->known & 1);
+        brightness_ = !setup && brightness_known_ ? values->values[0] : docs_.document().brightness();
+        brightness_step_ = 10;
+        mode_ = Mode::brightness;
+        device_editor_ = setup ? Mode::closed : Mode::brightness;
+    }
+    bool stage_brightness() {
+        Document draft;
+        if (!docs_.edit_document(draft)) return false;
+        if (brightness_known_ == bool(draft.explicit_settings() & 1)
+            && (!brightness_known_ || draft.brightness() == brightness_)) return true;
+        if (!docs_.edit_brightness(brightness_, !brightness_known_)) {
+            hardware_.error(ui::i18n::text(ui::i18n::Message::operation_failed));
+            return false;
+        }
+        draft_changed_ = true;
+        return true;
+    }
+    void brightness_button(unsigned button) {
+        if (button < 2) {
+            const unsigned next = unsigned(std::clamp(int(brightness_) + (button ? 1 : -1) * int(brightness_step_), 0, 255));
+            brightness_known_ |= next != brightness_;
+            brightness_ = next;
         } else if (button == 3) {
-            if (field.kind == ui::PreferenceKind::color) preference_component_ = (preference_component_ + 1) % 3;
-            else if (!setup_preferences_ || preference_can_inherit_) {
-                preference_known_ = false; preference_value_ = setup_preference_;
-                preference_rejected_ = false;
-            }
-        } else if (field.kind == ui::PreferenceKind::outputs && button < 3) {
-            if (button < 2) browse_preference_output(button == 0);
-            else if (const auto *output = preference_output()) {
-                preference_value_ ^= uint32_t(1u << output->route); preference_known_ = true;
-                preference_rejected_ = false;
-            }
-        } else if (button == 2 || button == 5) {
-            if (setup_preferences_) {
-                if ((button == 5 && preference_rejected_) || stage_setup_preference()) mode_ = Mode::preferences;
-            } else if (preference_changed()) { mode_ = Mode::decision; item_ = 2; }
-            else leave_device_editor();
-        } else if (button == 4 && field.kind != ui::PreferenceKind::outputs) {
-            const unsigned span = field.kind == ui::PreferenceKind::color
-                ? ui::preference_color_max[preference_component_] : field.maximum - field.minimum;
-            preference_step_ = preference_step_ * 10 <= span ? preference_step_ * 10 : 1;
-        } else if (button < 2) {
-            const uint32_t previous = preference_value_;
-            if (field.field >= 19 && field.field <= 22) {
-                const unsigned count = field.maximum + 1;
-                for (unsigned i = 0; i < count; ++i) {
-                    preference_value_ = (preference_value_ + (button == 0 ? count - 1 : 1)) % count;
-                    if (hardware_.supports_trs_mode(field.field - 19, midi::TrsMode(preference_value_))) break;
-                }
-            } else {
-                const int delta = (button == 0 ? -1 : 1) * int(preference_step_);
-                if (field.kind == ui::PreferenceKind::font) {
-                    const int index = int(ui::preference_face_index(previous)) + delta;
-                    preference_value_ = ui::preference_faces[std::clamp(index, int(field.minimum), int(field.maximum))];
-                } else if (field.kind == ui::PreferenceKind::color)
-                    preference_value_ = ui::adjust_color(uint16_t(previous), preference_component_, delta);
-                else preference_value_ = uint32_t(std::clamp(int64_t(preference_value_) + delta, int64_t(field.minimum), int64_t(field.maximum)));
-                if (ui::optional_tempo_preference(field.field)) {
-                    if (!previous && button == 1) preference_value_ = 20;
-                    else if (preference_value_ < 20) preference_value_ = 0;
-                }
-            }
-            preference_known_ |= preference_value_ != previous;
-            preference_rejected_ = false;
-        }
+            if (setup_brightness_ && !docs_.document().global_mask_offset()) return;
+            brightness_known_ = false;
+            const auto *values = docs_.global_preferences();
+            brightness_ = setup_brightness_ && values && (values->known & 1) ? values->values[0] : compiled_brightness_;
+        } else if (button == 4) brightness_step_ = brightness_step_ == 1 ? 10 : 1;
+        else if (setup_brightness_) {
+            if (stage_brightness()) finish_draft();
+        } else if (brightness_changed()) { mode_ = Mode::decision; item_ = 2; }
+        else leave_device_editor();
     }
     void keep_editing(Mode fallback) {
         if (device_editor_ == Mode::calibration) hardware_.expression_calibration()->pause_capture(false);
@@ -1754,7 +542,7 @@ private:
             else if (button == 5) mode_ = device_editor_ = Mode::calibration;
             else if (button == 2 && calibration_choice_ == pedals.count()) {
                 calibration_delay_ = pedals.settle_ms();
-                preference_step_ = 100;
+                calibration_step_ = 100;
                 mode_ = device_editor_ = Mode::calibration_delay;
             } else if (button == 2) {
                 const char *label = pedals.name(calibration_choice_);
@@ -1768,11 +556,11 @@ private:
                 mode_ = Mode::contact;
             }
         } else if (button < 2) {
-            const int step = int(preference_step_);
+            const int step = int(calibration_step_);
             calibration_delay_ = unsigned(std::clamp(int(calibration_delay_) + (button ? step : -step),
                 1, int(CalibrationFile::maximum_settle_ms)));
         } else if (button == 4) {
-            preference_step_ = preference_step_ == 1000 ? 1 : preference_step_ * 10;
+            calibration_step_ = calibration_step_ == 1000 ? 1 : calibration_step_ * 10;
         } else if (button == 2 || button == 5) {
             if (calibration_delay_ != pedals.settle_ms()) { mode_ = Mode::decision; item_ = 2; }
             else leave_device_editor();
@@ -1793,119 +581,33 @@ private:
         ui::utf8::next(next, code);
         const unsigned length = unsigned(std::strlen(contact_draft_));
         const bool naming = device_editor_ == Mode::calibration_name;
-        const bool object_name = editing_object_name();
-        if (mode_ == Mode::contact_action || mode_ == Mode::object_name_action) {
+        if (mode_ == Mode::contact_action) {
             if (button < 2) item_ = naming ? (item_ == 0 ? 2 : 0) : (item_ + (button ? 1 : 2)) % 3;
-            else if (button == 5) mode_ = object_name ? Mode::object_name : Mode::contact;
+            else if (button == 5) mode_ = Mode::contact;
             else if (button == 2) {
-                if (object_name && item_ == 1) { leave_object_name(); return; }
                 if (item_ == 2) std::memmove(position, next, std::strlen(next) + 1);
-                else if (length + 1 < text_capacity()) {
+                else if (length + 1 < sizeof(contact_draft_)) {
                     std::memmove(position + 1, position, std::strlen(position) + 1);
                     *position = item_ ? '\n' : ' ';
                 } else { hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return; }
-                mode_ = object_name ? Mode::object_name : Mode::contact;
+                mode_ = Mode::contact;
             }
             return;
         }
         if (button == 5) {
-            if (object_name) {
-                if (stage_object_name()) leave_object_name(true);
-            } else if (text_changed()) { mode_ = Mode::decision; item_ = contact_shortcut_ ? 0 : 2; }
+            if (text_changed()) { mode_ = Mode::decision; item_ = contact_shortcut_ ? 0 : 2; }
             else leave_device_editor();
-        } else if (button == 2) { mode_ = object_name ? Mode::object_name_action : Mode::contact_action; item_ = 0; }
+        } else if (button == 2) { mode_ = Mode::contact_action; item_ = 0; }
         else if (button == 3 && contact_cursor_) {
             do { --contact_cursor_; } while ((uint8_t(contact_draft_[contact_cursor_]) & 0xc0) == 0x80);
         } else if (button == 4) contact_cursor_ = unsigned(next - contact_draft_);
         else if (button < 2) {
-            if (!code && length + 1 >= text_capacity()) {
+            if (!code && length + 1 >= sizeof(contact_draft_)) {
                 hardware_.error(ui::i18n::text(ui::i18n::Message::capacity_exceeded)); return;
             }
             std::memmove(position + 1, next, std::strlen(next) + 1);
             *position = code >= 32 && code <= 126 ? char(32 + (code - 32 + (button ? 1 : 94)) % 95)
                 : button ? 'a' : 'A';
-        }
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_cycle_name)
-#endif
-    void propose_cycle_name(const Document &doc) {
-        const char *alias = reinterpret_cast<const char *>(doc.instrument(alias_));
-        const char *tag = tag_ == CycleCatalogue::all ? "" : doc.cycle_catalogue().tag(tag_);
-        std::snprintf(suggested_, sizeof(suggested_), "%s", alias);
-        if (*tag) {
-            const auto used = std::strlen(suggested_);
-            suggested_[used] = ' ';
-            ui::utf8::copy(suggested_ + used + 1, sizeof(suggested_) - used - 1, tag);
-        }
-        std::strcpy(cycle_name_, suggested_);
-        for (unsigned suffix = 2;; ++suffix) {
-            if (!docs_.edit_cycle_name_used(cycle_name_)) break;
-            char number[12];
-            std::snprintf(number, sizeof(number), " %u", suffix);
-            ui::utf8::copy(cycle_name_, sizeof(cycle_name_) - std::strlen(number), suggested_);
-            std::strcat(cycle_name_, number);
-        }
-        std::strcpy(suggested_, cycle_name_);
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_cycle_button)
-#endif
-    void cycle_button(unsigned button) {
-        Document doc;
-        if (!docs_.edit_document(doc)) return;
-        const auto &catalogue = doc.cycle_catalogue();
-        if (mode_ == Mode::cycle_instrument) {
-            if (button == 5) mode_ = cycle_return_;
-            else if (button < 2) do {
-                alias_ = (alias_ + doc.instruments() + (button ? 1 : -1)) % doc.instruments();
-            } while (!catalogue.count(alias_));
-            else if (button == 2) { tag_ = CycleCatalogue::all; mode_ = Mode::cycle_tag; }
-        } else if (mode_ == Mode::cycle_tag) {
-            if (button == 5) mode_ = Mode::cycle_instrument;
-            else if (button < 2) {
-                const unsigned count = catalogue.tags() + 1;
-                unsigned choice = tag_ == CycleCatalogue::all ? 0 : tag_ + 1;
-                do { choice = (choice + count + (button ? 1 : -1)) % count; }
-                while (choice && !catalogue.count(alias_, choice - 1));
-                tag_ = choice ? choice - 1 : CycleCatalogue::all;
-            } else if (button == 2) { propose_cycle_name(doc); mode_ = Mode::cycle_confirm; }
-        } else if (mode_ == Mode::cycle_confirm) {
-            if (button == 5) mode_ = Mode::cycle_tag;
-            else if (button == 3) {
-                std::strcpy(suggested_, cycle_name_);
-                for (const char *p = cycle_name_; *p; ++p) if (uint8_t(*p) >= 128) {
-                    cycle_name_[0] = 0; break;
-                }
-                character_ = 0;
-                mode_ = Mode::cycle_name;
-            } else if (button == 2) {
-                if (docs_.edit_cycle_name_used(cycle_name_)) {
-                    hardware_.error("Cycle name already used");
-                    return;
-                }
-                if (!docs_.edit_add_cycle(cycle_name_, alias_, tag_)) {
-                    hardware_.error("Cycle exceeds available setup capacity");
-                    return;
-                }
-                changed_fields_ |= 1u << 9;
-                mode_ = Mode::decision; item_ = 0;
-            }
-        } else {
-            unsigned length = unsigned(std::strlen(cycle_name_));
-            if (button == 5) std::strcpy(cycle_name_, suggested_);
-            if (button == 2 || button == 5) {
-                while (length && button == 2 && cycle_name_[length - 1] == ' ') cycle_name_[--length] = 0;
-                if (!cycle_name_[0]) std::strcpy(cycle_name_, suggested_);
-                mode_ = Mode::cycle_confirm;
-            } else if (button == 3 && character_) --character_;
-            else if (button == 4 && character_ < 62) ++character_;
-            else if (button < 2) {
-                while (length <= character_) cycle_name_[length++] = ' ';
-                cycle_name_[length] = 0;
-                char &letter = cycle_name_[character_];
-                letter = char(32 + (letter - 32 + 95 + (button ? 1 : -1)) % 95);
-            }
         }
     }
     void begin_contact() {
@@ -1914,385 +616,8 @@ private:
         mode_ = device_editor_ = Mode::contact;
     }
     void close() { contact_shortcut_ = false; mode_ = Mode::closed; docs_.redraw(); }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_begin_edit)
-#endif
-    void begin_edit() {
-        if (!docs_.edit_begin(name_)) { mode_ = Mode::failed; render(); return; }
-        if (docs_.busy()) { mode_ = Mode::loading_draft; render(); return; }
-        open_draft();
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_open_draft)
-#endif
-    void open_draft() {
-        Document draft;
-        if (!docs_.edit_document(draft)) { docs_.edit_cancel(); mode_ = Mode::failed; render(); return; }
-        original_ = false;
-        current_field_ = false;
-        changed_fields_ = 0;
-        patch_ = 0;
-        field_ = draft.patches() ? 0 : 5;
-        mode_ = draft_return_ = draft.patches() ? Mode::patch : Mode::field;
-        render();
-    }
     void browse(bool backward) {
         if (docs_.browse(name_, backward)) browsing_ = true;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_render_chooser_displays)
-#endif
-    void render_chooser_displays(Pane (&views)[3], PageLayout layout, ui::Prompt &prompt) const {
-        using Role = ControlRole;
-        const unsigned page = layout.controller_page(page_position_);
-        const bool minimum = mode_ == Mode::layout_chooser_minimum;
-        const bool order = mode_ == Mode::layout_chooser_order || mode_ == Mode::layout_chooser_order_move;
-        const bool moving = mode_ == Mode::layout_chooser_order_move;
-        ui::copy_caption(views[1].lines[1], layout.name(page));
-        if (order) {
-            ui::copy_caption(views[2].lines[0], moving ? "Move to" : "Give-up order");
-            ui::copy_caption(views[2].lines[1], layout.display_name(layout.page(page)[2 + page_region_]));
-            std::snprintf(views[2].lines[2].text, 64, "Position %u/%u",
-                (moving ? destination_position_ : page_region_) + 1, layout.displays());
-        } else {
-            ui::copy_caption(views[2].lines[0], "Minimum displays");
-            std::snprintf(views[2].lines[1].text, 64, "%u", minimum ? chooser_minimum_ : layout.minimum_displays(page));
-        }
-        if (layout_rejected_) ui::copy_caption(views[1].lines[2], minimum ? "Displays unavailable" : "Could not move display");
-        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
-            minimum ? "Adjust" : moving ? "Position" : "Browse").text());
-        const char *confirm = minimum || moving ? "Accept" : order ? "Move" : "Edit minimum";
-        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, confirm)
-            .add(Role::back, minimum || moving ? "Cancel" : "Back", ", ").text());
-        if (mode_ == Mode::layout_chooser)
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, "Give-up order").text());
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_render_layout)
-#endif
-    void render_layout(Pane (&views)[3], PageLayout layout, ui::Prompt &prompt) const {
-        using Role = ControlRole;
-        if (mode_ == Mode::layout_menu) {
-            ui::copy_caption(views[1].lines[1], "Page layout");
-            ui::copy_caption(views[2].lines[1], layout_options[unsigned(layout_option_)]);
-            return;
-        }
-        if (mode_ == Mode::layout_add_type) {
-            ui::copy_caption(views[1].lines[0], "Append to region");
-            ui::copy_caption(views[1].lines[1], layout.region_name(page_region_));
-            ui::copy_caption(views[2].lines[0], "Page type");
-            ui::copy_caption(views[2].lines[1], utility_pages[page_position_].label);
-            ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, "Browse types").text());
-            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Name page").add(Role::back, "Back", ", ").text());
-            return;
-        }
-        if (mode_ >= Mode::layout_chooser) {
-            render_chooser_displays(views, layout, prompt);
-            return;
-        }
-        if (layout_option_ == LayoutOption::join) {
-            ui::copy_caption(views[1].lines[0], "Keep this region");
-            ui::copy_caption(views[1].lines[1], layout.region_name(page_region_));
-            ui::copy_caption(views[2].lines[0], "Append pages from");
-            ui::copy_caption(views[2].lines[1], layout.region_name(page_region_ + 1));
-            if (layout_rejected_) ui::copy_caption(views[1].lines[2], "Could not join regions");
-            ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, "Browse pairs").text());
-            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Join")
-                .add(Role::back, "Back", ", ").text());
-            return;
-        }
-        if (mode_ == Mode::layout_region || mode_ == Mode::layout_region_move) {
-            const bool moving_region = mode_ == Mode::layout_region_move;
-            const bool priority = layout_option_ == LayoutOption::priority;
-            const bool focus = layout_option_ == LayoutOption::focus;
-            const bool choosing = priority || focus;
-            ui::copy_caption(views[1].lines[1], choosing ? layout_options[unsigned(layout_option_)] : layout.region_name(page_region_));
-            ui::copy_caption(views[2].lines[0], moving_region ? "Move to" : "Selection");
-            if (priority) ui::copy_caption(views[2].lines[1], layout_left_ ? "Left first" : "Right first");
-            else if (focus) ui::copy_caption(views[2].lines[1], layout.region_name(page_region_));
-            else std::snprintf(views[2].lines[1].text, 64, "Position %u/%u",
-                (moving_region ? destination_region_ : page_region_) + 1, layout.regions());
-            if (layout_rejected_) ui::copy_caption(views[1].lines[2], "Could not change layout");
-            ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, moving_region ? "Position" : "Browse").text());
-            const char *confirm = moving_region ? "Accept move" : choosing ? "Accept"
-                : layout_option_ == LayoutOption::region_names ? "Rename"
-                : layout_option_ == LayoutOption::add ? "Choose region" : "Move";
-            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, confirm)
-                .add(Role::back, moving_region ? "Cancel" : "Back", ", ").text());
-            return;
-        }
-        const bool moving = mode_ == Mode::layout_move;
-        const unsigned region = moving ? destination_region_ : page_region_;
-        const unsigned position = moving ? destination_position_ : page_position_;
-        const unsigned page = layout.region_page(page_region_, page_position_);
-        const unsigned count = layout.region_size(region) + unsigned(moving && region != page_region_);
-        ui::copy_caption(views[1].lines[1], layout.name(page));
-        ui::copy_caption(views[2].lines[0], moving ? "Move to" : "Region");
-        ui::copy_caption(views[2].lines[1], layout.region_name(region));
-        std::snprintf(views[2].lines[2].text, 64, "Position %u/%u", position + 1, count);
-        if (layout_rejected_) ui::copy_caption(views[1].lines[2], layout.region_size(page_region_) == 1
-            ? "Keep one page in each region" : "Displays unavailable");
-        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, moving ? "Position" : "Browse").text());
-        const bool split = layout_option_ == LayoutOption::split;
-        const char *confirm = moving ? "Accept move" : layout_option_ == LayoutOption::page_names ? "Rename"
-            : split ? "Split here" : "Move";
-        prompt.clear();
-        if (!split || position) prompt.add(Role::confirm, confirm);
-        else ui::copy_caption(views[1].lines[2], "Choose a later page");
-        ui::copy_caption(views[0].lines[1], prompt.add(Role::back, moving ? "Cancel" : "Back", ", ").text());
-        if (layout.regions() > 1)
-            ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Region").text());
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_render_movies)
-#endif
-    void render_movies(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
-        using Role = ControlRole;
-        auto &center = views[1].lines;
-        auto &right = views[2].lines;
-        const char *list = movie_idle_ ? "Idle movies" : "Startup movies";
-        ui::copy_caption(center[1], list);
-        const unsigned count = draft.movies(movie_idle_);
-        const char *confirm = "Open", *value = "";
-        char number[24];
-        if (mode_ == Mode::movie_lists) {
-            std::snprintf(number, sizeof(number), "%u selected", count);
-            value = number;
-        } else if (mode_ == Mode::movie_entries) {
-            if (movie_index_ == count) {
-                confirm = "Add";
-                value = "Add installed movie";
-            } else {
-                confirm = "Replace";
-                std::snprintf(center[2].text, 64, "%u/%u", movie_index_ + 1, count);
-                std::snprintf(number, sizeof(number), "%08lx", (unsigned long)u32(draft.movie_keys(movie_idle_) + 4 * movie_index_));
-                value = number;
-                ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Remove").text());
-            }
-        } else {
-            confirm = movie_choice_ && mode_ == Mode::movie_picker ? "Use movie" : "";
-            ui::copy_caption(center[1], "Installed movies");
-            if (mode_ == Mode::movie_scan) value = "Scanning card";
-            else if (!movie_choice_) value = "No compatible movies";
-            else {
-                std::snprintf(number, sizeof(number), "%08lx", (unsigned long)*movie_choice_);
-                value = number;
-            }
-        }
-        ui::copy_caption(right[0], list);
-        ui::copy_caption(right[1], value);
-        if (movie_rejected_) ui::copy_caption(right[2], "Could not change selection");
-        prompt.clear();
-        if (*confirm) prompt.add(Role::confirm, confirm);
-        ui::copy_caption(views[0].lines[1], prompt.add(Role::back, "Back", ", ").text());
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_render_neutral)
-#endif
-    void render_neutral(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
-        using Role = ControlRole;
-        const auto *record = draft.loop_stop_settings();
-        const unsigned count = record ? u16(record + 5) : 0;
-        auto &center = views[1].lines;
-        auto &right = views[2].lines;
-        const auto outputs = hardware_.midi_outputs();
-        const char *feedback = neutral_rejected_ ? "Invalid or overlapping value"
-            : neutral_changed_ && mode_ != Mode::neutrals ? "Changed" : "";
-        ui::copy_caption(right[2], feedback);
-        const bool list = mode_ == Mode::neutrals, adjusting = mode_ == Mode::neutral_value;
-        if (list && neutral_index_ == count) {
-            ui::copy_caption(center[1], "Loop-stop neutral values");
-            ui::copy_caption(right[1], "Add neutral value");
-            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Add")
-                .add(Role::back, "Back", ", ").text());
-            return;
-        }
-        const auto *row = list ? record + 7 + 7 * neutral_index_ : nullptr;
-        const auto *output = outputs.route(row ? row[0] : neutral_output_);
-        const char *output_name = output ? output->label : "Unavailable";
-        const unsigned kind = row ? row[1] : neutral_.kind;
-        unsigned kind_index = 0;
-        while (neutral_kinds[kind_index] != kind) ++kind_index;
-        if (list) {
-            ui::copy_caption(center[1], "Loop-stop neutral values");
-            std::snprintf(center[2].text, 64, "%u/%u", neutral_index_ + 1, count);
-            ui::copy_caption(right[0], output_name);
-            std::snprintf(right[1].text, 64, "%s %u Ch %u = %u", neutral_types[kind_index],
-                u16(row + 3), row[2] + 1, u16(row + 5));
-            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Edit")
-                .add(Role::back, "Back", ", ").text());
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, "Remove").text());
-            return;
-        }
-        const char *fields[] = {"Output", "Control type", "MIDI channel",
-            neutral_.kind == midi::Parameter::cc7 || neutral_.kind == midi::Parameter::cc14 ? "Controller" : "Parameter",
-            "Neutral value"};
-        ui::copy_caption(center[1], fields[neutral_field_]);
-        ui::copy_caption(right[0], "Loop stop");
-        if (neutral_field_ < 2) ui::copy_caption(right[1], neutral_field_ ? neutral_types[kind_index] : output_name);
-        else std::snprintf(right[1].text, 64, "%d", neutral_field_ == 2 ? neutral_.channel + 1
-            : neutral_field_ == 3 ? neutral_.address : int(neutral_.value));
-        if (adjusting) {
-            ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, "Adjust").text());
-            if (neutral_field_ >= 3) {
-                char step[16]; std::snprintf(step, sizeof(step), "Step %lu", (unsigned long)preference_step_);
-                ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
-            }
-        } else {
-            ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, "Edit").add(Role::back, "Accept entry", ", ").text());
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Cancel entry").text());
-        }
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_render_counter)
-#endif
-    void render_counter(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) {
-        using Role = ControlRole;
-        const bool picking = mode_ == Mode::counters, adjusting = mode_ == Mode::counter_value;
-        const auto *record = !counter_adding_ && draft.counters() ? draft.counter(counter_index_) : nullptr;
-        const char *name = counter_adding_ ? contact_draft_ : record ? reinterpret_cast<const char *>(record) : "Counters";
-        ui::copy_caption(views[1].lines[1], name);
-        ui::copy_caption(views[2].lines[2], "Shared by patches in this setup");
-        if (picking) {
-            ui::copy_caption(views[2].lines[0], "Counters");
-            if (record) std::snprintf(views[2].lines[1].text, 64, "%u/%u", counter_index_ + 1, draft.counters());
-            else ui::copy_caption(views[2].lines[1], "No counters");
-        } else {
-            ui::copy_caption(views[2].lines[0], counter_fields[counter_field_]);
-            auto &value = views[2].lines[1];
-            if (counter_field_ == counter_output) {
-                const auto *name = counter_values_.output;
-                const auto *output = hardware_.midi_outputs().find(name);
-                ui::copy_caption(value, output ? output->label : name);
-            } else if (counter_field_ == counter_type) ui::copy_caption(value, counter_is_program() ? "Program Change" : "Control Change");
-            else if (counter_field_ == counter_boundary) ui::copy_caption(value, counter_values_.bounce ? "Bounce" : "Wrap");
-            else {
-                int number;
-                if (counter_field_ == counter_channel) number = (counter_values_.status & 15) + 1;
-                else if (counter_field_ == counter_step) number = int16_t(u16(counter_values_.step));
-                else number = counter_number() + unsigned(counter_is_program());
-                std::snprintf(value.text, sizeof(value.text), "%d", number);
-            }
-            if (!counter_feedback_ && (!record || std::memcmp(record + 64, &counter_values_, sizeof(counter_values_))))
-                ui::copy_caption(views[1].lines[2], ui::i18n::text(ui::i18n::Message::changed));
-        }
-        if (counter_feedback_) ui::copy_caption(views[1].lines[2], counter_feedback_);
-        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
-            adjusting ? "Adjust" : "Browse").text());
-        prompt.clear().add(Role::confirm, adjusting ? "Accept" : picking ? (record ? "Open" : "New counter") : "Edit");
-        ui::copy_caption(views[0].lines[1], prompt.add(Role::back, mode_ == Mode::counter_fields ? "Accept counter" : "Back", ", ").text());
-        if (picking && record && draft.counters() < UINT16_MAX && enabled_outputs(draft))
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, "New counter").text());
-        else if (mode_ == Mode::counter_fields)
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Cancel counter").text());
-        else if (adjusting && counter_field_ >= counter_controller && counter_field_ < counter_boundary) {
-            char step[24]; std::snprintf(step, sizeof(step), "Step %u", unsigned(preference_step_));
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
-        }
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_render_navigation)
-#endif
-    void render_navigation(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
-        using Role = ControlRole;
-        const auto *shortcuts = draft.page_layout().navigation();
-        const bool adjusting = mode_ == Mode::navigation_value;
-        const unsigned mask = adjusting ? navigation_mask() : shortcuts ? shortcuts[navigation_index_] : 0;
-        const char *labels[2] = {};
-        for (unsigned i = 0, used = 0; i < std::min(hardware_.input_count(), 8u) && used < 2; ++i)
-            if (mask & (1u << i)) labels[used++] = hardware_.input_label(i);
-        ui::copy_caption(views[1].lines[1], navigation_names[navigation_index_]);
-        ui::copy_caption(views[2].lines[0], "Switch combination");
-        auto &value = views[2].lines[1];
-        if (labels[1]) std::snprintf(value.text, sizeof(value.text), "%s+%s", labels[0], labels[1]);
-        else ui::copy_caption(value, labels[0] ? labels[0] : "Default");
-        if (navigation_feedback_) ui::copy_caption(views[1].lines[2], navigation_feedback_);
-        else if (adjusting) {
-            const unsigned selected = navigation_buttons_[navigation_slot_];
-            std::snprintf(views[2].lines[2].text, 64, "Switch %u %s", navigation_slot_ + 1,
-                selected ? hardware_.input_label(selected - 1) : "None");
-        } else ui::copy_caption(views[2].lines[2], "Applies to this setup");
-        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
-            adjusting ? "Choose switch" : "Browse").text());
-        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, adjusting ? "Accept" : "Edit")
-            .add(Role::back, "Back", ", ").text());
-        if (adjusting)
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Default")
-                .add(Role::next_section, "Other switch", ", ").text());
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_render_expression)
-#endif
-    void render_expression(Pane (&views)[3], const Document &draft, ui::Prompt &prompt) const {
-        using Role = ControlRole;
-        const bool picking = mode_ == Mode::expression_jacks, adjusting = mode_ == Mode::expression_value;
-        const auto saved = draft.page_settings().expression[expression_jack_];
-        const auto &a = picking ? saved : expression_assignment_;
-        const auto *calibration = hardware_.expression_calibration();
-        const char *name = calibration && expression_jack_ < calibration->count() ? calibration->name(expression_jack_) : "";
-        auto &title = views[1].lines[1];
-        if (*name) std::snprintf(title.text, sizeof(title.text), "TRS %u %s", expression_jack_ + 1, name);
-        else std::snprintf(title.text, sizeof(title.text), "TRS %u", expression_jack_ + 1);
-        const auto outputs = hardware_.midi_outputs();
-        auto &value = views[2].lines[1];
-        ui::copy_caption(views[2].lines[0], picking ? "Expression MIDI" : expression_fields[expression_field_]);
-        if (picking || expression_field_ == expression_output || expression_field_ == expression_mirror) {
-            const bool mirror = !picking && expression_field_ == expression_mirror;
-            const auto *output = mirror ? outputs.route(a.mirror_route) : outputs.find(a.output);
-            ui::copy_caption(value, output ? output->label : a.channel && !mirror ? a.output : picking ? "Unassigned" : "None");
-        } else if (expression_field_ == expression_curve) ui::copy_caption(value, expression_curves[unsigned(a.curve)]);
-        else if (expression_field_ == expression_reverse) ui::copy_caption(value, a.reverse ? "On" : "Off");
-        else {
-            const unsigned number = expression_field_ == expression_channel ? a.channel : expression_field_ == expression_controller
-                ? a.controller : expression_field_ == expression_minimum ? a.minimum : a.maximum;
-            std::snprintf(value.text, sizeof(value.text), "%u", number);
-        }
-        if (expression_feedback_) ui::copy_caption(views[1].lines[2], expression_feedback_);
-        else if (!picking && expression_changed_) ui::copy_caption(views[1].lines[2], ui::i18n::text(ui::i18n::Message::changed));
-        if (picking && a.channel) std::snprintf(views[2].lines[2].text, 64, "Ch %u, CC %u", unsigned(a.channel), unsigned(a.controller));
-        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, adjusting ? "Adjust" : "Browse").text());
-        const char *confirm = adjusting ? "Accept" : picking && !a.channel ? "Assign" : "Edit";
-        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, confirm)
-            .add(Role::back, mode_ == Mode::expression_fields ? "Accept assignment" : "Back", ", ").text());
-        if (picking && a.channel)
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Remove assignment").text());
-        else if (mode_ == Mode::expression_fields)
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Cancel edits").text());
-        else if (adjusting && expression_field_ >= expression_controller && expression_field_ <= expression_maximum) {
-            char step[24]; std::snprintf(step, sizeof(step), "Step %u", unsigned(preference_step_));
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
-        }
-    }
-#ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(setup_ui_render_contact_style)
-#endif
-    void render_contact_style(Pane (&views)[3], ui::Prompt &prompt) const {
-        using Role = ControlRole;
-        const bool adjusting = mode_ == Mode::contact_style_value;
-        const bool font = contact_field_ == contact_font;
-        ui::copy_caption(views[1].lines[1], "Contact appearance");
-        ui::copy_caption(views[2].lines[0], contact_style_fields[contact_field_]);
-        auto &value = views[2].lines[1];
-        if (font) ui::copy_caption(value, contact_face_ == ui::localized_face
-            ? "Language font" : ui::preference_face_names[ui::preference_face_index(contact_face_)]);
-        else {
-            const auto color = contact_colors_[contact_field_];
-            ui::color_caption(value.text, sizeof(value.text), color);
-            if (hardware_.display_count() >= 3) {
-                views[2].graphics.background = color;
-                const uint16_t ink = ui::Raster::luminance(color) < 1790 ? 0xffff : 0;
-                for (auto &line : views[2].lines) line.graphics.foreground = ink;
-            }
-        }
-        if (contact_style_rejected_) ui::copy_caption(views[1].lines[2], "Could not change appearance");
-        ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, adjusting ? "Adjust" : "Browse").text());
-        ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, adjusting ? "Accept" : "Edit")
-            .add(Role::back, "Back", ", ").text());
-        if (adjusting) {
-            prompt.clear();
-            if (!font) prompt.add(Role::previous_section, ui::preference_color_channel[preference_component_]);
-            ui::copy_caption(views[0].lines[2], prompt.add(Role::next_section, "Default", ", ").text());
-        }
     }
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(setup_ui_render)
@@ -2303,33 +628,16 @@ private:
         const char *title = ui::i18n::text(ui::i18n::Message::setups), *value = browsing_ ? ui::i18n::text(ui::i18n::Message::working) : name_[0] ? name_ : ui::i18n::text(ui::i18n::Message::no_setups);
         const char *value_label = ui::i18n::text(ui::i18n::Message::action);
         char number[64] = {}, calibration_title[32] = {};
-        const bool adding_cycle = mode_ == Mode::cycle_instrument || mode_ == Mode::cycle_tag
-            || mode_ == Mode::cycle_confirm || mode_ == Mode::cycle_name;
-        const bool layout_entry = mode_ == Mode::preferences && preference_index_ == ui::layout_preference_index;
-        const bool counter_entry = mode_ == Mode::preferences && preference_index_ == ui::counter_preference_index;
-        const bool navigation_entry = mode_ == Mode::preferences && preference_index_ == ui::navigation_preference_index;
-        const bool expression_entry = mode_ == Mode::preferences && preference_index_ == ui::expression_preference_index;
-        const bool contact_style_entry = mode_ == Mode::preferences && preference_index_ == ui::contact_preference_index;
-        const bool special_entry = layout_entry || counter_entry || navigation_entry || expression_entry || contact_style_entry;
-        const bool preference_view = !special_entry && (mode_ == Mode::preferences || mode_ == Mode::preference_value);
-        const bool layout_view = is_layout_view();
-        const bool neutral_view = mode_ == Mode::neutrals || mode_ == Mode::neutral_fields || mode_ == Mode::neutral_value;
-        const bool movie_view = is_movie_view();
-        const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument || mode_ == Mode::instrument_value;
-        const bool draft_view = mode_ == Mode::patch || mode_ == Mode::field || mode_ == Mode::value || adding_cycle
-            || instrument_view || neutral_view || movie_view || layout_view || special_entry || is_counter_view() || is_navigation_view()
-            || is_expression_view() || is_contact_style_view() || (setup_preferences_ && preference_view);
+        const bool brightness_view = mode_ == Mode::brightness;
+        const bool instrument_view = mode_ == Mode::instruments || mode_ == Mode::instrument_value;
+        const bool draft_view = instrument_view || (setup_brightness_ && brightness_view);
         Document draft;
         if (draft_view && !docs_.edit_document(draft)) return;
         if (mode_ == Mode::current) {
-            const auto &doc = docs_.document();
             title = ui::i18n::text(ui::i18n::Message::current);
             if (shortcut_ == Shortcut::performance && current_set_[0]) {
                 value_label = ui::i18n::text(ui::i18n::Message::setlist);
                 value = current_set_;
-            } else if (shortcut_ == Shortcut::performance) {
-                value_label = ui::i18n::text(ui::i18n::Message::patch);
-                value = reinterpret_cast<const char *>(doc.patch(current_patch_) + 12);
             } else if (shortcut_ == Shortcut::setup) {
                 value_label = ui::i18n::text(ui::i18n::Message::setup);
                 value = docs_.selected();
@@ -2347,7 +655,7 @@ private:
         else if (mode_ == Mode::pedal) {
             title = ui::i18n::text(ui::i18n::Message::pedal);
             value = item_ == 5 ? ui::i18n::text(ui::i18n::Message::calibrate) : item_ == 4 ? ui::i18n::text(ui::i18n::Message::language)
-                : item_ == 3 ? "Boot firmware" : item_ == 2 ? "Preferences"
+                : item_ == 3 ? "Boot firmware" : item_ == 2 ? ui::i18n::text(ui::i18n::Message::brightness)
                 : ui::i18n::text(item_ ? ui::i18n::Message::owner_contact : ui::i18n::Message::startup_set);
         }
         else if (mode_ == Mode::boot_firmware) {
@@ -2374,52 +682,15 @@ private:
             }
             value_label = ui::i18n::text(ui::i18n::Message::pedal);
         }
-        else if (layout_entry) {
-            title = "Page layout";
-            value = "Pages and regions";
-        }
-        else if (counter_entry) {
-            title = "Counters";
-            value = "Shared MIDI counters";
-        }
-        else if (navigation_entry) {
-            title = "Navigation shortcuts";
-            value = "Song patches and pages";
-        }
-        else if (expression_entry) {
-            title = "Expression MIDI";
-            value = "Expression jack assignments";
-        }
-        else if (contact_style_entry) {
-            title = "Contact appearance";
-            value = "Text, background and font";
-        }
-        else if (preference_view) {
-            const auto &field = preference();
-            const auto *values = docs_.global_preferences();
-            const uint64_t bit = uint64_t(1) << field.field;
-            title = field.label;
-            const bool editing = mode_ == Mode::preference_value;
-            const bool page_field = field.field >= ui::page_preference;
-            const bool pedal_known = !page_field && values && (values->known & bit);
-            const bool known = editing ? preference_known_
-                : setup_preferences_ ? page_field || (draft.explicit_settings() & bit) : pedal_known;
-            const auto &owner = setup_preferences_ ? draft : docs_.document();
-            const bool use_pedal = setup_preferences_ ? !known && pedal_known : known;
-            value_label = use_pedal ? ui::i18n::text(ui::i18n::Message::pedal)
-                : setup_preferences_ && !known ? "Compiled value" : ui::i18n::text(ui::i18n::Message::setup);
-            const uint32_t display = editing ? preference_value_
-                : use_pedal ? values->values[field.field] : ui::setup_preference(owner, field.field);
-            preference_text(number, sizeof(number), display, editing);
+        else if (brightness_view) {
+            title = ui::i18n::text(ui::i18n::Message::brightness);
+            value_label = ui::i18n::text(setup_brightness_ ? ui::i18n::Message::setup : ui::i18n::Message::pedal);
+            std::snprintf(number, sizeof(number), "%u", brightness_);
             value = number;
         }
-        else if (mode_ == Mode::contact || mode_ == Mode::contact_action || editing_object_name()) {
+        else if (mode_ == Mode::contact || mode_ == Mode::contact_action) {
             title = ui::i18n::text(ui::i18n::Message::owner_contact);
-            if (editing_object_name()) title = counter_naming_ ? "New counter name"
-                : layout_option_ == LayoutOption::add ? "New page name"
-                : layout_option_ == LayoutOption::split ? "New region name"
-                : layout_option_ == LayoutOption::region_names ? "Region name" : "Page name";
-            else if (device_editor_ == Mode::calibration_name) {
+            if (device_editor_ == Mode::calibration_name) {
                 std::snprintf(calibration_title, sizeof(calibration_title), "Jack %u name", calibration_choice_ + 1);
                 title = calibration_title;
             }
@@ -2437,11 +708,9 @@ private:
             std::snprintf(number, sizeof(number), "%.*s[%.*s]%.*s", int(selected - start), start,
                 code == '\n' ? 0 : int(next - selected), selected, int(end - next), next);
             value = number;
-            if (mode_ == Mode::contact_action || mode_ == Mode::object_name_action) {
+            if (mode_ == Mode::contact_action) {
                 const ui::i18n::Message actions[] = {ui::i18n::Message::insert_space, ui::i18n::Message::insert_line_break, ui::i18n::Message::delete_character};
-                value_label = mode_ == Mode::object_name_action && item_ == 1
-                    ? (counter_naming_ || layout_option_ == LayoutOption::add ? "Cancel addition"
-                        : layout_option_ == LayoutOption::split ? "Cancel split" : "Cancel rename") : ui::i18n::text(actions[item_]);
+                value_label = ui::i18n::text(actions[item_]);
             } else if (code == '\n') value_label = ui::i18n::text(ui::i18n::Message::line_break);
             else value_label = ui::i18n::text(ui::i18n::Message::value);
         }
@@ -2450,15 +719,9 @@ private:
             value_label = ui::i18n::text(ui::i18n::Message::pedal);
             value = startup_draft_[0] ? startup_draft_ : ui::i18n::text(ui::i18n::Message::none);
         }
-        else if (mode_ == Mode::action) { title = name_; value = item_ == 2 ? ui::i18n::text(ui::i18n::Message::history) : item_ ? ui::i18n::text(ui::i18n::Message::edit) : ui::i18n::text(ui::i18n::Message::select); }
-        else if (mode_ == Mode::patch) {
-            title = reinterpret_cast<const char *>(draft.patch_cycle(u16(draft.patch(patch_) + 2)));
-            value = reinterpret_cast<const char *>(draft.patch(patch_) + 12);
-            value_label = ui::i18n::text(ui::i18n::Message::patch);
-        }
-        else if (mode_ == Mode::field && field_ == 8) {
-            title = ui::i18n::text(original_ ? ui::i18n::Message::edit_patch_entry : ui::i18n::Message::edit_original_patch);
-            value = "";
+        else if (mode_ == Mode::action) {
+            title = name_;
+            value = ui::i18n::text(item_ ? ui::i18n::Message::history : ui::i18n::Message::select);
         } else if (instrument_view) {
             const auto *selected = draft.instrument(instrument_);
             const auto *alias = reinterpret_cast<const char *>(selected);
@@ -2470,48 +733,17 @@ private:
                 std::snprintf(number, sizeof(number), "%s, ch %u", output, unsigned(selected[64]) + 1);
                 value = number;
             } else {
-                title = instrument_output_ ? "MIDI output" : ui::i18n::text(ui::i18n::Message::instrument_channel);
+                title = ui::i18n::text(ui::i18n::Message::instrument_channel);
                 value_label = alias;
                 std::snprintf(number, sizeof(number), "%u", unsigned(selected[64]) + 1);
-                value = instrument_output_ ? output : number;
+                value = number;
             }
-        } else if (mode_ == Mode::field && settings_ && (field_ == 5 || field_ == 6)) {
-            title = field_ == 5 ? "Setup fields" : "Instruments";
-            value = "";
-        } else if (mode_ == Mode::field || mode_ == Mode::value) {
-            const char *fields[] = {ui::i18n::text(ui::i18n::Message::program), ui::i18n::text(ui::i18n::Message::bank), ui::i18n::text(ui::i18n::Message::instrument_channel), ui::i18n::text(ui::i18n::Message::volume), ui::i18n::text(ui::i18n::Message::pan), ui::i18n::text(ui::i18n::Message::brightness), ui::i18n::text(ui::i18n::Message::idle_seconds), ui::i18n::text(ui::i18n::Message::usb_midi)};
-            title = fields[field_];
-            int64_t v = Documents::edit_value(draft, patch_, field_);
-            if ((field_ == 1 && v == -1) || (field_ == 3 && v == -1) || (field_ == 4 && v == -65)) ui::i18n::format(number, sizeof(number), ui::i18n::Message::none);
-            else if (field_ == 7) std::snprintf(number, sizeof(number), "%s", v ? ui::i18n::text(ui::i18n::Message::on) : ui::i18n::text(ui::i18n::Message::off));
-            else if (v >= 0) std::snprintf(number, sizeof(number), "%lu", (unsigned long)v);
-            else std::snprintf(number, sizeof(number), "%ld", (long)v);
-            value = number;
-            value_label = ui::i18n::text(ui::i18n::Message::value);
         } else if (mode_ == Mode::decision) {
             title = ui::i18n::text(ui::i18n::Message::unsaved_edits); value = item_ == 0 ? ui::i18n::text(ui::i18n::Message::save) : item_ == 1 ? ui::i18n::text(ui::i18n::Message::discard) : ui::i18n::text(ui::i18n::Message::cancel);
         } else if (mode_ == Mode::history_work) { title = ui::i18n::text(ui::i18n::Message::history); value = ui::i18n::text(ui::i18n::Message::working); }
         else if (mode_ == Mode::saving || mode_ == Mode::language_saving) { title = ui::i18n::text(ui::i18n::Message::saving); value = ui::i18n::text(ui::i18n::Message::please_wait); }
         else if (mode_ == Mode::selecting) { title = ui::i18n::text(ui::i18n::Message::changing_setup); value = ui::i18n::text(ui::i18n::Message::please_wait); }
-        else if (mode_ == Mode::loading_draft) { title = name_; value = ui::i18n::text(ui::i18n::Message::working); }
         else if (mode_ == Mode::failed) { title = ui::i18n::text(ui::i18n::Message::operation_failed); value = docs_.last_error(); }
-        if (adding_cycle) {
-            const auto &doc = draft;
-            title = "Add patch cycle";
-            if (mode_ == Mode::cycle_instrument) {
-                value_label = "Instrument";
-                value = reinterpret_cast<const char *>(doc.instrument(alias_));
-            } else if (mode_ == Mode::cycle_tag) {
-                value_label = "Programs";
-                value = tag_ == CycleCatalogue::all ? "All programs" : doc.cycle_catalogue().tag(tag_);
-            } else if (mode_ == Mode::cycle_confirm) {
-                std::snprintf(number, sizeof(number), "%u programs", doc.cycle_catalogue().count(alias_, tag_));
-                value_label = number; value = cycle_name_;
-            } else {
-                std::snprintf(number, sizeof(number), "Character %u", character_ + 1);
-                value_label = number; value = cycle_name_;
-            }
-        }
         if (mode_ == Mode::history) {
             title = ui::i18n::text(ui::i18n::Message::history); value_label = ui::i18n::text(ui::i18n::Message::revision);
             if (revision_.number) {
@@ -2540,27 +772,16 @@ private:
         }
         std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::browse)).text());
         std::snprintf(views[0].lines[1].text, 64, "%s", prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::ok)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
-        if (mode_ == Mode::value || mode_ == Mode::instrument_value)
+        if (brightness_view || mode_ == Mode::instrument_value)
             std::snprintf(views[0].lines[0].text, 64, "%s", prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
         views[0].lines[2].graphics.line_height = views[0].lines[2].graphics.size = 16;
-        if (mode_ == Mode::patch || mode_ == Mode::field) {
-            prompt.clear();
-            if (settings_ && mode_ == Mode::patch) prompt.add(Role::previous_section, "Setup fields");
-            if (draft.cycle_catalogue().size()) prompt.add(Role::next_section, "Add cycle");
-            ui::copy_caption(views[0].lines[2], prompt.text());
-        }
-        if (mode_ == Mode::cycle_confirm)
-            ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, ui::i18n::text(ui::i18n::Message::rename)).text());
-        if (mode_ == Mode::cycle_name)
-            ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, ui::i18n::text(ui::i18n::Message::position_action)).text());
         if (mode_ == Mode::catalogue) {
             ui::copy_caption(views[1].lines[0], ui::i18n::text(ui::i18n::Message::setups));
             std::snprintf(views[1].lines[1].text, 64, "%s", value);
             ui::copy_caption(views[2].lines[0], ui::i18n::text(ui::i18n::Message::setup_menu));
             ui::copy_caption(views[2].lines[1], ui::i18n::text(ui::i18n::Message::no_midi_sent));
         } else {
-            const bool shared_edit = original_ && (mode_ == Mode::field || mode_ == Mode::value) && field_ < 5;
-            ui::copy_caption(views[1].lines[0], ui::i18n::text(mode_ == Mode::action || adding_cycle ? ui::i18n::Message::setup : mode_ == Mode::patch ? ui::i18n::Message::patch_cycle : shared_edit ? ui::i18n::Message::edit_original_patch : ui::i18n::Message::field));
+            ui::copy_caption(views[1].lines[0], ui::i18n::text(mode_ == Mode::action ? ui::i18n::Message::setup : ui::i18n::Message::field));
             ui::copy_caption(views[1].lines[1], title);
             ui::copy_caption(views[2].lines[0], value_label);
             ui::copy_caption(views[2].lines[1], value);
@@ -2578,24 +799,16 @@ private:
                 if (songs_->entry(current_set_, songs_->next_position(), entry))
                     ui::i18n::format(views[1].lines[2].text, sizeof(views[1].lines[2].text), ui::i18n::Message::next_song_name, entry.song);
             }
-            if ((mode_ == Mode::field || mode_ == Mode::value) && field_ == 2 && u16(draft.patch(patch_)) < draft.instruments()) {
-                ui::copy_caption(views[2].lines[0], reinterpret_cast<const char *>(draft.instrument(u16(draft.patch(patch_)))));
-                ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::instrument_channel_scope));
+            if (mode_ == Mode::current && shortcut_ == Shortcut::setup) {
+                prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::brightness));
+                if (docs_.document().instruments()) prompt.add(Role::previous_section, "Instruments");
+                ui::copy_caption(views[0].lines[2], prompt.text());
             }
-            if (mode_ == Mode::current && shortcut_ == Shortcut::setup && docs_.document().instruments())
-                ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::previous_section, "Instruments").text());
-            if (mode_ == Mode::field && current_field_)
-                ui::copy_caption(views[2].lines[2], prompt.clear().add(Role::previous_section, "Instruments").text());
             if (instrument_view && mode_ != Mode::instruments)
                 ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::instrument_channel_scope));
             if (instrument_view && instrument_feedback_)
                 ui::copy_caption(views[2].lines[2], instrument_feedback_);
-            else if (instrument_view && mode_ != Mode::instruments && (instrument_changed_ & (1u << unsigned(instrument_output_))))
-                ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::changed));
-            if (draft_view && (!current_field_ || instrument_view))
-                ui::copy_caption(views[1].lines[0], docs_.edit_name());
-            if ((mode_ == Mode::field || mode_ == Mode::value) && shortcut_ != Shortcut::setups && (changed_fields_ & (1u << field_)))
-                ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::changed));
+            if (draft_view) ui::copy_caption(views[1].lines[0], docs_.edit_name());
             if (device_editor_ == Mode::startup_set)
                 ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::startup_set_scope));
             if (device_editor_ == Mode::boot_firmware) {
@@ -2617,80 +830,27 @@ private:
             }
             if (mode_ == Mode::calibration_delay) {
                 ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
-                char step[24]; std::snprintf(step, sizeof(step), "Step %lu ms", (unsigned long)preference_step_);
+                char step[24]; std::snprintf(step, sizeof(step), "Step %u ms", calibration_step_);
                 ui::copy_caption(views[0].lines[2], prompt.clear().add(Role::next_section, step).text());
             }
-            if (mode_ == Mode::contact || mode_ == Mode::object_name) {
+            if (mode_ == Mode::contact) {
                 ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next, ui::i18n::text(ui::i18n::Message::adjust)).text());
-                ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action))
-                    .add(Role::back, mode_ == Mode::object_name ? "Accept name" : ui::i18n::text(ui::i18n::Message::back), ", ").text());
+                ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, ui::i18n::text(ui::i18n::Message::action)).add(Role::back, ui::i18n::text(ui::i18n::Message::back), ", ").text());
                 ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, ui::i18n::text(ui::i18n::Message::position_action)).text());
-                if (mode_ == Mode::object_name && counter_naming_ && counter_feedback_)
-                    ui::copy_caption(views[1].lines[2], counter_feedback_);
-                else if (mode_ == Mode::object_name && layout_rejected_)
-                    ui::copy_caption(views[1].lines[2], layout_option_ == LayoutOption::add ? "Check name and layout limits"
-                        : layout_option_ == LayoutOption::split ? "Check name and display space" : "Could not use that name");
             }
-            if (preference_view) {
-                if (!setup_preferences_) ui::copy_caption(views[1].lines[0], preference().group);
-                if (!setup_preferences_ && preference_overridden()) {
-                    char effective[32];
-                    preference_text(effective, sizeof(effective), ui::setup_preference(docs_.document(), preference().field));
-                    std::snprintf(views[2].lines[2].text, 64, "%s  %s", docs_.selected(), effective);
-                } else if (setup_preferences_) {
-                    if (mode_ == Mode::preference_value && preference_rejected_)
-                        ui::copy_caption(views[2].lines[2], "Invalid for this setup");
-                    else if ((setup_changes_ & (uint64_t(1) << preference().field))
-                        || (mode_ == Mode::preference_value && (preference_value_ != preference_initial_
-                            || preference_known_ != preference_initial_known_)))
-                        ui::copy_caption(views[2].lines[2], ui::i18n::text(ui::i18n::Message::changed));
-                    else ui::copy_caption(views[2].lines[2], preference().group);
-                }
-                if (mode_ == Mode::preferences) {
-                    ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Group").text());
-                } else {
-                    const auto kind = preference().kind;
-                    const bool routes = kind == ui::PreferenceKind::outputs;
-                    ui::copy_caption(views[0].lines[0], prompt.clear().pair(Role::previous, Role::next,
-                        ui::i18n::text(routes ? ui::i18n::Message::browse : ui::i18n::Message::adjust)).text());
-                    ui::copy_caption(views[0].lines[1], prompt.clear().add(Role::confirm, routes ? "Toggle output" : ui::i18n::text(ui::i18n::Message::ok))
-                        .add(Role::back, setup_preferences_ && preference_rejected_ ? "Cancel value"
-                            : ui::i18n::text(ui::i18n::Message::back), ", ").text());
-                    prompt.clear();
-                    if (kind == ui::PreferenceKind::color) {
-                        prompt.add(Role::previous_section, ui::preference_color_channel[preference_component_]);
-                        if (hardware_.display_count() >= 3) {
-                            const auto color = uint16_t(preference_value_);
-                            const uint16_t ink = ui::Raster::luminance(color) < 1790 ? 0xffff : 0;
-                            views[2].graphics.background = color;
-                            for (auto &line : views[2].lines) line.graphics.foreground = ink;
-                        }
-                    } else if (!setup_preferences_ || preference_can_inherit_)
-                        prompt.add(Role::previous_section, setup_preferences_ ? "Use pedal value" : "Use setup value");
-                    if (!routes && preference().maximum - preference().minimum >= 10) {
-                        char step[24]; std::snprintf(step, sizeof(step), "Step %lu", (unsigned long)preference_step_);
-                        prompt.add(Role::next_section, step);
-                    }
-                    if (setup_preferences_ && preference().field == 33)
-                        prompt.add(Role::next_section, "Neutral values");
-                    if (setup_preferences_ && preference().field == 8 && hardware_.movie_library())
-                        prompt.add(Role::next_section, "Movies");
-                    ui::copy_caption(views[0].lines[2], prompt.text());
-                }
+            if (brightness_view) {
+                prompt.clear();
+                if (!setup_brightness_ || docs_.document().global_mask_offset())
+                    prompt.add(Role::previous_section, setup_brightness_ ? "Use pedal value" : "Use setup value");
+                char step[16]; std::snprintf(step, sizeof(step), "Step %u", brightness_step_);
+                ui::copy_caption(views[0].lines[2], prompt.add(Role::next_section, step).text());
+                if (!setup_brightness_ && (docs_.document().explicit_settings() & 1))
+                    std::snprintf(views[2].lines[2].text, 64, "%s  %u", docs_.selected(), unsigned(docs_.document().brightness()));
             }
-            if (neutral_view) render_neutral(views, draft, prompt);
-            if (movie_view) render_movies(views, draft, prompt);
-            if (layout_view) render_layout(views, draft.page_layout(), prompt);
-            if (is_counter_view()) render_counter(views, draft, prompt);
-            if (is_navigation_view()) render_navigation(views, draft, prompt);
-            if (is_expression_view()) render_expression(views, draft, prompt);
-            if (is_contact_style_view()) render_contact_style(views, prompt);
-            if (special_entry)
-                ui::copy_caption(views[0].lines[2], prompt.clear().pair(Role::previous_section, Role::next_section, "Group").text());
             if (mode_ == Mode::decision) {
                 const bool pedal = device_editor_ != Mode::closed;
                 ui::copy_caption(views[1].lines[0], pedal ? ui::i18n::text(ui::i18n::Message::pedal) : docs_.edit_name());
-                const bool reload = device_editor_ == Mode::preference_value ? preference_reloads() : !pedal && docs_.edit_reloads();
+                const bool reload = !pedal && docs_.edit_reloads();
                 const auto save = reload ? ui::i18n::Message::save_reload_setup : ui::i18n::Message::save;
                 const auto action = item_ == 0 ? save : item_ == 1 ? ui::i18n::Message::discard : ui::i18n::Message::keep_editing;
                 ui::copy_caption(views[2].lines[1], ui::i18n::text(action));
@@ -2715,9 +875,9 @@ private:
                     ui::copy_caption(views[2].lines[0], "Settling time");
                     std::snprintf(views[2].lines[2].text, 64, "%u ms", calibration_delay_);
                 }
-                else if (device_editor_ == Mode::preference_value) {
-                    ui::copy_caption(views[2].lines[0], preference().label);
-                    preference_text(views[2].lines[2].text, sizeof(views[2].lines[2].text), preference_value_);
+                else if (device_editor_ == Mode::brightness) {
+                    ui::copy_caption(views[2].lines[0], ui::i18n::text(ui::i18n::Message::brightness));
+                    std::snprintf(views[2].lines[2].text, 64, "%u", brightness_);
                 }
                 if (reload) ui::copy_caption(views[0].lines[2], ui::i18n::text(ui::i18n::Message::reload_stops_playback));
             }

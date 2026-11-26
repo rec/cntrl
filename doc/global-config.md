@@ -153,98 +153,14 @@ as instruments, patches and routes. Those still use compilation-time defaults.
 Setups uploaded before explicit-setting metadata was introduced must be
 recompiled and uploaded before they can inherit live device-global preferences.
 
-On the pedal, open **Settings** and choose the current setup, or choose **Setups**
-and open a saved setup. **Setup fields** groups the compiled preferences by
-task, including MIDI, Navigation, Ports, Time, and Tempo presets. The display
-says whether the value comes from the setup, the pedal, or the compiled fallback.
-Adjusting a value makes a setup override. **Use pedal value** clears the
-override when a pedal value is
-available. Save commits the draft as a setup revision. Saving the loaded setup
-reloads it.
+On the pedal, **Settings → Setup** edits the loaded setup's brightness.
+**Settings → Pedal → Brightness** edits the device-wide value. In each
+editor, D clears the local brightness override so the next applicable
+default supplies it. Saving a setup brightness change reloads the setup.
 
-Choose **Page layout** in Setup fields. **Move pages** uses A/B to browse
-within a region, D/E to select a region, and C to pick a page to move.
-**Move regions** changes their left-to-right order. **Startup focus** chooses
-the region that gets focus when the setup loads. **Spare displays** chooses
-which side gets first claim on any displays left after each region gets its
-required minimum. Accept each change into the draft and save the setup to apply it.
-
-**Patch Chooser displays** edits the minimum number of displays for each
-Patch Chooser. Press E for **Give-up order** and move the displays into the
-order they should be released when the chooser has fewer displays available.
-With a single display, the chooser shows the sent patch on that display.
-
-**Rename pages** and **Rename regions** change the names used in the setup
-and its editable export. Choose a name, edit it with A/B and D/E or a USB
-keyboard, then use F or Enter to accept it into the draft. Names in each list
-must be unique and contain 1 to 31 printable ASCII characters.
-
-**Split region** starts a new region at the selected page and moves the pages
-from there onward into it. Pick a page after the first one and name the new
-region. The split must fit within the available displays. **Join regions**
-shows two neighbors. It appends the right region's pages to the left region
-in order and keeps the left region's name. If the right region had startup
-focus, the joined region gets that focus.
-
-**Add utility page** appends a page to the chosen region. Choose an available
-page type and give it a unique name. The editor checks the layout against
-the setup's display and memory budgets before accepting the addition.
-
-**Counters** lists the MIDI counters defined in the setup. Choose **New counter**
-to add one. On the MC6 Pro, press C when the list is empty or E when a counter
-is selected. Enter a unique name of up to 63 printable ASCII characters,
-then set its MIDI fields and accept the counter into the draft. Choose a counter
-to edit its output, message type, channel, controller number for Control
-Change, initial value, range, step, or boundary behavior. Edit related
-values before accepting the counter into the draft. The minimum, initial
-value, and maximum must be in order. Saving the setup applies the definition
-to every patch that uses that counter.
-
-**Navigation shortcuts** edits the setup's next and previous song-patch
-and page controls. Choose an action, then choose one or two switches by
-their physical labels. Use E to edit the other switch, D to restore the
-default for that action, and C to accept the combination into the draft.
-The Settings chord is reserved. With custom navigation configured, choose
-a **Previous song patch** shortcut if you use backward stepping in a setlist.
-Clear all four assignments to restore the pedal's default navigation gestures.
-
-**Expression MIDI** lists jacks configured for expression in the setup's
-Ports group. Choose a jack to add or edit its MIDI output, optional mirror,
-channel, controller number, value range, direction, or response curve. A new
-assignment starts on channel 1, CC 11, with the full 0–127 range. Use D from
-the jack list to remove an existing assignment. Save the setup to apply the
-changes. Heel and toe calibration and jack names are under Pedal.
-
-The utility groups cover clock following, tap detection, saved tempo presets,
-display layout, colors, fonts, and Status refresh. Choose MIDI clock outputs in
-the MIDI group. The live clock's send switch and active source stay on the Time
-page.
-
-In the setup's **Display** group, **Frame buffers** reserves zero, one, or two
-full-display buffers. Zero disables scrolling. **Use animations** controls
-scrolling and movie playback. The setup checks its display memory budget as
-you accept each draft value.
-
-Open **Use animations** and press E for **Movies** to edit the startup or idle
-list. Add or replace an entry by choosing an installed movie. Use D to remove a
-highlighted entry. Movies are shown by the eight-digit ID used in backup file
-names. Save the setup to apply the lists.
-
-In the setup's **MIDI** group, **Pickup** sets the default for controls that
-inherit the setup policy. **Pickup pairing (ms)** changes the pairing window.
-**Reset controls on loop stop** enables the setup's reset policy and preserves
-any authored neutral values.
-
-Open **Reset controls on loop stop** and press E for **Neutral values**. Each
-entry specifies its output, control type, channel, address, and value. Select
-**Add neutral value** to create an entry, or select an existing entry to edit
-or remove it. Accept the entry into the draft, then save the setup to apply it.
-
-Select **Instruments** from the current setup, from the current patch's MIDI
-channel field, or from a saved setup's field list. The instrument editor shows
-the current channel and output. Saving applies the new route to instrument
-programs that use that instrument in the owning setup. Raw MIDI actions keep the
-channel and output stored in each action.
+The **Instruments** shortcut under **Setup** changes an instrument's MIDI
+channel in the loaded setup. The channel applies to instrument programs
+using that instrument. Raw MIDI actions use the channel stored in each action.
 
 Use the USB connection to inspect, set or clear preferences:
 
@@ -345,12 +261,6 @@ Use `cntrl global list name_and_contact --from-pedal` to read the full text over
 To clear both copies, run `cntrl global clear name_and_contact` with the pedal connected.
 Clearing it offline saves an empty value to apply on the next sync.
 The translated Contact caption requires the language packs built for this firmware.
-
-On the pedal, open **Settings → Setup fields → Contact appearance** to edit
-the text color, background color, and font for the loaded or saved setup.
-Use D to choose the color component and E to restore the current field's
-default. Save the setup to apply the appearance. The contact text belongs to
-the pedal, and the optional image can be set in the setup file.
 
 The setup file accepts a Contact body style like this.
 The image sits behind the text. CNTRL checks the contrast under the lettering

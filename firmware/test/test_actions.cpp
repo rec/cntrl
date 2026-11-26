@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
     documents.tick(0);
     const unsigned selected_memory = cntrl::memory_used;
     assert(selected_memory >= baseline_memory + cntrl::memory_charge(unsigned(bytes.size())));
-    assert(documents.edit_begin() && documents.edit_adjust(0, 5, 1));
+    assert(documents.edit_begin() && documents.edit_brightness(193));
     assert(cntrl::memory_used >= selected_memory + 2 * cntrl::memory_charge(unsigned(bytes.size())));
     documents.edit_cancel(); assert(cntrl::memory_used == selected_memory);
     cntrl::MemoryBuffer occupied;

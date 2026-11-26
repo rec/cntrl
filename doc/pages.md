@@ -43,21 +43,21 @@ An authored C+F navigation chord takes priority. Include Settings in an
 explicit page list if you use C+F for navigation. Timing-sensitive utility
 pages such as Time and Panic keep their own switch timing while focused.
 
-Open Settings to edit the loaded setup's brightness, screensaver timeout,
-or USB MIDI setting. In browser mode, the current patch is also available
-when it selects a program for an instrument. Its MIDI channel edit applies
-to every patch that uses that instrument in the setup.
-Under **Pedal**, choose the setlist to open on the next boot. Choose **None**
-to start in the Patch Chooser.
+In **Settings**, choose **Setup** and press C to edit the loaded setup's
+brightness. Press D from **Setup** to choose an instrument and correct its
+MIDI channel. The channel applies to every patch that uses that instrument
+in the setup. Saving either change reloads the setup.
+
+Choose **Pedal** for device-wide brightness, startup set, language, boot
+firmware, Contact, and expression calibration, as supported by the device.
+In either brightness editor, A/B adjust the value and E switches between
+steps of 1 and 10. D clears the override and shows the inherited value.
+Press C or F to review before saving. An explicit setup brightness takes
+precedence over the pedal brightness.
+
+In the startup set editor, choose **None** to start in the Patch Chooser.
 In setlist mode, **Use at startup** opens the same editor with the current
 setlist selected.
-
-Open **Preferences** under **Pedal** for device-wide defaults. A/B browse
-fields and D/E move between groups. In a value editor D clears the device
-value so the setup supplies it, and E changes the step size for larger
-numbers. In MIDI clock outputs, A/B choose an output and C toggles it.
-Press F to review before saving. An explicit setup value appears beside
-the device value when the setup takes precedence.
 
 Open **Setlists** from **Settings** to reorder a saved setlist. Browse to
 the setlist, press C to open it, then use A/B to choose an occurrence by
@@ -78,14 +78,11 @@ a line break, or deleting a character. F opens the save prompt when the text
 has changed. Contact saves to the pedal's preferences and appears on the
 Contact screen in Status.
 
-Adjustments are drafts. Back from a value returns to its field. Back from
-the field list offers to save and reload the setup, discard the draft, or
-keep editing. Saving the loaded setup stops current playback during reload.
+Open **Setups** from **Settings** to browse the saved setups. Choose one to
+select it or open its revision history.
 
-Open **Setups** from **Settings** to browse the saved setups. Choose one to edit
-its patches or setup settings. Saving edits to an inactive setup stores a
-revision and keeps the loaded setup playing. Saving the loaded setup uses
-**Save and reload setup**.
+Configure layout, routing, styling, and patch contents in the setup and
+song library files on the computer.
 
 ## Changing setups
 
@@ -100,8 +97,8 @@ clock generators, arpeggiators, forwarding, processing queues and MIDI monitorin
 It releases notes, pedal holds and keyboard keys, restores relay resting states,
 clears expression assignments and stops old animations, pulsing and games.
 An active MIDI-file recording is finalized and retained as the latest recording.
-An in-progress save finishes before its buffers are released. The patch editor's
-existing Save/Discard decision still protects unsaved setup edits.
+An in-progress save finishes before its buffers are released. The Settings
+Save/Discard decision protects unsaved setup edits.
 
 MIDI cleanup has a one-second budget, so an unplugged or blocked output cannot
 prevent changing setups indefinitely. Incomplete delivery is reported and old

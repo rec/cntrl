@@ -25,31 +25,15 @@ The song keeps its name and setlist entries. Renaming updates every setlist
 reference to that name. Rename uses A/B to change a character, D/E to move the cursor, C to save and F to cancel. The same editor is
 available for setlist names.
 
-To edit a MIDI action inside a song patch, open **Settings**, choose **Songs**,
-open the song, and choose **Edit patches**. Choose the step and **Edit patch
-value**. If the patch has several editable actions or a switch action, browse
-by activation order or by the switch and its trigger. The display shows the
-current Program Change or Control Change. Choose **Only this song step** to
-make a private copy, or edit the shared action for every use. The review shows
-the proposed values before saving.
-
-Choose **Appearance** in the same song menu to edit its display name, text
-color, background color, and font. The name used in setlist entries stays the
-same. Use D to select a color component and E to change its adjustment step.
-The right display previews the color, and **Use compiled value** removes a
-saved override for that field. Save writes the appearance to the song library
-and includes it in an editable export.
+Open **Settings → Songs** during performance to rename a song or reorder
+and remove existing steps. Edit MIDI actions, display names, colors, and
+fonts in the song library file.
 
 Under Setlists, choose **New setlist**. It receives a unique default name and
 opens the alphabetically sorted song picker. C adds the highlighted song and
 keeps the picker open; A/B browse and D/E jump between initial letters. F returns
 to the ordered performance view. Song names are unique; a setlist can contain
 the same name more than once.
-
-To edit a setlist's display name, text color, or background color, open
-**Settings**, choose **Setlists**, open the setlist, and choose **Appearance**.
-The controls and save review work the same way as for songs. The setlist keeps
-its startup identity and song order.
 
 In the performance view, click F for the next song step and double-click F
 for the previous step.

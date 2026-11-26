@@ -45,15 +45,6 @@ public:
     bool busy() const { return state_ != State::command; }
     bool accepts_input() const { return state_ == State::command || state_ == State::receiving; }
 #ifdef CNTRL_FLASH_ROUTINE
-    CNTRL_FLASH_ROUTINE(movie_playable)
-#endif
-    bool playable(uint32_t key, unsigned width, unsigned height, unsigned streams) {
-        uint32_t length;
-        uint8_t header[header_bytes];
-        return !busy() && asset_info(key, length, header) && u16(header + 6) == width
-            && u16(header + 8) == height && u16(header + 10) == streams;
-    }
-#ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(movie_data)
 #endif
     void receive_data(const uint8_t *bytes, unsigned length, uint32_t now) {
@@ -139,14 +130,13 @@ private:
 #ifdef CNTRL_FLASH_ROUTINE
     CNTRL_FLASH_ROUTINE(movie_asset_info)
 #endif
-    bool asset_info(uint32_t key, uint32_t &length, uint8_t *movie_header = nullptr) {
+    bool asset_info(uint32_t key, uint32_t &length) {
         uint8_t envelope[16], header[header_bytes], trailer[4];
-        if (!movie_header) movie_header = header;
         if (!storage_.read(key, 0, envelope, sizeof(envelope)) || std::memcmp(envelope, "CNSP", 4)
             || u32(envelope + 12) != key) return false;
         length = u32(envelope + 8);
         return uint64_t(length) + 20 == storage_.size(key)
-            && storage_.read(key, 16, movie_header, sizeof(header)) && valid_header(movie_header, length)
+            && storage_.read(key, 16, header, sizeof(header)) && valid_header(header, length)
             && storage_.read(key, 16 + length, trailer, 4) && !std::memcmp(trailer, "DONE", 4);
     }
 #ifdef CNTRL_FLASH_ROUTINE

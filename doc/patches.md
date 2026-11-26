@@ -35,14 +35,9 @@ Synth = { instrument = 'synth' }
 The cycle contains named programs in bank and program-number order. Recompile
 to pick up changes to the catalogue or tag membership.
 
-On the pedal, open **Setups**, choose **Edit**, then press the switch labeled
-**Add cycle**. Browse with A and B, confirm with C, and go back with F on
-six-switch controllers. Choose the instrument, then **All programs** or a
-tag. Review the name and count. D opens the name editor. Confirm the cycle and
-choose **Save** to make it available in browser mode. Recompile older setups
-with the current `cntrl` to include their catalogues. Export and sync retain
-the instrument and tag selection. Editing an individual entry's program, bank,
-volume, or pan makes that cycle an explicit patch list on export.
+Export and sync retain the instrument and tag selection. If a previously
+saved pedal edit customized a cycle entry, the cycle exports as an explicit
+patch list.
 
 ## Patch display presentation
 
@@ -640,9 +635,8 @@ next (0), sent (1), undo (2). Recompile and
 upload matching setup and song documents together before using this firmware.
 Existing binary documents are rejected; no migration or dual execution path is
 provided. Keep backups before replacing existing device data.
-Exports after on-pedal program or bank edits preserve the current MIDI values
-and displayed labels while canonicalizing their source metadata. Further
-export/recompile cycles are stable.
+Exports of previously edited programs and banks preserve the current MIDI
+values and displayed labels while canonicalizing their source metadata.
 
 - Move the old browser-list dictionary from `patches` to `patch_cycles`.
   `patches` now holds reusable named Patch tables.

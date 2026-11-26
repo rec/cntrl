@@ -135,12 +135,12 @@
 - patch<program-change.channel>.output: string | null = null
 - patch<program-change.channel>.program: integer
 - patch<program-change.channel>.type: 'program-change'
-• patch<program-change.instrument>.bank: integer | null = null
+- patch<program-change.instrument>.bank: integer | null = null
 - patch<program-change.instrument>.instrument: string | null = null
-• patch<program-change.instrument>.pan: integer | null = null
-• patch<program-change.instrument>.program: integer | string
+- patch<program-change.instrument>.pan: integer | null = null
+- patch<program-change.instrument>.program: integer | string
 - patch<program-change.instrument>.type: 'program-change'
-• patch<program-change.instrument>.volume: integer | null = null
+- patch<program-change.instrument>.volume: integer | null = null
 - patch<record-midi-file>.channels: list<integer> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 - patch<record-midi-file>.inputs: list<string> | null = null
 - patch<record-midi-file>.operation: 'record-midi-file'
@@ -180,123 +180,124 @@
 - patch<time-code-quarter-frame>.value: integer
 - patch<usb-midi-interface>.operation: 'usb-midi-interface'
 - patch<usb-midi-interface>.value: boolean
-• pedal.animation_color_cycle: boolean | null = null
-• pedal.auxiliary_switches.1: 'independent' | 'combined' | null = null
-• pedal.auxiliary_switches.2: 'independent' | 'combined' | null = null
-• pedal.auxiliary_switches.3: 'independent' | 'combined' | null = null
-• pedal.auxiliary_switches.4: 'independent' | 'combined' | null = null
+- pedal.animation_color_cycle: boolean | null = null
+- pedal.auxiliary_switches.1: 'independent' | 'combined' | null = null
+- pedal.auxiliary_switches.2: 'independent' | 'combined' | null = null
+- pedal.auxiliary_switches.3: 'independent' | 'combined' | null = null
+- pedal.auxiliary_switches.4: 'independent' | 'combined' | null = null
 • pedal.brightness: integer | null = null
 • pedal.calibration.<jack>.heel: integer
 • pedal.calibration.<jack>.name: string = ''
 • pedal.calibration.<jack>.toe: integer
 • pedal.calibration.settle_ms: integer = 2000
 • pedal.default_firmware: 'cntrl' | 'stock' = 'cntrl'
-• pedal.fast_debounce: boolean | null = null
-• pedal.forward_device_to_host: boolean | null = null
-• pedal.frame_buffers: integer | null = null
-• pedal.is_midi_interface: boolean | null = null
+- pedal.fast_debounce: boolean | null = null
+- pedal.forward_device_to_host: boolean | null = null
+- pedal.frame_buffers: integer | null = null
+- pedal.is_midi_interface: boolean | null = null
 • pedal.language: string = 'en'
-• pedal.loop_stop_reset_controls: boolean | null = null
+- pedal.loop_stop_reset_controls: boolean | null = null
 • pedal.name_and_contact: string = ''
-• pedal.navigation.hold_delay: float | null = null
-• pedal.navigation.repeat_interval: float | null = null
-• pedal.page_settings.clock_outputs: list<string> | null = null
-• pedal.pickup: boolean | null = null
-• pedal.pickup_pairing_ms: integer | null = null
-• pedal.screensaver_timeout: integer | null = null
-• pedal.scrolling.cycles: 'right' | 'left' | 'up' | 'down' | null = null
-• pedal.scrolling.horizontal_duration: float | null = null
-• pedal.scrolling.patches: 'right' | 'left' | 'up' | 'down' | null = null
-• pedal.scrolling.send: 'right' | 'left' | 'up' | 'down' | null = null
-• pedal.scrolling.vertical_duration: float | null = null
+- pedal.navigation.hold_delay: float | null = null
+- pedal.navigation.repeat_interval: float | null = null
+- pedal.page_settings.clock_outputs: list<string> | null = null
+- pedal.pickup: boolean | null = null
+- pedal.pickup_pairing_ms: integer | null = null
+- pedal.screensaver_timeout: integer | null = null
+- pedal.scrolling.cycles: 'right' | 'left' | 'up' | 'down' | null = null
+- pedal.scrolling.horizontal_duration: float | null = null
+- pedal.scrolling.patches: 'right' | 'left' | 'up' | 'down' | null = null
+- pedal.scrolling.send: 'right' | 'left' | 'up' | 'down' | null = null
+- pedal.scrolling.vertical_duration: float | null = null
 • pedal.selected_setup: string | null = null
 • pedal.startup_set: string | null = null
-• pedal.target_pulse.delay: float | null = null
-• pedal.target_pulse.maximum: integer | null = null
-• pedal.target_pulse.minimum: integer | null = null
-• pedal.target_pulse.period: float | null = null
-• pedal.trs_ports.1: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux' | null = null
-• pedal.trs_ports.2: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux' | null = null
-• pedal.trs_ports.3: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux' | null = null
-• pedal.trs_ports.4: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux' | null = null
-• pedal.usb_device_midi: boolean | null = null
-• pedal.usb_host_midi: boolean | null = null
-• pedal.use_animations: boolean | null = null
-• setlist.display_name: string | null = null
+- pedal.target_pulse.delay: float | null = null
+- pedal.target_pulse.maximum: integer | null = null
+- pedal.target_pulse.minimum: integer | null = null
+- pedal.target_pulse.period: float | null = null
+- pedal.trs_ports.1: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux' | null = null
+- pedal.trs_ports.2: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux' | null = null
+- pedal.trs_ports.3: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux' | null = null
+- pedal.trs_ports.4: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux' | null = null
+- pedal.usb_device_midi: boolean | null = null
+- pedal.usb_host_midi: boolean | null = null
+- pedal.use_animations: boolean | null = null
+- setlist.display_name: string | null = null
 • setlist.name: string
 • setlist.songs: list<string> = []
-• setlist.style: Style | null = null
-• setup.animation_color_cycle: boolean = false
+- setlist.style: Style | null = null
+- setup.animation_color_cycle: boolean = false
 - setup.auxiliary_switches: map<string, 'independent' | 'combined'> = {}
-• setup.auxiliary_switches.<jack>: 'independent' | 'combined'
+- setup.auxiliary_switches.<jack>: 'independent' | 'combined'
 - setup.background_color: string = '0xFFF8D8'
 - setup.bindings: map<string, binding> = {}
 - setup.bindings.<input>: binding
 • setup.brightness: integer = 192
 - setup.contrast: float = 0.6
 - setup.counters: map<string, Counter> = {}
-• setup.counters.<counter>: Counter
-• setup.counters.<counter>.boundary: 'wrap' | 'bounce' = 'wrap'
-• setup.counters.<counter>.channel: integer
-• setup.counters.<counter>.controller: integer | null = null
-• setup.counters.<counter>.initial: integer
-• setup.counters.<counter>.maximum: integer
-• setup.counters.<counter>.minimum: integer
-• setup.counters.<counter>.output: string
-• setup.counters.<counter>.step: integer = 1
-• setup.counters.<counter>.type: 'program-change' | 'control-change'
+- setup.counters.<counter>: Counter
+- setup.counters.<counter>.boundary: 'wrap' | 'bounce' = 'wrap'
+- setup.counters.<counter>.channel: integer
+- setup.counters.<counter>.controller: integer | null = null
+- setup.counters.<counter>.initial: integer
+- setup.counters.<counter>.maximum: integer
+- setup.counters.<counter>.minimum: integer
+- setup.counters.<counter>.output: string
+- setup.counters.<counter>.step: integer = 1
+- setup.counters.<counter>.type: 'program-change' | 'control-change'
 - setup.definitions: Definitions | null = null
 - setup.displays: Displays = default Displays
 - setup.displays.next: Display = default Display
 - setup.displays.sent: Display = default Display
 - setup.displays.undo: Display = default Display
-• setup.fast_debounce: boolean = true
+- setup.fast_debounce: boolean = true
 - setup.fast_switches: string = 'A'
 - setup.fill_in_styles: boolean = true
 - setup.fonts: map<string, string> = {}
 - setup.fonts.<font>: string
 - setup.foreground_brightness_limit: float = 0.5
-• setup.forward_device_to_host: boolean = true
-• setup.frame_buffers: integer = 1
-• setup.idle_movie: list<string> = []
+- setup.forward_device_to_host: boolean = true
+- setup.frame_buffers: integer = 1
+- setup.idle_movie: list<string> = []
 - setup.inheritance.remove: list<list<string>> = []
 - setup.inline_patches: boolean = true
-• setup.instruments: map<string, Instrument> = {}
-• setup.is_midi_interface: boolean = false
+- setup.instruments: map<string, Instrument> = {}
+• setup.instruments.<instrument>.channel: integer
+- setup.is_midi_interface: boolean = false
 - setup.layout: PageLayout | null = null
-• setup.layout.focus: string | null = null
-• setup.layout.left_wins: boolean = false
-• setup.layout.order: list<string> = []
-• setup.loop_stop_neutral_values: list<ControlChange | Nrpn | Rpn> = []
-• setup.loop_stop_neutral_values[]<control-change>.channel: integer | null = null
-• setup.loop_stop_neutral_values[]<control-change>.controller: integer
-• setup.loop_stop_neutral_values[]<control-change>.output: string | null = null
-• setup.loop_stop_neutral_values[]<control-change>.resolution: 7 | 14 = 7
-• setup.loop_stop_neutral_values[]<control-change>.type: 'control-change'
-• setup.loop_stop_neutral_values[]<control-change>.value: integer
-• setup.loop_stop_neutral_values[]<nrpn>.channel: integer | null = null
-• setup.loop_stop_neutral_values[]<nrpn>.output: string | null = null
-• setup.loop_stop_neutral_values[]<nrpn>.parameter: integer
-• setup.loop_stop_neutral_values[]<nrpn>.resolution: 7 | 14 = 14
-• setup.loop_stop_neutral_values[]<nrpn>.type: 'nrpn'
-• setup.loop_stop_neutral_values[]<nrpn>.value: integer
-• setup.loop_stop_neutral_values[]<rpn>.channel: integer | null = null
-• setup.loop_stop_neutral_values[]<rpn>.output: string | null = null
-• setup.loop_stop_neutral_values[]<rpn>.parameter: 1 = 1
-• setup.loop_stop_neutral_values[]<rpn>.type: 'rpn'
-• setup.loop_stop_neutral_values[]<rpn>.value: integer
-• setup.loop_stop_reset_controls: boolean = false
+- setup.layout.focus: string | null = null
+- setup.layout.left_wins: boolean = false
+- setup.layout.order: list<string> = []
+- setup.loop_stop_neutral_values: list<ControlChange | Nrpn | Rpn> = []
+- setup.loop_stop_neutral_values[]<control-change>.channel: integer | null = null
+- setup.loop_stop_neutral_values[]<control-change>.controller: integer
+- setup.loop_stop_neutral_values[]<control-change>.output: string | null = null
+- setup.loop_stop_neutral_values[]<control-change>.resolution: 7 | 14 = 7
+- setup.loop_stop_neutral_values[]<control-change>.type: 'control-change'
+- setup.loop_stop_neutral_values[]<control-change>.value: integer
+- setup.loop_stop_neutral_values[]<nrpn>.channel: integer | null = null
+- setup.loop_stop_neutral_values[]<nrpn>.output: string | null = null
+- setup.loop_stop_neutral_values[]<nrpn>.parameter: integer
+- setup.loop_stop_neutral_values[]<nrpn>.resolution: 7 | 14 = 14
+- setup.loop_stop_neutral_values[]<nrpn>.type: 'nrpn'
+- setup.loop_stop_neutral_values[]<nrpn>.value: integer
+- setup.loop_stop_neutral_values[]<rpn>.channel: integer | null = null
+- setup.loop_stop_neutral_values[]<rpn>.output: string | null = null
+- setup.loop_stop_neutral_values[]<rpn>.parameter: 1 = 1
+- setup.loop_stop_neutral_values[]<rpn>.type: 'rpn'
+- setup.loop_stop_neutral_values[]<rpn>.value: integer
+- setup.loop_stop_reset_controls: boolean = false
 - setup.midi: map<string, Route> | null = null
 - setup.navigation: NavigationSettings = default NavigationSettings
-• setup.navigation.hold_delay: float = 1.5
-• setup.navigation.page_back: string | null = null
-• setup.navigation.page_forward: string | null = null
-• setup.navigation.repeat_interval: float = 1
-• setup.navigation.song_backward: string | null = null
-• setup.navigation.song_forward: string | null = null
+- setup.navigation.hold_delay: float = 1.5
+- setup.navigation.page_back: string | null = null
+- setup.navigation.page_forward: string | null = null
+- setup.navigation.repeat_interval: float = 1
+- setup.navigation.song_backward: string | null = null
+- setup.navigation.song_forward: string | null = null
 - setup.pad: integer | null = 4
 - setup.page_settings: PageSettings = default PageSettings
-• setup.page_settings.annulus: integer = 5
+- setup.page_settings.annulus: integer = 5
 - setup.page_settings.arpeggiator: ArpeggiatorSettings | null = null
 - setup.page_settings.arpeggiator.channels: list<integer> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 - setup.page_settings.arpeggiator.events: integer = 128
@@ -321,19 +322,19 @@
 - setup.page_settings.arpeggiator.selection<walk>.kind: 'walk' = 'walk'
 - setup.page_settings.arpeggiator.selection<walk>.prob_down: string = '1/2'
 - setup.page_settings.arpeggiator.selection<walk>.prob_up: string = '1/2'
-• setup.page_settings.autoselect_clock: boolean = true
-• setup.page_settings.background_color: string = '0xFFF085'
-• setup.page_settings.clock_average_beats: integer = 1
-• setup.page_settings.clock_bpms: list<integer> = [120]
-• setup.page_settings.clock_outputs: list<string> = []
-• setup.page_settings.clock_timeout: float = 0.25
-• setup.page_settings.clocks_per_quarter: integer = 24
-• setup.page_settings.contact_style: ContactStyle | null = null
-• setup.page_settings.decimals: integer = 2
-• setup.page_settings.digits: integer = 3
-• setup.page_settings.expression: map<string, ExpressionAssignment> = {}
-• setup.page_settings.flash_fraction: float = 0.4
-• setup.page_settings.flasher_diameter: integer = 40
+- setup.page_settings.autoselect_clock: boolean = true
+- setup.page_settings.background_color: string = '0xFFF085'
+- setup.page_settings.clock_average_beats: integer = 1
+- setup.page_settings.clock_bpms: list<integer> = [120]
+- setup.page_settings.clock_outputs: list<string> = []
+- setup.page_settings.clock_timeout: float = 0.25
+- setup.page_settings.clocks_per_quarter: integer = 24
+- setup.page_settings.contact_style: ContactStyle | null = null
+- setup.page_settings.decimals: integer = 2
+- setup.page_settings.digits: integer = 3
+- setup.page_settings.expression: map<string, ExpressionAssignment> = {}
+- setup.page_settings.flash_fraction: float = 0.4
+- setup.page_settings.flasher_diameter: integer = 40
 - setup.page_settings.looper: LooperSettings | null = null
 - setup.page_settings.looper.channels: list<integer> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 - setup.page_settings.looper.events: integer = 512
@@ -356,75 +357,75 @@
 - setup.page_settings.memon.timed: boolean = true
 - setup.page_settings.memon.timeout: float = 5
 - setup.page_settings.memon.velocity: integer = 100
-• setup.page_settings.minimum_interval: float = 0.1
-• setup.page_settings.minimum_taps: integer = 2
-• setup.page_settings.off_color: string = '0x600000'
-• setup.page_settings.on_color: string = '0xFF0000'
-• setup.page_settings.padding: integer = 2
-• setup.page_settings.refresh_interval: float = 1
-• setup.page_settings.reset_gap: float = 3
-• setup.page_settings.ring_color: string = 'black'
-• setup.page_settings.status_font: string = 'TamzenBold7x13'
-• setup.page_settings.tap_intervals: integer = 4
-• setup.page_settings.tempo_font: string = 'CourierPrime'
-• setup.page_settings.tempo_height: integer = 40
-• setup.page_settings.title_font: string = 'AtkinsonNextSemiBold'
-• setup.page_settings.title_height: integer = 12
-• setup.pages: map<string, Page> = built-in page list
+- setup.page_settings.minimum_interval: float = 0.1
+- setup.page_settings.minimum_taps: integer = 2
+- setup.page_settings.off_color: string = '0x600000'
+- setup.page_settings.on_color: string = '0xFF0000'
+- setup.page_settings.padding: integer = 2
+- setup.page_settings.refresh_interval: float = 1
+- setup.page_settings.reset_gap: float = 3
+- setup.page_settings.ring_color: string = 'black'
+- setup.page_settings.status_font: string = 'TamzenBold7x13'
+- setup.page_settings.tap_intervals: integer = 4
+- setup.page_settings.tempo_font: string = 'CourierPrime'
+- setup.page_settings.tempo_height: integer = 40
+- setup.page_settings.title_font: string = 'AtkinsonNextSemiBold'
+- setup.page_settings.title_height: integer = 12
+- setup.pages: map<string, Page> = built-in page list
 - setup.pages.<page>.ram2_bytes: integer = 0
 - setup.pages.<page>.type: 'patch-chooser' | 'time' | 'status' | 'cable-test' | 'panic' | 'midi-monitor' | 'midi-looper' | 'arpeggiator' | 'banked' | 'pong' | 'memon' | 'doom' | 'language' | 'calibrate' | 'None' | 'setups' | 'songs-and-setlists' | 'switches' | 'settings' = 'patch-chooser'
 - setup.pages.<page><banked>.patch: string
-• setup.pages.<page><patch-chooser>.give_up_displays: list<string> = reverse physical display order
-• setup.pages.<page><patch-chooser>.min_displays: integer = 1
+- setup.pages.<page><patch-chooser>.give_up_displays: list<string> = reverse physical display order
+- setup.pages.<page><patch-chooser>.min_displays: integer = 1
 - setup.parameters: map<string, Parameter> = {}
 - setup.parameters.<parameter>.style: Style | null = null
 - setup.parameters.<parameter>.value: string | integer | float | boolean | null = null
 - setup.patch_cycle_seeds: map<string, integer> = {}
 - setup.patch_cycle_seeds.<cycle>: integer
-• setup.patch_cycles: map<string, list<patch>> = {}
-• setup.patch_cycles.<cycle>: list<patch> | Selector
-• setup.patch_cycles.<cycle><selector>.instrument: string
-• setup.patch_cycles.<cycle><selector>.tag: string | null = null
+- setup.patch_cycles: map<string, list<patch>> = {}
+- setup.patch_cycles.<cycle>: list<patch> | Selector
+- setup.patch_cycles.<cycle><selector>.instrument: string
+- setup.patch_cycles.<cycle><selector>.tag: string | null = null
 - setup.patch_views: map<string, PatchView> = {'patch': {'fields': ['patch_cycle.name', 'display_name'], 'style': null, 'line_styles': {}}}
 - setup.patch_views.<view>.fields: list<string> = ['patch_cycle.name', 'display_name']
 - setup.patch_views.<view>.line_styles: map<string, Style> = {}
 - setup.patch_views.<view>.style: Style | null = null
 - setup.patches: map<string, patch> = {}
 - setup.patches.<patch>: patch
-• setup.pickup: boolean | null = null
-• setup.pickup_pairing_ms: integer = 2
+- setup.pickup: boolean | null = null
+- setup.pickup_pairing_ms: integer = 2
 - setup.regions: map<string, PageRegion> = {}
-• setup.regions.<region>: PageRegion
-• setup.regions.<region>.pages: list<string>
+- setup.regions.<region>: PageRegion
+- setup.regions.<region>.pages: list<string>
 - setup.relays: map<string, boolean> = {}
 - setup.relays.<relay>: boolean
-• setup.screensaver_timeout: integer = 0
+- setup.screensaver_timeout: integer = 0
 - setup.scrolling: Scrolling = default Scrolling
-• setup.scrolling.cycles: 'right' | 'left' | 'up' | 'down' = 'right'
-• setup.scrolling.horizontal_duration: float = 0.075
-• setup.scrolling.patches: 'right' | 'left' | 'up' | 'down' = 'right'
-• setup.scrolling.send: 'right' | 'left' | 'up' | 'down' = 'right'
-• setup.scrolling.vertical_duration: float = 0.2
+- setup.scrolling.cycles: 'right' | 'left' | 'up' | 'down' = 'right'
+- setup.scrolling.horizontal_duration: float = 0.075
+- setup.scrolling.patches: 'right' | 'left' | 'up' | 'down' = 'right'
+- setup.scrolling.send: 'right' | 'left' | 'up' | 'down' = 'right'
+- setup.scrolling.vertical_duration: float = 0.2
 - setup.seed: integer | null = 23
-• setup.splash_movie: list<string> = []
+- setup.splash_movie: list<string> = []
 - setup.style: Style | null = null
 - setup.switches: map<string, SwitchAssignment> = {}
 - setup.tag_styles: map<string, Style> = {}
 - setup.tags: list<string> = []
 - setup.take_first_match: boolean = false
 - setup.target_pulse: TargetPulse = default TargetPulse
-• setup.target_pulse.delay: float = 2
-• setup.target_pulse.maximum: integer = 128
-• setup.target_pulse.minimum: integer = 64
-• setup.target_pulse.period: float = 4
+- setup.target_pulse.delay: float = 2
+- setup.target_pulse.maximum: integer = 128
+- setup.target_pulse.minimum: integer = 64
+- setup.target_pulse.period: float = 4
 - setup.trs_ports: map<string, 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux'> = {}
-• setup.trs_ports.<jack>: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux'
-• setup.usb_device_midi: boolean = true
-• setup.usb_host_midi: boolean = true
-• setup.use_animations: boolean = true
+- setup.trs_ports.<jack>: 'off' | 'midi-a' | 'midi-b' | 'expression' | 'aux'
+- setup.usb_device_midi: boolean = true
+- setup.usb_host_midi: boolean = true
+- setup.use_animations: boolean = true
 - song.bindings: map<string, binding> = {}
 - song.bindings.<input>: binding
-• song.display_name: string | null = null
+- song.display_name: string | null = null
 - song.enter: patch | null = null
 - song.exit: patch | null = null
 - song.fast_switches: string | null = null
@@ -432,17 +433,17 @@
 • song.name: string
 - song.navigation: PageNavigation | null = null
 • song.patches: list<patch>
-• song.patches[]<control-change>.channel: integer | null = null
-• song.patches[]<control-change>.controller: integer
-• song.patches[]<control-change>.value: integer
-• song.patches[]<program-change.channel>.channel: integer | null = null
-• song.patches[]<program-change.channel>.program: integer
-• song.patches[]<program-change.instrument>.bank: integer | null = null
-• song.patches[]<program-change.instrument>.pan: integer | null = null
-• song.patches[]<program-change.instrument>.program: integer | string
-• song.patches[]<program-change.instrument>.volume: integer | null = null
+- song.patches[]<control-change>.channel: integer | null = null
+- song.patches[]<control-change>.controller: integer
+- song.patches[]<control-change>.value: integer
+- song.patches[]<program-change.channel>.channel: integer | null = null
+- song.patches[]<program-change.channel>.program: integer
+- song.patches[]<program-change.instrument>.bank: integer | null = null
+- song.patches[]<program-change.instrument>.pan: integer | null = null
+- song.patches[]<program-change.instrument>.program: integer | string
+- song.patches[]<program-change.instrument>.volume: integer | null = null
 - song.seed: integer | null = null
-• song.style: Style | null = null
+- song.style: Style | null = null
 - song_library.background_color: string = '0xFFF8D8'
 - song_library.bindings: map<string, binding> = {}
 - song_library.bindings.<input>: binding

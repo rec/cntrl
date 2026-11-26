@@ -4,13 +4,12 @@ import subprocess
 from pathlib import Path
 
 import tomlkit
-from PIL import Image
 
 from cntrl.fonts import ui
 from cntrl.patch_chooser import (
+    binary_format,
     compiler,
     compiler_inputs,
-    display,
     models,
     resolved,
     songs,
@@ -86,324 +85,47 @@ def test_song_step_navigation_and_boundaries(
     runner = native_programs.build('test/test_song_steps.cpp')
     subprocess.run([str(runner), str(fixture), str(setup)], check=True)
     edited = tmp_path / 'edited.bin'
-    layout_setup = tmp_path / 'layout.bin'
-    layout_setup.write_bytes(
-        compiler.compile_show(
-            {
-                'pages': {
-                    'Time': {'type': 'time', 'ram2_bytes': 16},
-                    'Language': {'type': 'language'},
-                    'Empty': {'type': 'None'},
-                    'Status': {'type': 'status'},
-                    'Gap': {'type': 'None'},
-                    'Browser': {'type': 'patch-chooser', 'min_displays': 0},
-                    'Other status': {'type': 'status'},
-                },
-                'regions': {
-                    'tools': {'pages': ['Time', 'Language', 'Empty', 'Other status']},
-                    'performance': {'pages': ['Status', 'Browser']},
-                    'extra': {'pages': ['Gap']},
-                },
-                'layout': {'focus': 'performance'},
-            },
-            {},
-            [],
-            target,
-        )
-    )
-    subprocess.run(
-        [str(runner), str(fixture), str(layout_setup), '--page-layout', str(edited)],
-        check=True,
-    )
-    saved_layout = tomlkit.parse(resolved.export(edited.read_bytes()))
-    assert saved_layout['regions']['tools']['pages'] == [
-        'Language',
-        'STime',
-        'Other status',
-    ]
-    assert saved_layout['regions']['performance']['pages'] == [
-        'Status',
-        'Empty',
-        'Browser',
-        'XStatus',
-    ]
-    assert saved_layout['pages']['XStatus']['type'] == 'status'
-    assert saved_layout['pages']['STime']['ram2_bytes'] == 16
-    assert saved_layout['pages']['Browser']['min_displays'] == 1
-    assert saved_layout['pages']['Browser']['give_up_displays'] == [
-        'center',
-        'left',
-        'right',
-    ]
-    assert saved_layout['regions']['Omitted']['pages'] == ['Gap']
-    assert saved_layout['layout'] == {
-        'order': ['performance', 'Omitted', 'tools'],
-        'focus': 'performance',
-        'left_wins': True,
-    }
-    subprocess.run(
-        [str(runner), str(fixture), str(setup), '--setup-preferences', str(edited)],
-        check=True,
-    )
-    edited_setup = edited.read_bytes()
-    saved = tomlkit.parse(resolved.export(edited_setup))
-    assert saved['frame_buffers'] == 2
-    assert saved['use_animations'] is False
-    assert resolved.refresh_memory(edited_setup, {}, target=target) == edited_setup
-    assert saved['pickup'] is True
-    assert saved['pickup_pairing_ms'] == 3
-    assert saved['loop_stop_reset_controls'] is True
-    (neutral,) = saved['loop_stop_neutral_values']
-    assert neutral == {
-        'output': 'din',
-        'channel': 1,
-        'type': 'control-change',
-        'controller': 1,
-        'value': 2,
-        'resolution': 7,
-    }
-    saved_time = saved['page_settings']
-    assert saved_time['clock_outputs'] == ['din']
-    assert saved_time['clock_timeout'] == 0.26
-    assert saved_time['autoselect_clock'] is False
-    assert saved_time['clock_bpms'] == [120, 20]
-    assert saved_time['title_font'] == 'CourierPrime'
-    assert saved_time['ring_color'] == '0x080400'
-    midi_setup = tmp_path / 'midi.bin'
-    midi_setup.write_bytes(
+    setup.write_bytes(
         compiler.compile_show(
             {
                 **pages,
-                'pickup': True,
-                'pickup_pairing_ms': 9,
-                'patches': {
-                    'held': {
-                        'output': 'din',
-                        'channel': 1,
-                        'controller': 7,
-                        'value': 12,
-                        'pickup': True,
-                    }
+                'instruments': {
+                    'synth': {'output': 'din', 'channel': 1},
+                    'z-backup': {'output': 'din', 'channel': 6},
                 },
-                'loop_stop_reset_controls': True,
-                'loop_stop_neutral_values': [
-                    {
-                        'type': 'control-change',
-                        'output': 'din',
-                        'channel': 1,
-                        'controller': 7,
-                        'value': 12,
-                    }
-                ],
+                'page_settings': {'clock_timeout': 0.5},
             },
             {},
             [],
             target,
+            setting_overrides={},
         )
     )
     subprocess.run(
-        [str(runner), str(fixture), str(midi_setup), '--midi-preferences', str(edited)],
+        [str(runner), str(fixture), str(setup), '--quick-settings', str(edited)],
         check=True,
     )
-    saved_midi = tomlkit.parse(resolved.export(edited.read_bytes()))
-    assert saved_midi['pickup'] is False
-    assert saved_midi['pickup_pairing_ms'] == 2
-    assert saved_midi['patches']['held']['pickup'] is True
-    assert saved_midi['loop_stop_reset_controls'] is False
-    assert saved_midi['loop_stop_neutral_values'][0]['value'] == 12
-    subprocess.run(
-        [str(runner), str(fixture), str(setup), '--navigation-settings', str(edited)],
-        check=True,
-    )
-    saved_navigation = tomlkit.parse(resolved.export(edited.read_bytes()))['navigation']
-    assert saved_navigation['page_forward'] == 'A+B'
-    contact_art = tmp_path / 'contact.png'
-    Image.new('RGB', (12, 12), 'red').save(contact_art)
-    patch_art = tmp_path / 'patch.png'
-    Image.new('RGB', (12, 12), 'blue').save(patch_art)
-    appearance_cases = (
-        {},
-        {
-            'patch_cycles': {
-                'Patch': [
-                    {
-                        'output': 'din',
-                        'channel': 1,
-                        'controller': 7,
-                        'value': 12,
-                        'style': {'image': str(patch_art)},
-                    }
-                ]
-            }
-        },
-        {'page_settings': {'contact_style': {'image': str(contact_art)}}},
-    )
-    contact_setup = tmp_path / 'contact.bin'
-    for fields in appearance_cases:
-        original = compiler.compile_show({**pages, **fields}, {}, [], target)
-        contact_setup.write_bytes(original)
-        subprocess.run(
-            [
-                str(runner),
-                str(fixture),
-                str(contact_setup),
-                '--contact-style',
-                str(edited),
-            ],
-            check=True,
-        )
-        saved = edited.read_bytes()
-        contact = tomlkit.parse(resolved.export(saved))['page_settings'][
-            'contact_style'
+    saved = tomlkit.parse(resolved.export(edited.read_bytes()))
+    assert saved['instruments']['synth']['channel'] == 2
+    assert saved['instruments']['synth']['output'] == 'din'
+    assert saved['instruments']['z-backup']['channel'] == 6
+    assert saved['page_settings']['clock_timeout'] == 0.5
+    legacy = binary_format.unpack(encoded, binary_format.Kind.songs)
+    legacy.records.extend(
+        [
+            binary_format.Record(
+                tag=binary_format.SONG_APPEARANCE,
+                data=songs.APPEARANCE.pack(0, 3, 0, 0x001F, 0, b'First song'),
+            ),
+            binary_format.Record(
+                tag=binary_format.SETLIST_APPEARANCE,
+                data=songs.APPEARANCE.pack(0, 1, 0, 0, 0, b'Friday set'),
+            ),
         ]
-        assert contact['foreground_color'] == '0x080000'
-        assert contact['font_name'] == 'Arimo'
-        assert contact.get('image') == (
-            str(contact_art) if 'page_settings' in fields else None
-        )
-        saved_art = display.artwork_files(
-            saved, display.read_source(saved, resolved.graph_offset(saved))
-        )
-        original_art = display.artwork_files(
-            original, display.read_source(original, resolved.graph_offset(original))
-        )
-        assert bool(original_art[1]) == bool(fields)
-        assert saved_art == original_art
-    expression_setup = tmp_path / 'expression.bin'
-    expression_setup.write_bytes(
-        compiler.compile_show(
-            {
-                **pages,
-                'trs_ports': {'configurable-2': 'expression'},
-                'page_settings': {'clock_outputs': ['din']},
-            },
-            {},
-            [],
-            target.model_copy(update={'trs_ports': {'configurable-2': ['expression']}}),
-        )
     )
-    subprocess.run(
-        [
-            str(runner),
-            str(fixture),
-            str(expression_setup),
-            '--expression-settings',
-            str(edited),
-        ],
-        check=True,
-    )
-    expression_pages = tomlkit.parse(resolved.export(edited.read_bytes()))[
-        'page_settings'
-    ]
-    assignment = expression_pages['expression']['configurable-2']
-    assert assignment['channel'] == 2 and assignment['mirror_output'] == 'trs'
-    assert expression_pages['clock_outputs'] == ['din']
-    counter_setup = tmp_path / 'counters.bin'
-    counter_setup.write_bytes(
-        compiler.compile_show(
-            {
-                **pages,
-                'counters': {
-                    'Scenes': {
-                        'type': 'control-change',
-                        'output': 'din',
-                        'channel': 1,
-                        'controller': 7,
-                        'minimum': 1,
-                        'initial': 2,
-                        'maximum': 10,
-                    }
-                },
-                'patches': {
-                    'advance': {'operation': 'scroll-counter', 'counter': 'Scenes'}
-                },
-            },
-            {},
-            [],
-            target,
-        )
-    )
-    subprocess.run(
-        [
-            str(runner),
-            str(fixture),
-            str(counter_setup),
-            '--counter-settings',
-            str(edited),
-        ],
-        check=True,
-    )
-    saved_counters = tomlkit.parse(resolved.export(edited.read_bytes()))['counters']
-    saved_counter = saved_counters['Scenes']
-    assert (
-        saved_counter['minimum'],
-        saved_counter['initial'],
-        saved_counter['step'],
-    ) == (
-        3,
-        4,
-        -1,
-    )
-    subprocess.run(
-        [str(runner), str(fixture), str(setup), '--counter-settings', str(edited)],
-        check=True,
-    )
-    first_counter = tomlkit.parse(resolved.export(edited.read_bytes()))['counters']
-    assert list(first_counter) == ['Lights']
-    assert (
-        first_counter['Lights']['channel'] == saved_counters['Lights']['channel'] == 2
-    )
+    fixture.write_bytes(legacy.pack())
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--song-settings'], check=True
-    )
-    styled = library.model_copy(
-        update={
-            'songs': [
-                library.songs[0].model_copy(
-                    update={
-                        'display_name': 'Écho',
-                        'style': models.Style(
-                            foreground_color='blue',
-                            background_color='white',
-                            font_name='Arimo',
-                        ),
-                    }
-                ),
-                library.songs[1].model_copy(
-                    update={'style': models.Style(foreground_color='black')}
-                ),
-            ],
-            'setlists': [
-                library.setlists[0].model_copy(
-                    update={
-                        'display_name': 'Friday',
-                        'style': models.Style(
-                            foreground_color='white', background_color='black'
-                        ),
-                    }
-                )
-            ],
-        }
-    )
-    fixture.write_bytes(songs.encode(styled, target))
-    subprocess.run(
-        [str(runner), str(fixture), str(setup), '--song-appearance', str(edited)],
-        check=True,
-    )
-    restored_style = songs.decode(edited.read_bytes())
-    first, second = restored_style.songs
-    assert first.name == 'One' and first.display_name == '!SÉcho'
-    assert first.style == models.Style(
-        foreground_color='blue',
-        background_color='0xF6FFFF',
-        font_name='AtkinsonNextSemiBold',
-    )
-    assert second.style == models.Style(foreground_color='0x080000')
-    (setlist,) = restored_style.setlists
-    assert setlist.name == 'Set' and setlist.display_name == 'LFriday'
-    assert setlist.songs == ['One', 'Two', 'One']
-    assert setlist.style == models.Style(
-        foreground_color='white', background_color='0x080000'
     )
     with_spare = library.model_copy(
         update={
@@ -454,77 +176,5 @@ def test_song_step_navigation_and_boundaries(
     )
     subprocess.run(
         [str(runner), str(fixture), str(setup), '--shortcut-conflict'],
-        check=True,
-    )
-    setup.write_bytes(
-        compiler.compile_show(
-            {
-                **pages,
-                'instruments': {
-                    'synth': {'instrument': 'synth', 'output': 'din', 'channel': 1},
-                    'alternate': {
-                        'instrument': 'alternate',
-                        'output': 'din',
-                        'channel': 2,
-                    },
-                },
-                'definitions': {
-                    'profiles': [
-                        {
-                            'instrument': 'synth',
-                            'name': 'default',
-                            'banks': {1: {'lsb': 7}, 3: {'msb': 4, 'lsb': 9}},
-                        },
-                        {
-                            'instrument': 'alternate',
-                            'name': 'default',
-                            'banks': {2: {'lsb': 2}},
-                        },
-                    ],
-                },
-                'patches': {
-                    'Lead': {
-                        'type': 'control-change',
-                        'output': 'din',
-                        'channel': 1,
-                        'controller': 20,
-                        'value': 10,
-                    },
-                    'Voice': {'instrument': 'synth', 'program': 12, 'bank': 1},
-                    'Scene': {
-                        'patch': 'Lead',
-                        'bindings': {
-                            'A': {
-                                'mode': 'momentary',
-                                'on': {
-                                    'output': 'din',
-                                    'channel': 1,
-                                    'controller': 64,
-                                    'value': 127,
-                                },
-                                'off': {
-                                    'output': 'din',
-                                    'channel': 1,
-                                    'controller': 64,
-                                },
-                            },
-                        },
-                    },
-                    'Other': {'instrument': 'alternate', 'program': 12, 'bank': 2},
-                    'Direct': {
-                        'type': 'program-change',
-                        'output': 'din',
-                        'channel': 3,
-                        'program': 12,
-                    },
-                },
-            },
-            {},
-            [],
-            target,
-        )
-    )
-    subprocess.run(
-        [str(runner), str(fixture), str(setup), '--named-patch-settings'],
         check=True,
     )
