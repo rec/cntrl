@@ -39,3 +39,16 @@ observed terminal output. Their timestamps are approximate, in CET (UTC+01:00).
 - Image SHA-256 `aa0abe2e9ff349c81ef7cdeedabaf5030e5987b9f1733fa813d7b4e823b6b384`
 - Succeeded (uploader exit 0). The pedal booted, and a separate restore and read-back verification passed.
 - Reconnect: expected build running (`278f147`), confirmed by a separate status check.
+
+## 2026-11-27T18:08:49+00:00
+
+<a id="attempt-e917195c50514df69a062d2690cca5f9"></a>
+
+- Image SHA-256 `98fb021a96c2e016d8880e9aaa9c19d5b4f0a59cdc9d7519f703db5ef2d7abf1`
+- Succeeded (uploader exit 0)
+
+### Reconnect 2026-11-27T18:09:16+00:00
+
+- [Upload attempt](#attempt-e917195c50514df69a062d2690cca5f9), uploader exit 0
+- Expected build `3c233bc`
+- Expected build running (`3c233bc`)
